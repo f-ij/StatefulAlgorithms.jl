@@ -1,0 +1,41 @@
+name: Register new version
+
+on:
+  push:
+    tags: ['v*']  # Trigger only on version tags like v0.2.0
+
+jobs:
+  register:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out the package repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Required to get tag info
+
+      - name: Set up Julia
+        uses: julia-actions/setup-julia@v2
+        with:
+          version: '1.10'
+
+      - name: Decode SSH key
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.REGISTRY_DEPLOY_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$SSH_PRIVATE_KEY" | base64 -d > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan github.com >> ~/.ssh/known_hosts
+
+      - name: Register in private registry
+        run: |
+          git config --global user.name "${{ github.actor }}"
+          git config --global user.email "${{ github.actor }}@users.noreply.github.com"
+          export GIT_SSH_COMMAND="ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no"
+
+          julia -e '
+            using Pkg; Pkg.add("LocalRegistry")
+            using LocalRegistry
+            register(registry = "git@github.com:f-ij/FIJRegistry.git", push = true)
+          '
