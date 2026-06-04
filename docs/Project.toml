@@ -1,0 +1,5 @@
+[deps]
+Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
+DocumenterTools = "35a29f4d-8980-5a13-9543-d66fff28ecb8"
+JLD2 = "033835bb-8acc-5ee8-8aae-3f567f8a3819"
+StatefulAlgorithms = "3c03ca44-5aad-4ad5-81af-1baae4bc194b"
