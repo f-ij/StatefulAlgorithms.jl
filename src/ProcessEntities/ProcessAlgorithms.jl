@@ -597,7 +597,7 @@ function _step_algorithm_macro(ex)
     return esc(q)
 end
 
-"""Define a stateful process algorithm from a function-like signature."""
+"""Define a step algorithm from a function-like signature."""
 macro StepAlgorithm(ex)
     return _step_algorithm_macro(ex)
 end
