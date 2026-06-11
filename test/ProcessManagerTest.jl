@@ -935,7 +935,7 @@ end
     @test external == [2, 5]
 end
 
-@ProcessAlgorithm function ManagerRuntimeJobStep(
+@StatefulAlgorithm function ManagerRuntimeJobStep(
     delta,
     @managed(total = base);
     @inputs((; base = 0))

@@ -130,7 +130,7 @@ end
 
 `Sink(value = produced)` routes `produced` into the target as `value`.
 
-Process algorithms created with `@ProcessAlgorithm` can also use direct
+Stateful algorithms created with `@StatefulAlgorithm` can also use direct
 positional syntax when their positional argument names are known:
 
 ```julia
@@ -274,10 +274,13 @@ Broadcast assignment is also supported for context buffers.
 replacement = [7, 8]
 
 algo = @Routine begin
+    @state source = [2, 4, 6]
     @state buffer = [0, 0, 0]
 
     buffer .= 1
+    buffer .= source
     buffer[2:3] .= replacement
+    buffer[2:3] .= source[1:2]
 end
 ```
 

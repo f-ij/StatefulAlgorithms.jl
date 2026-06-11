@@ -58,11 +58,11 @@ dsl_runtime_final_summary(context) = (; result = context.result)
 dsl_state_push_writer!(buffers) = (push!(buffers, :writer); buffers)
 dsl_state_push_reader!(buffers) = (push!(buffers, :reader); buffers)
 
-@ProcessAlgorithm function DSLPositionalCallAlgo(value)
+@StatefulAlgorithm function DSLPositionalCallAlgo(value)
     return (; seen = value)
 end
 
-@ProcessAlgorithm function DSLKeywordCallAlgo(value; scale = 1)
+@StatefulAlgorithm function DSLKeywordCallAlgo(value; scale = 1)
     return (; seen = value * scale)
 end
 
@@ -288,11 +288,11 @@ end
 
     @testset "@all uses known alias keys in share endpoints" begin
         @info "Composite DSL: @all uses known alias keys in share endpoints"
-        @ProcessAlgorithm function DSLShareSource(@managed(x = 1))
+        @StatefulAlgorithm function DSLShareSource(@managed(x = 1))
             return (; x)
         end
 
-        @ProcessAlgorithm function DSLShareTarget(x)
+        @StatefulAlgorithm function DSLShareTarget(x)
             return nothing
         end
 
@@ -687,6 +687,25 @@ end
         StatefulAlgorithms.run(p)
         ctx = fetch(p)
         @test ctx[:_state].somebuffer == [1, 7, 8]
+        @test !haskey(StatefulAlgorithms.getglobals(ctx), :result)
+    end
+
+    @testset "State buffers can broadcast from other state buffers" begin
+        @info "Composite DSL: State buffers can broadcast from other state buffers"
+
+        algo = @Routine begin
+            @state sourcebuffer = [2, 4, 6]
+            @state targetbuffer = [0, 0, 0]
+            targetbuffer .= sourcebuffer
+            targetbuffer[2:3] .= sourcebuffer[1:2]
+            result = keyword_value_identity_dsl_test(value = targetbuffer)
+        end
+
+        resolved = resolve(algo)
+        p = Process(resolved, repeat = 1)
+        StatefulAlgorithms.run(p)
+        ctx = fetch(p)
+        @test ctx[:_state].targetbuffer == [2, 2, 4]
         @test !haskey(StatefulAlgorithms.getglobals(ctx), :result)
     end
 

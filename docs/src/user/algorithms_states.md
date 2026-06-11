@@ -1,8 +1,8 @@
 # [Algorithms and States](@id algorithms_states_user)
 
-`ProcessAlgorithm` and `ProcessState` are the two main building blocks you compose into a process.
+`StatefulAlgorithm` and `ProcessState` are the two main building blocks you compose into a process.
 
-- Use `ProcessAlgorithm` for something that actively participates in the loop by implementing `StatefulAlgorithms.step!`.
+- Use `StatefulAlgorithm` for something that actively participates in the loop by implementing `StatefulAlgorithms.step!`.
 - Use `ProcessState` for data that should be initialized into a subcontext and then shared or read by algorithms.
 
 Both are process entities: values that the package knows how to place inside a
@@ -36,7 +36,7 @@ If you want a one-time preparation step, fold it into `init` or guard the first 
 ## Full Definitions
 
 ```julia
-struct MyAlgo <: ProcessAlgorithm
+struct MyAlgo <: StatefulAlgorithm
     gain::Float64
 end
 
@@ -66,13 +66,13 @@ end
 
 ## Macro Shortcuts
 
-### `@ProcessAlgorithm`
+### `@StatefulAlgorithm`
 
-`@ProcessAlgorithm` creates the struct and the needed `step!` methods from a
+`@StatefulAlgorithm` creates the struct and the needed `step!` methods from a
 function signature.
 
 ```julia
-@ProcessAlgorithm function Accumulate(x, gain)
+@StatefulAlgorithm function Accumulate(x, gain)
     x = x + gain
     return (; x)
 end
@@ -82,7 +82,7 @@ You can still define `init` and `cleanup` manually for the generated type.
 
 #### Macro-Generated Algorithm Semantics
 
-`@ProcessAlgorithm` also supports managed local state and configuration fields.
+`@StatefulAlgorithm` also supports managed local state and configuration fields.
 Managed local state is data that belongs to one algorithm and is created during
 `init`, then read again during each `step!`.
 
@@ -97,7 +97,7 @@ The signature is split into:
 Example:
 
 ```julia
-@ProcessAlgorithm begin
+@StatefulAlgorithm begin
     @config n::Int = 8
     @config damp = 1.0
 
@@ -124,7 +124,7 @@ Rules worth knowing:
 - `@managed(a, b = expr, c = expr2)` expands to multiple managed locals in order.
 - `@input/@inputs/@init` may only appear once and must be the last keyword-like item.
 - `@config` fields must have defaults and become fields on the generated struct.
-  You can write them in a surrounding block or as a prelude like `@ProcessAlgorithm @config seed = 1 function MyAlgo(...) ... end`.
+  You can write them in a surrounding block or as a prelude like `@StatefulAlgorithm @config seed = 1 function MyAlgo(...) ... end`.
 - inside the algorithm body, config fields are available directly by name.
   Use `seed`, not `config.seed`.
 - plain positional arguments are runtime-only and are not available while constructing managed state.
@@ -138,7 +138,7 @@ For a macro-generated algorithm `MyAlgo`, the main entrypoints are:
 
 Internally the macro defines:
 
-- `struct MyAlgo <: ProcessAlgorithm end` or `Base.@kwdef struct MyAlgo ... end`
+- `struct MyAlgo <: StatefulAlgorithm end` or `Base.@kwdef struct MyAlgo ... end`
 - a hidden implementation function containing the user body
 - public `StatefulAlgorithms.step!(algo::MyAlgo, ...)` methods for direct calls
 - generated `StatefulAlgorithms.init` and `StatefulAlgorithms.step!` methods that feed the implementation

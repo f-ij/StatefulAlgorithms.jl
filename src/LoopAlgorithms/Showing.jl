@@ -178,6 +178,65 @@ function Base.show(io::IO, rT::Type{<:Routine})
 end
 
 """
+Display one runtime loop wrapper through its public execution plan.
+
+`LoopAlgorithm` carries lifecycle data such as registry and stored context, but
+that data is internal noise for normal display. Showing the plan keeps process
+trees focused on the algorithms the user asked to run.
+"""
+function Base.show(io::IO, la::LA) where {LA<:LoopAlgorithm}
+    return show(io, getplan(la))
+end
+
+"""
+Summarize one runtime loop wrapper with the summary of its execution plan.
+
+This keeps one-line process summaries from expanding the concrete lifecycle
+wrapper type, which can contain large context and registry parameters.
+"""
+function Base.summary(io::IO, la::LA) where {LA<:LoopAlgorithm}
+    show(io, typeof(getplan(la)))
+    return nothing
+end
+
+"""
+Print a compact label for concrete `LoopAlgorithm` types.
+
+Type display still exposes that a value is a runtime wrapper, but it elides the
+lifecycle type parameters that are not useful in user-facing output.
+"""
+function Base.show(io::IO, laT::Type{LA}) where {Plan, LA<:LoopAlgorithm{Plan}}
+    print(io, "LoopAlgorithm{")
+    show(io, Plan)
+    print(io, "}")
+    return nothing
+end
+
+"""
+Print a fallback label for abstract or partially specified `LoopAlgorithm` types.
+
+This method handles `LoopAlgorithm` itself and unionall forms whose execution
+plan parameter is not concrete.
+"""
+function Base.show(io::IO, laT::Type{<:LoopAlgorithm})
+    dt = Base.unwrap_unionall(laT)
+    if length(dt.parameters) == 0
+        print(io, "LoopAlgorithm")
+        return nothing
+    end
+
+    plan = dt.parameters[1]
+    if plan isa TypeVar
+        print(io, "LoopAlgorithm")
+    else
+        print(io, "LoopAlgorithm{")
+        show(io, plan)
+        print(io, "}")
+    end
+    return nothing
+end
+
+"""
 When composite is wrapped by a scope
 """
 function Base.show(io::IO, sa::IdentifiableAlgo{F, Id, Aliases, AlgoName, ScopeName}) where {F<:CompositeAlgorithm, Id, Aliases, AlgoName, ScopeName}

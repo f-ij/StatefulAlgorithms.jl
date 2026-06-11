@@ -1,8 +1,44 @@
 using Test
 using StatefulAlgorithms
 
-@testset "ProcessAlgorithm macro inputs and managed capture" begin
-    @ProcessAlgorithm function CaptureInput(
+"""
+Documented stateful algorithm for macro docstring tests.
+"""
+@StatefulAlgorithm function DocumentedStatefulAlgorithmForTest(value)
+    return (; value)
+end
+
+"""
+Documented config-backed stateful algorithm for macro docstring tests.
+"""
+@StatefulAlgorithm @config offset::Int = 1 function DocumentedConfiguredStatefulAlgorithmForTest(value)
+    return (; value = value + offset)
+end
+
+@testset "StatefulAlgorithm macro docstrings" begin
+    documented = sprint(show, MIME"text/plain"(), @doc(DocumentedStatefulAlgorithmForTest))
+    configured = sprint(show, MIME"text/plain"(), @doc(DocumentedConfiguredStatefulAlgorithmForTest))
+
+    @test occursin("Documented stateful algorithm", documented)
+    @test occursin("Documented config-backed stateful algorithm", configured)
+    @test DocumentedStatefulAlgorithmForTest <: StatefulAlgorithm
+    @test DocumentedConfiguredStatefulAlgorithmForTest <: StatefulAlgorithm
+    @test DocumentedStatefulAlgorithmForTest <: ProcessAlgorithm
+end
+
+@testset "ProcessAlgorithm macro deprecation alias" begin
+    @test_logs (:warn, r"`@ProcessAlgorithm` is deprecated") @eval begin
+        @ProcessAlgorithm function DeprecatedProcessAlgorithmMacroForTest(value)
+            return (; value)
+        end
+    end
+
+    @test DeprecatedProcessAlgorithmMacroForTest <: StatefulAlgorithm
+    @test StatefulAlgorithms.step!(DeprecatedProcessAlgorithmMacroForTest(), 3).value == 3
+end
+
+@testset "StatefulAlgorithm macro inputs and managed capture" begin
+    @StatefulAlgorithm function CaptureInput(
         a,
         @managed(c = b^2),
         @managed(b);
@@ -31,8 +67,8 @@ using StatefulAlgorithms
     @test boot_init == boot_inputs
 end
 
-@testset "ProcessAlgorithm macro keeps @init declaration compatibility" begin
-    @ProcessAlgorithm function LegacyInputs(
+@testset "StatefulAlgorithm macro keeps @init declaration compatibility" begin
+    @StatefulAlgorithm function LegacyInputs(
         a,
         @managed(c = b + 1),
         @managed(b);
@@ -49,8 +85,8 @@ end
     @test stepped.total == 10
 end
 
-@testset "ProcessAlgorithm macro can capture managed values directly from init context" begin
-    @ProcessAlgorithm function ContextCapture(
+@testset "StatefulAlgorithm macro can capture managed values directly from init context" begin
+    @StatefulAlgorithm function ContextCapture(
         x,
         @managed(state),
         @managed(dt),
@@ -69,8 +105,8 @@ end
     @test stepped.state == 1.1
 end
 
-@testset "ProcessAlgorithm macro supports grouped @managed declarations" begin
-    @ProcessAlgorithm function GroupedManaged(
+@testset "StatefulAlgorithm macro supports grouped @managed declarations" begin
+    @StatefulAlgorithm function GroupedManaged(
         a,
         @managed(b, c = b + 1, d = nothing);
         @inputs((; b = 2))
@@ -88,10 +124,10 @@ end
     @test isnothing(stepped.d)
 end
 
-@testset "ProcessAlgorithm macro supports where signatures" begin
+@testset "StatefulAlgorithm macro supports where signatures" begin
     resetstate!(graph::AbstractVector) = fill!(graph, 0)
 
-    @ProcessAlgorithm function resetgraph!(isinggraph::G) where G
+    @StatefulAlgorithm function resetgraph!(isinggraph::G) where G
         resetstate!(isinggraph)
         return
     end
@@ -105,8 +141,8 @@ end
     @test graph2 == [0, 0]
 end
 
-@testset "ProcessAlgorithm macro supports @config-backed structs" begin
-    @ProcessAlgorithm @config seed::Int = 3 begin
+@testset "StatefulAlgorithm macro supports @config-backed structs" begin
+    @StatefulAlgorithm @config seed::Int = 3 begin
         @config begin
             width::Int = 2
         end

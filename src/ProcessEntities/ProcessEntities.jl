@@ -1,4 +1,4 @@
-const ProcessEntity = Union{ProcessState, ProcessAlgorithm}
+const ProcessEntity = Union{ProcessState, StatefulAlgorithm}
 
 init(::ProcessEntity, context) = (;)
 step!(pe::ProcessEntity, context) = error("step! not implemented for $(typeof(pe))")
@@ -10,4 +10,3 @@ include("Utils.jl")
 
 include("ProcessStates/ProcessStates.jl")
 include("ProcessAlgorithms.jl")
-include("ProcessAlgorithmsNew.jl")

@@ -6,7 +6,7 @@ isdefined(StatefulAlgorithms, :ContextAnalyzer) || Base.include(
     joinpath(dirname(pathof(StatefulAlgorithms)), "ContextAnalyzer", "ContextAnalyzer.jl"),
 )
 
-StatefulAlgorithms.@ProcessAlgorithm function CaptureSeedForAnalyzerTest(
+StatefulAlgorithms.@StatefulAlgorithm function CaptureSeedForAnalyzerTest(
     @managed(history = Int[]);
     @inputs((; seed::Int, scale::Float64 = 1.0))
 )

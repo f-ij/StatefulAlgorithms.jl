@@ -72,13 +72,13 @@ _process_precompile_add(x, y; bias = 0.0) = x + y + bias
 _process_precompile_scale(x; scale = 1.0) = x * scale
 
 @setup_workload begin
-    @ProcessAlgorithm function _ProcessPrecompileSource(seed)
+    @StatefulAlgorithm function _ProcessPrecompileSource(seed)
         produced = seed * 2.0
         passthrough = seed + 1.0
         return (; produced, passthrough)
     end
 
-    @ProcessAlgorithm function _ProcessPrecompileManaged(
+    @StatefulAlgorithm function _ProcessPrecompileManaged(
         x,
         @managed(total = start);
         gain = 1.0,
@@ -88,7 +88,7 @@ _process_precompile_scale(x; scale = 1.0) = x * scale
         return (; total)
     end
 
-    @ProcessAlgorithm @config offset::Float64 = 1.0 begin
+    @StatefulAlgorithm @config offset::Float64 = 1.0 begin
         function _ProcessPrecompileConfigured(
             x;
             gain = 1.0,
@@ -99,7 +99,7 @@ _process_precompile_scale(x; scale = 1.0) = x * scale
         end
     end
 
-    @ProcessAlgorithm function ProcessManagerPrecompileStep(
+    @StatefulAlgorithm function ProcessManagerPrecompileStep(
         @managed(
             x = Ref(0.0),
             y = Ref(0.0),

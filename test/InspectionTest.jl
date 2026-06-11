@@ -1,7 +1,7 @@
 using Test
 using StatefulAlgorithms
 
-StatefulAlgorithms.@ProcessAlgorithm function InspectionProducerForTest(
+StatefulAlgorithms.@StatefulAlgorithm function InspectionProducerForTest(
     @managed(history = Int[]);
     @inputs((; seed::Int = 1))
 )
@@ -9,7 +9,7 @@ StatefulAlgorithms.@ProcessAlgorithm function InspectionProducerForTest(
     return (; value = seed + 1)
 end
 
-StatefulAlgorithms.@ProcessAlgorithm function InspectionConsumerForTest(value)
+StatefulAlgorithms.@StatefulAlgorithm function InspectionConsumerForTest(value)
     return (; doubled = 2value)
 end
 
