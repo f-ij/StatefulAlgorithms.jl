@@ -58,11 +58,11 @@ dsl_runtime_final_summary(context) = (; result = context.result)
 dsl_state_push_writer!(buffers) = (push!(buffers, :writer); buffers)
 dsl_state_push_reader!(buffers) = (push!(buffers, :reader); buffers)
 
-@StatefulAlgorithm function DSLPositionalCallAlgo(value)
+@StepAlgorithm function DSLPositionalCallAlgo(value)
     return (; seen = value)
 end
 
-@StatefulAlgorithm function DSLKeywordCallAlgo(value; scale = 1)
+@StepAlgorithm function DSLKeywordCallAlgo(value; scale = 1)
     return (; seen = value * scale)
 end
 
@@ -288,11 +288,11 @@ end
 
     @testset "@all uses known alias keys in share endpoints" begin
         @info "Composite DSL: @all uses known alias keys in share endpoints"
-        @StatefulAlgorithm function DSLShareSource(@managed(x = 1))
+        @StepAlgorithm function DSLShareSource(@managed(x = 1))
             return (; x)
         end
 
-        @StatefulAlgorithm function DSLShareTarget(x)
+        @StepAlgorithm function DSLShareTarget(x)
             return nothing
         end
 

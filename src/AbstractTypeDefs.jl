@@ -1,7 +1,7 @@
 abstract type SteppableAlgorithm end
 
-abstract type StatefulAlgorithm <: SteppableAlgorithm end
-const ProcessAlgorithm = StatefulAlgorithm
+abstract type StepAlgorithm <: SteppableAlgorithm end
+const ProcessAlgorithm = StepAlgorithm
 abstract type AbstractOption end
 abstract type AbstractWiring end
 abstract type ProcessState <: AbstractOption end

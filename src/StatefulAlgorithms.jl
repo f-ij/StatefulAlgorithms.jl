@@ -10,7 +10,7 @@ module StatefulAlgorithms
 
     import DataStructures: Queue, dequeue!, enqueue!
 
-    export StatefulAlgorithm, ProcessAlgorithm, ProcessState, ParserOption, IfWrapped, profile_step_return, filter_by_type
+    export StepAlgorithm, ProcessAlgorithm, ProcessState, ParserOption, IfWrapped, profile_step_return, filter_by_type
 
     const DEBUG_MODE = @load_preference("debug", false)
     debug_mode() = @load_preference("debug", false)

@@ -1,4 +1,4 @@
-const ProcessEntity = Union{ProcessState, StatefulAlgorithm}
+const ProcessEntity = Union{ProcessState, StepAlgorithm}
 
 init(::ProcessEntity, context) = (;)
 step!(pe::ProcessEntity, context) = error("step! not implemented for $(typeof(pe))")

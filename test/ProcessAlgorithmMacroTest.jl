@@ -2,28 +2,28 @@ using Test
 using StatefulAlgorithms
 
 """
-Documented stateful algorithm for macro docstring tests.
+Documented step algorithm for macro docstring tests.
 """
-@StatefulAlgorithm function DocumentedStatefulAlgorithmForTest(value)
+@StepAlgorithm function DocumentedStepAlgorithmForTest(value)
     return (; value)
 end
 
 """
-Documented config-backed stateful algorithm for macro docstring tests.
+Documented config-backed step algorithm for macro docstring tests.
 """
-@StatefulAlgorithm @config offset::Int = 1 function DocumentedConfiguredStatefulAlgorithmForTest(value)
+@StepAlgorithm @config offset::Int = 1 function DocumentedConfiguredStepAlgorithmForTest(value)
     return (; value = value + offset)
 end
 
-@testset "StatefulAlgorithm macro docstrings" begin
-    documented = sprint(show, MIME"text/plain"(), @doc(DocumentedStatefulAlgorithmForTest))
-    configured = sprint(show, MIME"text/plain"(), @doc(DocumentedConfiguredStatefulAlgorithmForTest))
+@testset "StepAlgorithm macro docstrings" begin
+    documented = sprint(show, MIME"text/plain"(), @doc(DocumentedStepAlgorithmForTest))
+    configured = sprint(show, MIME"text/plain"(), @doc(DocumentedConfiguredStepAlgorithmForTest))
 
-    @test occursin("Documented stateful algorithm", documented)
-    @test occursin("Documented config-backed stateful algorithm", configured)
-    @test DocumentedStatefulAlgorithmForTest <: StatefulAlgorithm
-    @test DocumentedConfiguredStatefulAlgorithmForTest <: StatefulAlgorithm
-    @test DocumentedStatefulAlgorithmForTest <: ProcessAlgorithm
+    @test occursin("Documented step algorithm", documented)
+    @test occursin("Documented config-backed step algorithm", configured)
+    @test DocumentedStepAlgorithmForTest <: StepAlgorithm
+    @test DocumentedConfiguredStepAlgorithmForTest <: StepAlgorithm
+    @test DocumentedStepAlgorithmForTest <: ProcessAlgorithm
 end
 
 @testset "ProcessAlgorithm macro deprecation alias" begin
@@ -33,12 +33,12 @@ end
         end
     end
 
-    @test DeprecatedProcessAlgorithmMacroForTest <: StatefulAlgorithm
+    @test DeprecatedProcessAlgorithmMacroForTest <: StepAlgorithm
     @test StatefulAlgorithms.step!(DeprecatedProcessAlgorithmMacroForTest(), 3).value == 3
 end
 
-@testset "StatefulAlgorithm macro inputs and managed capture" begin
-    @StatefulAlgorithm function CaptureInput(
+@testset "StepAlgorithm macro inputs and managed capture" begin
+    @StepAlgorithm function CaptureInput(
         a,
         @managed(c = b^2),
         @managed(b);
@@ -67,8 +67,8 @@ end
     @test boot_init == boot_inputs
 end
 
-@testset "StatefulAlgorithm macro keeps @init declaration compatibility" begin
-    @StatefulAlgorithm function LegacyInputs(
+@testset "StepAlgorithm macro keeps @init declaration compatibility" begin
+    @StepAlgorithm function LegacyInputs(
         a,
         @managed(c = b + 1),
         @managed(b);
@@ -85,8 +85,8 @@ end
     @test stepped.total == 10
 end
 
-@testset "StatefulAlgorithm macro can capture managed values directly from init context" begin
-    @StatefulAlgorithm function ContextCapture(
+@testset "StepAlgorithm macro can capture managed values directly from init context" begin
+    @StepAlgorithm function ContextCapture(
         x,
         @managed(state),
         @managed(dt),
@@ -105,8 +105,8 @@ end
     @test stepped.state == 1.1
 end
 
-@testset "StatefulAlgorithm macro supports grouped @managed declarations" begin
-    @StatefulAlgorithm function GroupedManaged(
+@testset "StepAlgorithm macro supports grouped @managed declarations" begin
+    @StepAlgorithm function GroupedManaged(
         a,
         @managed(b, c = b + 1, d = nothing);
         @inputs((; b = 2))
@@ -124,10 +124,10 @@ end
     @test isnothing(stepped.d)
 end
 
-@testset "StatefulAlgorithm macro supports where signatures" begin
+@testset "StepAlgorithm macro supports where signatures" begin
     resetstate!(graph::AbstractVector) = fill!(graph, 0)
 
-    @StatefulAlgorithm function resetgraph!(isinggraph::G) where G
+    @StepAlgorithm function resetgraph!(isinggraph::G) where G
         resetstate!(isinggraph)
         return
     end
@@ -141,8 +141,8 @@ end
     @test graph2 == [0, 0]
 end
 
-@testset "StatefulAlgorithm macro supports @config-backed structs" begin
-    @StatefulAlgorithm @config seed::Int = 3 begin
+@testset "StepAlgorithm macro supports @config-backed structs" begin
+    @StepAlgorithm @config seed::Int = 3 begin
         @config begin
             width::Int = 2
         end

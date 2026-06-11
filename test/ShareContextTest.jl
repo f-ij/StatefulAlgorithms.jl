@@ -5,14 +5,14 @@ using StatefulAlgorithms
     # This mirrors `manual tests/ShareTest.jl` and verifies that `Share(...)` makes
     # variables from one subcontext available (and writable) to the other.
 
-    @StatefulAlgorithm function Oscillator(@managed(dt), @managed(state = 1.0), @managed(velocity = 0.0), @managed(trajectory = Float64[1.0]); @inputs (; dt = 0.1))
+    @StepAlgorithm function Oscillator(@managed(dt), @managed(state = 1.0), @managed(velocity = 0.0), @managed(trajectory = Float64[1.0]); @inputs (; dt = 0.1))
         new_vel = velocity - state * dt
         new_state = state + new_vel * dt
         push!(trajectory, new_state)
         return (; state = new_state, velocity = new_vel)
     end
 
-    @StatefulAlgorithm function Damper(state, velocity, trajectory, @managed(damp = 0.05))
+    @StepAlgorithm function Damper(state, velocity, trajectory, @managed(damp = 0.05))
         velocity = velocity * (1.0 - damp)
         push!(trajectory, state)
         return (; velocity)

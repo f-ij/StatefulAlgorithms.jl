@@ -130,7 +130,7 @@ end
 
 `Sink(value = produced)` routes `produced` into the target as `value`.
 
-Stateful algorithms created with `@StatefulAlgorithm` can also use direct
+Step algorithms created with `@StepAlgorithm` can also use direct
 positional syntax when their positional argument names are known:
 
 ```julia
