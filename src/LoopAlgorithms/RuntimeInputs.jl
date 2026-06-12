@@ -247,6 +247,7 @@ specs override stored specs per target.
     overrides = _merge_specs_by_target(stored_overrides, new_overrides)
     interactives = _merge_interactives_by_target(stored_interactives, new_interactives)
     context = @inline apply_interactive_specs(_init_context_for(resolved, inits, overrides, lifetime), interactives)
+    context = @inline apply_replace_specs(context, resolved)
     return _with_lifecycle(resolved, context, inits, (overrides..., interactives...))
 end
 
@@ -270,6 +271,7 @@ function partialinit(la::LA, specs::InputInterface...) where {LA<:AbstractLoopAl
         new_context = initcontext(new_context, key; inputs = get_vars(input), overrides = isempty(ov) ? (;) : get_vars(first(ov)))
     end
     new_context = @inline apply_interactive_specs(new_context, merged_interactives)
+    new_context = @inline apply_replace_specs(new_context, la)
     return _with_lifecycle(la, new_context, _merge_specs_by_target(getstoredinits(la), inits), (merged_overrides..., merged_interactives...))
 end
 

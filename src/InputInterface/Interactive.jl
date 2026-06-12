@@ -43,8 +43,9 @@ end
 
 @inline interactive_names(::Union{Interactive{Target, Names}, Type{<:Interactive{Target, Names}}}) where {Target, Names} = Names
 
-"""Expose the current interactive payload when a `SubContextView` reads it."""
-@inline subcontext_view_value(ref::InteractiveVar) = ref[]
+"""Expose the current interactive payload through the generic view-value hook."""
+@inline subcontext_view_value(ref::InteractiveVar, view::V) where {V<:SubContextView} =
+    @inline subcontext_view_value(ref[], view)
 
 """Wrap a context value for interactive mutation, unless it is already wrapped."""
 @inline interactive_wrapper(value) = InteractiveVar(value)

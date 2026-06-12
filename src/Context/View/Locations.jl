@@ -10,11 +10,28 @@
 
 function get_local_locations(sct::Type{SCT}) where {SCT<:SubContextView{CType, SubKey}} where {CType, SubKey}
     _subcontext_type = subcontext_type(SCT)
+    _data_type = getdatatype(_subcontext_type)
     local_varnames = keys(_subcontext_type)
 
-    localst = ntuple(i ->VarLocation{:local}(SubKey, local_varnames[i]), length(local_varnames))
+    localst = ntuple(i -> _redirected_varlocation(fieldtype(_data_type, local_varnames[i]), Val(SubKey), Val(local_varnames[i])), length(local_varnames))
     return NamedTuple{(local_varnames...,)}(localst)
 end
+
+"""
+    _redirected_varlocation(::Type{T}, Val(subcontext), Val(name))
+
+Overloadable storage-type hook for local fields in `SubContextView`.
+
+The default maps a physically local field to its local backing location. Storage
+marker types can overload this to redirect reads and writeback to another
+`VarLocation`; `ReplacedVar` uses this to make a local marker behave as a source
+field elsewhere in the persistent context.
+"""
+@inline _redirected_varlocation(::Type{T}, ::Val{SubKey}, ::Val{name}) where {T, SubKey, name} =
+    VarLocation{:local}(SubKey, name)
+
+@inline _redirected_varlocation(::Type{T}, ::Val{SubKey}, ::Val{name}) where {VL<:VarLocation, T<:ReplacedVar{VL}, SubKey, name} =
+    VL()
 
 """
 Shared subcontexts => VarLocations
@@ -143,19 +160,30 @@ end
 end
 
 """
-    subcontext_view_value(value)
+    subcontext_view_value(value, view)
 
 Return the value exposed by `SubContextView` reads for one stored field.
-Wrapper storage types can overload this to present algorithm-facing values
-without changing the persistent context representation.
+
+This is an overloadable API for storage wrappers that need custom
+algorithm-facing read behavior. Methods should transform `value` and then call
+`subcontext_view_value(next_value, view)` again, so nested wrappers unfold until
+the default identity method is reached.
 """
-@inline subcontext_view_value(value) = value
+@inline subcontext_view_value(value::T, view::V) where {T, V<:SubContextView} = value
+
+"""Resolve a replaced field through its stored backing location."""
+@inline function subcontext_view_value(value::R, view::V) where {VL<:VarLocation, R<:ReplacedVar{VL}, V<:SubContextView}
+    return @inline subcontext_view_value(getproperty(view, getfield(value, :varlocation)), view)
+end
 
 """
     subcontext_writeback_value(old, returned)
 
 Return the value that should be written to context when an algorithm returns
 `returned` for a field currently storing `old`.
+
+This is an overloadable API for storage wrappers that absorb writes while
+preserving their context representation, for example mutable reference wrappers.
 """
 @inline subcontext_writeback_value(::Any, returned) = returned
 
@@ -166,22 +194,22 @@ Return the value that should be written to context when an algorithm returns
 ) where {SCV<:SubContextView, subcontextname, varname}
     runtimecontext = @inline getruntimecontext(scv)
     if subcontextname === :_input || subcontextname === :_runtime
-        return @inline subcontext_view_value(_runtime_get_var(runtimecontext, Val(subcontextname), Val(varname)))
+        return @inline subcontext_view_value(_runtime_get_var(runtimecontext, Val(subcontextname), Val(varname)), scv)
     end
     context = @inline getcontext(scv)
     subcontexts = @inline get_subcontexts(context)
     if haskey(subcontexts, subcontextname)
         subcontext = @inline getproperty(subcontexts, subcontextname)
         if @inline haskey(getdata(subcontext), varname)
-            return @inline subcontext_view_value(getproperty(subcontext, varname))
+            return @inline subcontext_view_value(getproperty(subcontext, varname), scv)
         end
     end
     if @inline _runtime_has_var(runtimecontext, Val(subcontextname), Val(varname))
-        return @inline subcontext_view_value(_runtime_get_var(runtimecontext, Val(subcontextname), Val(varname)))
+        return @inline subcontext_view_value(_runtime_get_var(runtimecontext, Val(subcontextname), Val(varname)), scv)
     end
     if haskey(subcontexts, subcontextname)
         subcontext = @inline getproperty(subcontexts, subcontextname)
-        return @inline subcontext_view_value(getproperty(subcontext, varname))
+        return @inline subcontext_view_value(getproperty(subcontext, varname), scv)
     end
     error("Subcontext `$subcontextname` is not available in state or runtime context.")
 end
@@ -259,14 +287,14 @@ Read a routed runtime variable from the runtime context.
     target_variables = get_originalname(vl)
     if isnothing(getfunc(vl)) && target_variables isa Symbol
         return quote
-            return @inline subcontext_view_value(_runtime_get_var(getruntimecontext(sct), Val($(QuoteNode(target_subcontext))), Val($(QuoteNode(target_variables)))))
+            return @inline subcontext_view_value(_runtime_get_var(getruntimecontext(sct), Val($(QuoteNode(target_subcontext))), Val($(QuoteNode(target_variables)))), sct)
         end
     end
 
     varnames = target_variables isa Tuple ? target_variables : (target_variables,)
     varsymbols = ntuple(i -> gensym(:runtime_var), length(varnames))
     assign_exprs = [
-        :($(varsymbols[i]) = @inline subcontext_view_value(_runtime_get_var(getruntimecontext(sct), Val($(QuoteNode(target_subcontext))), Val($(QuoteNode(varnames[i]))))))
+        :($(varsymbols[i]) = @inline subcontext_view_value(_runtime_get_var(getruntimecontext(sct), Val($(QuoteNode(target_subcontext))), Val($(QuoteNode(varnames[i])))), sct))
         for i in eachindex(varnames)
     ]
     fexpr = funcexpr(vl, varsymbols...)

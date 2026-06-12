@@ -132,6 +132,23 @@ function _dsl_build_global_route_statement(stmt, alias_map, context_map; include
     return _dsl_maybe_guard_metadata_expr(:(push!(_dsl_options, $route)), include_condition)
 end
 
+"""Parse `@replace source.field => target.field` as a root replacement option."""
+function _dsl_build_global_replace_statement(stmt, alias_map, context_map; include_condition = nothing)
+    stmt isa Expr && stmt.head == :macrocall && stmt.args[1] == Symbol("@replace") || return nothing
+    length(stmt.args) == 3 || error("@replace expects `source.field => target.field`.")
+    replace_expr = stmt.args[3]
+    replace_expr isa Expr && replace_expr.head == :call && replace_expr.args[1] == :(=>) && length(replace_expr.args) == 3 ||
+        error("@replace expects `source.field => target.field`.")
+
+    source = _dsl_parse_owned_route_expr(alias_map, context_map, replace_expr.args[2])
+    target = _dsl_parse_owned_route_expr(alias_map, context_map, replace_expr.args[3])
+    isnothing(source) && error("@replace source must be an owned field reference like `source.value` or `c1.inner.value`.")
+    isnothing(target) && error("@replace target must be an owned field reference like `sink.value`.")
+
+    replacement = :(StatefulAlgorithms.Replace($(esc(source.owner)) => $(esc(target.owner)), $(QuoteNode(source.source)) => $(QuoteNode(target.source))))
+    return _dsl_maybe_guard_metadata_expr(:(push!(_dsl_options, $replacement)), include_condition)
+end
+
 """
 Emit the share/route owner expression matching the eventual constructor entry.
 
@@ -387,6 +404,9 @@ function _dsl_build_statement(stmt, alias_map, context_map, known_outputs::Set{S
 
     global_route = _dsl_build_global_route_statement(stmt, alias_map, context_map; include_condition)
     isnothing(global_route) || return global_route
+
+    global_replace = _dsl_build_global_replace_statement(stmt, alias_map, context_map; include_condition)
+    isnothing(global_replace) || return global_replace
 
     outputs = ()
     rhs = stmt

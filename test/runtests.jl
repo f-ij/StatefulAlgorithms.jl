@@ -21,6 +21,7 @@ using StatefulAlgorithms
     include("InnerTypeFilterTest.jl")
     include("ContextShowingTest.jl")
     include("InteractiveTest.jl")
+    include("ReplacementTest.jl")
     include("CompositeDSLTest.jl")
     include("ProcessAlgorithmMacroTest.jl")
     include("ContextAnalyzerTest.jl")
