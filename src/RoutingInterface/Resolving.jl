@@ -38,13 +38,13 @@ end
 end
 
 """
-Resolve route wiring and group resolved routes by target context name.
+Resolve route-like wiring and group resolved variable bindings by target context name.
 """
-@inline function resolve_options(reg::R, routes::Route...) where {R<:NameSpaceRegistry}
+@inline function resolve_options(reg::R, routes::Union{Route, Replace}...) where {R<:NameSpaceRegistry}
     return _resolve_route_options(reg, routes, (;))
 end
 
-"""Resolve route wiring with tuple recursion."""
+"""Resolve route-like wiring with tuple recursion."""
 @inline _resolve_route_options(reg::NameSpaceRegistry, routes::Tuple{}, grouped::NamedTuple) = grouped
 @inline function _resolve_route_options(reg::R, routes::Routes, grouped::NamedTuple) where {R<:NameSpaceRegistry, Routes<:Tuple}
     grouped = _append_resolved_wiring(grouped, resolve_wiring(reg, first(routes)))

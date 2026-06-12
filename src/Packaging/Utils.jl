@@ -2,7 +2,7 @@
 Make a zip of varname_in_subcontext => varname_in_localcontext 
     For all variables in the route
 """
-function route_to_alias_zip(route::Route, registry::NameSpaceRegistry)
+function route_to_alias_zip(route::Union{Route, Replace}, registry::NameSpaceRegistry)
     origin_obj = getfrom(route)
     target_obj = getto(route)
 

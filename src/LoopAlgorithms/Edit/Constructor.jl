@@ -122,6 +122,22 @@ end
 @inline _rename_item(r::Route, replacements) = _rename_route(r, replacements)
 @inline _rename_item(r::Route, replacements::Tuple{Vararg{Pair}}) = _rename_route(r, replacements)
 
+"""Return replacement wiring retargeted through loop-algorithm key renames."""
+@inline function _rename_replace(r::Replace, replacements)
+    varnames = getvarnames(r)
+    aliases = getaliases(r)
+    mappings = ntuple(i -> varnames[i] == aliases[i] ? varnames[i] : (varnames[i] => aliases[i]), length(varnames))
+    return Replace(
+        _rename_item(getfrom(r), replacements) => _rename_item(getto(r), replacements),
+        mappings...;
+        transform = gettransform(r),
+        reverse_transform = getreverse_transform(r),
+    )
+end
+
+@inline _rename_item(r::Replace, replacements) = _rename_replace(r, replacements)
+@inline _rename_item(r::Replace, replacements::Tuple{Vararg{Pair}}) = _rename_replace(r, replacements)
+
 function rename(la::LA, replacements::Pair...) where {LA<:AbstractLoopAlgorithm}
     _ensure_unresolved_for_edit(la)
     funcs = map(x -> _rename_item(x, replacements), getalgos(la))

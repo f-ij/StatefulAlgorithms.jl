@@ -37,7 +37,7 @@ end
 function Package(comp::CompositeAlgorithm, states::States, name = Symbol()) where {States<:Tuple}
     identifiable_funcs = getalgos(comp)
     package_intervals = intervals(comp)
-    routes = typefilter(Route, getoptions(comp))
+    routes = (typefilter(Route, getoptions(comp))..., typefilter(Replace, getoptions(comp))...)
     aliases = package_aliases(identifiable_funcs, setup_registry(comp), routes)
     package_states = (states..., getstates(comp)...)
     customname = name == Symbol() || name == "" ? Symbol() : Symbol(name)

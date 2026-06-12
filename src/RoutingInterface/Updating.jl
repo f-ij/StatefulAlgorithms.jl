@@ -11,6 +11,6 @@ function update_option_keys(la::ALA) where {ALA<:AbstractLoopAlgorithm}
     options = la isa LoopAlgorithm ? _unresolved_options(la) : getoptions(la)
     options isa Tuple || return options
     isresolved(la) || return options
-    routing_options = filter(option -> option isa Union{Route, Share}, options)
+    routing_options = filter(option -> option isa Union{Route, Replace, Share}, options)
     return update_keys.(routing_options, Ref(getregistry(la)))
 end

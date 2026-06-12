@@ -8,6 +8,8 @@ struct DSLValueAlgo <: StatefulAlgorithms.ProcessAlgorithm end
 struct DSLNestedSourceAlgo <: StatefulAlgorithms.ProcessAlgorithm end
 struct DSLHeldStateAlgo <: StatefulAlgorithms.ProcessAlgorithm end
 struct DSLRepeatLifetimeCounter <: StatefulAlgorithms.ProcessAlgorithm end
+struct DSLReplaceSourceAlgo <: StatefulAlgorithms.ProcessAlgorithm end
+struct DSLReplaceTargetAlgo <: StatefulAlgorithms.ProcessAlgorithm end
 
 function StatefulAlgorithms.step!(::DSLSourceAlgo, context)
     return (; produced = 2, passthrough = context.seed)
@@ -43,6 +45,22 @@ end
 
 function StatefulAlgorithms.step!(::A, context::C) where {A<:DSLRepeatLifetimeCounter,C}
     return (; count = context.count + 1)
+end
+
+function StatefulAlgorithms.init(::DSLReplaceSourceAlgo, context)
+    return (; value = 3)
+end
+
+function StatefulAlgorithms.step!(::DSLReplaceSourceAlgo, context)
+    return (;)
+end
+
+function StatefulAlgorithms.init(::DSLReplaceTargetAlgo, context)
+    return (; value = 100, seen = 0)
+end
+
+function StatefulAlgorithms.step!(::DSLReplaceTargetAlgo, context)
+    return (; value = context.value + 1, seen = context.value)
 end
 
 scaled_double_dsl_test(x; scale = 1) = scale * (2x)
@@ -439,6 +457,25 @@ end
         StatefulAlgorithms.run(p_two_var)
         ctx_two_var = fetch(p_two_var)
         @test isempty(ctx_two_var[:DSLValueAlgo_1])
+    end
+
+    @testset "Replace wiring overrides target-local state locations" begin
+        @info "Composite DSL: Replace wiring overrides target-local state locations"
+        algo = @CompositeAlgorithm begin
+            @alias source = DSLReplaceSourceAlgo()
+            @alias target = DSLReplaceTargetAlgo()
+            source()
+            target()
+            @replace source.value => target.value
+        end
+
+        p = Process(algo, repeat = 1)
+        StatefulAlgorithms.run(p)
+        ctx = fetch(p)
+
+        @test ctx[:source].value == 4
+        @test ctx[:target].value == 100
+        @test ctx[:target].seen == 3
     end
 
     @testset "Implicit transform expressions are rejected in route syntax" begin

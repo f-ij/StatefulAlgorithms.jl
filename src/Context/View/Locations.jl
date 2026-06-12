@@ -37,7 +37,7 @@ end
 Routes supplied to the view => VarLocations.
 """
 function get_routed_locations(sct::Type{SCT}) where {SCT<:SubContextView{CType, SubKey}} where {CType, SubKey}
-    sharedvars = _view_shared_types(view_sharedvars(SCT))
+    sharedvars = typefilter(Route, _view_shared_types(view_sharedvars(SCT)))
 
     routedvars = named_flat_collect_broadcast(sharedvars) do sv
         fromname = get_fromname(sv)
@@ -51,6 +51,30 @@ function get_routed_locations(sct::Type{SCT}) where {SCT<:SubContextView{CType, 
     end
 
     return routedvars
+end
+
+"""
+Replacement routes supplied to the view => VarLocations.
+
+Replacements intentionally override target-local state for the same view name.
+They are kept separate from ordinary routes so `_compute_location` can give them
+stronger precedence without changing existing `Route` behavior.
+"""
+function get_replacement_locations(sct::Type{SCT}) where {SCT<:SubContextView{CType, SubKey}} where {CType, SubKey}
+    replacements = typefilter(Replace, _view_shared_types(view_sharedvars(SCT)))
+
+    replacementvars = named_flat_collect_broadcast(replacements) do replacement
+        fromname = get_fromname(replacement)
+        _localnames = localnames(replacement)
+        _subvarcontextnames = subvarcontextnames(replacement)
+        _transform = gettransform(replacement)
+        _reverse_transform = getreverse_transform(replacement)
+        location_type = (fromname == :_runtime || fromname == :_input) ? :runtime : :subcontext
+        pairs = (_localnames[i] => VarLocation{location_type}(fromname, _subvarcontextnames[i], _transform, _reverse_transform) for i in 1:length(_localnames))
+        return NamedTuple(pairs)
+    end
+
+    return replacementvars
 end
 
 function get_injected_locations(sct::Type{SCT}) where {SCT<:SubContextView{CType, SubKey}} where {CType, SubKey}
@@ -67,10 +91,11 @@ function _compute_varlocations(::Type{C}) where {C<:SubContextView{CType, SubKey
     locals = get_local_locations(C)
     sharedvars = get_shared_locations(C)
     routedvars = get_routed_locations(C)
+    replacements = get_replacement_locations(C)
     injectedvars = get_injected_locations(C)
-    # Locals take precedene over routes which take precedence over shared if there are name clashes
+    # Replacements intentionally override locals; locals still override routes.
     # Injected take precedence over all
-    return (;sharedvars..., routedvars..., locals..., injectedvars...)
+    return (;sharedvars..., routedvars..., locals..., replacements..., injectedvars...)
 end
 
 """
@@ -81,9 +106,10 @@ function _compute_all_locations(::Type{SCT}) where {SCT<:SubContextView}
     locals = get_local_locations(SCT)
     sharedvars = get_shared_locations(SCT)
     routedvars = get_routed_locations(SCT)
+    replacements = get_replacement_locations(SCT)
     injectedvars = get_injected_locations(SCT)
-    # Locals take precedene over routes which take precedence over shared
-    return (;sharedvars..., routedvars..., locals..., injectedvars...)
+    # Replacements intentionally override locals; locals still override routes.
+    return (;sharedvars..., routedvars..., locals..., replacements..., injectedvars...)
 end
 
 @inline @generated function _generated_varlocations(::Type{C}) where {C<:SubContextView}
@@ -107,6 +133,9 @@ function _compute_location(::Type{SCT}, name::Symbol) where {SCT<:SubContextView
 
     injected = get_injected_locations(SCT)
     hasproperty(injected, subcontext_name) && return getproperty(injected, subcontext_name), subcontext_name
+
+    replacements = get_replacement_locations(SCT)
+    hasproperty(replacements, subcontext_name) && return getproperty(replacements, subcontext_name), subcontext_name
 
     local_locations = get_local_locations(SCT)
     hasproperty(local_locations, subcontext_name) && return getproperty(local_locations, subcontext_name), subcontext_name

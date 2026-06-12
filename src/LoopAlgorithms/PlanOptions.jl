@@ -47,7 +47,7 @@ end
 
 """Collect plan-wide route/share wiring into a `Wiring` value."""
 @inline function _plan_wiring(options::Options) where {Options<:Tuple}
-    routes = typefilter(Route, options)
+    routes = (typefilter(Route, options)..., typefilter(Replace, options)...)
     shares = typefilter(Share, options)
     return Wiring(routes, shares)
 end
@@ -80,7 +80,7 @@ end
 @inline _child_matches_endpoint_match(child, endpoint_match) = _child_matches_endpoint_match(typeof(child), endpoint_match)
 
 function _scoped_wiring_matches_child_type(::Type{Child}, ::Type{Owner}, ::Type{Option}) where {Child, Owner, Option}
-    if Option <: Route
+    if Option <: Union{Route, Replace}
         return _child_matches_endpoint_match(Child, to_match_by(Option))
     end
     if Owner === Any || Owner === DataType || Owner === UnionAll
@@ -92,7 +92,7 @@ end
 @generated function _scoped_wiring_matches_child(::Val{I}, funcs::Funcs, ::LocalPlanOption{Owner, Option}) where {I, Funcs<:Tuple, Owner, Option}
     I > fieldcount(Funcs) && return :(Val(false))
     _scoped_wiring_matches_child_type(fieldtype(Funcs, I), Owner, Option) && return :(Val(true))
-    if !(Option <: Route)
+    if !(Option <: Union{Route, Replace})
         return :(Val(:runtime))
     end
     return :(Val(false))
@@ -134,7 +134,7 @@ end
 
 """Return the concrete `Wiring` bucket for one child position."""
 @inline function _child_wiring_bucket(options::Options) where {Options<:Tuple}
-    routes = typefilter(Route, options)
+    routes = (typefilter(Route, options)..., typefilter(Replace, options)...)
     shares = typefilter(Share, options)
     return Wiring(routes, shares)
 end
@@ -159,7 +159,7 @@ end
 """Return whether a child value receives one runtime-scoped wiring option."""
 function _runtime_scoped_wiring_matches_child(child, option::LocalPlanOption)
     scoped_wiring = _wrapped_plan_wiring(option)
-    if scoped_wiring isa Route
+    if scoped_wiring isa Union{Route, Replace}
         return _child_matches_endpoint_match(child, to_match_by(scoped_wiring))
     end
 
@@ -187,7 +187,7 @@ function _plan_child_wiring_runtime(funcs::Funcs, options::Options) where {Funcs
         assigned = false
         for i in eachindex(route_buckets)
             _runtime_scoped_wiring_matches_child(getfield(funcs, i), option) || continue
-            if scoped_wiring isa Route
+            if scoped_wiring isa Union{Route, Replace}
                 push!(route_buckets[i], scoped_wiring)
             elseif scoped_wiring isa Share
                 push!(share_buckets[i], scoped_wiring)
