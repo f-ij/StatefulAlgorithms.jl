@@ -10,6 +10,7 @@ using StatefulAlgorithms
     include("CopyManagerTest.jl")
     include("ProcessManagerTest.jl")
     include("RuntimeInputsLifecycleTest.jl")
+    include("LoopCursorScheduleTest.jl")
     include("PackageTest.jl")
     include("RouteWalkerTest.jl")
     include("ShareContextTest.jl")

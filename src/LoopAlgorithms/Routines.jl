@@ -4,15 +4,13 @@ export Routine, RoutinePlan
 Execution plan that repeats child algorithms.
 
 `Routine` is the repeated counterpart to `CompositeAlgorithm`: it keeps child
-algorithms, repeat metadata, resume counters, and plan wiring. The runtime
-registry, root states, context, inputs, and overrides are carried by the concrete
-`LoopAlgorithm` wrapper.
+algorithms, repeat metadata, namespaces, and plan wiring. Resume counters are
+allocated as loop cursors only for pausable executions.
 """
-struct Routine{T, Repeats, Namespaces, MV, W, id} <: AbstractLoopAlgorithm
+struct Routine{T, Repeats, Namespaces, W, id} <: AbstractPlan
     funcs::T     
     repeats
     namespaces::Namespaces
-    resume_idxs::MV
     wiring::W
 end
 
@@ -31,9 +29,8 @@ non-plan options remain on the `LoopAlgorithm` wrapper.
 """
 function LoopAlgorithm(::Type{Routine}, funcs::F, states::Tuple, options::Tuple, repeats; id = nothing) where F
     namespaces = ntuple(_ -> Namespace{nothing}(), length(funcs))
-    resume_idxs = MVector{length(funcs),Int}(ones(length(funcs)))
     wiring = PlanWiring(_plan_wiring(options), _plan_child_wiring(funcs, options))
-    plan = Routine{typeof(funcs), repeats, typeof(namespaces), typeof(resume_idxs), typeof(wiring), id}(funcs, repeats, namespaces, resume_idxs, wiring)
+    plan = Routine{typeof(funcs), repeats, typeof(namespaces), typeof(wiring), id}(funcs, repeats, namespaces, wiring)
     root_options = _root_loop_options(options)
     return isempty(states) && isempty(root_options) ? plan : LoopAlgorithm(plan; states, options = root_options, id)
 end
@@ -92,8 +89,6 @@ end
 """Convert routine specification entries into registry multiplier weights."""
 getmultipliers_from_specification_num(::Type{R}, specification_num::S) where {R<:Routine,S} =
     map(_routine_schedule_multiplier, specification_num)
-get_resume_idxs(r::Routine) = getfield(r, :resume_idxs)
-resume_idx(r::Routine, idx) = getfield(r, :resume_idxs)[idx]
 resumable(r::Routine) = true
 
 # TODO: This is only used in treesctructure, try to deprecate
@@ -106,7 +101,6 @@ statetypes(r::Union{Routine, Type{<:Routine}}) = ()
 Base.length(r::Routine) = length(getalgos(r))
 
 function reset!(r::Routine)
-    getfield(r, :resume_idxs) .= 1
     reset!.(getalgos(r))
 end
 #############################################
@@ -120,7 +114,7 @@ end
 """Return registry multiplier weights for each routine child."""
 multipliers(r::R) where {R<:Routine} = map(_routine_schedule_multiplier, lifetimes(r))
 multipliers(rT::Type{R}) where {R<:Routine} = map(_routine_schedule_multiplier, lifetimes(rT))
-getid(r::Union{Routine{T,R,NS,MV,W,id},Type{<:Routine{T,R,NS,MV,W,id}}}) where {T,R,NS,MV,W,id} = id
+getid(r::Union{Routine{T,R,NS,W,id},Type{<:Routine{T,R,NS,W,id}}}) where {T,R,NS,W,id} = id
 
 """Return the child lifetime schedule tuple for a routine."""
 @inline lifetimes(r::Routine) = typeof(r).parameters[2]
@@ -135,16 +129,3 @@ lifetimes(r::Type{<:Routine}, ::Val{idx}) where {idx} = lifetimes(r)[idx]
 repeats(r::Union{Routine, Type{<:Routine}}, idx::Int) = repeats(lifetimes(r, idx))
 repeats(r::Union{Routine, Type{<:Routine}}, idx::Val) = repeats(lifetimes(r, idx))
 
-
-
-function resume_idxs(r::Routine)
-    getfield(r, :resume_idxs)
-end
-
-function set_resume_point!(r::Routine, idx::Int, loopidx::Int)
-    getfield(r, :resume_idxs)[idx] = loopidx
-end
-
-@inline function get_resume_point(r::Routine, idx::Int)
-    getfield(r, :resume_idxs)[idx]
-end

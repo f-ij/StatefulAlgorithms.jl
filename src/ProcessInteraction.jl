@@ -105,6 +105,7 @@ function Base.close(p::Process)
     p.task = nothing 
 
     p.loopidx = 1
+    p.loop_cursor = nothing
     return true
 end
 

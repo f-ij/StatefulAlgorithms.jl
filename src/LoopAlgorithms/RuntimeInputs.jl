@@ -77,7 +77,7 @@ Runtime input declarations may be stored either as explicit `RuntimeInputs`
 options or as `RuntimeInputState` process states. The latter is used by the DSL
 so inputs can participate in routing through the registry.
 """
-function runtimeinputs(la::LA) where {LA<:AbstractLoopAlgorithm}
+function runtimeinputs(la::LA) where {LA<:LoopSpec}
     opts = getoptions(la)
     inputs = filter_by_type(RuntimeInputs, opts)
     if !isempty(inputs)
@@ -117,7 +117,7 @@ Validate one run's keyword arguments against `la`'s runtime input declarations.
 This rejects unknown names, checks required inputs, validates typed inputs with
 `isa`, and merges optional defaults into the returned `NamedTuple`.
 """
-function _validate_runtime_inputs(la::LA, inputs::I) where {LA<:AbstractLoopAlgorithm, I<:NamedTuple}
+function _validate_runtime_inputs(la::LA, inputs::I) where {LA<:LoopSpec, I<:NamedTuple}
     specs = runtimeinputs(la).specs
     if isempty(specs)
         isempty(inputs) || error("Runtime inputs were passed, but this LoopAlgorithm declares no @input values.")
@@ -145,11 +145,11 @@ end
 
 # Lifecycle accessors keep `LoopAlgorithm`, plain plan nodes, and wrappers on a
 # shared path. Plain plans report no stored lifecycle data.
-@inline getstoredinits(la::LA) where {LA<:AbstractLoopAlgorithm} = hasfield(LA, :inits) ? getfield(la, :inits) : ()
-@inline getstoredoverrides(la::LA) where {LA<:AbstractLoopAlgorithm} = hasfield(LA, :overrides) ? getfield(la, :overrides) : ()
-@inline getstoredcontext(la::LA) where {LA<:AbstractLoopAlgorithm} = hasfield(LA, :context) ? getfield(la, :context) : nothing
-@inline context(la::LA) where {LA<:AbstractLoopAlgorithm} = getstoredcontext(la)
-@inline _without_lifecycle(la::LA) where {LA<:AbstractLoopAlgorithm} = _with_lifecycle(la, nothing, (), ())
+@inline getstoredinits(la::LA) where {LA<:LoopSpec} = hasfield(LA, :inits) ? getfield(la, :inits) : ()
+@inline getstoredoverrides(la::LA) where {LA<:LoopSpec} = hasfield(LA, :overrides) ? getfield(la, :overrides) : ()
+@inline getstoredcontext(la::LA) where {LA<:LoopSpec} = hasfield(LA, :context) ? getfield(la, :context) : nothing
+@inline context(la::LA) where {LA<:LoopSpec} = getstoredcontext(la)
+@inline _without_lifecycle(la::LA) where {LA<:LoopSpec} = _with_lifecycle(la, nothing, (), ())
 
 # Merge newly passed `Init`/`Override` specs over previously stored specs by
 # target. This lets `init(initialized, Init(Target; ...))` replay the old
@@ -238,7 +238,7 @@ end
 Fully initialize `la`, replaying stored init/override specs and letting passed
 specs override stored specs per target.
 """
-@inline function init(la::LA, specs::InputInterface...; lifetime = Indefinite()) where {LA<:AbstractLoopAlgorithm}
+@inline function init(la::LA, specs::InputInterface...; lifetime = Indefinite()) where {LA<:LoopSpec}
     resolved = _without_lifecycle(resolve(la))
     new_specs = _resolve_lifecycle_specs(getregistry(resolved), specs)
     new_inits, new_overrides, new_interactives = _split_lifecycle_specs(new_specs)
@@ -281,7 +281,7 @@ validated, merged into the transient `ProcessContext._input` field for the loop
 call, and removed before the returned loop algorithm stores its next persistent
 context.
 """
-function Base.run(la::LA; repeats = 1, lifetime = nothing, kwargs...) where {LA<:AbstractLoopAlgorithm}
+function Base.run(la::LA; repeats = 1, lifetime = nothing, kwargs...) where {LA<:LoopSpec}
     initialized = isnothing(getstoredcontext(la)) ? init(la) : la
     stored_context = getstoredcontext(initialized)
     lt = isnothing(lifetime) ? normalize_process_lifetime(initialized, repeats) : normalize_process_lifetime(initialized, lifetime)

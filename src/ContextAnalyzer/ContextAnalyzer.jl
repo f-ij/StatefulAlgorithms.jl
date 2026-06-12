@@ -383,7 +383,7 @@ _analysis_mock_loopalgorithm(x) = x
 
 function _analysis_mock_loopalgorithm(sa::AbstractIdentifiableAlgo)
     inner = getalgo(sa)
-    if inner isa AbstractLoopAlgorithm
+    if inner isa LoopSpec
         return setfield(sa, :func, _analysis_mock_loopalgorithm(inner))
     end
     return sa
@@ -405,7 +405,7 @@ function _analysis_mock_loopalgorithm(r::Routine)
     return mocked
 end
 
-function analyse_inits(la::ALA; globals = (;), inputs = (;)) where {ALA<:AbstractLoopAlgorithm}
+function analyse_inits(la::ALA; globals = (;), inputs = (;)) where {ALA<:LoopSpec}
     resolved = resolve(la)
     mocked = _analysis_mock_loopalgorithm(resolved)
     analyser = ContextAnalyser(; globals = merge(_default_analysis_globals(mocked), globals), inputs)
@@ -421,7 +421,7 @@ function analyse_inits(la::ALA; globals = (;), inputs = (;)) where {ALA<:Abstrac
     return analyser
 end
 
-function analyse_steps(la::ALA; globals = (;), inputs = (;), init = true) where {ALA<:AbstractLoopAlgorithm}
+function analyse_steps(la::ALA; globals = (;), inputs = (;), init = true) where {ALA<:LoopSpec}
     resolved = resolve(la)
     mocked = _analysis_mock_loopalgorithm(resolved)
     analyser = ContextAnalyser(; globals = merge(_default_analysis_globals(mocked), globals), inputs)

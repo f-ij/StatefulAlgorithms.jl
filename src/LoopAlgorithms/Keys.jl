@@ -20,23 +20,24 @@ end
 
 """Return a nested loop algorithm carried by `entity`, or `nothing`."""
 @inline _nested_loop(::Any) = nothing
-@inline _nested_loop(loop::LA) where {LA<:AbstractLoopAlgorithm} = loop
-@inline _nested_loop(::Type{LA}) where {LA<:AbstractLoopAlgorithm} = LA
+@inline _nested_loop(loop::LA) where {LA<:LoopSpec} = loop
+@inline _nested_loop(::Type{LA}) where {LA<:LoopSpec} = LA
 @inline _nested_loop(entity::AbstractIdentifiableAlgo{F}) where {F} =
-    F <: AbstractLoopAlgorithm ? getalgo(entity) : nothing
+    F <: LoopSpec ? getalgo(entity) : nothing
 @inline _nested_loop(::Type{<:AbstractIdentifiableAlgo{F}}) where {F} =
-    F <: AbstractLoopAlgorithm ? F : nothing
+    F <: LoopSpec ? F : nothing
 
 """Return `(algos..., states...)` for following a `KeyLocation` path."""
-@inline _key_children(loop::LA) where {LA<:AbstractLoopAlgorithm} = tuple(getalgos(loop)..., getstates(loop)...)
-@inline _key_children(::Type{LA}) where {LA<:AbstractLoopAlgorithm} = tuple(algotypes(LA)..., statetypes(LA)...)
+@inline _key_children(loop::LA) where {LA<:LoopSpec} = tuple(getalgos(loop)..., getstates(loop)...)
+@inline _key_children(::Type{LA}) where {LA<:LoopSpec} = tuple(algotypes(LA)..., statetypes(LA)...)
 
 @inline _namespace_key(namespaces::Tuple, idx::Int) = namesymbol(getfield(namespaces, idx))
 @inline _namespace_key(::Type{NS}, idx::Int) where {NS<:Tuple} = namesymbol(fieldtype(NS, idx))
 @inline _namespace_key(::Nothing, idx::Int) = nothing
 
-@inline _namespace_tuple(loop::Union{CompositeAlgorithm, Routine}) = getfield(loop, :namespaces)
-@inline _namespace_tuple(::Type{<:Union{CompositeAlgorithm{FT,S,NS}, Routine{FT,S,NS}}}) where {FT,S,NS} = NS
+@inline _namespace_tuple(loop::AbstractPlan) = getfield(loop, :namespaces)
+@inline _namespace_tuple(::Type{<:CompositeAlgorithm{FT,S,NS}}) where {FT,S,NS} = NS
+@inline _namespace_tuple(::Type{<:Routine{FT,S,NS}}) where {FT,S,NS} = NS
 @inline _namespace_tuple(loop::LoopAlgorithm) = _namespace_tuple(getplan(loop))
 @inline _namespace_tuple(::Type{<:LoopAlgorithm{Plan}}) where {Plan} = _namespace_tuple(Plan)
 @inline _namespace_tuple(loop::FinalizedAlgorithm) = _namespace_tuple(inneralgorithm(loop))
@@ -68,7 +69,7 @@ function _append_keys!(names::Vector{Symbol}, loop)
     return names
 end
 
-function _append_keys!(names::Vector{Symbol}, ::Type{LA}) where {LA<:AbstractLoopAlgorithm}
+function _append_keys!(names::Vector{Symbol}, ::Type{LA}) where {LA<:LoopSpec}
     child_types = algotypes(LA)
     for idx in eachindex(child_types)
         child_type = child_types[idx]
@@ -91,11 +92,11 @@ end
 @inline _key_source(loop) = loop
 
 """Return all named children and states visible from a loop algorithm tree."""
-function Base.keys(loop::LA) where {LA<:AbstractLoopAlgorithm}
+function Base.keys(loop::LA) where {LA<:LoopSpec}
     return tuple(_append_keys!(Symbol[], _key_source(loop))...)
 end
 
-@generated function Base.keys(::Type{LA}) where {LA<:AbstractLoopAlgorithm}
+@generated function Base.keys(::Type{LA}) where {LA<:LoopSpec}
     names = tuple(_append_keys!(Symbol[], _key_source(LA))...)
     return Expr(:tuple, (QuoteNode(name) for name in names)...)
 end
@@ -122,7 +123,7 @@ function _findkey(loop, key::Symbol, prefix::Tuple)
     return nothing
 end
 
-function _findkey(::Type{LA}, key::Symbol, prefix::Tuple) where {LA<:AbstractLoopAlgorithm}
+function _findkey(::Type{LA}, key::Symbol, prefix::Tuple) where {LA<:LoopSpec}
     child_types = algotypes(LA)
     for idx in eachindex(child_types)
         child_type = child_types[idx]
@@ -145,10 +146,10 @@ function _findkey(::Type{LA}, key::Symbol, prefix::Tuple) where {LA<:AbstractLoo
 end
 
 """Return the `KeyLocation` for `key`, or `nothing` if the key is not visible."""
-@inline findkey(loop::LA, key::Symbol) where {LA<:AbstractLoopAlgorithm} = _findkey(_key_source(loop), key, ())
-@inline findkey(::Type{LA}, key::Symbol) where {LA<:AbstractLoopAlgorithm} = _findkey(_key_source(LA), key, ())
-@inline Base.haskey(loop::LA, key::Symbol) where {LA<:AbstractLoopAlgorithm} = !isnothing(findkey(loop, key))
-@inline Base.haskey(::Type{LA}, key::Symbol) where {LA<:AbstractLoopAlgorithm} = !isnothing(findkey(LA, key))
+@inline findkey(loop::LA, key::Symbol) where {LA<:LoopSpec} = _findkey(_key_source(loop), key, ())
+@inline findkey(::Type{LA}, key::Symbol) where {LA<:LoopSpec} = _findkey(_key_source(LA), key, ())
+@inline Base.haskey(loop::LA, key::Symbol) where {LA<:LoopSpec} = !isnothing(findkey(loop, key))
+@inline Base.haskey(::Type{LA}, key::Symbol) where {LA<:LoopSpec} = !isnothing(findkey(LA, key))
 
 function _getindex_keylocation(current, path::Tuple)
     child = _key_children(current)[first(path)]
@@ -159,5 +160,5 @@ function _getindex_keylocation(current, path::Tuple)
     return _getindex_keylocation(nested, Base.tail(path))
 end
 
-@inline Base.getindex(loop::LA, location::KeyLocation) where {LA<:AbstractLoopAlgorithm} =
+@inline Base.getindex(loop::LA, location::KeyLocation) where {LA<:LoopSpec} =
     _getindex_keylocation(loop, keypath(location))

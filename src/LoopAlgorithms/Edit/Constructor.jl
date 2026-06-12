@@ -2,7 +2,7 @@ export insert, addalgo, addstate, addoption, rename, changeinterval, changeinter
 
 import Base: rename
 
-@inline function _ensure_unresolved_for_edit(la::LA) where {LA<:AbstractLoopAlgorithm}
+@inline function _ensure_unresolved_for_edit(la::LA) where {LA<:LoopSpec}
     isresolved(la) && error("LoopAlgorithm edit tools currently require an unresolved loop algorithm. Edit the unresolved algorithm first, then call resolve again.")
     return la
 end
@@ -38,7 +38,7 @@ rebuilds need those buckets rehydrated as `LocalPlanOption` values; otherwise an
 edit such as `rename` or `addalgo` would flatten local routes into top-level
 routes and change execution semantics.
 """
-@inline _stored_constructor_options(la::LA) where {LA<:AbstractLoopAlgorithm} = getoptions(la)
+@inline _stored_constructor_options(la::LA) where {LA<:LoopSpec} = getoptions(la)
 @inline _stored_constructor_options(la::Union{CompositeAlgorithm, Routine}) =
     (routes(global_wiring(getwiring(la)))..., shares(global_wiring(getwiring(la)))..., _local_constructor_options(getalgos(la), child_wiring(getwiring(la)))...)
 @inline _stored_constructor_options(la::LoopAlgorithm) = (_stored_constructor_options(getplan(la))..., getoptions(la)...)
@@ -49,7 +49,7 @@ routes and change execution semantics.
     states = getstates(la),
     options = _stored_constructor_options(la),
     schedule_spec = _stored_schedule_spec(la),
-) where {LA<:AbstractLoopAlgorithm}
+) where {LA<:LoopSpec}
     LoopAlgorithm(_constructor_type(la), funcs, states, options, schedule_spec; id = getid(la))
 end
 
@@ -75,6 +75,7 @@ end
 
 @inline _normalize_schedule_entry(::Routine, spec::Lifetime) = spec
 @inline _normalize_schedule_entry(::Routine, spec) = Repeat(spec)
+@inline _normalize_schedule_entry(::Union{CompositeAlgorithm, ThreadedCompositeAlgorithm}, spec::RunIf) = spec
 @inline _normalize_schedule_entry(::Union{CompositeAlgorithm, ThreadedCompositeAlgorithm}, spec::Interval) = spec
 @inline _normalize_schedule_entry(::Union{CompositeAlgorithm, ThreadedCompositeAlgorithm}, spec::Real) = Interval(round(Int, spec))
 @inline _normalize_schedule_entry(la::LoopAlgorithm, spec) = _normalize_schedule_entry(getplan(la), spec)
@@ -122,7 +123,7 @@ end
 @inline _rename_item(r::Route, replacements) = _rename_route(r, replacements)
 @inline _rename_item(r::Route, replacements::Tuple{Vararg{Pair}}) = _rename_route(r, replacements)
 
-function rename(la::LA, replacements::Pair...) where {LA<:AbstractLoopAlgorithm}
+function rename(la::LA, replacements::Pair...) where {LA<:LoopSpec}
     _ensure_unresolved_for_edit(la)
     funcs = map(x -> _rename_item(x, replacements), getalgos(la))
     states = map(x -> _rename_item(x, replacements), getstates(la))
@@ -130,7 +131,7 @@ function rename(la::LA, replacements::Pair...) where {LA<:AbstractLoopAlgorithm}
     return _rebuild_loopalgorithm(la; funcs, states, options)
 end
 
-function insert(la::LA, idx::Integer, algo, schedule_spec = _default_schedule_entry(la)) where {LA<:AbstractLoopAlgorithm}
+function insert(la::LA, idx::Integer, algo, schedule_spec = _default_schedule_entry(la)) where {LA<:LoopSpec}
     _ensure_unresolved_for_edit(la)
     newfuncs = _tuple_insert(getalgos(la), idx, _edit_entity(algo))
     schedule_entries = _schedule_entries(la)
@@ -142,15 +143,15 @@ function insert(la::LA, idx::Integer, algo, schedule_spec = _default_schedule_en
     )
 end
 
-@inline addalgo(la::LA, algo, schedule_spec = _default_schedule_entry(la)) where {LA<:AbstractLoopAlgorithm} = insert(la, length(getalgos(la)) + 1, algo, schedule_spec)
+@inline addalgo(la::LA, algo, schedule_spec = _default_schedule_entry(la)) where {LA<:LoopSpec} = insert(la, length(getalgos(la)) + 1, algo, schedule_spec)
 
-function addstate(la::LA, state) where {LA<:AbstractLoopAlgorithm}
+function addstate(la::LA, state) where {LA<:LoopSpec}
     _ensure_unresolved_for_edit(la)
     newstates = (getstates(la)..., _edit_entity(state))
     return _rebuild_loopalgorithm(la; states = newstates)
 end
 
-function addoption(la::LA, option) where {LA<:AbstractLoopAlgorithm}
+function addoption(la::LA, option) where {LA<:LoopSpec}
     _ensure_unresolved_for_edit(la)
     newoptions = (_stored_constructor_options(la)..., option)
     return _rebuild_loopalgorithm(la; options = newoptions)

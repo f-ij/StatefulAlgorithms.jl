@@ -25,12 +25,12 @@ end
     return cleaned, runtimecontext
 end
 
-function init(algos::LA, inputcontext::C) where {LA<:AbstractLoopAlgorithm,C<:AbstractContext}
+function init(algos::LA, inputcontext::C) where {LA<:LoopSpec,C<:AbstractContext}
     runtimecontext = @inline _empty_context()
     return @inline init(algos, inputcontext, runtimecontext)
 end
 
-function init(algos::LA, inputcontext::C, runtimecontext::RC) where {LA<:AbstractLoopAlgorithm,C<:ProcessContext,RC<:ProcessContext}
+function init(algos::LA, inputcontext::C, runtimecontext::RC) where {LA<:LoopSpec,C<:ProcessContext,RC<:ProcessContext}
     registry = @inline getregistry(inputcontext)
     named_algos = @inline all_algos(registry)
 
@@ -41,13 +41,13 @@ function init(algos::LA, inputcontext::C, runtimecontext::RC) where {LA<:Abstrac
     return context
 end
 
-function cleanup(algos::LA, context) where {LA<:AbstractLoopAlgorithm}
+function cleanup(algos::LA, context) where {LA<:LoopSpec}
     runtimecontext = @inline _empty_context()
     context, _ = @inline cleanup(algos, context, runtimecontext)
     return context
 end
 
-function cleanup(algos::LA, context::C, runtimecontext::RC) where {LA<:AbstractLoopAlgorithm,C<:ProcessContext,RC<:ProcessContext}
+function cleanup(algos::LA, context::C, runtimecontext::RC) where {LA<:LoopSpec,C<:ProcessContext,RC<:ProcessContext}
     registry = getregistry(context)
     named_algos = all_algos(registry)
 
@@ -63,7 +63,7 @@ end
 For testing purposes, allow init to be called with a NamedTuple of input arguments instead of a ProcessContext
     This works like a subcontext
 """
-function init(algos::LA, input::NamedTuple) where {LA<:AbstractLoopAlgorithm}
+function init(algos::LA, input::NamedTuple) where {LA<:LoopSpec}
     # If prepared from a namedtuple, create an empty context first
     newcontext = ProcessContext(algos)
     

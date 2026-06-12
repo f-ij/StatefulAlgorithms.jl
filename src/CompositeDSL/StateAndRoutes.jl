@@ -141,7 +141,7 @@ emitted route/share ownership metadata, because those keyed endpoints can later
 be renamed during composition.
 """
 function _composite_dsl_owner(entity, name::Symbol)
-    if entity isa AbstractLoopAlgorithm
+    if entity isa LoopSpec
         return entity
     end
     return IdentifiableAlgo(entity, name)
@@ -155,7 +155,7 @@ their own tree. This helper centralizes that distinction so route ownership and
 constructor entries keep the same identity convention.
 """
 function _composite_dsl_entry(entity, name::Symbol)
-    if name == Symbol() || entity isa AbstractLoopAlgorithm
+    if name == Symbol() || entity isa LoopSpec
         return entity
     end
     return name => entity
@@ -199,7 +199,7 @@ property, so writes into a nested routine/composite must target that state owner
 Plain algorithms use the normal keyed owner wrapper.
 """
 function _composite_dsl_write_owner(entity, name::Symbol)
-    if entity isa AbstractLoopAlgorithm
+    if entity isa LoopSpec
         return getproperty(entity, :_state)
     end
     return IdentifiableAlgo(entity, name)
@@ -299,7 +299,7 @@ function _composite_dsl_map_states_changed(func::F, entity::LA) where {F, LA<:Un
     return rebuild_loopalgorithm_funcs(entity, funcs), true
 end
 
-function _composite_dsl_map_states_changed(func::F, entity::IA) where {F, Inner<:AbstractLoopAlgorithm, IA<:AbstractIdentifiableAlgo{Inner}}
+function _composite_dsl_map_states_changed(func::F, entity::IA) where {F, Inner<:LoopSpec, IA<:AbstractIdentifiableAlgo{Inner}}
     inner, inner_changed = _composite_dsl_map_states_changed(func, getalgo(entity))
     inner_changed || return entity, false
     return setfield(entity, :func, inner), true

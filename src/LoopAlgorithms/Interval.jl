@@ -1,4 +1,19 @@
+export Interval, RunIf
+
 struct Interval{I, First, Offset} end
+
+"""
+Composite schedule entry that runs a child only when a context predicate passes.
+
+`RunIf(cond, vars...)` defaults to every loop tick. `RunIf(interval, cond,
+vars...)` combines normal interval scheduling with a runtime predicate. The
+selector tuple lives in the type so generated composite steps can specialize on
+the context reads while the predicate function remains a value.
+"""
+struct RunIf{Vars, F, I}
+    cond::F
+    interval::I
+end
 
 getinterval(i::Interval{I, First, Offset}) where {I, First, Offset} = I
 
@@ -12,6 +27,15 @@ function Interval(i::Int, first::Symbol, offset::Int = 0)
     Interval{i, first, offset}()
 end
 Interval(f::Real, first = :end, offset = 0) = Interval(round(Int, f), first, offset)
+
+RunIf(cond::Function, vars...) = RunIf(Interval(1), cond, vars...)
+RunIf(interval::Interval, cond::Function, vars...) = RunIf{vars, typeof(cond), typeof(interval)}(cond, interval)
+RunIf(interval::Real, cond::Function, vars...) = RunIf(Interval(interval), cond, vars...)
+
+@inline getcondition(runif::RunIf) = getfield(runif, :cond)
+@inline getinterval(runif::RunIf) = getinterval(getfield(runif, :interval))
+@inline schedule_interval(interval::Interval) = interval
+@inline schedule_interval(runif::RunIf) = getfield(runif, :interval)
 
 @inline function Base.:(%)(num, interval::Interval{I, First, Offset}) where {I, First, Offset}
     if Offset == 0
@@ -70,6 +94,21 @@ end
     return num % I == 0
 end
 
+@inline divides(num, runif::RunIf) = @inline divides(num, schedule_interval(runif))
+
+"""Return whether a composite schedule entry should run on this tick."""
+@inline should_run_schedule(interval::Interval, loopidx::Int, context) = @inline divides(loopidx, interval)
+
+@inline function should_run_schedule(runif::RunIf{Vars}, loopidx::Int, context) where {Vars}
+    if !(@inline divides(loopidx, runif))
+        return false
+    end
+    if isempty(Vars)
+        return @inline getcondition(runif)()
+    end
+    return @inline getcondition(runif)(getindex(context, Vars...))
+end
+
 Base.length(i::Interval) = 1
 function Base.:(*)(num, interval::Interval{I, First, Offset}) where {I, First, Offset}
     @assert First == :start || First == :end "When multiplying an integer with an Interval, the first argument must be either :start or :end, otherwise the result is not well defined."
@@ -82,7 +121,16 @@ function Base.:(*)(interval1::Interval{I1, First1, Offset1}, interval2::Interval
     Interval(I1*I2, First1, Offset1*I2 + Offset2*I1)
 end
 
-function Base.lcm(is::Interval...)
+Base.:(*)(runif::RunIf{Vars}, interval::Interval) where {Vars} =
+    RunIf(schedule_interval(runif) * interval, getcondition(runif), Vars...)
+Base.:(*)(interval::Interval, runif::RunIf{Vars}) where {Vars} =
+    RunIf(interval * schedule_interval(runif), getcondition(runif), Vars...)
+Base.:(*)(runif::RunIf{Vars}, num::Real) where {Vars} =
+    RunIf(schedule_interval(runif) * num, getcondition(runif), Vars...)
+Base.:(*)(num::Real, runif::RunIf{Vars}) where {Vars} =
+    RunIf(num * schedule_interval(runif), getcondition(runif), Vars...)
+
+function Base.lcm(is::Union{Interval, RunIf}...)
     nums = getinterval.(is)
     return lcm(nums...)
 end

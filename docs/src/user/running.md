@@ -22,8 +22,8 @@ run(p)
 ```
 
 `run(p)` starts the process loop task. If the process was paused, `run(p)`
-resumes the suspended runtime context; new runtime inputs, init specs, and
-lifetime changes are rejected during resume.
+resumes the suspended runtime context and loop cursor; new runtime inputs, init
+specs, and lifetime changes are rejected during resume.
 
 If the loop algorithm declares runtime `@input` values, pass them as run
 keywords:
@@ -35,8 +35,8 @@ run(p; temperature = 2.0, sweep = 10)
 The keywords are converted to a `NamedTuple`, validated against the algorithm's
 runtime input declarations, and merged into `ProcessContext._input` only for
 that loop run. Finished processes strip runtime-only fields before storing their
-persistent context. A paused process may keep its live runtime context
-internally so it can resume.
+persistent context. A paused process may keep its live runtime context and loop
+cursor internally so it can resume.
 
 Initialized loop algorithms can also be run directly:
 

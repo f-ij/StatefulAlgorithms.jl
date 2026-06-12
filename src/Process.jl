@@ -6,6 +6,7 @@ mutable struct Process{F,LT} <: AbstractProcess
     algo::F
     lifetime::Lifetime
     runtime_context::Union{Nothing, ProcessContext}
+    loop_cursor::Any
     timeout::Float64
     task::Union{Nothing, Task}
     loopidx::UInt # To track the current loop index for resuming
@@ -101,7 +102,7 @@ function _finish_process_constructor_with_context(algo::A, prepared_context::PC,
     algo = _with_lifecycle(algo, prepared_context, getstoredinits(algo), getstoredoverrides(algo))
 
     # p = Process(uuid1(), context, td, timeout, nothing, UInt(1), UInt(1), Threads.ReentrantLock(), false, true, nothing, nothing, Arena(), RuntimeListeners(), 0)
-    p = Process{typeof(algo),typeof(lifetime)}(uuid1(), algo, lifetime, nothing, timeout, nothing, UInt(1), UInt(1), Threads.ReentrantLock(), false, true, nothing, nothing, nothing, RuntimeListeners(), 0)
+    p = Process{typeof(algo),typeof(lifetime)}(uuid1(), algo, lifetime, nothing, nothing, timeout, nothing, UInt(1), UInt(1), Threads.ReentrantLock(), false, true, nothing, nothing, nothing, RuntimeListeners(), 0)
 
     register_process!(p)
     schedule_loop_precompile!(p, lifetime)
@@ -111,16 +112,16 @@ function _finish_process_constructor_with_context(algo::A, prepared_context::PC,
     return p
 end
 
-@inline function _process_constructor_algo(algo::LA, ::Nothing, inputs_overrides::Tuple{}, lifetime::LT) where {LA<:AbstractLoopAlgorithm, LT}
+@inline function _process_constructor_algo(algo::LA, ::Nothing, inputs_overrides::Tuple{}, lifetime::LT) where {LA<:LoopSpec, LT}
     isnothing(getstoredcontext(algo)) || return algo
     return init(algo; lifetime)
 end
 
-@inline function _process_constructor_algo(algo::LA, ::Nothing, inputs_overrides::IO, lifetime::LT) where {LA<:AbstractLoopAlgorithm, IO<:Tuple, LT}
+@inline function _process_constructor_algo(algo::LA, ::Nothing, inputs_overrides::IO, lifetime::LT) where {LA<:LoopSpec, IO<:Tuple, LT}
     return init(algo, inputs_overrides...; lifetime)
 end
 
-@inline function _process_constructor_algo(algo::LA, context::C, inputs_overrides::IO, lifetime::LT) where {LA<:AbstractLoopAlgorithm, C, IO<:Tuple, LT}
+@inline function _process_constructor_algo(algo::LA, context::C, inputs_overrides::IO, lifetime::LT) where {LA<:LoopSpec, C, IO<:Tuple, LT}
     isempty(inputs_overrides) || error("Pass either an initialized `context` or init/override specs to `Process`, not both.")
     isnothing(getstoredcontext(algo)) || return algo
     return _with_lifecycle(resolve(algo), nothing, getstoredinits(algo), getstoredoverrides(algo))
@@ -236,6 +237,7 @@ end
 function createfrom!(p1::Process, p2::Process)
     p1.algo = p2.algo
     commit_context!(p1, context(p2))
+    p1.loop_cursor = nothing
     p1.timeout = p2.timeout
     reset!(p1)
 end
@@ -337,6 +339,7 @@ It does not change `process.runtime_context`, `process.task`, or
 function reset!(p::Process)
     reset_loopidx!(p)
     reset_ticks!(p)
+    p.loop_cursor = nothing
     @atomic p.paused = false
     @atomic p.shouldrun = true
     reset_times!(p)

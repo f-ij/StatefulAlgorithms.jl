@@ -17,7 +17,7 @@ isrunning(p::Process) = isstarted(p) && !istaskdone(p.task)
 """
 P had a task and it was paused
 """
-ispaused(p::Process) = !isnothing(p.task) && p.paused
+ispaused(p::Process) = !isnothing(p.task) && (@atomic p.paused)
 
 """
 P had a task and it finished running, without being flagged as paused

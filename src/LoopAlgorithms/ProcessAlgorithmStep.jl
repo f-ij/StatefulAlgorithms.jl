@@ -14,6 +14,19 @@ through that view.
 """
 @inline function _step!(
     algo::A,
+    ::NoLoopCursor,
+    context::C,
+    runtimecontext::RC,
+    wiring::W,
+    namespace::Namespace{Name},
+    process::P,
+    lifetime::LT,
+) where {A<:ProcessAlgorithm,C<:AbstractContext,RC<:AbstractContext,W<:PlanWiringView,Name,P<:AbstractProcess,LT<:Lifetime}
+    return @inline _step!(algo, context, runtimecontext, wiring, namespace, process, lifetime)
+end
+
+@inline function _step!(
+    algo::A,
     context::C,
     runtimecontext::RC,
     wiring::W,

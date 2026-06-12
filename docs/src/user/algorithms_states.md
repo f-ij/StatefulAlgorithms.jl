@@ -170,7 +170,7 @@ end
 
 ## Composition
 
-Compose entities with loop algorithms:
+Compose entities with loop plans:
 
 - `CompositeAlgorithm(...)` for interleaved stepping with intervals.
 - `Routine(...)` for sequential blocks with repeats.
@@ -180,8 +180,7 @@ Both can include `ProcessState`s and user options such as `Route` and `Share`.
 ### Changing a Loop Algorithm Schedule
 
 Process `lifetime` controls how long the outer process loop runs. Inside a
-loop algorithm, the per-child schedule is controlled by the loop algorithm
-itself:
+loop plan, the per-child schedule is controlled by the plan itself:
 
 - `CompositeAlgorithm` and `ThreadedCompositeAlgorithm` use intervals.
 - `Routine` uses repeats.
@@ -198,9 +197,22 @@ algo = changeintervals(algo, (1, 5))
 intervals(algo) == (StatefulAlgorithms.Interval(1), StatefulAlgorithms.Interval(5))
 ```
 
-These helpers return a new loop algorithm with the updated schedule. They are
-intended for unresolved loop algorithms; if you already called `resolve`, edit
-the original algorithm and resolve it again.
+Composite schedules can also be conditional:
+
+```julia
+algo = CompositeAlgorithm(
+    Logger,
+    (RunIf(Interval(10), x -> x > 0, Var(Source, :value)),),
+)
+```
+
+`RunIf(cond, vars...)` defaults to every tick. `RunIf(interval, cond, vars...)`
+combines interval scheduling with a context predicate. A skipped child leaves
+its previous persistent state unchanged.
+
+These helpers return a new plan with the updated schedule. They are intended
+for unresolved plans; if you already called `resolve`, edit the original plan
+and resolve it again.
 
 When adding a child, pass the new child's schedule as the last argument:
 

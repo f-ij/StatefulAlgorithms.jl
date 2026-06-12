@@ -63,8 +63,8 @@ function _resolve_composite_dsl_entity(spec, inputs::Tuple, output_symbols::Tupl
     elseif spec isa AbstractIdentifiableAlgo
         # Already-named/unique algorithms can pass straight through.
         return _CompositeDSLResolved{:algo, typeof(spec), typeof(inputs)}(spec, inputs)
-    elseif spec isa Union{SteppableAlgorithm, Type{<:SteppableAlgorithm}}
-        # Plain algorithms/loop algorithms are passed through and keyed by the
+    elseif spec isa Union{SteppableAlgorithm, AbstractPlan, Type{<:SteppableAlgorithm}, Type{<:AbstractPlan}}
+        # Plain algorithms/plans/resolved loops are passed through and keyed by the
         # normal constructor surface later.
         resolved = _dsl_with_customname(spec, Val(Name))
         return _CompositeDSLResolved{:algo, typeof(resolved), typeof(inputs)}(resolved, inputs)
@@ -76,7 +76,7 @@ function _resolve_composite_dsl_entity(spec, inputs::Tuple, output_symbols::Tupl
         resolved = _dsl_with_customname(wrapped, Val(Name))
         return _CompositeDSLResolved{:algo, typeof(resolved), typeof(inputs)}(resolved, inputs)
     else
-        error("Unsupported DSL entry `$spec`. Expected a SteppableAlgorithm, ProcessState, or Function.")
+        error("Unsupported DSL entry `$spec`. Expected a SteppableAlgorithm, AbstractPlan, ProcessState, or Function.")
     end
 end
 

@@ -1,7 +1,7 @@
 """
 Get the algorithm that matches in the LA tree
 """
-function Base.getindex(ela::LA, key) where {LA<:AbstractLoopAlgorithm}
+function Base.getindex(ela::LA, key) where {LA<:LoopSpec}
     _flat_funcs = flat_funcs(ela) 
     return staticmatch(_flat_funcs, Val(key))
 end

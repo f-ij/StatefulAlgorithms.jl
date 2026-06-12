@@ -33,9 +33,9 @@ function flatten(comp::LoopAlgorithm{<:CompositeAlgorithm})
     return flatten(getplan(comp))
 end
 
-function flatten_loopalgorithms(la::ALA) where {ALA<:AbstractLoopAlgorithm}
+function flatten_loopalgorithms(la::ALA) where {ALA<:LoopSpec}
     flat_funcs, flat_intervals = flat_tree_property_recursion((la,), (1,)) do el, trait
-        if !(el isa AbstractLoopAlgorithm)
+        if !(el isa LoopSpec)
             return nothing, nothing
         end
         newels = getalgos(el)
@@ -46,7 +46,7 @@ function flatten_loopalgorithms(la::ALA) where {ALA<:AbstractLoopAlgorithm}
 end
 
 
-function fuse(cla::ALA, name_prefix = "") where {ALA<:AbstractLoopAlgorithm}
+function fuse(cla::ALA, name_prefix = "") where {ALA<:LoopSpec}
     if isfused(cla)
         return cla
     end

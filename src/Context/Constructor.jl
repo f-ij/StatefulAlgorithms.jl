@@ -22,7 +22,7 @@ function _build_process_context(registry::R) where {R<:NameSpaceRegistry}
     return ProcessContext(named_subcontexts, registry)
 end
 
-function ProcessContext(la::LA) where {LA<:AbstractLoopAlgorithm}
+function ProcessContext(la::LA) where {LA<:LoopSpec}
     la = resolve(la)
     return _build_process_context(getregistry(la))
 end

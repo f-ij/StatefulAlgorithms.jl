@@ -8,6 +8,12 @@ Var(name) = Var{:globals, name}()
     @inline getproperty(c[Entity], name)
 end
 
+@inline function Base.getindex(c::ProcessContext, vars::Var...)
+    ntuple(Val(length(vars))) do i
+        @inline getindex(c, vars[i])
+    end
+end
+
 @inline function Base.getindex(c::SubContext, vars::Var...)
     ntuple(Val(length(vars))) do i
         getindex(c, vars[i])

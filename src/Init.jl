@@ -27,7 +27,8 @@ end
 """
 Make a context from an algo and empty context
 """
-function initcontext(algo::F, c::ProcessContext; lifetime = Indefinite()) where {F <: AbstractLoopAlgorithm}
+function initcontext(algo::F, c::ProcessContext; lifetime = Indefinite()) where {F <: LoopSpec}
+    algo = resolve(algo)
     runtime_context = @inline _init_runtime_context(algo, lifetime)
 
     @DebugMode "Preparing context for algo $(algo) with input context $c"
@@ -39,7 +40,8 @@ function initcontext(algo::F, c::ProcessContext; lifetime = Indefinite()) where 
     return @inline _init_state_context(prepared_context, c)
 end
 
-function initcontext(algo::F, c::ProcessContext = ProcessContext(algo), overrides_and_inputs::InputInterface...; lifetime = Indefinite()) where {F <: AbstractLoopAlgorithm}
+function initcontext(algo::F, c::ProcessContext = ProcessContext(algo), overrides_and_inputs::InputInterface...; lifetime = Indefinite()) where {F <: LoopSpec}
+    algo = resolve(algo)
     resolved = _resolve_lifecycle_specs(getregistry(c), overrides_and_inputs)
     inputs, overrides, interactives = _split_lifecycle_specs(resolved)
     input_state_context = merge_resolved_inputs(c, inputs)

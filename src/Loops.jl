@@ -59,6 +59,23 @@ end
 """Build the root wiring view for one loop execution."""
 @inline _root_wiring_view(algo, step_plan) = PlanWiringView(getwiring(step_plan), Val(()), _finalstep_demands_all_returns(algo))
 
+"""Build or recover the per-run loop cursor for one execution."""
+@inline _loop_cursor(process::AbstractProcess, plan, ::Resuming) = loop_cursor(plan, Val(false))
+
+@inline function _loop_cursor(process::Process, plan, ::Resuming{IsResuming}) where {IsResuming}
+    if IsResuming
+        cursor = process.loop_cursor
+        if isnothing(cursor)
+            cursor = @inline loop_cursor(plan, Val(true))
+            process.loop_cursor = cursor
+        end
+        return cursor
+    end
+    cursor = @inline loop_cursor(plan, Val(true))
+    process.loop_cursor = cursor
+    return cursor
+end
+
 """Commit or return the persistent context produced by the loop."""
 @inline function after_while(p::P, func::F, context::C, runtimecontext::RC, returnvalue, stored_context::SC = context) where {P<:Process,F,C<:ProcessContext,RC<:ProcessContext,SC<:ProcessContext}
     @inline set_endtime!(p)
@@ -68,6 +85,7 @@ end
         return paused_context
     end
     commit_context!(p, context)
+    p.loop_cursor = nothing
     return returnvalue
 end
 
@@ -94,19 +112,20 @@ Run a single function in a loop indefinitely.
     step_plan = @inline getplan(func)
     step_wiring = @inline _root_wiring_view(func, step_plan)
     resume = Resuming{isresuming}()
+    step_cursor = @inline _loop_cursor(process, step_plan, resume)
     context = @inline _loop_state_context(stored_context, resume)
     runtimecontext = @inline _loop_runtime_context(inputs, process, lifetime, stored_context, resume)
 
     if isresuming
         @atomic process.paused = false
     else
-        context, runtimecontext = @inline _step!(step_plan, context, runtimecontext, step_wiring, Namespace{nothing}(), process, lifetime)
+        context, runtimecontext = @inline _step!(step_plan, step_cursor, context, runtimecontext, step_wiring, Namespace{nothing}(), process, lifetime)
         @inline tick!(process)
         @inline inc!(process)
     end
 
     while true
-        context, runtimecontext = @inline _step!(step_plan, context, runtimecontext, step_wiring, Namespace{nothing}(), process, lifetime)
+        context, runtimecontext = @inline _step!(step_plan, step_cursor, context, runtimecontext, step_wiring, Namespace{nothing}(), process, lifetime)
         @inline tick!(process)
         @inline inc!(process)
         if @inline breakcondition(lifetime, process, context)
@@ -137,19 +156,20 @@ Base.@constprop :aggressive @inline function loop(process::P, algo::F, stored_co
     step_plan = @inline getplan(algo)
     step_wiring = @inline _root_wiring_view(algo, step_plan)
     resume = Resuming{isresuming}()
+    step_cursor = @inline _loop_cursor(process, step_plan, resume)
     context = @inline _loop_state_context(stored_context, resume)
     runtimecontext = @inline _loop_runtime_context(inputs, process, lifetime, stored_context, resume)
 
     if isresuming
         @atomic process.paused = false
     else
-        context, runtimecontext = @inline _step!(step_plan, context, runtimecontext, step_wiring, Namespace{nothing}(), process, lifetime)
+        context, runtimecontext = @inline _step!(step_plan, step_cursor, context, runtimecontext, step_wiring, Namespace{nothing}(), process, lifetime)
         @inline tick!(process)
         @inline inc!(process)
     end
 
     for _ in (@inline loopidx(process)):(@inline repeats(lifetime))
-        context, runtimecontext = @inline _step!(step_plan, context, runtimecontext, step_wiring, Namespace{nothing}(), process, lifetime)
+        context, runtimecontext = @inline _step!(step_plan, step_cursor, context, runtimecontext, step_wiring, Namespace{nothing}(), process, lifetime)
         @inline tick!(process)
         @inline inc!(process)
         if @inline breakcondition(lifetime, process, context)

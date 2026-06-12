@@ -1,3 +1,8 @@
+"""Return `true` for loop-constructor children that run or describe runnable children."""
+function _is_loop_child_input(arg)
+    return arg isa Union{SteppableAlgorithm, AbstractPlan, Type{<:SteppableAlgorithm}, Type{<:AbstractPlan}}
+end
+
 """
 Return `true` when an argument belongs in the algorithm section of a loop constructor.
 
@@ -7,18 +12,18 @@ fall through to the later ProcessState parsing branch.
 function isa_processentity_input(arg)
     if arg isa ParserOption
         return true
-    elseif arg isa Union{SteppableAlgorithm, Type{<:SteppableAlgorithm}}
+    elseif _is_loop_child_input(arg)
         return true
     elseif arg isa Pair
         @assert arg.first isa Symbol "If passing algorithms as pairs, the first element must be a Symbol representing the name of the algorithm, but got: $(arg.first)"
         if arg.second isa ParserOption
             return true
-        elseif arg.second isa Union{SteppableAlgorithm, Type{<:SteppableAlgorithm}}
+        elseif _is_loop_child_input(arg.second)
             return true
         elseif arg.second isa ProcessState || arg.second isa Type{<:ProcessState}
             return false
         else
-            error("If passing algorithms as pairs, the second element must be a SteppableAlgorithm, Type{<:SteppableAlgorithm}, or ParserOption, but got: $(arg.second)")
+            error("If passing algorithms as pairs, the second element must be a SteppableAlgorithm, AbstractPlan, matching Type, or ParserOption, but got: $(arg.second)")
         end
     else
         return false
@@ -40,7 +45,7 @@ end
 
 function _normalize_loopalgorithm_entity_input(el)
     if el isa Pair
-        @assert !(el.second isa LoopAlgorithmTypes) "LoopAlgorithms cannot currently be passed as pairs (aliased), but got: $(el.second) in pair $(el)"
+        @assert !(el.second isa LoopAlgorithmTypes) "Loop plans cannot currently be passed as pairs (aliased), but got: $(el.second) in pair $(el)"
         return IdentifiableAlgo(el.second, el.first)
     elseif el isa Union{ProcessEntity, Type{<:ProcessEntity}}
         return IdentifiableAlgo(el)
@@ -71,7 +76,7 @@ routing metadata. DSL expansion can pass `LocalPlanOption` values when a
 route/share belongs to a specific child plan node. Non-routing options stay on
 the `LoopAlgorithm` runtime wrapper.
 """
-function parse_la_input(laType::Type{LA}, args...) where {LA<:AbstractLoopAlgorithm}
+function parse_la_input(laType::Type{LA}, args...) where {LA<:AbstractPlan}
     collected_options = tuple()
 
     ######### ALGORITHMS #########
@@ -114,7 +119,7 @@ function parse_la_input(laType::Type{LA}, args...) where {LA<:AbstractLoopAlgori
         if firstargs isa Tuple
             intervals_or_repeats = _filter_loopalgorithm_specification(firstargs, kept_algos)
             if iscomposite(laType)
-                intervals_or_repeats = map(x -> !(x isa Interval) ? Interval(x) : x, intervals_or_repeats)
+                intervals_or_repeats = map(x -> x isa Union{Interval, RunIf} ? x : Interval(x), intervals_or_repeats)
             else
                 intervals_or_repeats = map(x -> x isa Lifetime ? x : Repeat(x), intervals_or_repeats)
             end

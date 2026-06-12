@@ -7,16 +7,16 @@ execution.
 
 `Process(func, inputs_overrides...; repeats, lifetime, timeout)` (`src/Process.jl`):
 
-1. Wrap bare `ProcessAlgorithm` as a one-child `CompositeAlgorithm`.
+1. Wrap bare `ProcessAlgorithm` as a one-child `CompositeAlgorithm` plan.
 2. Normalize stop behavior: `repeats = n` becomes `Repeat(n)`, `lifetime` accepts `Lifetime` objects, and `Routine` defaults to `Repeat(1)` when no lifetime is provided.
-3. Resolve the loop algorithm when needed.
+3. Resolve the plan into a `LoopAlgorithm` wrapper when needed.
 4. Run lifecycle `init(algo, specs...; lifetime)` unless an initialized context is already provided.
 5. Store the algorithm and its current runtime context on the process.
 
-There is no `TaskData` layer. The initialized loop algorithm carries the
+There is no `TaskData` layer. The initialized `LoopAlgorithm` carries the
 persistent context plus stored init/override specs. `Process` keeps its current
-context separately so pausing can preserve a suspended runtime context without
-rebaking it into the algorithm.
+context and loop cursor separately so pausing can preserve counters and resume
+positions without rebaking them into the algorithm.
 
 ## 2. Init Phase
 
@@ -42,12 +42,14 @@ the targeted subcontexts.
 `makeloop!`:
 
 - validates runtime keyword arguments against the loop algorithm's `@input` metadata,
+- builds per-run `AbstractLoopCursor` from the resolved plan,
 - passes the persistent context to `loop`,
 - passes runtime inputs as a positional `NamedTuple` to `loop`,
 - spawns the loop task.
 
 `run(la::LoopAlgorithm; kwargs...)` runs an initialized loop algorithm directly
-and returns a loop algorithm with the next persistent context.
+with a fresh non-pausable loop cursor and returns a loop algorithm with the next
+persistent context.
 
 ## 4. Loop Bootstrap and Runtime Inputs
 
@@ -75,7 +77,10 @@ High-level structure:
 4. tick/index increments
 5. `after_while(process, algo, context, stored_context)`
 
-Step bodies are produced by `step!_expr` (`src/LoopAlgorithms/GeneratedStep.jl` and `src/Identifiable/Step.jl`) so composite/routine structures can be unrolled and specialized to concrete algorithm/context types.
+Composite and routine steps receive an explicit loop cursor. Composite cursors
+own the interval counter for that run. Pausable process runs allocate routine
+resume storage; direct runs use non-pausable cursors without a mutable resume
+array.
 
 ## 5. Cleanup Behavior
 

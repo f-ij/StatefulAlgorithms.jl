@@ -113,7 +113,7 @@ end
     return @inline view(pc, pc, instance, namespace, inject, sharedcontexts, sharedvars)
 end
 
-"""Get a subcontext view for a raw child algorithm with explicit runtime state."""
+"""Get a subcontext view for a raw child algorithm with explicit runtime context."""
 @inline function Base.view(pc::ProcessContext, runtimecontext::ProcessContext, instance::A, namespace::Namespace; inject = (;), sharedcontexts = (), sharedvars = ()) where {A<:ProcessAlgorithm}
     return @inline view(pc, runtimecontext, instance, namespace, inject, sharedcontexts, sharedvars)
 end
@@ -129,7 +129,7 @@ Get a subcontext view for a specific subcontext
     return @inline view(pc, pc, instance, inject, sharedcontexts, sharedvars)
 end
 
-"""Get a subcontext view for a specific subcontext with explicit runtime state."""
+"""Get a subcontext view for a specific subcontext with explicit runtime context."""
 @inline function Base.view(pc::ProcessContext, runtimecontext::ProcessContext, instance::SA; inject = (;), sharedcontexts = (), sharedvars = ()) where SA <: AbstractIdentifiableAlgo
     return @inline view(pc, runtimecontext, instance, inject, sharedcontexts, sharedvars)
 end

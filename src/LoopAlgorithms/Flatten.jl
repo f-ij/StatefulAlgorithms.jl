@@ -1,7 +1,7 @@
 
-function flat_funcs(la::LA) where {LA<:AbstractLoopAlgorithm}
+function flat_funcs(la::LA) where {LA<:LoopSpec}
     tree_flatten(la) do func
-        if func isa StatefulAlgorithms.AbstractLoopAlgorithm
+        if func isa StatefulAlgorithms.LoopSpec
             return StatefulAlgorithms.getalgos(func)
         else
             return nothing
@@ -9,9 +9,9 @@ function flat_funcs(la::LA) where {LA<:AbstractLoopAlgorithm}
     end
 end
 
-function flat_states(la::LA) where {LA<:AbstractLoopAlgorithm}
+function flat_states(la::LA) where {LA<:LoopSpec}
     tree_trait_flat_collect(la) do func
-        if func isa StatefulAlgorithms.AbstractLoopAlgorithm
+        if func isa StatefulAlgorithms.LoopSpec
             return getalgos(func), getstates(func)
         else
             return nothing, nothing
@@ -19,9 +19,9 @@ function flat_states(la::LA) where {LA<:AbstractLoopAlgorithm}
     end
 end
 
-function flat_multipliers(la::LA) where {LA<:AbstractLoopAlgorithm}
+function flat_multipliers(la::LA) where {LA<:LoopSpec}
     @inline tree_trait_flatten(la, 1.) do func, multiplier
-        if func isa StatefulAlgorithms.AbstractLoopAlgorithm
+        if func isa StatefulAlgorithms.LoopSpec
             return getalgos(func), multiplier .* StatefulAlgorithms.multipliers(func)
         else
             return nothing, nothing

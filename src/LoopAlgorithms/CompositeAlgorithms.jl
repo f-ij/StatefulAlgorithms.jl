@@ -5,17 +5,17 @@ export CompositeAlgorithm, CompositePlan
 """
 Execution plan that steps child algorithms on fixed intervals.
 
-`CompositeAlgorithm` intentionally stores the executable plan: child algorithms
-(`funcs`), plan wiring, and the interval cursor (`inc`). Runtime state such as
-the registry, root process states, stored context, inputs, and overrides belongs
-to the concrete `LoopAlgorithm` wrapper created by `resolve`/`init`.
+`CompositeAlgorithm` stores only the executable plan: child algorithms
+(`funcs`), schedule metadata, namespaces, and plan wiring. Runtime state such as
+the registry, root process states, stored context, inputs, overrides, and
+interval cursor belongs to the concrete `LoopAlgorithm`/`AbstractLoopCursor`
+created by `resolve`/`init`/`run`.
 """
-struct CompositeAlgorithm{T, Intervals, Namespaces, W, id} <: AbstractLoopAlgorithm
+struct CompositeAlgorithm{T, Intervals, Namespaces, W, id} <: AbstractPlan
     funcs::T
     intervals
     namespaces::Namespaces
     wiring::W
-    inc::Base.RefValue{Int} # Runtime interval cursor.
 end
 
 const CompositePlan = CompositeAlgorithm
@@ -35,7 +35,7 @@ non-plan options stay on the `LoopAlgorithm` wrapper.
 function LoopAlgorithm(::Type{CompositeAlgorithm}, funcs::F, states::Tuple, options::Tuple, intervals; id = nothing) where F
     namespaces = ntuple(_ -> Namespace{nothing}(), length(funcs))
     wiring = PlanWiring(_plan_wiring(options), _plan_child_wiring(funcs, options))
-    plan = CompositeAlgorithm{typeof(funcs), intervals, typeof(namespaces), typeof(wiring), id}(funcs, intervals, namespaces, wiring, Ref(1))
+    plan = CompositeAlgorithm{typeof(funcs), intervals, typeof(namespaces), typeof(wiring), id}(funcs, intervals, namespaces, wiring)
     root_options = _root_loop_options(options)
     return isempty(states) && isempty(root_options) ? plan : LoopAlgorithm(plan; states, options = root_options, id)
 end
@@ -58,7 +58,6 @@ subalgotypes(::Type{CA}) where {FT, CA<:CompositeAlgorithm{FT}} = FT.parameters
 @inline getstates(ca::CompositeAlgorithm) = ()
 
 
-getinc(ca::CompositeAlgorithm) = getfield(ca, :inc)
 getwiring(ca::CompositeAlgorithm) = getfield(ca, :wiring)
 getoptions(ca::CompositeAlgorithm) = _all_plan_wiring(global_wiring(getwiring(ca)), child_wiring(getwiring(ca)))
 
@@ -118,16 +117,16 @@ track_algo(ca::CompositeAlgorithm) = hasflag(ca, :trackalgo)
 """
 Increment the stepidx for the composite algorithm
 """
-@inline @generated function inc!(ca::CA) where CA <: CompositeAlgorithm
+@inline @generated function inc!(cursor::CompositeLoopCursor, ca::CA) where CA <: CompositeAlgorithm
     _lcm = lcm(intervals(ca)...)
     return quote
-        cainc = getinc(ca)
+        cainc = getinc(cursor)
         cainc[] = mod1(cainc[] + 1, $_lcm)
     end
 end
 
-function reset!(ca::CA) where CA <: CompositeAlgorithm
-    getinc(ca)[] = 1
+function reset!(cursor::CompositeLoopCursor, ca::CA) where CA <: CompositeAlgorithm
+    getinc(cursor)[] = 1
     reset!.(getalgos(ca))
 end
 
@@ -156,7 +155,7 @@ get_intervals(ct::Type{CA}) where {CA<:CompositeAlgorithm} = intervals(ct)
     return Val.(intervals(ca))
 end
 
-@inline inc(ca::CA) where {CA<:CompositeAlgorithm} = getinc(ca)[]
+@inline inc(cursor::CompositeLoopCursor) = getinc(cursor)[]
 
 
 # CompositeAlgorithm(f, interval::Int, flags...) = CompositeAlgorithm((f,), (interval,), flags...)

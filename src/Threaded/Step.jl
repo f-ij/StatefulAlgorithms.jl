@@ -13,9 +13,9 @@ Until threaded plan wiring is implemented, children are emitted in one layer.
     return :(($(Expr(:curly, :ThreadedLayer, Expr(:tuple, ntuple(identity, n)...)))(),))
 end
 
-@inline function _threaded_should_run(tca::ThreadedCompositeAlgorithm, this_inc::Int, idx::Int)
+@inline function _threaded_should_run(tca::ThreadedCompositeAlgorithm, this_inc::Int, idx::Int, context)
     this_interval = interval(tca, idx)
-    return this_interval == 1 || this_inc % this_interval == 0
+    return @inline should_run_schedule(this_interval, this_inc, context)
 end
 
 Base.@constprop :aggressive function threaded_step(sa::SA, base_context::C) where {SA<:AbstractIdentifiableAlgo, C<:ProcessContext}
@@ -25,7 +25,7 @@ Base.@constprop :aggressive function threaded_step(sa::SA, base_context::C) wher
 end
 
 Base.@constprop :aggressive function _threaded_run_child(base_context::C, tca::TCA, ::ThreadedIndex{idx}, this_inc::Int) where {C<:ProcessContext, TCA<:ThreadedCompositeAlgorithm, idx}
-    if !(@inline _threaded_should_run(tca, this_inc, idx))
+    if !(@inline _threaded_should_run(tca, this_inc, idx, base_context))
         return nothing
     end
 
@@ -39,7 +39,7 @@ Base.@constprop :aggressive function _threaded_run_child(base_context::C, tca::T
 end
 
 Base.@constprop :aggressive function _threaded_spawn_child(base_context::C, tca::TCA, ::ThreadedIndex{idx}, this_inc::Int) where {C<:ProcessContext, TCA<:ThreadedCompositeAlgorithm, idx}
-    if !(@inline _threaded_should_run(tca, this_inc, idx))
+    if !(@inline _threaded_should_run(tca, this_inc, idx, base_context))
         return nothing
     end
     sa = @inline getalgo(tca, idx)
@@ -87,12 +87,42 @@ Base.@constprop :aggressive function _threaded_run_layer(base_context::C, tca::T
 end
 
 Base.@constprop :aggressive function step!(tca::ThreadedCompositeAlgorithm, context::C) where {C<:ProcessContext}
-    this_inc = inc(tca)
+    cursor = loop_cursor(tca, Val(false))
+    this_inc = inc(cursor, tca)
     layers = @inline _threaded_layers(tca, context)
 
     current = @inline unrollreplace(context, layers) do current, layer
         @inline _threaded_run_layer(current, tca, layer, this_inc)::C
     end
-    inc!(tca)
+    inc!(cursor, tca)
     return current
+end
+
+Base.@constprop :aggressive @inline @generated function _step!(tca::TCA, cursor::S, context::C, runtimecontext::RC, wiring::W, namespace::N, process::P, lifetime::LT) where {TCA <: ThreadedCompositeAlgorithm, S<:CompositeLoopCursor, C <: AbstractContext, RC <: ProcessContext, W <: PlanWiringView, N <: Namespace, P <: AbstractProcess, LT <: Lifetime}
+    algo_count = numalgos(TCA)
+    schedule_values = TCA.parameters[2]
+    child_namespace_tuple_type = TCA.parameters[3]
+
+    exprs = Any[]
+    sizehint!(exprs, algo_count + 4)
+    push!(exprs, :(local algos = @inline getalgos(tca)))
+    push!(exprs, :(local this_inc = @inline inc(cursor, tca)))
+
+    for i in 1:algo_count
+        schedule_value = schedule_values[i]
+        child_namespace_type = fieldtype(child_namespace_tuple_type, i)
+        push!(exprs, quote
+            if @inline should_run_schedule($schedule_value, this_inc, context)
+                local algo = @inline getfield(algos, $i)
+                local child_cursor = @inline child_loop_cursor(cursor, Val($i))
+                local child_step_wiring = @inline child_wiring_view(wiring, Val($i))
+                local child_namespace = $child_namespace_type()
+                context, runtimecontext = @inline _step!(algo, child_cursor, context, runtimecontext, child_step_wiring, child_namespace, process, lifetime)
+            end
+        end)
+    end
+
+    push!(exprs, :(@inline inc!(cursor, tca)))
+    push!(exprs, :(return context, runtimecontext))
+    return Expr(:block, exprs...)
 end

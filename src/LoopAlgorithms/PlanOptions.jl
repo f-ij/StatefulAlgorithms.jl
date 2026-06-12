@@ -21,7 +21,7 @@ function _append_root_loop_options!(root_options::Vector{Any}, options::Options)
 end
 
 """Collect root options from a loop tree without materializing plan wiring."""
-function _append_plan_tree_root_options!(root_options::Vector{Any}, la::LA) where {LA<:AbstractLoopAlgorithm}
+function _append_plan_tree_root_options!(root_options::Vector{Any}, la::LA) where {LA<:LoopSpec}
     plan = if la isa LoopAlgorithm
         _append_root_loop_options!(root_options, getoptions(la))
         getplan(la)
@@ -33,7 +33,7 @@ function _append_plan_tree_root_options!(root_options::Vector{Any}, la::LA) wher
     # `getoptions(plan)` here. That would rebuild all route/share options just
     # to discard them as non-root options.
     for child in getalgos(plan)
-        child isa AbstractLoopAlgorithm && _append_plan_tree_root_options!(root_options, child)
+        child isa LoopSpec && _append_plan_tree_root_options!(root_options, child)
     end
     return root_options
 end
@@ -145,13 +145,13 @@ end
 end
 
 """Return nested plan wiring for loop-plan children."""
-@inline function _child_wiring_for_child(child::LA, bucket::Wiring) where {LA<:AbstractLoopAlgorithm}
+@inline function _child_wiring_for_child(child::LA, bucket::Wiring) where {LA<:LoopSpec}
     isempty(bucket) || error("Child-scoped wiring $(bucket) was assigned to nested plan child $(child). Attach the route/share to a concrete child inside the nested plan.")
     return getwiring(child)
 end
 
 """Return nested plan wiring for identifiable loop-plan children."""
-@inline function _child_wiring_for_child(child::IA, bucket::Wiring) where {F<:AbstractLoopAlgorithm, IA<:AbstractIdentifiableAlgo{F}}
+@inline function _child_wiring_for_child(child::IA, bucket::Wiring) where {F<:LoopSpec, IA<:AbstractIdentifiableAlgo{F}}
     isempty(bucket) || error("Child-scoped wiring $(bucket) was assigned to nested plan child $(child). Attach the route/share to a concrete child inside the nested plan.")
     return getwiring(getalgo(child))
 end

@@ -41,14 +41,28 @@ struct IfWrapped{A,C} <: ParserOption
 end
 
 """
-Supertype for loop-like algorithms and loop runtime wrappers.
+Supertype for immutable loop execution plans.
 
-`CompositeAlgorithm` and `Routine` are execution-plan nodes: they describe the
-child algorithms, schedule metadata, and local plan wiring. `LoopAlgorithm` is
-the concrete runtime wrapper that carries registry, context, input, override,
-and root-state lifecycle data around one of those plans.
+Plans describe what can run: child algorithms, schedule metadata, namespaces,
+and route/share wiring. They do not own resolved registries, lifecycle contexts,
+or per-run scheduler counters.
+"""
+abstract type AbstractPlan end
+
+"""
+Supertype for executable loop runtime wrappers.
+
+`LoopAlgorithm` wraps an `AbstractPlan` with resolved registry and lifecycle
+data. Per-run scheduler counters live in `AbstractLoopCursor` values built
+when execution starts.
 """
 abstract type AbstractLoopAlgorithm <: SteppableAlgorithm end
+
+"""
+Convenience API union for functions that intentionally accept either an
+unresolved plan or a resolved loop wrapper.
+"""
+const LoopSpec = Union{AbstractPlan, AbstractLoopAlgorithm}
 
 """
 Runtime wrapper for a loop execution plan.
@@ -59,7 +73,7 @@ that plan is resolved or initialized: root states, resolved options, registry,
 stored context, initializers, and overrides. Reinitialization should replace
 this wrapper/lifecycle data without changing the type of the wrapped plan.
 """
-struct LoopAlgorithm{Plan, S, O, R, C, Inits, Overrides, id} <: AbstractLoopAlgorithm
+struct LoopAlgorithm{Plan<:AbstractPlan, S, O, R, C, Inits, Overrides, id} <: AbstractLoopAlgorithm
     plan::Plan
     states::S
     options::O
@@ -67,6 +81,29 @@ struct LoopAlgorithm{Plan, S, O, R, C, Inits, Overrides, id} <: AbstractLoopAlgo
     context::C
     inits::Inits
     overrides::Overrides
+end
+
+"""Supertype for per-run loop cursors built from a resolved plan."""
+abstract type AbstractLoopCursor end
+
+"""Cursor sentinel for children that do not need counters."""
+struct NoLoopCursor <: AbstractLoopCursor end
+
+"""Per-run cursor for composite-style interval plans."""
+struct CompositeLoopCursor{Children} <: AbstractLoopCursor
+    inc::Base.RefValue{Int}
+    children::Children
+end
+
+"""Non-pausable routine cursor that carries only nested child cursors."""
+struct DirectRoutineCursor{Children} <: AbstractLoopCursor
+    children::Children
+end
+
+"""Pausable routine cursor that records child resume points for one process."""
+struct PausableRoutineCursor{MV, Children} <: AbstractLoopCursor
+    resume_idxs::MV
+    children::Children
 end
 
 """
@@ -149,7 +186,7 @@ end
 PlanWiringView(wiring::W, ::Val{Path} = Val(()), ::Val{DemandAll} = Val(false)) where {W<:PlanWiring,Path,DemandAll} =
     PlanWiringView{W,Path,DemandAll}(wiring)
 
-Base.iterate(la::ALA) where {ALA<:AbstractLoopAlgorithm} = iterate(getalgos(la))
+Base.iterate(la::ALA) where {ALA<:LoopSpec} = iterate(getalgos(la))
 
 
 

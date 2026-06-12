@@ -9,10 +9,10 @@ unresolved plan (`CompositeAlgorithm`/`Routine`) or a runtime `LoopAlgorithm`
 without branching.
 """
 @inline getplan(la::LoopAlgorithm) = getfield(la, :plan)
-@inline getplan(plan::Union{CompositeAlgorithm, Routine}) = plan
+@inline getplan(plan::AbstractPlan) = plan
 @inline getplan(fa::FinalizedAlgorithm) = getplan(inneralgorithm(fa))
 @inline getplan(::Type{<:LoopAlgorithm{Plan}}) where {Plan} = Plan
-@inline getplan(::Type{Plan}) where {Plan<:Union{CompositeAlgorithm, Routine}} = Plan
+@inline getplan(::Type{Plan}) where {Plan<:AbstractPlan} = Plan
 @inline getplan(::Type{FA}) where {LA, FA<:FinalizedAlgorithm{LA}} = getplan(LA)
 
 """
@@ -24,7 +24,7 @@ fields such as states, registry, context, inputs, and overrides.
 LoopAlgorithm(plan::LoopAlgorithm; states = getstates(plan), options = getoptions(plan), registry = getregistry(plan), context = getstoredcontext(plan), inits = getstoredinits(plan), overrides = getstoredoverrides(plan), id = getid(plan)) =
     LoopAlgorithm{typeof(getplan(plan)), typeof(states), typeof(options), typeof(registry), typeof(context), typeof(inits), typeof(overrides), id}(getplan(plan), states, options, registry, context, inits, overrides)
 
-LoopAlgorithm(plan::Union{CompositeAlgorithm, Routine}; states = (), options = (), registry = nothing, context = nothing, inits = (), overrides = (), id = getid(plan)) =
+LoopAlgorithm(plan::AbstractPlan; states = (), options = (), registry = nothing, context = nothing, inits = (), overrides = (), id = getid(plan)) =
     LoopAlgorithm{typeof(plan), typeof(states), typeof(options), typeof(registry), typeof(context), typeof(inits), typeof(overrides), id}(plan, states, options, registry, context, inits, overrides)
 
 """Return plan-global wiring inherited by every child."""
@@ -51,8 +51,6 @@ Base.isempty(wiring::PlanWiring) =
 @inline getalgo(cla::LoopAlgorithm, idx) = getalgo(getplan(cla), idx)
 @inline getwiring(cla::LoopAlgorithm) = getwiring(getplan(cla))
 @inline subalgorithms(cla::LoopAlgorithm) = subalgorithms(getplan(cla))
-@inline getinc(cla::LoopAlgorithm) = getinc(getplan(cla))
-@inline inc(cla::LoopAlgorithm) = inc(getplan(cla))
 @inline intervals(cla::LoopAlgorithm) = intervals(getplan(cla))
 @inline intervals(cla::LoopAlgorithm, idx) = intervals(getplan(cla), idx)
 @inline interval(cla::LoopAlgorithm, idx) = interval(getplan(cla), idx)
@@ -61,11 +59,6 @@ Base.isempty(wiring::PlanWiring) =
 @inline repeats(cla::LoopAlgorithm, idx::Val{I}) where {I} = repeats(getplan(cla), idx)
 @inline multipliers(cla::LoopAlgorithm) = multipliers(getplan(cla))
 @inline multiplier(cla::LoopAlgorithm, idx) = multiplier(getplan(cla), idx)
-@inline get_resume_idxs(cla::LoopAlgorithm) = get_resume_idxs(getplan(cla))
-@inline resume_idx(cla::LoopAlgorithm, idx) = resume_idx(getplan(cla), idx)
-@inline resume_idxs(cla::LoopAlgorithm) = resume_idxs(getplan(cla))
-@inline set_resume_point!(cla::LoopAlgorithm, idx::Int, loopidx::Int) = set_resume_point!(getplan(cla), idx, loopidx)
-
 """Return the namespace symbol stored for one child of a resolved plan."""
 @inline function plan_child_namespace(la::Union{CompositeAlgorithm, Routine}, idx::Int)
     name = namesymbol(getfield(getfield(la, :namespaces), idx))
@@ -74,11 +67,11 @@ end
 
 @inline plan_child_namespace(la::LoopAlgorithm, idx::Int) = plan_child_namespace(getplan(la), idx)
 
-get_shares(cla::LA) where {LA<:AbstractLoopAlgorithm} = @inline filter_by_type(Share, getoptions(cla))
-get_routes(cla::LA) where {LA<:AbstractLoopAlgorithm} = @inline filter_by_type(Route, getoptions(cla))
+get_shares(cla::LA) where {LA<:LoopSpec} = @inline filter_by_type(Share, getoptions(cla))
+get_routes(cla::LA) where {LA<:LoopSpec} = @inline filter_by_type(Route, getoptions(cla))
 
-@inline getoptions(la::LA, T::Type{O}) where {LA<:AbstractLoopAlgorithm, O} = filter_by_type(O, getoptions(la))
-setoptions(la::LA, options) where {LA<:AbstractLoopAlgorithm} = error("setoptions not implemented for $(typeof(la))")
+@inline getoptions(la::LA, T::Type{O}) where {LA<:LoopSpec, O} = filter_by_type(O, getoptions(la))
+setoptions(la::LA, options) where {LA<:LoopSpec} = error("setoptions not implemented for $(typeof(la))")
 
 function setoptions(la::LoopAlgorithm{Plan, S, O, R, C, Inits, Overrides, id}, options) where {Plan, S, O, R, C, Inits, Overrides, id}
     LoopAlgorithm{Plan, S, typeof(options), R, C, Inits, Overrides, id}(getplan(la), getstates(la), options, getregistry(la), getstoredcontext(la), getstoredinits(la), getstoredoverrides(la))
@@ -92,6 +85,7 @@ end
     LoopAlgorithm{Plan, S, O, R, C, Inits, Overrides, id}(getplan(la), getstates(la), getoptions(la), registry, getstoredcontext(la), getstoredinits(la), getstoredoverrides(la))
 
 @inline isresolved(la::LoopAlgorithm) = !isnothing(getregistry(la))
+@inline isresolved(::AbstractPlan) = false
 @inline getid(la::Union{LoopAlgorithm{Plan,S,O,R,C,I,Ov,id}, Type{<:LoopAlgorithm{Plan,S,O,R,C,I,Ov,id}}}) where {Plan,S,O,R,C,I,Ov,id} = id
 @inline hasid(la::Union{LoopAlgorithm{Plan,S,O,R,C,I,Ov,id}, Type{<:LoopAlgorithm{Plan,S,O,R,C,I,Ov,id}}}) where {Plan,S,O,R,C,I,Ov,id} = !isnothing(id)
 @inline id(la::Union{LoopAlgorithm{Plan,S,O,R,C,I,Ov,id}, Type{<:LoopAlgorithm{Plan,S,O,R,C,I,Ov,id}}}) where {Plan,S,O,R,C,I,Ov,id} = id
@@ -100,10 +94,10 @@ end
 Trait for setup
 """
 @inline iscomposite(::Any) = false
-@inline iscomposite(::Type{<:AbstractLoopAlgorithm}) = false
+@inline iscomposite(::Type{<:LoopSpec}) = false
 @inline iscomposite(::Type{<:CompositeAlgorithm}) = true
 @inline iscomposite(::Type{<:LoopAlgorithm{Plan}}) where {Plan} = iscomposite(Plan)
-@inline iscomposite(la::LA) where {LA<:AbstractLoopAlgorithm} = iscomposite(typeof(la))
+@inline iscomposite(la::LA) where {LA<:LoopSpec} = iscomposite(typeof(la))
 
 statetypes(::Type{<:LoopAlgorithm{Plan,S}}) where {Plan,S} = S.parameters
 algotypes(::Type{<:LoopAlgorithm{Plan}}) where {Plan} = algotypes(Plan)
@@ -118,31 +112,30 @@ algotypes(::Type{<:LoopAlgorithm{Plan}}) where {Plan} = algotypes(Plan)
 """
 Get the numbers Val(1), Val(2), ... Val(N) for the N algorithms in a composite or routine, as a tuple.
 """
-@generated function algonvalumbers(ca::LA) where {LA<:AbstractLoopAlgorithm}
+@generated function algonvalumbers(ca::LA) where {LA<:LoopSpec}
     nums = ntuple(i -> Val(i), numalgos(ca))
     return :($nums)
 end
 
-Base.@constprop :aggressive @inline function Base.getindex(cla::LA, name::Symbol) where {LA<:AbstractLoopAlgorithm}
+Base.@constprop :aggressive @inline function Base.getindex(cla::LA, name::Symbol) where {LA<:LoopSpec}
     getproperty(cla, name)
 end
 
-@inline function Base.getindex(cla::LA, idx::Int) where {LA<:AbstractLoopAlgorithm}
+@inline function Base.getindex(cla::LA, idx::Int) where {LA<:LoopSpec}
     getalgos(cla)[idx]
 end
 
-Base.@constprop :aggressive @inline function Base.getproperty(ca::LA, name::Symbol) where {LA<:AbstractLoopAlgorithm}
+Base.@constprop :aggressive @inline function Base.getproperty(ca::LA, name::Symbol) where {LA<:LoopSpec}
     keyloc = findkey(ca, name)
     isnothing(keyloc) && error("No algorithm or state with name $(name) found in LoopAlgorithm $(ca)")
     return ca[keyloc]
 end
 
-@inline Base.propertynames(ca::LA) where {LA<:AbstractLoopAlgorithm} = keys(ca)
+@inline Base.propertynames(ca::LA) where {LA<:LoopSpec} = keys(ca)
 
 @inline Base.length(la::LoopAlgorithm) = length(getplan(la))
 @inline Base.eachindex(la::LoopAlgorithm) = eachindex(getplan(la))
-@inline reset!(la::LoopAlgorithm) = reset!(getplan(la))
-@inline inc!(la::LoopAlgorithm) = inc!(getplan(la))
+@inline reset!(la::LoopAlgorithm) = la
 
 """
 Internal single-step entrypoint for tests and manual loop-plan driving.
@@ -150,12 +143,13 @@ Internal single-step entrypoint for tests and manual loop-plan driving.
 This builds the minimal process handle needed by routines and interval logic,
 then enters the same `_step!` chain used by `run`.
 """
-@inline function _step!(la::LA, context::C) where {LA<:AbstractLoopAlgorithm, C<:AbstractContext}
+@inline function _step!(la::LA, context::C) where {LA<:LoopSpec, C<:AbstractContext}
     lifetime = get(getglobals(context), :lifetime, Indefinite())
     process = LoopRunProcess(lifetime)
     plan = @inline getplan(la)
+    cursor = @inline loop_cursor(plan, Val(false))
     runtimecontext = @inline _merge_into_globals(_empty_context(), (; lifetime))
-    newcontext, _ = @inline _step!(plan, context, runtimecontext, PlanWiringView(getwiring(plan)), Namespace{nothing}(), process, lifetime)
+    newcontext, _ = @inline _step!(plan, cursor, context, runtimecontext, PlanWiringView(getwiring(plan)), Namespace{nothing}(), process, lifetime)
     return newcontext
 end
 

@@ -1,5 +1,5 @@
-@inline normalize_process_algo(func::F) where {F<:AbstractLoopAlgorithm} = func
-@inline normalize_process_algo(func::Type{F}) where {F<:AbstractLoopAlgorithm} = func
+@inline normalize_process_algo(func::F) where {F<:LoopSpec} = func
+@inline normalize_process_algo(func::Type{F}) where {F<:LoopSpec} = func
 @inline normalize_process_algo(func::F) where {F} = CompositeAlgorithm(func)
 
 @inline normalize_process_lifetime(func, lifetime::Integer) = Repeat(lifetime)
@@ -16,8 +16,8 @@ end
 normalize_process_lifetime(func, lifetime) =
     error("Unsupported process lifetime `$lifetime` for `$func`.")
 
-@inline instantiate_process_algo(func::F) where {F<:AbstractLoopAlgorithm} = func
-@inline instantiate_process_algo(func::Type{F}) where {F<:AbstractLoopAlgorithm} = func()
+@inline instantiate_process_algo(func::F) where {F<:LoopSpec} = func
+@inline instantiate_process_algo(func::Type{F}) where {F<:LoopSpec} = func()
 
 @inline resolve_process_inputs_overrides(func) = resolve_process_inputs_overrides(func, ())
 

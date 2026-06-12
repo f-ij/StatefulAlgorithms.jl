@@ -12,7 +12,7 @@ registry. The returned value is always a runtime wrapper unless the input was a
 `FinalizedAlgorithm`, in which case the finalized outer shape is preserved and
 its inner loop is materialized.
 """
-@inline function resolve(la::LA) where {LA<:AbstractLoopAlgorithm}
+@inline function resolve(la::LA) where {LA<:LoopSpec}
     if la isa FinalizedAlgorithm
         return finalstep(resolve(inneralgorithm(la)), finalfunction(la))
     end
@@ -42,14 +42,14 @@ end
     return registry, setfield(la, :plan, named_plan)
 end
 
-@inline function add_algos_to_registry(registry::R, la::LA, multiplier) where {R<:NameSpaceRegistry, LA<:Union{CompositeAlgorithm, Routine}}
+@inline function add_algos_to_registry(registry::R, la::LA, multiplier) where {R<:NameSpaceRegistry, LA<:AbstractPlan}
     funcs = getalgos(la)
     algo_multipliers = multiplier .* multipliers(la)
     registry, raw_funcs, namespaces = add_algo_tuple_to_registry(registry, funcs, algo_multipliers)
     return registry, setfield(rebuild_loopalgorithm_funcs(la, raw_funcs), :namespaces, namespaces)
 end
 
-@inline function add_algos_to_registry(registry::R, la::LA, multiplier) where {R<:NameSpaceRegistry, LA<:AbstractLoopAlgorithm}
+@inline function add_algos_to_registry(registry::R, la::LA, multiplier) where {R<:NameSpaceRegistry, LA<:LoopSpec}
     funcs = getalgos(la)
     algo_multipliers = multiplier .* multipliers(la)
     registry, raw_funcs, _ = add_algo_tuple_to_registry(registry, funcs, algo_multipliers)
@@ -109,13 +109,13 @@ end
     return registry, (raw_head, raw_tail...), (name_head, name_tail...)
 end
 
-@inline function add_algo_to_registry(registry::R, algo::LA, multiplier) where {R<:NameSpaceRegistry, LA<:AbstractLoopAlgorithm}
+@inline function add_algo_to_registry(registry::R, algo::LA, multiplier) where {R<:NameSpaceRegistry, LA<:LoopSpec}
     inner = algo isa LoopAlgorithm ? getplan(algo) : algo
     registry, plan = add_algos_to_registry(registry, inner, multiplier)
     return registry, plan, Namespace{nothing}()
 end
 
-@inline function add_algo_to_registry(registry::R, algo::IA, multiplier) where {F<:AbstractLoopAlgorithm, R<:NameSpaceRegistry, IA<:AbstractIdentifiableAlgo{F}}
+@inline function add_algo_to_registry(registry::R, algo::IA, multiplier) where {F<:LoopSpec, R<:NameSpaceRegistry, IA<:AbstractIdentifiableAlgo{F}}
     registry, plan = add_algos_to_registry(registry, getalgo(algo), multiplier)
     return registry, plan, Namespace{nothing}()
 end
@@ -125,11 +125,11 @@ end
     return registry, getalgo(keyed_algo), Namespace{getkey(keyed_algo)}()
 end
 
-@inline function rebuild_loopalgorithm_funcs(la::LA, funcs::F) where {LA<:Union{CompositeAlgorithm, Routine}, F<:Tuple}
+@inline function rebuild_loopalgorithm_funcs(la::LA, funcs::F) where {LA<:AbstractPlan, F<:Tuple}
     return setfield(la, :funcs, funcs)
 end
 
-@inline function rebuild_loopalgorithm_funcs(la::LA, funcs::F) where {LA<:AbstractLoopAlgorithm, F}
+@inline function rebuild_loopalgorithm_funcs(la::LA, funcs::F) where {LA<:LoopSpec, F}
     return setfield(la, :funcs, funcs)
 end
 
@@ -146,9 +146,9 @@ end
     return _attach_registry(setfield(la, :plan, plan), registry)
 end
 
-@inline function attach_registry_to_tree(la::LA, registry::R) where {LA<:AbstractLoopAlgorithm, R<:NameSpaceRegistry}
+@inline function attach_registry_to_tree(la::LA, registry::R) where {LA<:LoopSpec, R<:NameSpaceRegistry}
     funcs = map(getalgos(la)) do func
-        func isa AbstractLoopAlgorithm ? attach_registry_to_tree(func, registry) : func
+        func isa LoopSpec ? attach_registry_to_tree(func, registry) : func
     end
     return rebuild_loopalgorithm_funcs(la, funcs)
 end
@@ -164,7 +164,7 @@ end
 end
 
 """Resolve a plan tree and inlay inherited global wiring into concrete children."""
-function _resolve_plan_wiring_tree(la::LA, registry::NameSpaceRegistry, inherited_global::NamedTuple) where {LA<:Union{CompositeAlgorithm, Routine}}
+function _resolve_plan_wiring_tree(la::LA, registry::NameSpaceRegistry, inherited_global::NamedTuple) where {LA<:AbstractPlan}
     raw_wiring = getwiring(la)
 
     # Global wiring is grouped by resolved target namespace once per plan node.
@@ -177,7 +177,7 @@ function _resolve_plan_wiring_tree(la::LA, registry::NameSpaceRegistry, inherite
     # child-indexed value passed to that child during parent stepping.
     funcs = ntuple(length(getalgos(la))) do i
         child = getalgo(la, i)
-        if child isa AbstractLoopAlgorithm
+        if child isa LoopSpec
             return _resolve_plan_wiring_tree(child, registry, combined_global)
         end
         return child
@@ -186,7 +186,7 @@ function _resolve_plan_wiring_tree(la::LA, registry::NameSpaceRegistry, inherite
 
     resolved_children = ntuple(length(funcs)) do i
         child = funcs[i]
-        if child isa AbstractLoopAlgorithm
+        if child isa LoopSpec
             return getwiring(child)
         end
         target = plan_child_namespace(la, i)
@@ -256,12 +256,12 @@ end
 @inline _plan_tree_child_options(::Tuple{}) = ()
 @inline function _plan_tree_child_options(children::Children) where {Children<:Tuple}
     child = first(children)
-    head_options = child isa AbstractLoopAlgorithm ? _plan_tree_options(child) : ()
+    head_options = child isa LoopSpec ? _plan_tree_options(child) : ()
     return (head_options..., _plan_tree_child_options(Base.tail(children))...)
 end
 
 """Collect unresolved options stored throughout one plan tree."""
-function _plan_tree_options(la::LA) where {LA<:AbstractLoopAlgorithm}
+function _plan_tree_options(la::LA) where {LA<:LoopSpec}
     nested = _plan_tree_child_options(getalgos(la))
     return (getoptions(la)..., nested...)
 end
@@ -269,9 +269,9 @@ end
 @inline _plan_tree_options(la::LoopAlgorithm) = (_plan_tree_options(getplan(la))..., getoptions(la)...)
 
 @inline _unresolved_options(la::LoopAlgorithm) = (_plan_tree_options(getplan(la))..., getoptions(la)...)
-@inline _unresolved_options(la::LA) where {LA<:AbstractLoopAlgorithm} = _plan_tree_options(la)
+@inline _unresolved_options(la::LA) where {LA<:LoopSpec} = _plan_tree_options(la)
 
-@inline function _resolve_options(la::LA) where {LA<:AbstractLoopAlgorithm}
+@inline function _resolve_options(la::LA) where {LA<:LoopSpec}
     resolved = resolve(la)
     return _resolved_wiring_maps(getwiring(resolved))
 end

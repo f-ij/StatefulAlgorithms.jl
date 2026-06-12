@@ -7,12 +7,11 @@ layers.
 The constructor API mirrors [`CompositeAlgorithm`](@ref): pass child algorithms, then an
 interval tuple, then any states and options.
 """
-struct ThreadedCompositeAlgorithm{T, Intervals, S, O, R, id} <: AbstractLoopAlgorithm
+struct ThreadedCompositeAlgorithm{T, Intervals, Namespaces, W, id} <: AbstractPlan
     funcs::T
-    states::S
-    options::O
-    inc::Base.RefValue{Int}
-    reg::R
+    intervals
+    namespaces::Namespaces
+    wiring::W
 end
 
 const BarrieredCompositeAlgorithm = ThreadedCompositeAlgorithm
@@ -22,32 +21,35 @@ iscomposite(::Type{TCA}) where {TCA<:ThreadedCompositeAlgorithm} = true
 ThreadedCompositeAlgorithm(args...) = parse_la_input(ThreadedCompositeAlgorithm, args...)
 
 function LoopAlgorithm(::Type{ThreadedCompositeAlgorithm}, funcs::F, states::Tuple, options::Tuple, intervals; id = nothing) where {F}
-    return ThreadedCompositeAlgorithm{typeof(funcs), intervals, typeof(states), typeof(options), Nothing, id}(funcs, states, options, Ref(1), nothing)
+    namespaces = ntuple(_ -> Namespace{nothing}(), length(funcs))
+    wiring = PlanWiring(_plan_wiring(options), _plan_child_wiring(funcs, options))
+    plan = ThreadedCompositeAlgorithm{typeof(funcs), intervals, typeof(namespaces), typeof(wiring), id}(funcs, intervals, namespaces, wiring)
+    root_options = _root_loop_options(options)
+    return isempty(states) && isempty(root_options) ? plan : LoopAlgorithm(plan; states, options = root_options, id)
 end
 
-function setoptions(tca::ThreadedCompositeAlgorithm{T, Intervals, S, O, R, id}, options) where {T, Intervals, S, O, R, id}
-    ThreadedCompositeAlgorithm{T, Intervals, S, typeof(options), R, id}(getalgos(tca), getstates(tca), options, getinc(tca), getregistry(tca))
+function setoptions(tca::ThreadedCompositeAlgorithm, options)
+    wiring = PlanWiring(_plan_wiring(options), _plan_child_wiring(getalgos(tca), options))
+    return setfield(tca, :wiring, wiring)
 end
 
 @inline getalgos(tca::ThreadedCompositeAlgorithm) = getfield(tca, :funcs)
-@inline getstates(tca::ThreadedCompositeAlgorithm) = getfield(tca, :states)
+@inline getstates(tca::ThreadedCompositeAlgorithm) = ()
+@inline getwiring(tca::ThreadedCompositeAlgorithm) = getfield(tca, :wiring)
+@inline getoptions(tca::ThreadedCompositeAlgorithm) = _all_plan_wiring(global_wiring(getwiring(tca)), child_wiring(getwiring(tca)))
 
 subalgorithms(tca::ThreadedCompositeAlgorithm) = getalgos(tca)
 subalgotypes(tca::ThreadedCompositeAlgorithm{FT}) where {FT} = FT.parameters
 subalgotypes(::Type{TCA}) where {FT, TCA<:ThreadedCompositeAlgorithm{FT}} = FT.parameters
 
-getinc(tca::ThreadedCompositeAlgorithm) = getfield(tca, :inc)
-getoptions(tca::ThreadedCompositeAlgorithm) = getfield(tca, :options)
-@inline getregistry(tca::ThreadedCompositeAlgorithm) = getfield(tca, :reg)
-@inline _attach_registry(tca::ThreadedCompositeAlgorithm, registry::NameSpaceRegistry) = setfield(tca, :reg, registry)
-@inline isresolved(tca::ThreadedCompositeAlgorithm) = !isnothing(getregistry(tca))
-
-getid(tca::Union{ThreadedCompositeAlgorithm{T,I,S,O,R,id}, Type{<:ThreadedCompositeAlgorithm{T,I,S,O,R,id}}}) where {T,I,S,O,R,id} = id
-setid(tca::TCA, id = uuid4()) where {TCA<:ThreadedCompositeAlgorithm} = setparameter(tca, 6, id)
+getid(tca::Union{ThreadedCompositeAlgorithm{T,I,NS,W,id}, Type{<:ThreadedCompositeAlgorithm{T,I,NS,W,id}}}) where {T,I,NS,W,id} = id
+setid(tca::TCA, id = uuid4()) where {TCA<:ThreadedCompositeAlgorithm} = setparameter(tca, 5, id)
 
 @inline functypes(::Union{ThreadedCompositeAlgorithm{T,I}, Type{<:ThreadedCompositeAlgorithm{T,I}}}) where {T,I} = tuple(T.parameters...)
 @inline getalgotype(::Union{ThreadedCompositeAlgorithm{T,I}, Type{<:ThreadedCompositeAlgorithm{T,I}}}, idx) where {T,I} = T.parameters[idx]
 @inline numalgos(::Union{ThreadedCompositeAlgorithm{T,I}, Type{<:ThreadedCompositeAlgorithm{T,I}}}) where {T,I} = length(T.parameters)
+statetypes(::Union{ThreadedCompositeAlgorithm, Type{<:ThreadedCompositeAlgorithm}}) = ()
+algotypes(tca::Union{ThreadedCompositeAlgorithm{FT}, Type{<:ThreadedCompositeAlgorithm{FT}}}) where FT = tuple(FT.parameters...)
 
 @inline function intervals(::Union{ThreadedCompositeAlgorithm{T,I}, Type{<:ThreadedCompositeAlgorithm{T,I}}}) where {T,I}
     if I isa Tuple
@@ -70,20 +72,20 @@ function setinterval(tca::TCA, idx::Int, new_interval) where {TCA<:ThreadedCompo
     setparameter(tca, 2, new_intervals)
 end
 
-hasid(tca::Union{ThreadedCompositeAlgorithm{T,I,S,O,R,id}, Type{<:ThreadedCompositeAlgorithm{T,I,S,O,R,id}}}) where {T,I,S,O,R,id} = !isnothing(id)
-id(tca::Union{ThreadedCompositeAlgorithm{T,I,S,O,R,id}, Type{<:ThreadedCompositeAlgorithm{T,I,S,O,R,id}}}) where {T,I,S,O,R,id} = id
+hasid(tca::Union{ThreadedCompositeAlgorithm{T,I,NS,W,id}, Type{<:ThreadedCompositeAlgorithm{T,I,NS,W,id}}}) where {T,I,NS,W,id} = !isnothing(id)
+id(tca::Union{ThreadedCompositeAlgorithm{T,I,NS,W,id}, Type{<:ThreadedCompositeAlgorithm{T,I,NS,W,id}}}) where {T,I,NS,W,id} = id
 
 Base.length(tca::ThreadedCompositeAlgorithm) = length(getalgos(tca))
 Base.eachindex(tca::ThreadedCompositeAlgorithm) = eachindex(getalgos(tca))
 getalgo(tca::ThreadedCompositeAlgorithm, idx) = getalgos(tca)[idx]
 
-@generated function inc!(tca::ThreadedCompositeAlgorithm)
+@generated function inc!(cursor::CompositeLoopCursor, tca::ThreadedCompositeAlgorithm)
     _lcm = lcm(intervals(tca)...)
-    return :(getinc(tca)[] = mod1(getinc(tca)[] + 1, $_lcm))
+    return :(getinc(cursor)[] = mod1(getinc(cursor)[] + 1, $_lcm))
 end
 
-function reset!(tca::ThreadedCompositeAlgorithm)
-    getinc(tca)[] = 1
+function reset!(cursor::CompositeLoopCursor, tca::ThreadedCompositeAlgorithm)
+    getinc(cursor)[] = 1
     reset!.(getalgos(tca))
 end
 
@@ -95,4 +97,18 @@ multiplier(tca::ThreadedCompositeAlgorithm, idx) = 1 / interval(tca, idx)
     return Val.(Is)
 end
 
-inc(tca::ThreadedCompositeAlgorithm) = getinc(tca)[]
+inc(cursor::CompositeLoopCursor, ::ThreadedCompositeAlgorithm) = getinc(cursor)[]
+
+@inline plan_child_namespace(tca::ThreadedCompositeAlgorithm, idx::Int) = begin
+    name = namesymbol(getfield(getfield(tca, :namespaces), idx))
+    isnothing(name) ? trykey(getalgo(tca, idx)) : name
+end
+
+@inline _namespace_tuple(::Type{<:ThreadedCompositeAlgorithm{FT,S,NS}}) where {FT,S,NS} = NS
+
+@generated function loop_cursor(plan::P, ::Val{Pausable} = Val(false)) where {P<:ThreadedCompositeAlgorithm, Pausable}
+    children = Expr(:tuple, (:(@inline loop_cursor(getfield(@inline(getalgos(plan)), $i), Val($Pausable))) for i in 1:numalgos(P))...)
+    return quote
+        CompositeLoopCursor(Ref(1), $children)
+    end
+end

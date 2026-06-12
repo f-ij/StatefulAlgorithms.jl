@@ -18,7 +18,7 @@ Root-only loop-algorithm wrapper that post-processes the cleaned final context.
 process. When nested inside another loop algorithm constructor, the parser warns
 and strips the wrapper so inner context semantics stay ordinary.
 """
-struct FinalizedAlgorithm{LA<:AbstractLoopAlgorithm, F} <: AbstractLoopAlgorithm
+struct FinalizedAlgorithm{LA<:LoopSpec, F} <: AbstractLoopAlgorithm
     inner::LA
     final::F
 end
@@ -34,7 +34,7 @@ The wrapper is root-only: pass the returned `FinalizedAlgorithm` directly to a
 constructor, the parser warns and drops the final wrapper because nested loop
 algorithms do not own the process-level result.
 """
-function finalstep(la::LA, final) where {LA<:AbstractLoopAlgorithm}
+function finalstep(la::LA, final) where {LA<:LoopSpec}
     return FinalizedAlgorithm{typeof(la), typeof(final)}(la, final)
 end
 
@@ -46,7 +46,7 @@ Reject type-level loop algorithms for finalization.
 `finalstep` needs an instantiated loop algorithm so the final wrapper can
 preserve the concrete algorithm value and forward all loop operations to it.
 """
-function finalstep(::Type{LA}, final) where {LA<:AbstractLoopAlgorithm}
+function finalstep(::Type{LA}, final) where {LA<:LoopSpec}
     error("`finalstep` requires an instantiated LoopAlgorithm, not a LoopAlgorithm type.")
 end
 

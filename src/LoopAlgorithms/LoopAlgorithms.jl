@@ -5,7 +5,7 @@ This keeps existing wrapper surfaces like `IdentifiableAlgo(loopalgo, :name)`
 and routed references from `@context` consistent without introducing any custom
 DSL runtime machinery.
 """
-@inline function match_by(la::LA) where {LA<:AbstractLoopAlgorithm}
+@inline function match_by(la::LA) where {LA<:LoopSpec}
     if isbits(la)
         return la
     end
@@ -13,7 +13,7 @@ DSL runtime machinery.
 end
 
 """Loop algorithm types match by their type."""
-@inline match_by(t::Type{<:AbstractLoopAlgorithm}) = t
+@inline match_by(t::Type{<:LoopSpec}) = t
 
 include("Utils.jl")
 include("Interval.jl")
@@ -23,6 +23,7 @@ include("CompositeAlgorithms.jl")
 include("Routines.jl")
 include("Recipes.jl")
 include("FinalizedAlgorithm.jl")
+include("LoopCursor.jl")
 include("Setup.jl")
 include("Preparation/Preparation.jl")
 include("Resolving/Resolving.jl")
@@ -51,4 +52,3 @@ include("Showing.jl")
 #     end
 #     return getid(claT1) == getid(checkobj)
 # end
-

@@ -4,4 +4,4 @@
     return Expr(:tuple, exprs...)
 end
 
-const LoopAlgorithmTypes = Union{AbstractLoopAlgorithm, Type{<:AbstractLoopAlgorithm}}
+const LoopAlgorithmTypes = Union{LoopSpec, Type{<:LoopSpec}}
