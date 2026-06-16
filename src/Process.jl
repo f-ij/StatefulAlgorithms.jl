@@ -97,6 +97,10 @@ end
 Print one multi-line field in a process tree with stable continuation
 indentation.
 """
+@inline function _process_nested_continuation_prefix(line::AbstractString, continuation::AbstractString)
+    return (startswith(line, "├── ") || startswith(line, "└── ")) ? string(continuation, "    ") : continuation
+end
+
 function _print_process_nested_field(
     io::IO,
     branch::AbstractString,
@@ -104,9 +108,11 @@ function _print_process_nested_field(
     name::Symbol,
     lines::AbstractVector{<:AbstractString},
 )
-    print(io, branch, name, " = ", first(lines))
+    label_prefix = string(branch, name, " = ")
+    label_continuation = string(continuation, repeat(" ", Base.Unicode.textwidth(string(name, " = "))))
+    _print_wrapped_prefixed(io, first(lines), label_prefix, label_continuation)
     for line in Iterators.drop(lines, 1)
-        print(io, "\n", continuation, line)
+        _print_wrapped_prefixed(io, line, continuation, _process_nested_continuation_prefix(line, continuation))
     end
     return nothing
 end
@@ -438,7 +444,6 @@ function Base.show(io::IO, ::MIME"text/plain", p::Process)
     _print_process_nested_field(io, "├── ", "│   ", :algo, algo_lines)
 
     context_lines = _process_context_show_lines(io, context(p))
-    print(io, "\n")
     _print_process_nested_field(io, "└── ", "    ", :context, context_lines)
 
     return nothing

@@ -1,13 +1,16 @@
-# [Routes and Shares Internals](@id routes_shares_internals)
+# [Routes, Shares, and Replacements Internals](@id routes_shares_internals)
 
-`Route` and `Share` are plan options. Resolution happens when a plan is wrapped
-and resolved as a concrete `LoopAlgorithm`.
+`Route`, `Share`, and `Replace` are plan options. Route/share resolution happens
+when a plan is wrapped and resolved as a concrete `LoopAlgorithm`. Replacement
+resolution is stored as a root option and materialized after lifecycle init has
+created the persistent context.
 
 Relevant files:
 
-- Definitions: `src/RoutingInterface/RouteDef.jl`, `src/RoutingInterface/ShareDef.jl`
+- Definitions: `src/RoutingInterface/RouteDef.jl`, `src/RoutingInterface/ShareDef.jl`, `src/RoutingInterface/ReplaceDef.jl`
 - Resolution backend: `src/RoutingInterface/Resolving.jl`, `src/RoutingInterface/Backend.jl`, `src/RoutingInterface/Sharing.jl`
 - Plan integration: `src/LoopAlgorithms/PlanOptions.jl`, `src/LoopAlgorithms/Preparation/Constructor.jl`
+- Replacement materialization: `src/LoopAlgorithms/ReplaceMaterialization.jl`
 - View integration: `src/Context/View/StructDef.jl`, `src/Context/View/Locations.jl`
 
 ## 1. Route Resolution
@@ -48,13 +51,39 @@ Transform details:
 
 This metadata is attached to the target child's `StepRouting`.
 
-## 3. How Views See Them
+## 3. Replacement Materialization
+
+`Replace` stores:
+
+- source endpoint (`from`)
+- target endpoint (`to`)
+- source variable names
+- target aliases
+- precomputed matcher identities for from/to
+
+`resolve_replacement(reg, replacement)` resolves endpoints against the
+namespace registry and returns a resolved `Replace` whose endpoint identities
+are concrete subcontext names.
+
+Replacement is not stored in `StepRouting`. After loop-algorithm init,
+`apply_replace_specs(context, la)` resolves each root replacement and rewrites
+the target persistent field to a `ReplacedVar(VarLocation{:subcontext}(...))`
+marker. The source and target fields must already exist in the initialized
+context, and self-replacement is rejected.
+
+`partialinit` applies replacement materialization again after rebuilding the
+targeted subcontexts, so replacement markers are restored when an affected
+field is reinitialized.
+
+## 4. How Views See Them
 
 When creating `SubContextView` locations (`src/Context/View/Locations.jl`):
 
 - `SharedContext` contributes all variables from the shared subcontext.
 - Route metadata contributes only specified routed vars, plus transform and
   reverse transform if provided.
+- Local fields whose storage type is `ReplacedVar` redirect their local
+  `VarLocation` to the stored backing location.
 
 Both become `VarLocation{:subcontext}` entries, so reads and writes are directed to the source subcontext.
 
@@ -63,16 +92,21 @@ That means returning a routed/shared variable from `step!` can update remote sta
 The view constructor reconstructs resolved route/share tuples from their
 concrete tuple types. The runtime routing value selects the type-specialized
 view, but the view does not depend on const-propagating route/share values.
+Replacement-backed local locations are discovered from the persistent context
+field type instead of from runtime routing metadata.
 
-## 4. Errors and Validation
+## 5. Errors and Validation
 
 If route/share endpoints are not present in the registry, resolution throws explicit errors listing available keys (see `to_sharedvar` and `to_sharedcontext`).
 
-## 5. Relation to Packaging
+Replacement materialization throws explicit errors when source/target
+subcontexts or variables are absent after init.
+
+## 6. Relation to Packaging
 
 During `Package(comp)`, routes are translated into `VarAliases` for internal subpackages (`src/Packaging/Constructor.jl`, `src/Packaging/Utils.jl`).
 
-## 6. Plan-Local Wiring
+## 7. Plan-Local Wiring
 
 Plain `Route`/`Share` options are stored on the plan node that contains them.
 DSL-local route/share statements become child-aligned local wiring, so the

@@ -185,7 +185,7 @@ function Base.show(io::IO, pc::ProcessContext)
         var_lines = _subcontext_var_lines(sc; io = show_ctx)
         var_last_idx = length(var_lines)
         for (var_idx, line) in enumerate(var_lines)
-            var_branch = var_idx == var_last_idx ? " └── " : " ├── "
+            var_branch = var_idx == var_last_idx ? "└── " : "├── "
             continuation_stem = var_idx == var_last_idx ? "    " : "│   "
             _print_wrapped_prefixed(io, line, stem * var_branch, stem * continuation_stem)
         end

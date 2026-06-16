@@ -28,7 +28,8 @@ positions without rebaking them into the algorithm.
 4. Merge `Init` values into target subcontexts.
 5. Run `init(algo, input_context)`.
 6. Merge `Override` values after init.
-7. Return a loop algorithm with stored context, inits, and overrides.
+7. Materialize root-level `Replace` options into target context fields.
+8. Return a loop algorithm with stored context, inits, and overrides.
 
 For loop algorithms, `init(::LoopAlgorithm, ::ProcessContext)` iterates all registry entities in order (`src/LoopAlgorithms/Init.jl`).
 

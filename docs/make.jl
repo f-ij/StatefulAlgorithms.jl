@@ -18,7 +18,7 @@ makedocs(
             "Referencing Algorithms" => "user/referencing_algorithms.md",
             "Contexts and Indexing" => "user/contexts.md",
             "Init Analysis" => "user/init_analysis.md",
-            "Routes and Shares" => "user/routes_shares.md",
+            "Routes, Shares, and Replacements" => "user/routes_shares.md",
             "Init, Overrides, and Runtime Inputs" => "user/inputs_overrides.md",
             "Vars (Var Selectors)" => "user/vars.md",
             "Interactive Contexts" => "user/interactive.md",
@@ -31,7 +31,7 @@ makedocs(
         "Internals" => [
             "Registry" => "internals/registry.md",
             "Contexts" => "internals/contexts.md",
-            "Routes and Shares" => "internals/routes_shares.md",
+            "Routes, Shares, and Replacements" => "internals/routes_shares.md",
             "Process Pipeline" => "internals/process_pipeline.md",
         ],
     ],

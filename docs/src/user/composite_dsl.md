@@ -187,6 +187,36 @@ Here `target` reads `input` through the forward transform. If it returns
 `@transform(f, source)` is read-transform syntax for call arguments. Reverse
 writeback uses `@route ... reverse_transform = g`.
 
+## Replacements
+
+Use `@replace` when a target should keep a local field name but the field should
+read and write through a source field after initialization.
+
+```julia
+algo = @CompositeAlgorithm begin
+    @alias source = SourceAlgo
+    @alias target = TargetAlgo
+
+    source()
+    target()
+
+    @replace source.value => target.value
+end
+```
+
+This lowers to a root `Replace(source => target, :value)` option. During init,
+the target field is created normally and then materialized as a replacement
+marker that points at the source field.
+
+Aliases are supported on the target side:
+
+```julia
+@replace source.value => target.input_value
+```
+
+This lowers to `Replace(source => target, :value => :input_value)`, so `target`
+sees `context.input_value` backed by `source.value`.
+
 ## Ref and Indexed Reads
 
 Indexed reads from context values are routed as transform routes.

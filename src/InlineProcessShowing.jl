@@ -41,7 +41,6 @@ function Base.show(io::IO, ::MIME"text/plain", ip::InlineProcess)
     _print_process_nested_field(io, "├── ", "│   ", :algo, algo_lines)
 
     context_lines = _process_context_show_lines(io, context(ip))
-    print(io, "\n")
     _print_process_nested_field(io, "└── ", "    ", :context, context_lines)
 
     return nothing

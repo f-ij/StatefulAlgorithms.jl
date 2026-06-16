@@ -1,10 +1,12 @@
-# [Routes and Shares](@id routes_shares_user)
+# [Routes, Shares, and Replacements](@id routes_shares_user)
 
-`Route` and `Share` make values from one algorithm or state visible to another.
+`Route`, `Share`, and `Replace` make values from one algorithm or state visible
+to another.
 
 Each algorithm or state owns a subcontext: its named part of the full process
 context. A route exposes selected names from one subcontext. A share exposes all
-names from one subcontext.
+names from one subcontext. A replacement makes a target-owned field read and
+write through a source-owned field after initialization.
 
 ## Referencing Algorithms
 
@@ -88,6 +90,42 @@ Default is bidirectional (`directional = false`), so both sides can read the
 other side's values. Use `directional = true` for a one-way share from the first
 argument to the second.
 
+## `Replace`: Persistent Field Backing
+
+Use `Replace` when one subcontext should keep its local field name, but the
+field should be backed by another subcontext's storage:
+
+```julia
+algo = CompositeAlgorithm(
+    Source, Target,
+    (1, 1),
+    Replace(Source => Target, :value),
+)
+```
+
+After `init`, `Target` still sees `context.value`, but reads and writes go
+through `Source.value`.
+
+You can also alias the target field name:
+
+```julia
+Replace(Source => Target, :value => :input_value)
+```
+
+In that case, `Target` sees `context.input_value`, backed by `Source.value`.
+
+Unlike `Route`, `Replace` is materialized into the persistent context. The
+target field is initialized normally, then replaced by a `ReplacedVar` marker
+that points at the source field. This makes replacement useful when a target
+algorithm requires a local field to exist during initialization, but the runtime
+value should be shared with a source field afterwards.
+
+Constraints:
+
+- A replacement must name at least one variable mapping.
+- Source and target subcontexts, and their variables, must exist after init.
+- A field cannot replace itself.
+
 ## Read and Write Semantics
 
 Routed and shared names point back to stored values. If the target returns one
@@ -96,6 +134,10 @@ of those names from `step!`, the source subcontext can be updated.
 This enables coupling patterns like:
 
 - algorithm B reading and damping algorithm A's `velocity`, then returning updated `velocity`.
+
+Replacement-backed fields behave the same way from the target algorithm's point
+of view: returning the replaced local name writes through to the source field
+while preserving the target's persistent replacement marker.
 
 ## Plan-Local Routes
 
