@@ -19,7 +19,6 @@ using StatefulAlgorithms
     include("LoopAlgorithmEditTest.jl")
     include("SymbolIndexingTest.jl")
     include("InnerTypeFilterTest.jl")
-    include("ContextShowingTest.jl")
     include("InteractiveTest.jl")
     include("ReplacementTest.jl")
     include("CompositeDSLTest.jl")

@@ -56,6 +56,61 @@ end
     return sprint(summary, getalgo(p))
 end
 
+"""
+    _process_nested_show_value(value)
+
+Return the user-facing value that should be rendered as a nested process field.
+
+Loop runtime wrappers carry lifecycle data in their concrete type and fields.
+For process display, the execution plan is the semantic value the user asked to
+run, so it is shown directly instead of the wrapper object.
+"""
+@inline function _process_nested_show_value(value::LA) where {LA<:LoopAlgorithm}
+    return getplan(value)
+end
+
+@inline _process_nested_show_value(value::V) where {V} = value
+
+"""
+    _process_nested_show_lines(io, value)
+
+Render `value` for a nested `Process` tree field and return its display lines.
+"""
+function _process_nested_show_lines(io::IO, value::V) where {V}
+    show_ctx = IOContext(io, :limit => get(io, :limit, false), :color => get(io, :color, false))
+    return split(chomp(sprint(show, _process_nested_show_value(value); context = show_ctx)), '\n')
+end
+
+"""
+    _process_context_show_lines(io, context)
+
+Render a process context without globals and return its display lines.
+"""
+function _process_context_show_lines(io::IO, context::C) where {C<:ProcessContext}
+    show_ctx = IOContext(io, :printcontextglobals => false, :limit => get(io, :limit, false), :color => get(io, :color, false))
+    return split(chomp(sprint(show, context; context = show_ctx)), '\n')
+end
+
+"""
+    _print_process_nested_field(io, branch, continuation, name, lines)
+
+Print one multi-line field in a process tree with stable continuation
+indentation.
+"""
+function _print_process_nested_field(
+    io::IO,
+    branch::AbstractString,
+    continuation::AbstractString,
+    name::Symbol,
+    lines::AbstractVector{<:AbstractString},
+)
+    print(io, branch, name, " = ", first(lines))
+    for line in Iterators.drop(lines, 1)
+        print(io, "\n", continuation, line)
+    end
+    return nothing
+end
+
 @inline function _process_constructor_lifetime(repeats, lifetime, repeat)
     if !isnothing(repeat)
         isnothing(repeats) || error("Pass either `repeats = ...` or `repeat = ...`, not both.")
@@ -379,20 +434,12 @@ function Base.show(io::IO, ::MIME"text/plain", p::Process)
     println(io, "├── loopidx = ", loopint(p))
     println(io, "├── timeout = ", p.timeout)
 
-    algo_lines = split(sprint(show, getalgo(p)), '\n')
-    print(io, "├── algo = ", algo_lines[1])
-    for line in Iterators.drop(algo_lines, 1)
-        print(io, "\n", "│   ", line)
-    end
+    algo_lines = _process_nested_show_lines(io, getalgo(p))
+    _print_process_nested_field(io, "├── ", "│   ", :algo, algo_lines)
 
-    context_lines = split(
-        sprint(show, context(p); context = IOContext(io, :printcontextglobals => false, :limit => get(io, :limit, false), :color => get(io, :color, false))),
-        '\n',
-    )
-    print(io, "\n", "└── context = ", context_lines[1])
-    for line in Iterators.drop(context_lines, 1)
-        print(io, "\n", "    ", line)
-    end
+    context_lines = _process_context_show_lines(io, context(p))
+    print(io, "\n")
+    _print_process_nested_field(io, "└── ", "    ", :context, context_lines)
 
     return nothing
 end

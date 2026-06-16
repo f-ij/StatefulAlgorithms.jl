@@ -37,20 +37,12 @@ function Base.show(io::IO, ::MIME"text/plain", ip::InlineProcess)
     println(io, "├── lifetime = ", lifetime(ip))
     println(io, "├── loopidx = ", loopint(ip))
 
-    algo_lines = split(sprint(show, getalgo(ip)), '\n')
-    print(io, "├── algo = ", algo_lines[1])
-    for line in Iterators.drop(algo_lines, 1)
-        print(io, "\n", "│   ", line)
-    end
+    algo_lines = _process_nested_show_lines(io, getalgo(ip))
+    _print_process_nested_field(io, "├── ", "│   ", :algo, algo_lines)
 
-    context_lines = split(
-        sprint(show, context(ip); context = IOContext(io, :printcontextglobals => false, :limit => get(io, :limit, false), :color => get(io, :color, false))),
-        '\n',
-    )
-    print(io, "\n", "└── context = ", context_lines[1])
-    for line in Iterators.drop(context_lines, 1)
-        print(io, "\n", "    ", line)
-    end
+    context_lines = _process_context_show_lines(io, context(ip))
+    print(io, "\n")
+    _print_process_nested_field(io, "└── ", "    ", :context, context_lines)
 
     return nothing
 end
