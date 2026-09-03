@@ -1,11 +1,6 @@
 using Test
 using StatefulAlgorithms
 
-isdefined(StatefulAlgorithms, :ContextAnalyzer) || Base.include(
-    StatefulAlgorithms,
-    joinpath(dirname(pathof(StatefulAlgorithms)), "ContextAnalyzer", "ContextAnalyzer.jl"),
-)
-
 StatefulAlgorithms.@StepAlgorithm function CaptureSeedForAnalyzerTest(
     @managed(history = Int[]);
     @inputs((; seed::Int, scale::Float64 = 1.0))
@@ -21,6 +16,18 @@ function StatefulAlgorithms.init(::DirectContextReadForAnalyzerTest, context::C)
     mis = get(context, :missing_value, 99)
     indexed = context[:capture_seed]
     return (; upstream, mis, indexed)
+end
+
+struct StepReadForAnalyzerTest <: StatefulAlgorithms.StepAlgorithm end
+
+function StatefulAlgorithms.init(::StepReadForAnalyzerTest, context::C) where {C<:StatefulAlgorithms.AbstractContext}
+    return (; total = 0)
+end
+
+function StatefulAlgorithms.step!(::StepReadForAnalyzerTest, context::C) where {C<:StatefulAlgorithms.AbstractContext}
+    increment = context.increment
+    isnothing(increment) && return nothing
+    return (; total = context.total + increment)
 end
 
 @testset "Context Analyzer" begin
@@ -61,4 +68,12 @@ end
     printed = sprint(io -> StatefulAlgorithms.printevents(io, analysis_with_inputs))
     @test occursin("ContextAnalyser events:", printed)
     @test occursin("DirectContextReadForAnalyzerTest_1", printed)
+
+    step_comp = CompositeAlgorithm(:reader => StepReadForAnalyzerTest(), (1,))
+    step_analysis = StatefulAlgorithms.analyse_steps(step_comp)
+    @test StatefulAlgorithms.requested_inputs(step_analysis) == Dict(
+        :reader => [:increment],
+    )
+    @test StatefulAlgorithms.stored_inputs(step_analysis)[:reader] == (; total = 0)
+    @test isempty(getfield(getfield(step_analysis, :memory), :errors))
 end

@@ -4,8 +4,9 @@ The registry layer is what assigns stable subcontext names to algorithms/states 
 
 Core types:
 
-- `NameSpaceRegistry`: top-level registry (`src/Registry/StructDefs.jl`).
-- `RegistryTypeEntry{T}`: one partition per entry type (`src/Registry/StructDefs.jl`).
+- `NameSpaceRegistry`: top-level registry (`src/Registry/StructDef.jl`).
+- `RegistryTypeEntry{T}`: one partition per entry type
+  (`src/Registry/TypeEntries/StructDef.jl`).
 - `IdentifiableAlgo{F,Id,...,Key}`: wrapped process entity with identity and assigned context key (`src/Identifiable/StructDef.jl`).
 
 ## 1. Type Partitions and Matching
@@ -24,7 +25,8 @@ This is why instance-based and type-based registrations are distinct identities.
 
 ## 2. Key Assignment
 
-`add(reg, obj, multiplier)` (`src/Registry/Registries.jl`, `src/Registry/TypeEntries.jl`) does:
+`add(reg, obj, multiplier)` (`src/Registry/Registries.jl`,
+`src/Registry/TypeEntries/Adding.jl`) does:
 
 1. Find/create the correct `RegistryTypeEntry`.
 2. If no match exists, create a key with `Autokey` (`TypeName_index`) and wrap as `IdentifiableAlgo`.

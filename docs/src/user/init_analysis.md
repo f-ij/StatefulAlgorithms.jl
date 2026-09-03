@@ -1,7 +1,7 @@
 # [Init Analysis](@id init_analysis_user)
 
-`ContextAnalyser` is a lightweight, best-effort tool for discovering which values
-an entity's `init` and `step!` methods try to read.
+`ContextAnalyser` is a lightweight, best-effort tool for discovering which
+unresolved context values an entity's `init` and `step!` methods request.
 
 It is meant for exploratory analysis, not for exact validation.
 When an `init` path eventually errors because a missing value turned into `nothing`,
@@ -13,13 +13,11 @@ instead of a normal runtime context.
 
 ## Loading It
 
-The analyzer lives in `src/ContextAnalyzer/ContextAnalyzer.jl` and is currently opt-in.
-
-Load it into the module with:
+The analyzer is included with the package and is available after loading
+`StatefulAlgorithms`:
 
 ```julia
 using StatefulAlgorithms
-Base.include(StatefulAlgorithms, joinpath(dirname(pathof(StatefulAlgorithms)), "ContextAnalyzer", "ContextAnalyzer.jl"))
 ```
 
 ## Running Analysis
@@ -30,17 +28,21 @@ Use `analyse_inits` on a loop algorithm:
 analysis = StatefulAlgorithms.analyse_inits(comp)
 ```
 
-This first builds a mock loop algorithm from the resolved one, with all repeats
-and intervals normalized to `1`.
-It then creates analyzer views with `view(...)` and runs each flattened `init`
-inside a `try` block.
+This resolves the loop algorithm, creates analyzer views with `view(...)`, and
+tries the registered initialization hooks inside error-recording blocks. It does
+not execute the real scheduler or reproduce the normal lifecycle exactly.
 
 The analyzer records:
 
 - which registered context entries were opened,
-- which names each entry requested through `context.x`, `get(context, :x, default)`, `haskey(context, :x)`, or indexing,
+- which unseeded names each entry requested through `context.x`,
+  `get(context, :x, default)`, `haskey(context, :x)`, or indexing,
 - a compact count of captured errors,
 - stored per-view inputs that were seeded or produced during successful `init` calls.
+
+An access satisfied by a seeded or previously produced value is returned
+directly and is not added to `requested_inputs`; that result describes missing
+dependencies, not a complete trace of every property access.
 
 ## Analysing Steps
 
@@ -50,8 +52,9 @@ Use `analyse_steps` when you want to probe runtime reads as well:
 analysis = StatefulAlgorithms.analyse_steps(comp)
 ```
 
-By default this first runs the init analysis pass and then executes each flattened
-step-capable leaf once from that mock loop algorithm.
+By default this first runs the analyzer's init traversal and then attempts one
+step-analysis pass for each registered step algorithm. This is a dependency
+probe, not a scheduled loop iteration.
 
 You can disable the init pass when you already have enough seeded state:
 
@@ -111,7 +114,26 @@ analysis.memory.errors
 view_key => Vector{Symbol}
 ```
 
-showing which symbols that view requested during analysis.
+showing which unresolved symbols that view requested during analysis.
+
+## Structural Inspection
+
+Use `inspect` for one report that combines resolved registry entries, routes,
+shares, runtime `@input` declarations, the execution-plan tree, and the
+best-effort init/step analysis:
+
+```julia
+report = inspect(comp)
+report_without_steps = inspect(comp; steps = false)
+```
+
+`inspect` does not initialize a real `ProcessContext` or run the hot loop. Its
+analysis sections do call user `init` and `step!` methods with recording views.
+Those hooks can still mutate captured objects or cause external side effects,
+so do not use analysis on effectful hooks when read-only behavior matters. The
+analysis sections have the same best-effort limitations as `analyse_inits` and
+`analyse_steps`; treat the report as a structural diagnostic, not proof that
+runtime behavior is valid.
 
 ## Printing Events
 
@@ -133,7 +155,7 @@ These forms work best:
 - optional reads through `get(context, :x, default)`
 - explicit presence checks through `haskey(context, :x)`
 - explicit indexed reads like `context[:OtherAlgo_1]` or `context[algo_ref]`
-- `@ProcessAlgorithm ... @inputs((; ...))` for init-only requirements
+- `@StepAlgorithm ... @inputs((; ...))` for init-only requirements
 - `step!` methods that return plain `NamedTuple`s with stable output names
 
 These forms are harder to analyse accurately:

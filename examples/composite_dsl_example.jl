@@ -1,9 +1,8 @@
 using StatefulAlgorithms
 
-struct ExampleSourceAlgo <: StatefulAlgorithms.ProcessAlgorithm end
-struct ExampleCombineAlgo <: StatefulAlgorithms.ProcessAlgorithm end
-struct ExampleSinkAlgo <: StatefulAlgorithms.ProcessAlgorithm end
-struct ExampleValueAlgo <: StatefulAlgorithms.ProcessAlgorithm end
+struct ExampleSourceAlgo <: StatefulAlgorithms.StepAlgorithm end
+struct ExampleCombineAlgo <: StatefulAlgorithms.StepAlgorithm end
+struct ExampleSinkAlgo <: StatefulAlgorithms.StepAlgorithm end
 
 function StatefulAlgorithms.step!(::ExampleSourceAlgo, context)
     return (; produced = 2, passthrough = context.seed)
@@ -15,10 +14,6 @@ end
 
 function StatefulAlgorithms.step!(::ExampleSinkAlgo, context)
     return (; seen = context.value)
-end
-
-function StatefulAlgorithms.step!(::ExampleValueAlgo, context)
-    return (; value = context.value)
 end
 
 scaled_double_example(x; scale = 1) = scale * (2x)
@@ -35,17 +30,16 @@ println()
 n = 5
 composite = @CompositeAlgorithm begin
     @state seed = 3
-    @state doubled = 10
     @alias source = ExampleSourceAlgo
 
     produced, passthrough = source(seed = seed)
     doubled = @interval n scaled_double_example(produced; scale = 2)
-    combined = ExampleCombineAlgo(left = passthrough, right = doubled)
-    ExampleSinkAlgo(value = combined)
+    combined = @interval n ExampleCombineAlgo(left = passthrough, right = doubled)
+    @interval n ExampleSinkAlgo(value = combined)
 end
 
 resolved_composite = resolve(composite)
-process = Process(resolved_composite, repeat = 5)
+process = Process(resolved_composite; repeats = 5)
 run(process)
 composite_context = fetch(process)
 
@@ -68,10 +62,11 @@ named_state_composite = @CompositeAlgorithm begin
 
     @alias source = ExampleSourceAlgo
     produced, passthrough = source(seed = seed)
-    ExampleValueAlgo(value = produced + offset)
+    value = +(produced, offset)
+    ExampleSinkAlgo(value = value)
 end
 
-named_state_process = Process(resolve(named_state_composite), repeat = 1)
+named_state_process = Process(resolve(named_state_composite); repeats = 1)
 run(named_state_process)
 
 println("@CompositeAlgorithm with named @state and transform route")
@@ -84,11 +79,12 @@ routine = @Routine begin
 
     produced, passthrough = @repeat 3 source(seed = seed)
     doubled = scaled_double_example(produced; scale = 4)
-    ExampleSinkAlgo(value = doubled + passthrough)
+    value = +(doubled, passthrough)
+    ExampleSinkAlgo(value = value)
 end
 
 resolved_routine = resolve(routine)
-routine_process = Process(resolved_routine, repeat = 1)
+routine_process = Process(resolved_routine; repeats = 1)
 run(routine_process)
 
 println("@Routine with @repeat on one statement")
@@ -96,20 +92,18 @@ println(fetch(routine_process))
 println()
 
 repeated_block = @CompositeAlgorithm begin
-    @state seed = 6
-    @state carried = 1
-    @alias source = ExampleSourceAlgo
+    @repeat 2 begin
+        @state seed = 6
+        @alias source = ExampleSourceAlgo
 
-    final_value = @repeat 2 begin
         produced, passthrough = source(seed = seed)
         carried = scaled_double_example(produced; scale = 3)
-        final_value = scaled_double_example(carried; scale = passthrough)
+        value = scaled_double_example(carried; scale = passthrough)
+        ExampleSinkAlgo(value = value)
     end
-
-    ExampleSinkAlgo(value = final_value)
 end
 
-repeated_block_process = Process(resolve(repeated_block), repeat = 1)
+repeated_block_process = Process(resolve(repeated_block); repeats = 1)
 run(repeated_block_process)
 
 println("@repeat n begin ... end inside @CompositeAlgorithm")

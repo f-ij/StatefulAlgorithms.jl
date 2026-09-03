@@ -65,7 +65,8 @@ For selector syntax used in `Until`, see [Vars (`Var` Selectors)](@ref vars_user
 
 - `pause(p)`: stop loop while keeping resumable state.
 - `run(p)`: start a new task or resume after pause.
-- `close(p)`: stop the process and collect the final task result into the stored process context.
+- `close(p)`: stop the process, wait for it, run cleanup when needed, and commit
+  the final persistent context.
 - `reinit(p)`: compatibility helper that pauses, reruns lifecycle `init`, and runs again.
 - `partialinit(la, specs...)`: rebuild only the targeted algorithms or states on an initialized loop algorithm.
 
@@ -78,8 +79,15 @@ In practice:
 
 - use `wait(p)` when you just want to block until completion,
 - use `fetch(p)` when you want the task's return value,
-- use `context(p)` for the stored persistent process context,
-- use `getcontext(p)` when you want that context with the process injected into globals.
+- use either `context(p)` or `getcontext(p)` for the current stored process
+  context; `getcontext(p, key)` additionally indexes it by `key`.
+
+For an ordinary process, the task result is the final cleanup-visible context.
+It may still expose transient runtime outputs that a root finalizer can consume.
+The process itself stores only the cleaned persistent context, so use
+`context(p)` when you need the state that will be reused by a later run. A
+`FinalizedAlgorithm` can instead make `fetch(p)` return the finalizer function's
+result.
 
 ## Status Helpers
 

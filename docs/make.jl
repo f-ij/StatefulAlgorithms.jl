@@ -3,8 +3,6 @@ push!(LOAD_PATH, joinpath(@__DIR__, "..", "src"))
 using Documenter
 using StatefulAlgorithms
 
-Base.include(StatefulAlgorithms, joinpath(@__DIR__, "..", "src", "ContextAnalyzer", "ContextAnalyzer.jl"))
-
 makedocs(
     modules = [StatefulAlgorithms],
     checkdocs = :none,

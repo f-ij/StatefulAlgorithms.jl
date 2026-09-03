@@ -18,8 +18,8 @@ Reference algorithms the same way you inserted them into the composition.
 ## Pattern 1: Added by Type
 
 ```julia
-struct Producer <: ProcessAlgorithm end
-struct Consumer <: ProcessAlgorithm end
+struct Producer <: StepAlgorithm end
+struct Consumer <: StepAlgorithm end
 
 algo = CompositeAlgorithm(
     Producer, Consumer,

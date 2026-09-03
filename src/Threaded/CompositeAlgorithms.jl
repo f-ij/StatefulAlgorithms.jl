@@ -99,9 +99,14 @@ end
 
 inc(cursor::CompositeLoopCursor, ::ThreadedCompositeAlgorithm) = getinc(cursor)[]
 
-@inline plan_child_namespace(tca::ThreadedCompositeAlgorithm, idx::Int) = begin
+"""Return the resolved or explicitly carried namespace for one threaded child."""
+@inline plan_child_namespace(tca::TCA, idx::Int) where {TCA<:ThreadedCompositeAlgorithm} = begin
     name = namesymbol(getfield(getfield(tca, :namespaces), idx))
-    isnothing(name) ? trykey(getalgo(tca, idx)) : name
+    isnothing(name) || return name
+
+    # Unresolved/structural plan children may still carry an explicit key.
+    fallback = _entity_key(getalgo(tca, idx))
+    return fallback == Symbol() ? nothing : fallback
 end
 
 @inline _namespace_tuple(::Type{<:ThreadedCompositeAlgorithm{FT,S,NS}}) where {FT,S,NS} = NS

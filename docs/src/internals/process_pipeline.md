@@ -7,16 +7,19 @@ execution.
 
 `Process(func, inputs_overrides...; repeats, lifetime, timeout)` (`src/Process.jl`):
 
-1. Wrap bare `ProcessAlgorithm` as a one-child `CompositeAlgorithm` plan.
+1. Wrap a bare `StepAlgorithm` as a one-child `CompositeAlgorithm` plan.
 2. Normalize stop behavior: `repeats = n` becomes `Repeat(n)`, `lifetime` accepts `Lifetime` objects, and `Routine` defaults to `Repeat(1)` when no lifetime is provided.
 3. Resolve the plan into a `LoopAlgorithm` wrapper when needed.
 4. Run lifecycle `init(algo, specs...; lifetime)` unless an initialized context is already provided.
-5. Store the algorithm and its current runtime context on the process.
+5. Store the initialized algorithm wrapper on the process. Its typed lifecycle
+   context is the normal persistent state; `Process.runtime_context` is reserved
+   for a live/paused or shape-divergent context.
 
 There is no `TaskData` layer. The initialized `LoopAlgorithm` carries the
-persistent context plus stored init/override specs. `Process` keeps its current
-context and loop cursor separately so pausing can preserve counters and resume
-positions without rebaking them into the algorithm.
+persistent context plus stored init/override specs. A `Process` normally reads
+its current persistent context from that wrapper. Its separate
+`runtime_context` slot is used only for paused or shape-divergent state, and its
+loop-cursor slot preserves scheduler position across pause/resume.
 
 ## 2. Init Phase
 
@@ -24,12 +27,15 @@ positions without rebaking them into the algorithm.
 
 1. Resolve `Init`/`Override` specs through the registry.
 2. Merge passed specs over stored specs per target.
-3. Build a fresh persistent `ProcessContext` with `algo` and `lifetime` in `_runtime`.
+3. Build a fresh persistent `ProcessContext` from the resolved registry.
 4. Merge `Init` values into target subcontexts.
-5. Run `init(algo, input_context)`.
-6. Merge `Override` values after init.
-7. Materialize root-level `Replace` options into target context fields.
-8. Return a loop algorithm with stored context, inits, and overrides.
+5. Build a separate init-only runtime context carrying `algo` and `lifetime`.
+6. Run registered `init` hooks with persistent and runtime contexts kept
+   separate.
+7. Merge `Override` values after init, then apply `Interactive` wrappers.
+8. Materialize root-level `Replace` options into target context fields.
+9. Return a loop algorithm with the persistent context and replayable lifecycle
+   specs stored on it.
 
 For loop algorithms, `init(::LoopAlgorithm, ::ProcessContext)` iterates all registry entities in order (`src/LoopAlgorithms/Init.jl`).
 
@@ -43,10 +49,12 @@ the targeted subcontexts.
 `makeloop!`:
 
 - validates runtime keyword arguments against the loop algorithm's `@input` metadata,
-- builds per-run `AbstractLoopCursor` from the resolved plan,
-- passes the persistent context to `loop`,
-- passes runtime inputs as a positional `NamedTuple` to `loop`,
+- selects the current persistent or paused context,
+- passes that context and the runtime-input `NamedTuple` to `loop`, and
 - spawns the loop task.
+
+The entered `loop` method then builds or restores the per-run
+`AbstractLoopCursor` from the resolved plan.
 
 `run(la::LoopAlgorithm; kwargs...)` runs an initialized loop algorithm directly
 with a fresh non-pausable loop cursor and returns a loop algorithm with the next
@@ -54,18 +62,17 @@ persistent context.
 
 ## 4. Loop Bootstrap and Runtime Inputs
 
-The loop wrappers in `src/Loops.jl` merge runtime inputs before the while/for
-loop:
+The loop wrappers in `src/Loops.jl` build a separate runtime context before the
+while/for loop:
 
 ```julia
 loop(process, algo, context, lifetime, inputs)
 ```
 
-The loop injects `process` and `lifetime` into the transient `_runtime` field.
-An empty input tuple is a no-op. A non-empty tuple is merged into the transient
-`ProcessContext._input` field. The bootstrap/first step may change the
-transient context type. After bootstrap, steady-state steps must preserve
-context type.
+The loop puts `process` and `lifetime` in the runtime context's `:_runtime`
+subcontext. A non-empty validated input tuple is stored in its `:_input`
+subcontext. Demanded transient child returns are stored in owner-named runtime
+subcontexts. None of these fields are added to the persistent context.
 
 Repeat and indefinite loops are defined in `src/Loops.jl`; generated loops live
 in `src/GeneratedCode/GeneratedLoops.jl`.
@@ -73,10 +80,10 @@ in `src/GeneratedCode/GeneratedLoops.jl`.
 High-level structure:
 
 1. `before_while(process)`
-2. one unstable/bootstrap step
-3. repeat/while body with stable step calls
-4. tick/index increments
-5. `after_while(process, algo, context, stored_context)`
+2. build or restore the per-run loop cursor and runtime context
+3. execute one initial scheduled step for a fresh run
+4. execute the remaining repeat/while body with tick/index increments
+5. either store paused state or run cleanup/final-result projection
 
 Composite and routine steps receive an explicit loop cursor. Composite cursors
 own the interval counter for that run. Pausable process runs allocate routine
@@ -85,38 +92,31 @@ array.
 
 ## 5. Cleanup Behavior
 
-`after_while` (`src/Loops.jl`) does:
+The completion paths distinguish stored state from the task result:
 
-- paused process: store the suspended runtime context as a side effect, but compute the task result from the stripped persistent context shape.
-- interrupted or indefinite: strip runtime-only fields before computing the task result.
-- natural finite completion: store `cleanup(func, context)` stripped back to persistent context shape, then compute the task result.
-
-Finished `Process`, `InlineProcess`, and direct `run(la::LoopAlgorithm)` paths
-store contexts that may be absorbed back into an algorithm, so runtime-only
-fields such as `_input`, `process`, and `lifetime` are stripped. A paused
-`Process` may still keep the live runtime context internally so it can resume.
-For ordinary algorithms the task result is the stripped context. For
-`FinalizedAlgorithm`, the final function projects a result from that stripped
-context, so `fetch(process)` still returns the `@finally` value.
+1. Pausing skips cleanup, stores the persistent state plus runtime inputs needed
+   for resume, and keeps the loop cursor. Closing that paused process later runs
+   cleanup and final projection.
+2. Natural completion or `close` runs cleanup while the runtime context is still
+   visible. Mapped cleanup writes update persistent state; cleanup-only outputs
+   remain available to final projection.
+3. A finished `Process` or `InlineProcess` stores only the cleaned persistent
+   context. Direct `run(la)` likewise returns a loop algorithm containing only
+   that persistent state.
+4. The task result for an ordinary process is a temporary final-visible context:
+   cleaned persistent state plus runtime subcontexts still present at the end.
+   `FinalizedAlgorithm` instead passes that projection to its final function and
+   returns the function's result.
 
 Paused processes resume through the normal `loop` path with a `Resuming{true}`
-entry trait. Fresh runs use `Resuming{false}`. This keeps the bootstrap decision
-in dispatch, so fresh runs infer the post-bootstrap context type and resumed
-runs infer the already-grown context type. New runtime inputs, init specs, and
+entry trait; fresh runs use `Resuming{false}`. New runtime inputs, init specs, and
 lifetime changes are rejected while resuming.
 
-## 6. Open Discovery Phase Need
+## 6. Scheduling and Transient Dataflow
 
-Some future process algorithms may need type discovery after lifecycle `init`
-has run and after routes are known, but before normal scheduled stepping begins.
-This should not become public bootstrap API: the bootstrap/unsafe step remains
-loop-owned, and transient values created only to discover route shapes should be
-discarded after the run.
-
-The intended future direction is a small route-aware discovery phase exposed
-through the `@ProcessAlgorithm` API. That phase would let an algorithm declare
-or compute first-step value shapes without requiring its scheduled `step!` to
-run early. Until that exists, delayed algorithms that expose values to other
-steps must initialize those values in persistent state or be wrapped in a
-routine/composition whose first scheduled step makes the value available before
-consumers run.
+There is no pre-run shape-discovery phase. A new `step!` return exists only in
+the runtime context after its producer has actually run, and only when wiring or
+the root finalizer demands it. Consequently, a consumer of a delayed transient
+output must not run before that producer. Align their plan schedules, order them
+inside a routine, or initialize a persistent field through an entity's lifecycle
+when a value must exist earlier.

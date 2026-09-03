@@ -1,21 +1,21 @@
 export inspect, InspectionReport
 
 """
-    inspect(la::AbstractLoopAlgorithm; globals = (;), inputs = (;), steps = true)
+    inspect(la::LoopSpec; globals = (;), inputs = (;), steps = true)
 
 Build a displayable structural report for a loop algorithm.
 
-`inspect` is a read-only tool for understanding composition boundaries. It
-resolves the loop algorithm, lists the registry entries, routes, shares, and
+`inspect` is a structural diagnostic for understanding composition boundaries.
+It resolves the loop algorithm, lists the registry entries, routes, shares, and
 stateful contexts, then runs the best-effort `ContextAnalyser` init/step passes.
-It does not initialize a real `ProcessContext`, mutate the input algorithm, or
-run the hot loop.
+It does not initialize a real `ProcessContext` or run the hot loop. The analyzer
+does call user `init` and `step!` methods with recording views, so hooks that
+mutate captured objects or perform external side effects can still do so.
 
-Runtime-input metadata is intentionally reported only when it is declared on the
-loop algorithm. The current implementation leaves that section empty because the
-LoopAlgorithm-level `@input` feature is not built yet.
+Runtime-input metadata is reported when DSL `@input` declarations are attached
+to the loop algorithm.
 """
-function inspect(la::LA; globals = (;), inputs = (;), steps::Bool = true) where {LA<:AbstractLoopAlgorithm}
+function inspect(la::LA; globals = (;), inputs = (;), steps::Bool = true) where {LA<:LoopSpec}
     resolved, resolve_error = _inspection_resolve(la)
     if isnothing(resolved)
         return InspectionReport(
@@ -72,19 +72,19 @@ struct InspectionShare
     source::Symbol
 end
 
-struct InspectionRoute
+struct InspectionRoute{Mappings,Transform,ReverseTransform}
     target::Symbol
     source::Symbol
-    mappings::Vector{Pair}
-    transform::Any
-    reverse_transform::Any
+    mappings::Mappings
+    transform::Transform
+    reverse_transform::ReverseTransform
 end
 
-struct InspectionRuntimeInput
+struct InspectionRuntimeInput{Default}
     name::Symbol
     type_label::String
     required::Bool
-    default::Any
+    default::Default
     has_default::Bool
 end
 
@@ -93,19 +93,19 @@ struct InspectionExecutionNode
     children::Vector{InspectionExecutionNode}
 end
 
-struct InspectionReport
-    original::Any
-    resolved::Any
+struct InspectionReport{Original,Resolved,Routes,RuntimeInputEntries,InitMemory,StepMemory}
+    original::Original
+    resolved::Resolved
     resolve_error::Union{Nothing, String}
     registry_entries::Vector{InspectionEntry}
     state_entries::Vector{InspectionEntry}
     algorithm_entries::Vector{InspectionEntry}
     shares::Vector{InspectionShare}
-    routes::Vector{InspectionRoute}
-    runtime_inputs::Vector{InspectionRuntimeInput}
+    routes::Routes
+    runtime_inputs::RuntimeInputEntries
     execution_plan::InspectionExecutionNode
-    init_memory::Any
-    step_memory::Any
+    init_memory::InitMemory
+    step_memory::StepMemory
 end
 
 function _inspection_resolve(la)
@@ -193,7 +193,7 @@ function _inspection_resolved_sharing(la::LA) where {LA<:AbstractLoopAlgorithm}
             source isa Symbol || continue
             varnames = collect(subvarcontextnames(shared))
             aliases = collect(localnames(shared))
-            mappings = Pair[varnames[i] => aliases[i] for i in eachindex(varnames)]
+            mappings = Pair{Symbol,Symbol}[varnames[i] => aliases[i] for i in eachindex(varnames)]
             push!(routes, InspectionRoute(target, source, mappings, gettransform(shared), getreverse_transform(shared)))
         end
     end
@@ -204,65 +204,108 @@ end
 _inspection_tuple(value::Tuple) = value
 _inspection_tuple(value) = (value,)
 
+"""Collect display metadata for the runtime inputs declared by a loop algorithm."""
 function _inspection_runtime_inputs(la::LA) where {LA<:AbstractLoopAlgorithm}
-    if isdefined(@__MODULE__, :runtime_inputs)
-        runtime_inputs_func = getfield(@__MODULE__, :runtime_inputs)
-        if hasmethod(runtime_inputs_func, Tuple{typeof(la)})
-            return _inspection_runtime_inputs(runtime_inputs_func(la))
-        end
-    end
-    return InspectionRuntimeInput[]
+    return _inspection_runtime_inputs(runtimeinputs(la))
 end
 
-function _inspection_runtime_inputs(inputs)
-    return InspectionRuntimeInput[]
+"""Convert a `RuntimeInputs` bundle into inspection-report entries."""
+function _inspection_runtime_inputs(inputs::RI) where {RI<:RuntimeInputs}
+    return InspectionRuntimeInput[
+        InspectionRuntimeInput(
+            _runtime_input_name(spec),
+            sprint(show, _runtime_input_type(spec)),
+            _runtime_input_required(spec),
+            getfield(spec, :default),
+            !_runtime_input_required(spec),
+        )
+        for spec in getfield(inputs, :specs)
+    ]
 end
 
+"""Build an execution tree from the resolved wrapper's concrete plan."""
 function _inspection_execution_plan(la::LA) where {LA<:AbstractLoopAlgorithm}
-    return InspectionExecutionNode(_inspection_loop_label(la), _inspection_execution_children(la))
+    return InspectionExecutionNode(_inspection_loop_label(la), _inspection_execution_children(getplan(la)))
 end
 
-function _inspection_execution_children(la::CompositeAlgorithm)
+"""Build display nodes for children scheduled by composite-style intervals."""
+function _inspection_execution_children(la::LA) where {LA<:CompositeAlgorithm}
     funcs = getalgos(la)
     schedule = intervals(la)
     return InspectionExecutionNode[
-        _inspection_execution_node(funcs[i], _inspection_schedule_label(:every, schedule[i]))
+        _inspection_execution_node(
+            funcs[i],
+            _inspection_schedule_label(:every, schedule[i]),
+            plan_child_namespace(la, i),
+        )
         for i in eachindex(funcs)
     ]
 end
 
-function _inspection_execution_children(la::Routine)
+"""Build display nodes for children scheduled by routine lifetimes."""
+function _inspection_execution_children(la::LA) where {LA<:Routine}
     funcs = getalgos(la)
-    schedule = repeats(la)
+    schedule = lifetimes(la)
     return InspectionExecutionNode[
-        _inspection_execution_node(funcs[i], _inspection_schedule_label(:repeat, schedule[i]))
+        _inspection_execution_node(
+            funcs[i],
+            _inspection_routine_schedule_label(schedule[i]),
+            plan_child_namespace(la, i),
+        )
         for i in eachindex(funcs)
     ]
 end
 
+"""Delegate child-tree display from a runtime wrapper to its stored plan."""
 function _inspection_execution_children(la::LA) where {LA<:AbstractLoopAlgorithm}
+    return _inspection_execution_children(getplan(la))
+end
+
+"""Display children of an extensible plan type not handled by a specific method."""
+function _inspection_execution_children(la::LA) where {LA<:AbstractPlan}
     funcs = getalgos(la)
+    if iscomposite(la)
+        schedule = intervals(la)
+        return InspectionExecutionNode[
+            _inspection_execution_node(
+                funcs[i],
+                _inspection_schedule_label(:every, schedule[i]),
+                plan_child_namespace(la, i),
+            )
+            for i in eachindex(funcs)
+        ]
+    end
     return InspectionExecutionNode[
-        _inspection_execution_node(func, "step")
-        for func in funcs
+        _inspection_execution_node(funcs[i], "step", plan_child_namespace(la, i))
+        for i in eachindex(funcs)
     ]
 end
 
-function _inspection_execution_node(obj, schedule::String)
-    if obj isa AbstractIdentifiableAlgo && getalgo(obj) isa AbstractLoopAlgorithm
+"""Build one scheduled execution-tree node, recursing into nested plans."""
+function _inspection_execution_node(obj::O, schedule::S, key::K) where {O,S<:AbstractString,K<:Union{Nothing,Symbol}}
+    if obj isa AbstractIdentifiableAlgo && getalgo(obj) isa LoopSpec
         inner = getalgo(obj)
         return InspectionExecutionNode(
-            string(_inspection_entry_label(obj), " (", schedule, ")"),
+            string(_inspection_execution_entry_label(obj, key), " (", schedule, ")"),
             _inspection_execution_children(inner),
         )
-    elseif obj isa AbstractLoopAlgorithm
+    elseif obj isa LoopSpec
+        label = isnothing(key) ? _inspection_loop_label(obj) : string(key, ": ", _inspection_loop_label(obj))
         return InspectionExecutionNode(
-            string(_inspection_loop_label(obj), " (", schedule, ")"),
+            string(label, " (", schedule, ")"),
             _inspection_execution_children(obj),
         )
     else
-        return InspectionExecutionNode(string(_inspection_entry_label(obj), " (", schedule, ")"), InspectionExecutionNode[])
+        return InspectionExecutionNode(
+            string(_inspection_execution_entry_label(obj, key), " (", schedule, ")"),
+            InspectionExecutionNode[],
+        )
     end
+end
+
+"""Label an execution leaf with its resolved child key when one is available."""
+function _inspection_execution_entry_label(obj::O, key::K) where {O,K<:Union{Nothing,Symbol}}
+    return isnothing(key) ? _inspection_entry_label(obj) : string(key, ": ", _inspection_label(obj))
 end
 
 function _inspection_entry_label(obj)
@@ -273,11 +316,12 @@ function _inspection_entry_label(obj)
     return string(key, ": ", _inspection_label(obj))
 end
 
-function _inspection_loop_label(la::CompositeAlgorithm)
+"""Return a concise kind label for a loop plan or runtime wrapper."""
+function _inspection_loop_label(la::LA) where {LA<:CompositeAlgorithm}
     return "CompositeAlgorithm"
 end
 
-function _inspection_loop_label(la::Routine)
+function _inspection_loop_label(la::LA) where {LA<:Routine}
     return "Routine"
 end
 
@@ -285,7 +329,35 @@ function _inspection_loop_label(la::LA) where {LA<:AbstractLoopAlgorithm}
     return sprint(summary, la)
 end
 
-function _inspection_schedule_label(kind::Symbol, interval::Interval)
+function _inspection_loop_label(la::LA) where {LA<:AbstractPlan}
+    return string(nameof(LA))
+end
+
+"""Format a routine child lifetime without displaying its condition closure."""
+function _inspection_routine_schedule_label(spec::LT) where {LT<:Lifetime}
+    if spec isa Repeat
+        return string("Repeat(", repeats(spec), ")")
+    elseif spec isa Indefinite
+        return "Indefinite()"
+    elseif spec isa Until
+        return "Until(condition)"
+    elseif spec isa AtLeast
+        return string("AtLeast(", getfield(spec, :atleast), ", condition)")
+    elseif spec isa RepeatOrUntil
+        return string("RepeatOrUntil(", repeats(spec), ", condition)")
+    elseif spec isa AtLeastAtMost
+        return string(
+            "AtLeastAtMost(",
+            getfield(spec, :atleast),
+            ", ",
+            repeats(spec),
+            ", condition)",
+        )
+    end
+    return string(nameof(LT))
+end
+
+function _inspection_schedule_label(kind::Symbol, interval::I) where {I<:Interval}
     return string(kind, " ", getinterval(interval))
 end
 

@@ -1,6 +1,6 @@
 using StatefulAlgorithms
 
-@ProcessAlgorithm function MockLearningDynamics(
+@StepAlgorithm function MockLearningDynamics(
     @managed(
         x = Ref(0.0),
         y = Ref(0.0),
@@ -52,10 +52,10 @@ recipe = (;
         history = NamedTuple[],
     ),
 
-    makeworker = (idx, manager) -> copyprocess(template; context = deepcopy(template.context)),
+    makeworker = (idx, manager) -> copyprocess(template),
 
     loadjob! = (slot, sample, manager) -> begin
-        ctx = slot.worker.context[MockLearningDynamics]
+        ctx = context(slot.worker)[MockLearningDynamics]
         ctx.x[] = sample.x
         ctx.y[] = sample.y
         ctx.params[] = manager.state.params[]
@@ -69,7 +69,7 @@ recipe = (;
         total_seen = 0
 
         for slot in slots(manager)
-            ctx = slot.worker.context[MockLearningDynamics]
+            ctx = context(slot.worker)[MockLearningDynamics]
             total_grad_w += ctx.grad_w[]
             total_grad_b += ctx.grad_b[]
             total_loss += ctx.loss[]
@@ -89,7 +89,7 @@ recipe = (;
         manager.state.epoch[] += 1
 
         for slot in slots(manager)
-            slot.worker.context[MockLearningDynamics].params[] = next_params
+            context(slot.worker)[MockLearningDynamics].params[] = next_params
         end
 
         push!(manager.state.history, (;

@@ -27,8 +27,10 @@ earlier state if those values are routed or shared to it.
 
 Two details from the implementation are worth knowing:
 
-- `cleanup` runs on natural finite completion.
-- If a process is interrupted, paused, or runs under `Indefinite()`, the current context is stored without automatic cleanup.
+- `cleanup` runs on natural finite completion and when `close` stops a running
+  process.
+- `pause` stores the resumable context without cleanup. Closing a paused
+  process runs cleanup before finalizing it.
 
 There is no built-in `prepare!` hook in the current pipeline.
 If you want a one-time preparation step, fold it into `init` or guard the first `step!` with a flag in state.

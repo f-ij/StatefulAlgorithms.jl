@@ -366,7 +366,7 @@ version = "1.11.0"
 
 [[deps.StatefulAlgorithms]]
 deps = ["DataStructures", "Documenter", "JLD2", "MacroTools", "PrecompileTools", "Preferences", "StaticArrays", "UUIDs"]
-path = "/Users/fabian/Documents/GitHub/Processes.jl"
+path = ".."
 uuid = "3c03ca44-5aad-4ad5-81af-1baae4bc194b"
 version = "0.1.2"
 

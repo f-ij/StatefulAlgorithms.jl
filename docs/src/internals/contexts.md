@@ -1,6 +1,6 @@
 # [Context Internals](@id context_internals)
 
-The runtime data stack is:
+The runtime data stack has three layers:
 
 1. `ProcessContext`
 2. `SubContext`
@@ -8,68 +8,81 @@ The runtime data stack is:
 
 ## 1. `ProcessContext`
 
-`ProcessContext{D,Reg}` holds (`src/Context/StructDefs.jl`):
+`ProcessContext{D,R}` stores two values (`src/Context/StructDefs.jl`):
 
-- `subcontexts::D`: named tuple of subcontexts plus `globals`.
-- `registry::Reg`: a `NameSpaceRegistry` used for static routing and lookup.
+1. `subcontexts::D`, a named tuple of `SubContext` values.
+2. `reg::R`, the registry used for identity lookup.
 
-Access patterns (`src/Context/ProcessContexts.jl`):
+The initialized process owns a persistent `ProcessContext`. Loop execution also
+builds a separate runtime `ProcessContext`, normally with `:_runtime` and
+`:_input` subcontexts. Runtime inputs, the active process/lifetime handles, and
+demanded transient step returns live there instead of changing persistent state
+shape.
 
-- `pc[:name]` or `pc.name` by subcontext symbol.
-- `pc[obj]` by algorithm/state value/type (resolved through registry key).
+Persistent contexts support these lookup forms:
 
-`globals` is a regular field in `subcontexts`; runtime code injects process-level values there (like `process`, `lifetime`, `algo`).
+1. `pc[:name]` or `pc.name` selects a subcontext by symbol.
+2. `pc[obj]` resolves an algorithm or state reference through `reg` and selects
+   its subcontext.
+
+`getglobals(runtime_context)` returns the data in `:_runtime`, while
+`getruntimeinput(runtime_context)` returns the data in `:_input`. If those
+subcontexts are absent, the corresponding accessor returns an empty named tuple.
 
 ## 2. `SubContext`
 
-`SubContext{Name,Data}` stores (`src/Context/StructDefs.jl`):
+`SubContext{Name,T}` stores (`src/Context/StructDefs.jl`):
 
-- `data::NamedTuple`: local variables owned by that entity.
+1. `name::Symbol`, also represented by the `Name` type parameter.
+2. `data::T`, the entity-owned `NamedTuple`.
 
-Initialization builds empty `SubContext`s for every registry key, then fills them by `init`.
+Initialization first makes an empty subcontext for each registry entry. Each
+entity's `init` result then replaces its subcontext and establishes its
+persistent field names and types.
 
-Route/share metadata is deliberately not stored on `SubContext`. Plan routing is
-resolved into step-local `StepRouting` values and attached to `SubContextView`
-types while a child runs. This keeps persistent context shape independent from
-execution-plan wiring.
+Route/share metadata is deliberately absent from `SubContext`. Resolved plan
+wiring is supplied only while a child executes, so the persistent context shape
+does not depend on execution-plan wiring.
 
 ## 3. `SubContextView`
 
-`step!`, `init`, and `cleanup` run against a `SubContextView` (`src/Context/View/StructDef.jl`).
+`step!`, `init`, and `cleanup` receive a `SubContextView`
+(`src/Context/View/StructDef.jl`). A view carries:
 
-A view carries:
+1. the persistent context;
+2. the separate runtime context;
+3. the current identifiable instance or namespace;
+4. explicitly injected values; and
+5. type-specialized aliases, shared contexts, and routed variables.
 
-- the full context,
-- the current identifiable instance,
-- optionally injected locals.
-- route/share metadata for the current step, as type parameters.
+Property access is compiled to `VarLocation` values. When the same local name is
+available from more than one source, precedence from lowest to highest is:
 
-Property access is generated through `VarLocation`s (`src/Context/View/Locations.jl`):
+1. shared-context fields;
+2. routed fields;
+3. local fields; and
+4. injected fields.
 
-- local vars,
-- shared-context vars from the current step routing,
-- routed vars from the current step routing,
-- injected vars.
+Thus local fields occlude route/share names, and injected fields occlude all
+other sources.
 
-Name precedence for reads is determined by `NamedTuple` merge order. Later
-groups override earlier groups:
+## 4. Merging Lifecycle Returns
 
-1. injected vars
-2. local vars
-3. routed vars
-4. shared vars
+During `init`, the returned named tuple replaces the current entity's empty
+subcontext. During `step!`, generated merge code treats returned names in two
+ways:
 
-This means local and injected names override route/share names on collisions.
+1. A name with a `VarLocation` writes to its mapped persistent field, including
+   routed/shared writeback and replacement redirection.
+2. An unknown name is written only to the owner bucket in the runtime context
+   when current plan wiring or the root finalizer demands it. Otherwise it is
+   discarded.
 
-## 4. Merging and Replacing
+`cleanup` also commits mapped persistent writes. Its unknown returns are kept in
+the runtime context long enough for the root final-result projection to see
+them, but they are not added to the stored persistent context.
 
-`merge(view, namedtuple)` (`src/GeneratedCode/SubContextView.jl`) maps return names back to concrete target subcontexts and variables.
-
-- Existing mapped variable: update that mapped target.
-- Unknown variable: added to the current local subcontext.
-
-`replace(view, (;SubKey => nt))` replaces the full subcontext and is used during init.
-
-`merge_into_subcontexts` (`src/Context/ProcessContexts.jl`) enforces that subcontext structure remains valid.
-
-A type-change guard in generated merge asserts the new `ProcessContext` type stays identical, preventing accidental type instability.
+After mapped writes, generated code asserts that the persistent
+`ProcessContext` type is unchanged. This rejects field-type changes that would
+make the loop state type-unstable. Runtime-only returns are merged separately and
+are removed from the stored process context after loop finalization.

@@ -60,9 +60,13 @@ Base.isempty(wiring::PlanWiring) =
 @inline multipliers(cla::LoopAlgorithm) = multipliers(getplan(cla))
 @inline multiplier(cla::LoopAlgorithm, idx) = multiplier(getplan(cla), idx)
 """Return the namespace symbol stored for one child of a resolved plan."""
-@inline function plan_child_namespace(la::Union{CompositeAlgorithm, Routine}, idx::Int)
+@inline function plan_child_namespace(la::LA, idx::Int) where {LA<:Union{CompositeAlgorithm,Routine}}
     name = namesymbol(getfield(getfield(la, :namespaces), idx))
-    return isnothing(name) ? trykey(getalgo(la, idx)) : name
+    isnothing(name) || return name
+
+    # Unresolved/structural plan children may still carry an explicit key.
+    fallback = _entity_key(getalgo(la, idx))
+    return fallback == Symbol() ? nothing : fallback
 end
 
 @inline plan_child_namespace(la::LoopAlgorithm, idx::Int) = plan_child_namespace(getplan(la), idx)

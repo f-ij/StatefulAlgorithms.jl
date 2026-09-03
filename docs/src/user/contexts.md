@@ -32,16 +32,25 @@ end
 
 ## Writing Variables
 
-Return a `NamedTuple` from `step!`/`init`/`cleanup`.
+Return a `NamedTuple` from each lifecycle hook, but note that the phase changes
+what that return means.
 
-- Existing names update mapped targets.
-- New names are added to local subcontext.
-- Type changes are rejected once the stable loop is running.
+1. `init` defines the persistent fields owned by the entity and replaces its
+   initially empty subcontext with those fields.
+2. `step!` updates existing local, routed, or shared fields. A new name is a
+   loop-local output: it remains available only when downstream routing or a
+   root finalizer demands it, and it is not added to the persistent subcontext.
+3. `cleanup` uses the same mapped-write mechanism as `step!`; its returned
+   existing fields are committed during finalization.
+
+Changing the type of an existing persistent field is rejected. If a value must
+change without changing context shape, initialize a suitably typed `Ref` or
+mutable buffer and update its contents.
 
 If `Target` sees `source_value` through a route and returns
 `(; source_value = 2.0)`, the stored value in the source subcontext is updated.
-If it returns `(; new_local_value = 2.0)`, that value is added to `Target`'s own
-subcontext.
+If a value must persist, create its field during `init`, with `@managed`, or
+with `@state`, then return that existing name from `step!`.
 
 ## Top-Level Context Access
 
@@ -51,8 +60,10 @@ From a process:
 ctx = context(p)
 ```
 
-`context(p)` returns the stored persistent context. `getcontext(p)` returns a
-runtime-flavored context with the process injected into globals.
+`context(p)` and `getcontext(p)` both return the process's current stored
+context. `getcontext(p, key)` is shorthand for indexing that context by `key`.
+The running loop injects `process` only into the transient runtime context seen
+by lifecycle hooks; it is not present in the stored context after completion.
 
 From a context, index by:
 
@@ -93,21 +104,17 @@ This updates only the targeted subcontext.
 - `inputs` are merged into that subcontext before `init(...)` runs.
 - `overrides` are merged into that subcontext after `init(...)` returns.
 
-## Globals
+## Runtime Globals
 
-`ProcessContext` includes a `globals` field.
+Persistent `ProcessContext` values do not have a dedicated `globals` field.
+During lifecycle execution, the package passes a separate runtime context whose
+`:_runtime` subcontext contains process-level values such as `lifetime`, `algo`,
+or `process`, depending on the phase. Entity views expose that transient bucket
+through `getglobals(context)`.
 
-Common globals:
+Runtime globals are not owned by an algorithm and are not retained in the
+finished process's persistent context. For selector syntax, see
+[Vars (`Var` Selectors)](@ref vars_user).
 
-- `lifetime`
-- `algo`
-- `process` (in runtime loop context)
-
-Use `getglobals(context)` inside entity methods when you need them. Globals are
-process-level values, not values owned by one algorithm.
-
-You can also select globals with `Var(:name)` in APIs like `Until(...)`.
-See [Vars (`Var` Selectors)](@ref vars_user).
-
-For buffered external writes through `ContextExchange` and ref-like
-`view(context, Var(...))` handles, see [Interactive Contexts](@ref interactive_user).
+For immediate `InteractiveVar` storage and buffered external writes through
+`ContextExchange`, see [Interactive Contexts](@ref interactive_user).

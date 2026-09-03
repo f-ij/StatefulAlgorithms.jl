@@ -366,12 +366,10 @@ function analyse_step(algo, context::Union{ContextAnalyser, ContextAnalyserView}
     return context
 end
 
-function analyse_step(sa::AbstractIdentifiableAlgo, analyser::ContextAnalyser)
-    try
-        step!(sa, analyser)
-    catch err
-        _record_error!(analyser, err)
-    end
+"""Analyze one registered algorithm step through its keyed recording view."""
+function analyse_step(sa::SA, analyser::ContextAnalyser) where {SA<:AbstractIdentifiableAlgo}
+    viewed = view(analyser, sa)
+    analyse_step(getalgo(sa), viewed)
     return analyser
 end
 
@@ -405,38 +403,35 @@ function _analysis_mock_loopalgorithm(r::Routine)
     return mocked
 end
 
+"""Probe lifecycle initialization reads for each registered entity once."""
 function analyse_inits(la::ALA; globals = (;), inputs = (;)) where {ALA<:LoopSpec}
     resolved = resolve(la)
     mocked = _analysis_mock_loopalgorithm(resolved)
     analyser = ContextAnalyser(; globals = merge(_default_analysis_globals(mocked), globals), inputs)
 
-    for state in flat_states(mocked)
-        analyse_init(state, analyser)
-    end
-
-    for algo in all_algos(getregistry(mocked))
-        analyse_init(algo, analyser)
+    # Match lifecycle initialization order without visiting state entries twice.
+    for entity in all_algos(getregistry(mocked))
+        analyse_init(entity, analyser)
     end
 
     return analyser
 end
 
+"""Probe initialization and one unscheduled step read pass for registered algorithms."""
 function analyse_steps(la::ALA; globals = (;), inputs = (;), init = true) where {ALA<:LoopSpec}
     resolved = resolve(la)
     mocked = _analysis_mock_loopalgorithm(resolved)
     analyser = ContextAnalyser(; globals = merge(_default_analysis_globals(mocked), globals), inputs)
 
     if init
-        for state in flat_states(mocked)
-            analyse_init(state, analyser)
-        end
-
-        for algo in all_algos(getregistry(mocked))
-            analyse_init(algo, analyser)
+        # The registry is already ordered with states before algorithms.
+        for entity in all_algos(getregistry(mocked))
+            analyse_init(entity, analyser)
         end
     end
 
-    for algo in all_algos(getregistry(mocked))
+    # ProcessState entries participate in init but do not own step! hooks.
+    for algo in findall(StepAlgorithm, getregistry(mocked))
         analyse_step(algo, analyser)
     end
 

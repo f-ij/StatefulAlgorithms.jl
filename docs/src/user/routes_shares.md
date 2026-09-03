@@ -139,23 +139,31 @@ Replacement-backed fields behave the same way from the target algorithm's point
 of view: returning the replaced local name writes through to the source field
 while preserving the target's persistent replacement marker.
 
-## Plan-Local Routes
+## Plan-Wide and Child-Local Routes
 
-Routes belong to the plan node where they are declared. In the DSL, a route
-statement inside a composite/routine is attached to that local child step, so
-the same algorithm type can be reused elsewhere with different local wiring.
+An explicit `@route` statement adds a plan-wide route to the containing
+composite or routine. A route created by a child call, such as
+`sink(value = produced)`, belongs only to that child entry. This lets repeated
+uses of the same algorithm have different call-local inputs.
+
+Use `@context` when an explicit route needs to name a field owned inside a
+nested plan.
 
 Example:
 
 ```julia
+inner = @Routine begin
+    @alias source = Source
+    source()
+end
+
 @CompositeAlgorithm begin
-    c1 = @CompositeAlgorithm begin
-        inner = Source()
-    end
-    sink = Sink()
-    @route c1.inner.value => sink.value
+    @context c1 = inner()
+    @alias sink = Sink
+    sink()
+    @route c1.source.value => sink.value
 end
 ```
 
-If a local route and a broader route expose the same target alias, the local
-route takes precedence for that child step.
+If a child-call route and an explicit `@route` expose the same target alias, the
+child-call route takes precedence for that child entry.

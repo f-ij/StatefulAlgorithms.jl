@@ -60,5 +60,9 @@ lifetime = Until(p -> loopidx(p) >= 10_000, Var(:process))
 
 In `Until`/`RepeatOrUntil`, this function is a stop condition (`true => stop`, `false => continue`).
 
-`Var(...)` is also the selector syntax used by interactive refs returned from
-`view(context, Var(...))`. See [Interactive Contexts](@ref interactive_user).
+`ContextExchange` also accepts `Var` selectors when its exposed variables are
+configured. After initialization, `view(context, Var(exchange_key, :name))`
+selects the exchange and its external name; in that particular overload, the
+first `Var` argument is the exchange key rather than the target entity. Prefer
+the clearer `view(context, :name; exchange = exchange_key)` form in new code.
+See [Interactive Contexts](@ref interactive_user).

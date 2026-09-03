@@ -37,6 +37,7 @@ If you are new to the package, read these first:
 - [Routes, Shares, and Replacements](@ref routes_shares_user)
 - [Init, Overrides, and Runtime Inputs](@ref inputs_overrides_user)
 - [Vars (`Var` Selectors)](@ref vars_user)
+- [Interactive Contexts](@ref interactive_user)
 - [Lifetime](@ref lifetime_user)
 - [Running, Wait, Fetch](@ref running_user)
 - [Copying Processes](@ref copying_processes_user)

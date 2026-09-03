@@ -49,7 +49,8 @@ Transform details:
 - `a -> b`
 - and also `b -> a` when non-directional.
 
-This metadata is attached to the target child's `StepRouting`.
+This metadata is inlaid into the target child's resolved `Wiring` bucket and is
+read through a `PlanWiringView` while that child executes.
 
 ## 3. Replacement Materialization
 
@@ -65,7 +66,7 @@ This metadata is attached to the target child's `StepRouting`.
 namespace registry and returns a resolved `Replace` whose endpoint identities
 are concrete subcontext names.
 
-Replacement is not stored in `StepRouting`. After loop-algorithm init,
+Replacement is not stored in the route/share `PlanWiring`. After loop-algorithm init,
 `apply_replace_specs(context, la)` resolves each root replacement and rewrites
 the target persistent field to a `ReplacedVar(VarLocation{:subcontext}(...))`
 marker. The source and target fields must already exist in the initialized
@@ -85,9 +86,14 @@ When creating `SubContextView` locations (`src/Context/View/Locations.jl`):
 - Local fields whose storage type is `ReplacedVar` redirect their local
   `VarLocation` to the stored backing location.
 
-Both become `VarLocation{:subcontext}` entries, so reads and writes are directed to the source subcontext.
+Shared fields and routes from persistent entity subcontexts become
+`VarLocation{:subcontext}` entries. Routes whose source is `:_input` or
+`:_runtime` become `VarLocation{:runtime}` entries and read from the separate
+loop-local runtime context. Replacement-backed locals retain the location kind
+of their stored backing location.
 
-That means returning a routed/shared variable from `step!` can update remote state, not only local state.
+Returning a routed or shared variable backed by persistent state can therefore
+update the remote source field, not only local state.
 
 The view constructor reconstructs resolved route/share tuples from their
 concrete tuple types. The runtime routing value selects the type-specialized
@@ -108,14 +114,19 @@ During `Package(comp)`, routes are translated into `VarAliases` for internal sub
 
 ## 7. Plan-Local Wiring
 
-Plain `Route`/`Share` options are stored on the plan node that contains them.
-DSL-local route/share statements become child-aligned local wiring, so the
-resolved `StepRouting` passed to a child is specific to that child location.
+Plain `Route`/`Share` options are plan-wide wiring on the plan node that contains
+them. During resolution, inherited plan-wide wiring is inlaid into the matching
+concrete child buckets.
+
+Routes and shares produced by a DSL child call, such as
+`sink(value = produced)`, are wrapped as `LocalPlanOption` values and stored in
+that child's bucket. The resolved `PlanWiringView` therefore exposes the exact
+`Wiring` for the current child path.
 
 Nested plan routes remain local to the nested plan. A route/share assigned to a
 nested plan child itself is rejected because nested plan nodes do not have their
 own root context key; attach that route/share to a concrete child inside the
 nested plan instead.
 
-If both top-level and local routes expose the same target alias, local routes
-take precedence for that child step.
+If both an explicit plan-wide route and child-call wiring expose the same target
+alias, the child-call route occludes the plan-wide route for that child.

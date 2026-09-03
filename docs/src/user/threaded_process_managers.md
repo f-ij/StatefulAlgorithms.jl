@@ -308,7 +308,7 @@ normal init pipeline:
 ```julia
 loadjob! = (slot, job, manager) -> reinitworker!(
     slot,
-    Input(MyAlgo, :start => job.start),
+    Init(MyAlgo; start = job.start),
 )
 ```
 

@@ -35,13 +35,10 @@ function _inspection_print_entries(io::IO, title::AbstractString, entries::Vecto
     return nothing
 end
 
-function _inspection_print_runtime_inputs(io::IO, inputs::Vector{InspectionRuntimeInput})
+function _inspection_print_runtime_inputs(io::IO, inputs::I) where {I<:AbstractVector{<:InspectionRuntimeInput}}
     _inspection_print_section(io, "Runtime Inputs")
     if isempty(inputs)
-        _inspection_print_tree_lines(io, [
-            "<no declared metadata>",
-            "LoopAlgorithm-level @input metadata is not implemented yet.",
-        ])
+        _inspection_print_tree_lines(io, ["<no declared metadata>"])
         return nothing
     end
 
@@ -54,7 +51,7 @@ function _inspection_print_runtime_inputs(io::IO, inputs::Vector{InspectionRunti
     return nothing
 end
 
-function _inspection_print_sharing(io::IO, shares::Vector{InspectionShare}, routes::Vector{InspectionRoute})
+function _inspection_print_sharing(io::IO, shares::S, routes::R) where {S<:AbstractVector{InspectionShare},R<:AbstractVector{<:InspectionRoute}}
     _inspection_print_section(io, "Sharing And Routes")
     if isempty(shares) && isempty(routes)
         _inspection_print_empty_tree(io, "none")
@@ -139,7 +136,7 @@ function _inspection_print_errors(io::IO, title::AbstractString, memory)
     return nothing
 end
 
-function Base.show(io::IO, report::InspectionReport)
+function Base.show(io::IO, report::R) where {R<:InspectionReport}
     println(io, "InspectionReport")
 
     if !isnothing(report.resolve_error)
@@ -160,9 +157,9 @@ function Base.show(io::IO, report::InspectionReport)
     _inspection_print_entries(io, "Algorithms", report.algorithm_entries)
     _inspection_print_execution_plan(io, report.execution_plan)
     _inspection_print_sharing(io, report.shares, report.routes)
-    _inspection_print_requests(io, "Init Reads", report.init_memory)
+    _inspection_print_requests(io, "Init Requests", report.init_memory)
     _inspection_print_errors(io, "init analysis", report.init_memory)
-    _inspection_print_requests(io, "Step Reads", report.step_memory)
+    _inspection_print_requests(io, "Step Requests", report.step_memory)
     _inspection_print_errors(io, "step analysis", report.step_memory)
 
     return nothing

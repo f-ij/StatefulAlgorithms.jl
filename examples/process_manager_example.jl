@@ -1,6 +1,6 @@
 using StatefulAlgorithms
 
-struct ManagedAccumulator <: StatefulAlgorithms.ProcessAlgorithm end
+struct ManagedAccumulator <: StatefulAlgorithms.StepAlgorithm end
 
 function StatefulAlgorithms.init(::ManagedAccumulator, context)
     return (; value = Ref(0), delta = Ref(1), local_buffer = Int[])
@@ -16,10 +16,10 @@ template = Process(ManagedAccumulator; repeats = 3)
 external_buffer = Int[]
 
 recipe = (;
-    makeworker = (idx, manager) -> copyprocess(template; context = deepcopy(template.context)),
+    makeworker = (idx, manager) -> copyprocess(template),
 
     loadjob! = (slot, job, manager) -> begin
-        ctx = slot.worker.context[ManagedAccumulator]
+        ctx = context(slot.worker)[ManagedAccumulator]
         ctx.value[] = job.start
         ctx.delta[] = job.delta
         resetworker!(slot)
@@ -27,7 +27,7 @@ recipe = (;
 
     sync_to_state! = manager -> begin
         for slot in slots(manager)
-            ctx = slot.worker.context[ManagedAccumulator]
+            ctx = context(slot.worker)[ManagedAccumulator]
             append!(external_buffer, ctx.local_buffer)
             empty!(ctx.local_buffer)
         end

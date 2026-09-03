@@ -1,6 +1,6 @@
 using StatefulAlgorithms
 
-StatefulAlgorithms.@ProcessAlgorithm function InspectSource(
+StatefulAlgorithms.@StepAlgorithm function InspectSource(
     @managed(counter = 0);
     @inputs((; seed::Int = 1))
 )
@@ -8,11 +8,11 @@ StatefulAlgorithms.@ProcessAlgorithm function InspectSource(
     return (; counter = counter + 1, value)
 end
 
-StatefulAlgorithms.@ProcessAlgorithm function InspectScale(value, factor)
+StatefulAlgorithms.@StepAlgorithm function InspectScale(value, factor)
     return (; scaled = factor * value)
 end
 
-StatefulAlgorithms.@ProcessAlgorithm function InspectSink(
+StatefulAlgorithms.@StepAlgorithm function InspectSink(
     value,
     @managed(log = Int[])
 )
@@ -20,7 +20,7 @@ StatefulAlgorithms.@ProcessAlgorithm function InspectSink(
     return (; last = value)
 end
 
-StatefulAlgorithms.@ProcessAlgorithm function InspectOscillator(
+StatefulAlgorithms.@StepAlgorithm function InspectOscillator(
     @managed(dt),
     @managed(state = 1.0),
     @managed(velocity = 0.0),
@@ -33,7 +33,7 @@ StatefulAlgorithms.@ProcessAlgorithm function InspectOscillator(
     return (; state, velocity)
 end
 
-StatefulAlgorithms.@ProcessAlgorithm function InspectDamper(
+StatefulAlgorithms.@StepAlgorithm function InspectDamper(
     state,
     velocity,
     trajectory,

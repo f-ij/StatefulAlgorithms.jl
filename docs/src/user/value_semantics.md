@@ -36,7 +36,7 @@ can be treated as the same logical identity.
 
 ## Matching Rules
 
-For process entities (`ProcessAlgorithm`/`ProcessState`), the current matching
+For process entities (`StepAlgorithm`/`ProcessState`), the current matching
 rules are:
 
 - an immutable instance that Julia can store directly in a type parameter matches by value,

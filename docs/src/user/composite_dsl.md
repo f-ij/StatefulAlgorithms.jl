@@ -557,14 +557,20 @@ For repeated sub-blocks:
 
 ```julia
 algo = @CompositeAlgorithm begin
-    @state value = 1
-
-    result = @repeat 3 begin
+    @repeat 3 begin
+        @state value = 1
         value = Step(value = value)
         value = Step(value = value)
     end
 end
 ```
+
+Repeated sub-blocks are nested plans. Declare block-owned state inside the block,
+or refer to surrounding algorithms through inherited `@alias`/`@context` owned
+field paths; bare state/output names from the surrounding block are not captured
+as block-local routes. Keep transient dataflow consumers inside the block. To
+route persistent state across a named plan boundary, define that plan separately
+and insert it with `@context`.
 
 Write schedules on the right-hand side:
 
