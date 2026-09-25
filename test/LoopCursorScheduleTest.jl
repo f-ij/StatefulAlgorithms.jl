@@ -48,7 +48,7 @@ using StatefulAlgorithms
     @test direct_cursor isa StatefulAlgorithms.DirectRoutineCursor
     @test StatefulAlgorithms.resume_idxs(direct_cursor) == ()
     @test pausable_cursor isa StatefulAlgorithms.PausableRoutineCursor
-    @test StatefulAlgorithms.resume_idxs(pausable_cursor) isa StatefulAlgorithms.MVector
+    @test StatefulAlgorithms.resume_idxs(pausable_cursor) isa Vector{Int}
 
     long_routine = init(Routine(LoopCursorYieldCounter, (10^8,)))
     paused = Process(long_routine; lifetime = Indefinite())

@@ -47,7 +47,7 @@ end
     if Pausable
         n = numalgos(P)
         return quote
-            PausableRoutineCursor(MVector{$n, Int}(ones(Int, $n)), $children)
+            PausableRoutineCursor(ones(Int, $n), $children)
         end
     end
     return quote
