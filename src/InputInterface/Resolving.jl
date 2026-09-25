@@ -13,8 +13,6 @@ to the resolved namespace symbol.
 @inline retarget(ov::Union{Init, Override}, name) = _retarget_input(ov, name)(get_vars(ov), nothing)
 @inline retarget(spec::Interactive, name) = _retarget_input(spec, name)(nothing)
 
-@inline get_target(::Union{Init{Target}, Override{Target}, Interactive{Target}}) where {Target} = Target
-@inline get_target(::Type{<:Union{Init{Target}, Override{Target}, Interactive{Target}}}) where {Target} = Target
 @inline get_ref(ov::OI) where {OI<:InputInterface} = ov.ref
 @inline get_vars(ov::OI) where {OI<:Union{Override, Input}} = ov.vars
 

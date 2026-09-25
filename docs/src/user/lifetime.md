@@ -113,7 +113,7 @@ p = Process(
 Important:
 
 - Use the same algorithm reference you used in `Process(...)` (same instance or same `Unique` variable).
-- `Var(:name)` reads from globals (for example `Var(:process)`).
+- `Var(:name)` reads a value that is actually stored in the persistent context globals.
 - The safest current `Until` usage is a single selector value.
 
 For full `Var` details, see [Vars (`Var` Selectors)](@ref vars_user).

@@ -160,9 +160,21 @@ Base.wait(args::NamedTuple, seconds) = Base.wait(args.timetracker, seconds)
 add_timetracker(args::NamedTuple) = (;args..., timetracker = TimeTracker())
 
 
-# Check Progress
+"""
+    progress(process)
+
+Return the fraction of the configured finite repeat bound already executed.
+
+The value is clamped to `[0, 1]`. Indefinite lifetimes report `0.0`, while a
+completed zero-repeat process reports `1.0`.
+"""
 function progress(p::Process)
-    loopidx(p) / maximum_loopidx(p)
+    total = maximum_loopidx(p)
+    isfinite(total) || return 0.0
+    total > 0 || return isdone(p) ? 1.0 : 0.0
+
+    completed = max(loopint(p) - 1, 0)
+    return clamp(completed / total, 0.0, 1.0)
 end
 
 """

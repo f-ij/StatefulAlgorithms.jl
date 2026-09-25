@@ -40,6 +40,8 @@ end
     Interactive{Target, Names, typeof(ref)}(ref)
 
 @inline target_type(::Interactive{Target}) where {Target} = Target
+@inline get_target(::Interactive{Target}) where {Target} = Target
+@inline get_target(::Type{<:Interactive{Target}}) where {Target} = Target
 
 @inline interactive_names(::Union{Interactive{Target, Names}, Type{<:Interactive{Target, Names}}}) where {Target, Names} = Names
 

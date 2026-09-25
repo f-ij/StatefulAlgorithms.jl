@@ -4,6 +4,16 @@ abstract type InputInterface end
 
 @inline target_type(::InputInterface) = nothing
 
+"""
+    get_target(spec)
+
+Return the lifecycle target encoded by an input specification.
+
+Concrete methods are defined immediately after their corresponding lifecycle
+input types so generated code observes them in the correct world age.
+"""
+function get_target end
+
 struct AllInitTargets end
 
 ########################################
@@ -59,6 +69,9 @@ end
 Override{Target}(vars::NT) where {Target,NT<:NamedTuple} = Override{Target,NT,Nothing}(vars, nothing)
 
 @inline target_type(::Union{Init{Target}, Override{Target}}) where {Target} = Target
+
+@inline get_target(::Union{Init{Target}, Override{Target}}) where {Target} = Target
+@inline get_target(::Type{<:Union{Init{Target}, Override{Target}}}) where {Target} = Target
 
 @inline _input_target_parameter(target::Symbol) = target
 @inline _input_target_parameter(target::Tuple) = map(_input_target_parameter, target)

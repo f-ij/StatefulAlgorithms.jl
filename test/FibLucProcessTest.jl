@@ -35,8 +35,12 @@ end
     @test repeats(StatefulAlgorithms.lifetime(p)) == n
     @test_throws ErrorException StatefulAlgorithms.Process(fibluc; lifetime = n)
 
+    @test progress(p) == 0.0
+
     StatefulAlgorithms.run(p)
     ctx = fetch(p)
+
+    @test progress(p) == 1.0
 
     fib_ctx = ctx[RunFib]
     luc_ctx = ctx[RunLuc]

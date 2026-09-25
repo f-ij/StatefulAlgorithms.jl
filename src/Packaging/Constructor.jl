@@ -38,6 +38,17 @@ function Package(comp::CompositeAlgorithm, states::States, name = Symbol()) wher
     identifiable_funcs = getalgos(comp)
     package_intervals = intervals(comp)
     routes = typefilter(Route, getoptions(comp))
+
+    # Package aliases are derived from the concrete endpoint objects retained
+    # by unresolved routes. Resolution deliberately replaces those objects
+    # with type-level namespace information, which this conversion cannot use.
+    if any(route -> isnothing(getfrom(route)) || isnothing(getto(route)), routes)
+        throw(ArgumentError(
+            "Package requires unresolved routes with concrete algorithm or type endpoints. " *
+            "Package the CompositeAlgorithm before resolve."
+        ))
+    end
+
     aliases = package_aliases(identifiable_funcs, setup_registry(comp), routes)
     package_states = (states..., getstates(comp)...)
     customname = name == Symbol() || name == "" ? Symbol() : Symbol(name)

@@ -32,11 +32,8 @@ Var(:name)
 
 This reads `:name` from `context.globals`.
 
-So:
-
-- `Var(:process)` reads `context.globals.process`
-- `Var(:algo)` reads `context.globals.algo`
-- `Var(:lifetime)` reads `context.globals.lifetime`
+Use this form only for values that are actually stored in the persistent
+context globals.
 
 ## Common Use in `Until`
 
@@ -49,14 +46,6 @@ counter = Counter()
 
 lifetime = Until(x -> x >= 100, Var(counter, :count))
 ```
-
-Example with a global variable (process object):
-
-```julia
-lifetime = Until(p -> loopidx(p) >= 10_000, Var(:process))
-```
-
-`Var(:process)` is useful when your stop rule depends on process-level state.
 
 In `Until`/`RepeatOrUntil`, this function is a stop condition (`true => stop`, `false => continue`).
 

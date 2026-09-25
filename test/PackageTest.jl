@@ -51,6 +51,8 @@ StatefulAlgorithms.step!(::NewPackNeedsRoute, context) = (; seen = context.delta
         (1, 2),
         Route(NewPackSource => NewPackTarget, :value => :input),
     )
+    @test_throws ArgumentError Package(resolve(comp))
+
     pkg = Package(comp, "NewPack")
 
     @test pkg isa ProcessAlgorithm
