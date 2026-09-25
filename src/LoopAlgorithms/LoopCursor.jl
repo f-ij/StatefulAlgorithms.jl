@@ -11,6 +11,12 @@ export AbstractLoopCursor, NoLoopCursor, loop_cursor
 @inline child_loop_cursor(cursor::PausableRoutineCursor, ::Val{I}) where {I} =
     getfield(getfield(cursor, :children), I)
 
+@inline child_loop_cursor(cursor::FirstTickCursor, i::Val) = first_tick(child_loop_cursor(cursor.cursor, i))
+@inline first_tick(cursor::CompositeLoopCursor) = FirstTickCursor(cursor)
+@inline first_tick(cursor) = cursor
+@inline inc(::FirstTickCursor) = 1
+@inline inc!(cursor::FirstTickCursor, ca) = inc!(cursor.cursor, ca)
+
 """Return a fresh cursor sentinel for leaf algorithms."""
 @inline loop_cursor(::Any, ::Val{Pausable} = Val(false)) where {Pausable} = NoLoopCursor()
 

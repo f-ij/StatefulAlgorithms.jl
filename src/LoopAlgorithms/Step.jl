@@ -9,7 +9,7 @@ Step each scheduled child of a composite plan with explicit loop runtime.
 The `process` and `lifetime` values are forwarded so nested loop algorithms can
 run without storing those transient values in the context.
 """
-Base.@constprop :aggressive @inline @generated function _step!(ca::CA, cursor::S, context::C, runtimecontext::RC, wiring::W, namespace::N, process::P, lifetime::LT) where {CA <: CompositeAlgorithm, S<:CompositeLoopCursor, C <: AbstractContext, RC <: ProcessContext, W <: PlanWiringView, N <: Namespace, P <: AbstractProcess, LT <: Lifetime}
+Base.@constprop :aggressive @inline @generated function _step!(ca::CA, cursor::S, context::C, runtimecontext::RC, wiring::W, namespace::N, process::P, lifetime::LT) where {CA <: CompositeAlgorithm, S<:Union{CompositeLoopCursor,FirstTickCursor}, C <: AbstractContext, RC <: ProcessContext, W <: PlanWiringView, N <: Namespace, P <: AbstractProcess, LT <: Lifetime}
     algo_count = numalgos(CA)
     schedule_values = CA.parameters[2]
     child_namespace_tuple_type = CA.parameters[3]

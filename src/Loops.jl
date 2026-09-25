@@ -112,7 +112,7 @@ Run a single function in a loop indefinitely.
     if isresuming
         @atomic process.paused = false
     else
-        context, runtimecontext = @inline _step!(step_plan, step_cursor, context, runtimecontext, step_wiring, Namespace{nothing}(), process, lifetime)
+        context, runtimecontext = @inline _step!(step_plan, first_tick(step_cursor), context, runtimecontext, step_wiring, Namespace{nothing}(), process, lifetime)
         @inline tick!(process)
         @inline inc!(process)
     end
@@ -156,7 +156,7 @@ Base.@constprop :aggressive @inline function loop(process::P, algo::F, stored_co
     if isresuming
         @atomic process.paused = false
     else
-        context, runtimecontext = @inline _step!(step_plan, step_cursor, context, runtimecontext, step_wiring, Namespace{nothing}(), process, lifetime)
+        context, runtimecontext = @inline _step!(step_plan, first_tick(step_cursor), context, runtimecontext, step_wiring, Namespace{nothing}(), process, lifetime)
         @inline tick!(process)
         @inline inc!(process)
     end

@@ -100,3 +100,22 @@ using StatefulAlgorithms
     nested_result = run(init(nested_plan, Override(LoopRunIfFlag; enabled = true)); repeats = 2)
     @test context(nested_result)[LoopRunIfCounter].count == 2
 end
+
+@testset "Bootstrap step keeps routed transients concretely typed" begin
+    struct BootSensor <: ProcessAlgorithm end
+    struct BootReader <: ProcessAlgorithm end
+    StatefulAlgorithms.init(::BootSensor, context) = (; n = 0)
+    StatefulAlgorithms.step!(::BootSensor, context) = (; n = context.n + 1, reading = Float64(context.n + 1))
+    StatefulAlgorithms.init(::BootReader, context) = (; acc = 0.0)
+    StatefulAlgorithms.step!(::BootReader, context) = (; acc = context.acc + context.reading)
+
+    # Producer and consumer both run on step 1 and every 10 steps after it.
+    plan = CompositeAlgorithm(BootSensor, BootReader, (Interval(10, :start), Interval(10, :start)), Route(BootSensor => BootReader, :reading))
+    run(InlineProcess(plan; repeats = 100))
+    small = InlineProcess(plan; repeats = 1_000)
+    large = InlineProcess(plan; repeats = 101_000)
+    allocs_small = @allocated run(small)
+    allocs_large = @allocated run(large)
+    @test allocs_large - allocs_small < 1_000
+    @test context(large)[BootReader].acc == 10_100 * 10_101 / 2
+end

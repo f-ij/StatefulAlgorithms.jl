@@ -95,6 +95,15 @@ struct CompositeLoopCursor{Children} <: AbstractLoopCursor
     children::Children
 end
 
+"""
+Cursor for the bootstrap step of a fresh run. Every composite counter is 1 on
+that step, so the tick is a compile-time constant and the scheduling checks
+fold away; the loop then starts from exactly the context type step 1 produced.
+"""
+struct FirstTickCursor{C<:CompositeLoopCursor} <: AbstractLoopCursor
+    cursor::C
+end
+
 """Non-pausable routine cursor that carries only nested child cursors."""
 struct DirectRoutineCursor{Children} <: AbstractLoopCursor
     children::Children
