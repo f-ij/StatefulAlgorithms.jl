@@ -12,7 +12,12 @@ Build a process context from named `SubContext` buckets.
         end
     end
     @assert isempty(bad_names) "All fields in ProcessContext subcontexts must be of type SubContext, but found non-SubContext fields: $bad_names"
-    @assert R <: Union{AbstractRegistry,Nothing} "Registry type must be `Nothing` or a subtype of AbstractRegistry, got: $R"
+    @assert R <: Union{AbstractRegistry,Base.RefValue{<:AbstractRegistry},Nothing} "Registry must be `Nothing`, an AbstractRegistry or a Ref to one, got: $R"
+    if R <: AbstractRegistry
+        # Box the registry: contexts are rebuilt every step, and a boxed registry is
+        # carried as one pointer instead of being copied along with the subcontexts.
+        return :(ProcessContext{D,Base.RefValue{R}}(subcontexts, Ref(reg)))
+    end
     return :(ProcessContext{D,R}(subcontexts, reg))
 end
 
@@ -57,7 +62,16 @@ end
 @inline Base.getindex(pc::ProcessContext, idx::Int) = get_subcontexts(pc)[idx]
 
 @inline get_subcontexts(pc::ProcessContext) = getfield(pc, :subcontexts)
-@inline getregistry(pc::ProcessContext) = getfield(pc, :reg)
+"""Registry field as stored: a `Ref` to the registry, or `nothing`. Rebuilds pass this through."""
+@inline registryref(pc::ProcessContext) = getfield(pc, :reg)
+@inline getregistry(pc::ProcessContext) = _unref(registryref(pc))
+@inline _unref(ref::Base.RefValue) = ref[]
+@inline _unref(::Nothing) = nothing
+
+"""Registry type of a context (value or type), with the `Ref` box unwrapped."""
+@inline getregistrytype(::Type{<:ProcessContext{D,Base.RefValue{R}}}) where {D,R} = R
+@inline getregistrytype(::Type{<:ProcessContext{D,Nothing}}) where {D} = Nothing
+@inline getregistrytype(pc::ProcessContext) = getregistrytype(typeof(pc))
 
 """Return the flat runtime-global bucket stored in a runtime context."""
 @inline function getglobals(pc::ProcessContext)
@@ -88,7 +102,7 @@ end
 Return an immutable `ProcessContext` rebuild with updated subcontexts.
 """
 @inline function withsubcontexts(pc::PC, subcontexts::D) where {PC<:ProcessContext,D<:NamedTuple}
-    return ProcessContext(subcontexts, getregistry(pc))
+    return ProcessContext(subcontexts, registryref(pc))
 end
 
 """
@@ -131,7 +145,7 @@ projection only; the returned process state remains `context`.
         end
     end
 
-    push!(exprs, :(return ProcessContext(subcontexts, getregistry(context))))
+    push!(exprs, :(return ProcessContext(subcontexts, registryref(context))))
     return Expr(:block, exprs...)
 end
 

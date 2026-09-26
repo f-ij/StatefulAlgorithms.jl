@@ -181,6 +181,7 @@ end
 Gives an estimate of the remaining time for the process
 """
 function est_remaining(p::Process)
+    # TODO: progress can now be 0.0 (before the first step, or after close), so rt / prog is Inf and floor(Int, Inf) throws InexactError.
     prog = progress(p)
     rt = runtime(p)
     total_time = rt / prog

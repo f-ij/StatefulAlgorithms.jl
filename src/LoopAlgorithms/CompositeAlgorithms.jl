@@ -115,13 +115,19 @@ getalgos(ca::CompositeAlgorithm) = getfield(ca, :funcs)
 hasflag(ca::CompositeAlgorithm, flag) = flag in getfield(ca, :flags)
 track_algo(ca::CompositeAlgorithm) = hasflag(ca, :trackalgo)
 """
-Increment the stepidx for the composite algorithm
+Increment the stepidx for the composite algorithm.
+
+The counter cycles through `1:lcm`. A compare/select wrap keeps the loop-carried
+counter off the division path that `mod1` would put on every tick; with an lcm
+of 1 the counter never changes.
 """
 @inline @generated function inc!(cursor::CompositeLoopCursor, ca::CA) where CA <: CompositeAlgorithm
     _lcm = lcm(intervals(ca)...)
+    _lcm == 1 && return :(nothing)
     return quote
         cainc = getinc(cursor)
-        cainc[] = mod1(cainc[] + 1, $_lcm)
+        i = cainc[]
+        cainc[] = ifelse(i >= $_lcm, 1, i + 1)
     end
 end
 

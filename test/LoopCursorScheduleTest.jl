@@ -58,8 +58,12 @@ using StatefulAlgorithms
     wait(paused)
     @test paused.loop_cursor isa StatefulAlgorithms.PausableRoutineCursor
     @test !isempty(StatefulAlgorithms.resume_idxs(paused.loop_cursor))
+    resumed_cursor = @inferred StatefulAlgorithms._loop_cursor(paused, StatefulAlgorithms.getplan(paused.algo), StatefulAlgorithms.Resuming{true}())
+    @test resumed_cursor === paused.loop_cursor
+    @test @inferred(StatefulAlgorithms.getloopcursor(paused)) === paused.loop_cursor
     close(paused)
     @test isnothing(paused.loop_cursor)
+    @test_throws TypeError StatefulAlgorithms.getloopcursor(paused)
 
     struct LoopRunIfFlag <: ProcessState end
     struct LoopRunIfCounter <: ProcessAlgorithm end

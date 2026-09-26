@@ -81,6 +81,7 @@ getalgo(tca::ThreadedCompositeAlgorithm, idx) = getalgos(tca)[idx]
 
 @generated function inc!(cursor::CompositeLoopCursor, tca::ThreadedCompositeAlgorithm)
     _lcm = lcm(intervals(tca)...)
+    # TODO: Use the compare/select wrap from the core inc! (LoopAlgorithms/CompositeAlgorithms.jl); mod1 costs ~3 ns per tick.
     return :(getinc(cursor)[] = mod1(getinc(cursor)[] + 1, $_lcm))
 end
 

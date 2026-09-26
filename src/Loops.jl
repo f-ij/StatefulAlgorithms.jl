@@ -63,14 +63,7 @@ end
 @inline _loop_cursor(process::AbstractProcess, plan, ::Resuming) = loop_cursor(plan, Val(false))
 
 @inline function _loop_cursor(process::Process, plan, ::Resuming{IsResuming}) where {IsResuming}
-    if IsResuming
-        cursor = process.loop_cursor
-        if isnothing(cursor)
-            cursor = @inline loop_cursor(plan, Val(true))
-            process.loop_cursor = cursor
-        end
-        return cursor
-    end
+    IsResuming && return @inline getloopcursor(process)
     cursor = @inline loop_cursor(plan, Val(true))
     process.loop_cursor = cursor
     return cursor

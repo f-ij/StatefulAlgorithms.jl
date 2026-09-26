@@ -1,12 +1,12 @@
 export Process, getallocator, getnewallocator, getcontext, getticks
 
 
-mutable struct Process{F,LT} <: AbstractProcess
+mutable struct Process{F,LT,C} <: AbstractProcess
     id::UUID
     algo::F
     lifetime::Lifetime
     runtime_context::Union{Nothing, ProcessContext}
-    loop_cursor::Any
+    loop_cursor::Union{Nothing, C} # Kept across pause/resume; C is fixed by the plan type
     timeout::Float64
     task::Union{Nothing, Task}
     loopidx::UInt # To track the current loop index for resuming
@@ -25,6 +25,14 @@ mutable struct Process{F,LT} <: AbstractProcess
 end
 
 @setterGetter Process lock shouldrun runtime_context
+"""
+    getloopcursor(p::Process)
+
+Return the loop cursor stored by a paused run, always as the plan's cursor type `C`.
+Throws a `TypeError` when no cursor is stored.
+"""
+@inline getloopcursor(p::Process{F,LT,C}) where {F,LT,C} = p.loop_cursor::C
+
 """
 Get value of run of a process, denoting wether it should run or not
 """
@@ -163,7 +171,8 @@ function _finish_process_constructor_with_context(algo::A, prepared_context::PC,
     algo = _with_lifecycle(algo, prepared_context, getstoredinits(algo), getstoredoverrides(algo))
 
     # p = Process(uuid1(), context, td, timeout, nothing, UInt(1), UInt(1), Threads.ReentrantLock(), false, true, nothing, nothing, Arena(), RuntimeListeners(), 0)
-    p = Process{typeof(algo),typeof(lifetime)}(uuid1(), algo, lifetime, nothing, nothing, timeout, nothing, UInt(1), UInt(1), Threads.ReentrantLock(), false, true, nothing, nothing, nothing, RuntimeListeners(), 0)
+    C = typeof(loop_cursor(getplan(algo), Val(true)))
+    p = Process{typeof(algo),typeof(lifetime),C}(uuid1(), algo, lifetime, nothing, nothing, timeout, nothing, UInt(1), UInt(1), Threads.ReentrantLock(), false, true, nothing, nothing, nothing, RuntimeListeners(), 0)
 
     register_process!(p)
     schedule_loop_precompile!(p, lifetime)

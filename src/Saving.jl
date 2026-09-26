@@ -9,6 +9,7 @@ This entry point is retained for compatibility. Its persistence format needs a
 versioned replacement before it should be used for new long-lived data.
 """
 function savecontext(p::Process, filename = "")
+    # TODO: Currently throws `MethodError: no method matching iterate(::ProcessContext)`; the splat below does not work.
     # TODO: Replace this legacy keyword-splat format with versioned context
     # serialization and an explicit load/migration path.
     jldsave("contextsave_$filename.jld2"; getcontext(p)...)
