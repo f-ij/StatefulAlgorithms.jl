@@ -47,7 +47,7 @@ end
     if Pausable
         n = numalgos(P)
         return quote
-            PausableRoutineCursor(ones(Int, $n), $children)
+            PausableRoutineCursor(TupleBox($(Expr(:tuple, ntuple(_ -> 1, n)...))), $children)
         end
     end
     return quote
