@@ -64,10 +64,15 @@ end
 
 @inline function _loop_cursor(process::Process, plan, ::Resuming{IsResuming}) where {IsResuming}
     IsResuming && return @inline getloopcursor(process)
-    cursor = @inline loop_cursor(plan, Val(true))
-    process.loop_cursor = cursor
-    return cursor
+    return @inline loop_cursor(plan, Val(true))
 end
+
+"""
+Keep the cursor on a pause so the next run resumes from it. It is stored only on
+that exit, so while the loop runs the cursor never escapes and can stay in registers.
+"""
+@inline _keep_loop_cursor!(process::Process, cursor) = (process.loop_cursor = cursor; nothing)
+@inline _keep_loop_cursor!(::AbstractProcess, cursor) = nothing
 
 """Commit or return the persistent context produced by the loop."""
 @inline function after_while(p::P, func::F, context::C, runtimecontext::RC, returnvalue, stored_context::SC = context) where {P<:Process,F,C<:ProcessContext,RC<:ProcessContext,SC<:ProcessContext}
@@ -127,6 +132,7 @@ Run a single function in a loop indefinitely.
     end
 
     if @inline _loop_ispaused(process)
+        @inline _keep_loop_cursor!(process, step_cursor)
         return @inline after_while(process, func, context, runtimecontext, context, stored_context)
     end
 
@@ -171,6 +177,7 @@ Base.@constprop :aggressive @inline function loop(process::P, algo::F, stored_co
     end
 
     if @inline _loop_ispaused(process)
+        @inline _keep_loop_cursor!(process, step_cursor)
         return @inline after_while(process, algo, context, runtimecontext, context, stored_context)
     end
 
