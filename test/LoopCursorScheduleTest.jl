@@ -119,3 +119,21 @@ end
     @test allocs_large - allocs_small < 1_000
     @test context(large)[BootReader].acc == 10_100 * 10_101 / 2
 end
+
+@testset "Nested routines stay specialized (no per-step allocation)" begin
+    struct NestLin{K} <: ProcessAlgorithm end
+    StatefulAlgorithms.init(::NestLin, context) = (; x = 0.0)
+    StatefulAlgorithms.step!(::NestLin{K}, context) where {K} = (; x = context.x + K)
+
+    for plan in (Routine(Routine(NestLin{1}, NestLin{2}, (1, 1)), NestLin{3}, (1, 1)),
+                 Routine(Routine(Routine(NestLin{1}, NestLin{2}, (1, 1)), NestLin{3}, (1, 1)), NestLin{4}, (1, 1)),
+                 Routine(CompositeAlgorithm(Routine(NestLin{1}, NestLin{2}, (1, 1)), NestLin{3}, (1, 1)), NestLin{4}, (1, 1)))
+        run(InlineProcess(plan; repeats = 100))
+        small = InlineProcess(plan; repeats = 1_000)
+        large = InlineProcess(plan; repeats = 101_000)
+        allocs_small = @allocated run(small)
+        allocs_large = @allocated run(large)
+        @test allocs_large - allocs_small < 1_000
+        @test context(large)[NestLin{1}].x == 101_000
+    end
+end
