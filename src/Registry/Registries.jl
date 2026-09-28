@@ -22,24 +22,6 @@ end
     return Base.setindex(reg, newentry, fidx)
 end
 
-@inline function StaticArrays.push(reg::NameSpaceRegistry{T}, newentry) where {T}
-    if !(newentry isa RegistryTypeEntry)
-        error("Cannot push a RegistryTypeEntry type: $(typeof(newentry)) to a NameSpaceRegistry")
-    end
-    old_entries = getentries(reg)
-    new_entries = (old_entries..., newentry)
-    return NameSpaceRegistry{typeof(new_entries)}(new_entries)
-end
-
-@inline function StaticArrays.pushfirst(reg::NameSpaceRegistry{T}, newentry) where {T}
-    if !(newentry isa RegistryTypeEntry)
-        error("Cannot push a RegistryTypeEntry type: $(typeof(newentry)) to a NameSpaceRegistry")
-    end
-    old_entries = getentries(reg)
-    new_entries = (newentry, old_entries...)
-    return NameSpaceRegistry{typeof(new_entries)}(new_entries)
-end
-
 """
 Get the actual types of the typeentries
 """
@@ -130,11 +112,11 @@ function add(reg::NameSpaceRegistry{T}, obj, multiplier = 1.; withkey = nothing)
         newentry = RegistryTypeEntry{entry_t}()
         newentry, keyed_obj = add(newentry, obj, multiplier; withkey)
         if entry_t <: ProcessState # States go first
-            newreg = StaticArrays.pushfirst(reg, newentry)
+            new_entries = (newentry, getentries(reg)...)
         else
-            newreg = StaticArrays.push(reg, newentry)
+            new_entries = (getentries(reg)..., newentry)
         end
-        return newreg, keyed_obj
+        return NameSpaceRegistry{typeof(new_entries)}(new_entries), keyed_obj
     else # Type was found
         entry = getentries(reg)[fidx]
         

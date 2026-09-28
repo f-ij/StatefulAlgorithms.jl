@@ -3,7 +3,8 @@ module StatefulAlgorithms
 
     export getcontext, context, Process, start, quit
 
-    using UUIDs, Preferences, MacroTools, StaticArrays, PrecompileTools
+    using UUIDs, Preferences, MacroTools, PrecompileTools
+    using Base: setindex # previously re-exported by StaticArrays
 
     import Base: Threads.SpinLock, lock, unlock
     const wait_timeout = .5

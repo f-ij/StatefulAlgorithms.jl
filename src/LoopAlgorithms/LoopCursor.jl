@@ -45,9 +45,9 @@ end
 @generated function loop_cursor(plan::P, ::Val{Pausable} = Val(false)) where {P<:Routine, Pausable}
     children = Expr(:tuple, (:(@inline loop_cursor(getfield(@inline(getalgos(plan)), $i), Val($Pausable))) for i in 1:numalgos(P))...)
     if Pausable
-        n = numalgos(P)
+        start_points = Expr(:tuple, fill(1, numalgos(P))...)   # literal (1, 1, …), built at generation time
         return quote
-            PausableRoutineCursor(MVector{$n, Int}(ones(Int, $n)), $children)
+            PausableRoutineCursor(TupleBox($start_points), $children)
         end
     end
     return quote
