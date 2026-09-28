@@ -1,0 +1,113 @@
+
+[cases."Routine (100, 5) / inline"]
+bytes_per_step = 0.0
+ns_hand = 1.160158761904762
+ns_package = 1.1677698095238094
+ratio = 1.0065603500735982
+
+[cases."Routine (100, 5) / process"]
+bytes_per_step = 0.0
+ns_hand = 1.158555619047619
+ns_package = 1.1741864761904761
+ratio = 1.0134916760886339
+
+[cases."Routine in Routine / inline"]
+bytes_per_step = 256.0
+ns_hand = 0.4153473333333333
+ns_package = 14.276861
+ratio = 34.37330603623313
+
+[cases."Routine in Routine / process"]
+bytes_per_step = 304.0
+ns_hand = 0.41429166666666667
+ns_package = 16.261097333333332
+ratio = 39.2503606557377
+
+[cases."flat Routine (1, 1, 1) / inline"]
+bytes_per_step = 0.0
+ns_hand = 0.42473890000000003
+ns_package = 0.4264097333333334
+ratio = 1.0039337892840363
+
+[cases."flat Routine (1, 1, 1) / process"]
+bytes_per_step = 0.0
+ns_hand = 0.4170180666666667
+ns_package = 0.4338208333333333
+ratio = 1.0402926587832886
+
+[cases."flat composite, 4 children / inline"]
+bytes_per_step = 0.0
+ns_hand = 0.31322395
+ns_package = 0.31607292499999995
+ratio = 1.0090956486564964
+
+[cases."flat composite, 4 children / process"]
+bytes_per_step = 0.0
+ns_hand = 0.3152604
+ns_package = 0.323346875
+ratio = 1.025650145086411
+
+[cases."intervals (1, 3) / inline"]
+bytes_per_step = 0.0
+ns_hand = 1.87854375
+ns_package = 1.8762791500000002
+ratio = 0.9987944917439374
+
+[cases."intervals (1, 3) / process"]
+bytes_per_step = 0.0
+ns_hand = 1.8793375000000003
+ns_package = 1.8756125
+ratio = 0.9980179185484245
+
+[cases."nested composite / inline"]
+bytes_per_step = 0.0
+ns_hand = 2.3512791
+ns_package = 1.8732874999999998
+ratio = 0.7967099694800162
+
+[cases."nested composite / process"]
+bytes_per_step = 0.0
+ns_hand = 2.3460709
+ns_package = 1.8834416999999999
+ratio = 0.8028068120191935
+
+[cases."route from interval-10 producer / inline"]
+bytes_per_step = 0.0
+ns_hand = 1.8863624999999997
+ns_package = 1.8899583000000002
+ratio = 1.001906208377234
+
+[cases."route from interval-10 producer / process"]
+bytes_per_step = 0.0
+ns_hand = 1.8872292000000002
+ns_package = 1.8934416999999997
+ratio = 1.0032918630127172
+
+[cases."transient route, produced on step 1 / inline"]
+bytes_per_step = 0.0
+ns_hand = 0.6299958
+ns_package = 0.47904169999999996
+ratio = 0.7603887200517845
+
+[cases."transient route, produced on step 1 / process"]
+bytes_per_step = 0.0
+ns_hand = 0.6304334
+ns_package = 1.174975
+ratio = 1.8637575356889402
+
+[cases."wide composite, 32 children / inline"]
+bytes_per_step = 0.0
+ns_hand = 0.06370050000000001
+ns_package = 0.06039453125000001
+ratio = 0.9481013689060527
+
+[cases."wide composite, 32 children / process"]
+bytes_per_step = 0.0
+ns_hand = 0.062339843750000005
+ns_package = 0.11803515625
+ratio = 1.8934143743342313
+[meta]
+commit = "07b5377"
+cpu = "Apple M5 Pro"
+julia = "1.12.6"
+threads = 1
