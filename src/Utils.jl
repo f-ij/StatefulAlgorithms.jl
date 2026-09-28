@@ -141,3 +141,15 @@ Base.@constprop :aggressive @generated function separate_nested_namedtuples(nt::
 end
 
 @inline filter_nt(nt::NT, keys...) where NT = @inline Base.structdiff(nt, NamedTuple{tuple(keys...)})
+
+"""
+Fixed-size mutable storage: an `NTuple` in a mutable box, so the length and
+element type live in the type. Writes replace the tuple (`Base.setindex`).
+"""
+mutable struct TupleBox{N,T}
+    data::NTuple{N,T}
+end
+@inline Base.getindex(b::TupleBox, i::Int) = getfield(b, :data)[i]
+@inline Base.setindex!(b::TupleBox, v, i::Int) = (setfield!(b, :data, Base.setindex(getfield(b, :data), v, i)); v)
+@inline Base.length(::TupleBox{N}) where {N} = N
+@inline Base.iterate(b::TupleBox, state...) = iterate(getfield(b, :data), state...)
