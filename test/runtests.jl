@@ -25,4 +25,5 @@ using StatefulAlgorithms
     include("ProcessAlgorithmMacroTest.jl")
     include("ContextAnalyzerTest.jl")
     include("InspectionTest.jl")
+    include("SavingTest.jl")
 end

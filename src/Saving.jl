@@ -1,16 +1,25 @@
-export savecontext
+export savecontext, loadcontext
 
 """
-    savecontext(process, filename = "")
+    savecontext(p::Process, filename)
+    savecontext(context::ProcessContext, filename)
 
-Save the current process context through the legacy JLD2 keyword-splat format.
+Save the persistent data of a process context to a JLD2 file: a `NamedTuple`
+with one entry per subcontext key, each holding that subcontext's variables.
 
-This entry point is retained for compatibility. Its persistence format needs a
-versioned replacement before it should be used for new long-lived data.
+Requires `using JLD2`; the method lives in the `StatefulAlgorithmsJLD2Ext` extension.
 """
-function savecontext(p::Process, filename = "")
-    # TODO: Currently throws `MethodError: no method matching iterate(::ProcessContext)`; the splat below does not work.
-    # TODO: Replace this legacy keyword-splat format with versioned context
-    # serialization and an explicit load/migration path.
-    jldsave("contextsave_$filename.jld2"; getcontext(p)...)
-end
+function savecontext end
+
+"""
+    loadcontext(filename)
+
+Load the data written by [`savecontext`](@ref): a `NamedTuple` keyed by
+subcontext key, e.g. `loadcontext(file).Counter_1.count`.
+
+Requires `using JLD2`.
+"""
+function loadcontext end
+
+"""Persistent data of a context as a `NamedTuple` of `NamedTuple`s, keyed by subcontext key."""
+contextdata(context::ProcessContext) = map(getdata, get_subcontexts(context))

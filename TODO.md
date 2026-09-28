@@ -25,7 +25,6 @@ Each was reproduced in the September 2026 code review unless marked *(unverified
 
 ## Tools and persistence
 - [ ] `src/Tools.jl:184`: `est_remaining` throws when `progress == 0.0` (inline TODO).
-- [ ] `src/Saving.jl:12`: `savecontext` always throws, there's no load counterpart, and JLD2 is only used here (inline TODO).
 - [ ] `src/Tools.jl:176`: `progress()` reports 0.0 once a completed process is closed *(unverified)*.
 
 ## Packaging and threaded composites
