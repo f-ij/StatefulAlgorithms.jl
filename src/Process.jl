@@ -36,7 +36,7 @@ Throws a `TypeError` when no cursor is stored.
 """
 Get value of run of a process, denoting wether it should run or not
 """
-shouldrun(p::Process) = p.shouldrun
+shouldrun(p::Process) = @atomic :monotonic p.shouldrun   # atomic (no ordering barrier): re-read every step, so pause/close are seen
 """
 Set value of run of a process, denoting wether it should run or not
 """
