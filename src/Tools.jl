@@ -142,7 +142,7 @@ end
 
 
 ####
-export TimeTracker, wait, add_timetracker
+export TimeTracker
 """
 A time tracker for waiting in loops
 """
@@ -155,9 +155,6 @@ function Base.wait(timetracker::TimeTracker, seconds)
     end
     timetracker.lasttime = time_ns()
 end
-
-Base.wait(args::NamedTuple, seconds) = Base.wait(args.timetracker, seconds)
-add_timetracker(args::NamedTuple) = (;args..., timetracker = TimeTracker())
 
 
 """

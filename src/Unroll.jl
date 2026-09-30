@@ -410,8 +410,6 @@ original outer slot. Empty inner results are dropped.
     end
 end
 
-@inline Base.keys(::Type{<:NamedTuple{Names}}) where {Names} = Names
-
 Base.@constprop :aggressive @generated function _inner_typefilter(::Type{T}, elements::NT) where {T, NT<:NamedTuple}
     names = fieldnames(NT)
     field_exprs = Any[]
