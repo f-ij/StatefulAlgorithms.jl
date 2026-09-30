@@ -4,6 +4,13 @@
 #   julia --project=perf perf/run.jl --update-baseline    store this run as the new baseline
 #   julia --project=perf perf/run.jl --strict             exit non-zero on any warning
 #   julia --project=perf perf/run.jl --only Routine       run cases whose name contains "Routine"
+#   julia --project=perf perf/run.jl --runtime-only       skip compile times
+#   julia --project=perf perf/run.jl --compile-only       only compile times
+#
+# Compile times (package precompile, `using`, first run under InlineProcess and
+# Process, and reconfiguring a plan) are measured in fresh processes by
+# perf/compile.jl, minimum over samples. They are absolute, so they warn
+# (SLOWER) only when more than 25% and more than 0.1 s worse than the baseline.
 #
 # For every case the package plan and a hand-written loop computing the same
 # results are timed alternately in the same process (minimum over rounds), so the
@@ -62,16 +69,63 @@ function measure_case(case, runner)
               ratio = tp / th, bytes = bytes_per_step(case, runner), correct)
 end
 
+const COMPILE_TOLERANCE = 0.25     # allowed relative increase in compile time vs baseline ...
+const COMPILE_MIN_DELTA = 0.1      # ... and it must also be at least this many seconds worse
+const COMPILE_SAMPLES = 3          # fresh processes per compile case (minimum is kept)
+const COMPILE_CASE_NAMES = ["flat composite, 4 children", "route from interval-10 producer", "nested composite",
+    "wide composite, 32 children", "flat Routine (1, 1, 1)", "Routine (100, 5)", "Routine in Routine",
+    "DSL, 4 plain-function statements"]
+
+"""Run perf/compile.jl in fresh processes and keep the minimum of every metric."""
+function measure_compile(case_name, samples)
+    julia = Base.julia_cmd()
+    best = Dict{String,Float64}()
+    for _ in 1:samples
+        out = read(`$julia --startup-file=no --project=$(@__DIR__) $(joinpath(@__DIR__, "compile.jl")) $case_name`, String)
+        line = only(filter(startswith("COMPILE "), split(out, '\n')))
+        for kv in split(line)[2:end]
+            k, v = split(kv, '=')
+            best[k] = min(get(best, k, Inf), parse(Float64, v))
+        end
+    end
+    return best
+end
+
+function run_compile(baseline, only, warnings)
+    results = Dict{String,Any}()
+    base_all = get(baseline, "compile", Dict())
+    println("\nCompile times (seconds, minimum over fresh processes; `load` and first runs in CPU s, precompile in wall s)")
+    @printf("%-38s %-14s %8s %8s  %s\n", "case", "metric", "seconds", "baseline", "status")
+    names = ["package precompile"; COMPILE_CASE_NAMES]
+    for name in names
+        only !== nothing && !occursin(only, name) && continue
+        r = name == "package precompile" ? measure_compile("precompile", 2) : measure_compile(name, COMPILE_SAMPLES)
+        base = get(base_all, name, Dict())
+        for (metric, t) in sort(collect(r))
+            metric == "load" && name != first(COMPILE_CASE_NAMES) && continue   # same `using` in every case; report once
+            b = get(base, metric, nothing)
+            slower = b !== nothing && t > b * (1 + COMPILE_TOLERANCE) && t - b > COMPILE_MIN_DELTA
+            @printf("%-38s %-14s %8.3f %8s  %s\n", name, metric, t, b === nothing ? "-" : @sprintf("%.3f", b), slower ? "SLOWER" : "ok")
+            slower && push!(warnings, "$name / $metric: compile $(round(t; digits = 2)) s vs baseline $(round(b; digits = 2)) s")
+        end
+        results[name] = r
+    end
+    return results
+end
+
 function main(args)
     update = "--update-baseline" in args
     strict = "--strict" in args
+    runtime = !("--compile-only" in args)
+    compile = !("--runtime-only" in args)
     only = (i = findfirst(==("--only"), args)) === nothing ? nothing : args[i + 1]
     baseline = isfile(BASELINE) ? TOML.parsefile(BASELINE) : Dict{String,Any}()
     results = Dict{String,Any}()
     warnings = String[]
 
-    @printf("%-38s %-8s %9s %9s %7s %7s %9s %8s  %s\n", "case", "runner", "pkg ns", "hand ns", "ratio", "target", "B/step", "baseline", "status")
+    runtime && @printf("%-38s %-8s %9s %9s %7s %7s %9s %8s  %s\n", "case", "runner", "pkg ns", "hand ns", "ratio", "target", "B/step", "baseline", "status")
     for case in CASES, runner in RUNNERS
+        runtime || break
         only !== nothing && !occursin(only, case.name) && continue
         key = "$(case.name) / $runner"
         r = measure_case(case, runner)
@@ -87,12 +141,15 @@ function main(args)
         results[key] = Dict("ratio" => r.ratio, "ns_package" => r.ns_package, "ns_hand" => r.ns_hand, "bytes_per_step" => r.bytes)
     end
 
+    compile_results = compile ? run_compile(baseline, only, warnings) : Dict{String,Any}()
+
     if update
         commit = try readchomp(`git -C $(@__DIR__) rev-parse --short HEAD`) catch; "unknown" end
         meta = Dict("julia" => string(VERSION), "cpu" => Sys.cpu_info()[1].model, "commit" => commit, "threads" => Threads.nthreads())
-        merged = only === nothing ? results : merge(get(baseline, "cases", Dict{String,Any}()), results)
+        cases = merge(get(baseline, "cases", Dict{String,Any}()), results)
+        compiles = merge(get(baseline, "compile", Dict{String,Any}()), compile_results)
         open(BASELINE, "w") do io
-            TOML.print(io, Dict("meta" => meta, "cases" => merged); sorted = true)
+            TOML.print(io, Dict("meta" => meta, "cases" => cases, "compile" => compiles); sorted = true)
         end
         println("\nBaseline written to $(relpath(BASELINE)).")
     end

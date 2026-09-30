@@ -106,8 +106,59 @@ bytes_per_step = 0.0
 ns_hand = 0.062339843750000005
 ns_package = 0.11803515625
 ratio = 1.8934143743342313
+
+[compile."DSL, 4 plain-function statements"]
+first_inline = 0.9434610000000001
+first_process = 0.6159589999999997
+load = 1.241181
+reconfigure = 0.557715
+
+[compile."Routine (100, 5)"]
+first_inline = 0.3357690000000002
+first_process = 0.15763000000000016
+load = 1.2469329999999998
+reconfigure = 0.07810799999999984
+
+[compile."Routine in Routine"]
+first_inline = 0.689935
+first_process = 0.16046900000000042
+load = 1.229315
+reconfigure = 0.24551699999999999
+
+[compile."flat Routine (1, 1, 1)"]
+first_inline = 0.49618300000000004
+first_process = 0.18014099999999988
+load = 1.234804
+reconfigure = 0.08233999999999986
+
+[compile."flat composite, 4 children"]
+first_inline = 0.7295670000000001
+first_process = 0.09901800000000005
+load = 1.228935
+reconfigure = 0.1831710000000002
+
+[compile."nested composite"]
+first_inline = 0.8798440000000001
+first_process = 0.08949699999999972
+load = 1.2311519999999998
+reconfigure = 0.33038000000000034
+
+[compile."package precompile"]
+precompile = 20.28596975
+
+[compile."route from interval-10 producer"]
+first_inline = 0.520959
+first_process = 0.14134400000000014
+load = 1.224412
+reconfigure = 0.1504380000000003
+
+[compile."wide composite, 32 children"]
+first_inline = 4.226772
+first_process = 0.4245169999999998
+load = 1.243007
+reconfigure = 0.7295049999999996
 [meta]
-commit = "07b5377"
+commit = "9efb17d"
 cpu = "Apple M5 Pro"
 julia = "1.12.6"
 threads = 1
