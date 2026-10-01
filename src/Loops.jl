@@ -26,18 +26,18 @@ end
 """Build the loop-local runtime context for one execution."""
 @inline function _initial_runtime_context(inputs::NamedTuple, process::P, lifetime::LT) where {P<:AbstractProcess,LT<:Lifetime}
     runtime = @inline _merge_into_globals(_empty_context(), (; process, lifetime))
-    return isempty(inputs) ? runtime : @inline with_subcontext(runtime, Val(:_input), SubContext(:_input, inputs))
+    return isempty(inputs) ? runtime : @inline with_subcontext(runtime, Val(:_input), SubContext{:_input}(inputs))
 end
 
 """Build the visible paused context that keeps runtime inputs for resuming."""
 @inline function _paused_visible_context(context::C, runtimecontext::RC) where {C<:ProcessContext,RC<:ProcessContext}
     inputs = @inline getruntimeinput(runtimecontext)
-    return isempty(inputs) ? context : @inline with_subcontext(context, Val(:_input), SubContext(:_input, inputs))
+    return isempty(inputs) ? context : @inline with_subcontext(context, Val(:_input), SubContext{:_input}(inputs))
 end
 
 """Clear pause-only runtime inputs before re-entering the hot loop."""
 @inline function _paused_state_context(context::C) where {C<:ProcessContext}
-    return haskey(get_subcontexts(context), :_input) ? (@inline with_subcontext(context, Val(:_input), SubContext(:_input, (;)))) : context
+    return haskey(get_subcontexts(context), :_input) ? (@inline with_subcontext(context, Val(:_input), SubContext{:_input}((;)))) : context
 end
 
 @inline _loop_state_context(stored_context::C, ::Resuming{false}) where {C<:ProcessContext} = stored_context

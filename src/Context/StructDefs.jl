@@ -39,6 +39,8 @@ struct SubContext{Name,T<:NamedTuple} <: AbstractSubContext
 end
 
 SubContext(name::Symbol, data::D) where {D<:NamedTuple} = SubContext{name,D}(data)
+# Name as a type parameter: the result type never depends on constant propagation of a Symbol.
+SubContext{Name}(data::D) where {Name,D<:NamedTuple} = SubContext{Name,D}(data)
 
 export inject
 #######################
