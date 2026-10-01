@@ -1,164 +1,236 @@
 
+[cases."3-level Routine / inline"]
+bytes_per_step = 0.0
+ns_hand = 0.5839375
+ns_package = 0.46053750000000004
+ratio = 0.7886760141282244
+
+[cases."3-level Routine / process"]
+bytes_per_step = 0.0
+ns_hand = 0.5799917
+ns_package = 0.4932375
+ratio = 0.8504216525857181
+
 [cases."Routine (100, 5) / inline"]
 bytes_per_step = 0.0
-ns_hand = 1.160158761904762
-ns_package = 1.1677698095238094
-ratio = 1.0065603500735982
+ns_hand = 1.0935992380952382
+ns_package = 1.0979642857142857
+ratio = 1.0039914508596863
 
 [cases."Routine (100, 5) / process"]
 bytes_per_step = 0.0
-ns_hand = 1.158555619047619
-ns_package = 1.1741864761904761
-ratio = 1.0134916760886339
+ns_hand = 1.1198888571428571
+ns_package = 1.1399960952380954
+ratio = 1.0179546728829298
 
 [cases."Routine in Routine / inline"]
-bytes_per_step = 256.0
-ns_hand = 0.4153473333333333
-ns_package = 14.276861
-ratio = 34.37330603623313
+bytes_per_step = 0.0
+ns_hand = 0.3912636666666667
+ns_package = 0.39087500000000003
+ratio = 0.9990066374678287
 
 [cases."Routine in Routine / process"]
-bytes_per_step = 304.0
-ns_hand = 0.41429166666666667
-ns_package = 16.261097333333332
-ratio = 39.2503606557377
+bytes_per_step = 0.0
+ns_hand = 0.4019583333333333
+ns_package = 0.412375
+ratio = 1.025914792163367
+
+[cases."Routine in Routine, repeats / inline"]
+bytes_per_step = 0.0
+ns_hand = 0.7330806382978724
+ns_package = 0.7412101063829787
+ratio = 1.0110894595497462
+
+[cases."Routine in Routine, repeats / process"]
+bytes_per_step = 0.0
+ns_hand = 0.7316267021276596
+ns_package = 0.7781781914893617
+ratio = 1.0636273788618222
+
+[cases."Routine in composite / inline"]
+bytes_per_step = 0.0
+ns_hand = 2.10209375
+ns_package = 2.06663525
+ratio = 0.9831318179790984
+
+[cases."Routine in composite / process"]
+bytes_per_step = 0.0
+ns_hand = 2.1013125
+ns_package = 1.824875
+ratio = 0.8684453169150235
+
+[cases."composite in Routine / inline"]
+bytes_per_step = 0.0
+ns_hand = 5.203875000000001
+ns_package = 5.317979
+ratio = 1.0219267372871177
+
+[cases."composite in Routine / process"]
+bytes_per_step = 0.0
+ns_hand = 5.1933750000000005
+ns_package = 7.118021000000001
+ratio = 1.3705963848171951
 
 [cases."flat Routine (1, 1, 1) / inline"]
 bytes_per_step = 0.0
-ns_hand = 0.42473890000000003
-ns_package = 0.4264097333333334
-ratio = 1.0039337892840363
+ns_hand = 0.40228470000000005
+ns_package = 0.39746943333333334
+ratio = 0.988030201828042
 
 [cases."flat Routine (1, 1, 1) / process"]
 bytes_per_step = 0.0
-ns_hand = 0.4170180666666667
-ns_package = 0.4338208333333333
-ratio = 1.0402926587832886
+ns_hand = 0.3927583333333334
+ns_package = 0.4193958333333333
+ratio = 1.0678216036154549
 
 [cases."flat composite, 4 children / inline"]
 bytes_per_step = 0.0
-ns_hand = 0.31322395
-ns_package = 0.31607292499999995
-ratio = 1.0090956486564964
+ns_hand = 0.295126025
+ns_package = 0.296779175
+ratio = 1.0056015053230225
 
 [cases."flat composite, 4 children / process"]
 bytes_per_step = 0.0
-ns_hand = 0.3152604
-ns_package = 0.323346875
-ratio = 1.025650145086411
+ns_hand = 0.293941675
+ns_package = 0.29728957500000003
+ratio = 1.0113896744992013
 
 [cases."intervals (1, 3) / inline"]
 bytes_per_step = 0.0
-ns_hand = 1.87854375
-ns_package = 1.8762791500000002
-ratio = 0.9987944917439374
+ns_hand = 1.7582604000000002
+ns_package = 1.7553166500000004
+ratio = 0.9983257599386303
 
 [cases."intervals (1, 3) / process"]
 bytes_per_step = 0.0
-ns_hand = 1.8793375000000003
-ns_package = 1.8756125
-ratio = 0.9980179185484245
+ns_hand = 1.7550000000000001
+ns_package = 1.76089585
+ratio = 1.0033594586894587
 
 [cases."nested composite / inline"]
 bytes_per_step = 0.0
-ns_hand = 2.3512791
-ns_package = 1.8732874999999998
-ratio = 0.7967099694800162
+ns_hand = 2.1974834
+ns_package = 1.7565875
+ratio = 0.7993632625393212
 
 [cases."nested composite / process"]
 bytes_per_step = 0.0
-ns_hand = 2.3460709
-ns_package = 1.8834416999999999
-ratio = 0.8028068120191935
+ns_hand = 2.2006624999999995
+ns_package = 1.7654084
+ratio = 0.8022167869902814
 
 [cases."route from interval-10 producer / inline"]
 bytes_per_step = 0.0
-ns_hand = 1.8863624999999997
-ns_package = 1.8899583000000002
-ratio = 1.001906208377234
+ns_hand = 1.7637208000000002
+ns_package = 1.7756042
+ratio = 1.0067376877337955
 
 [cases."route from interval-10 producer / process"]
 bytes_per_step = 0.0
-ns_hand = 1.8872292000000002
-ns_package = 1.8934416999999997
-ratio = 1.0032918630127172
+ns_hand = 1.792825
+ns_package = 1.7832292
+ratio = 0.9946476649979781
 
 [cases."transient route, produced on step 1 / inline"]
 bytes_per_step = 0.0
-ns_hand = 0.6299958
-ns_package = 0.47904169999999996
-ratio = 0.7603887200517845
+ns_hand = 0.5984708000000001
+ns_package = 0.4849333
+ratio = 0.8102873189468893
 
 [cases."transient route, produced on step 1 / process"]
 bytes_per_step = 0.0
-ns_hand = 0.6304334
-ns_package = 1.174975
-ratio = 1.8637575356889402
+ns_hand = 0.5946833
+ns_package = 1.1040583
+ratio = 1.8565483510298673
 
 [cases."wide composite, 32 children / inline"]
 bytes_per_step = 0.0
-ns_hand = 0.06370050000000001
-ns_package = 0.06039453125000001
-ratio = 0.9481013689060527
+ns_hand = 0.05961199999999999
+ns_package = 0.057109375
+ratio = 0.9580181003824734
 
 [cases."wide composite, 32 children / process"]
 bytes_per_step = 0.0
-ns_hand = 0.062339843750000005
-ns_package = 0.11803515625
-ratio = 1.8934143743342313
+ns_hand = 0.059171875000000006
+ns_package = 0.11263671875
+ratio = 1.9035516239767625
+
+[compile."3-level Routine"]
+first_inline = 0.9340630000000001
+first_process = 0.23164099999999976
+load = 1.240262
+reconfigure = 0.3747219999999998
 
 [compile."DSL, 4 plain-function statements"]
-first_inline = 0.9434610000000001
-first_process = 0.6159589999999997
-load = 1.241181
-reconfigure = 0.557715
+first_inline = 0.961929
+first_process = 0.6225160000000001
+load = 1.2564000000000002
+reconfigure = 0.5717829999999999
 
 [compile."Routine (100, 5)"]
-first_inline = 0.3357690000000002
-first_process = 0.15763000000000016
-load = 1.2469329999999998
-reconfigure = 0.07810799999999984
+first_inline = 0.3104849999999999
+first_process = 0.10408400000000029
+load = 1.23406
+reconfigure = 0.07591899999999985
 
 [compile."Routine in Routine"]
-first_inline = 0.689935
-first_process = 0.16046900000000042
-load = 1.229315
-reconfigure = 0.24551699999999999
+first_inline = 0.6146580000000001
+first_process = 0.10719199999999995
+load = 1.238115
+reconfigure = 0.20157999999999987
+
+[compile."Routine in Routine, repeats"]
+first_inline = 0.6723729999999999
+first_process = 0.19097199999999992
+load = 1.2390059999999998
+reconfigure = 0.22543999999999986
+
+[compile."Routine in composite"]
+first_inline = 0.725641
+first_process = 0.12994299999999992
+load = 1.254196
+reconfigure = 0.282168
+
+[compile."composite in Routine"]
+first_inline = 0.727427
+first_process = 0.1280669999999997
+load = 1.2471910000000002
+reconfigure = 0.299515
 
 [compile."flat Routine (1, 1, 1)"]
-first_inline = 0.49618300000000004
-first_process = 0.18014099999999988
-load = 1.234804
-reconfigure = 0.08233999999999986
+first_inline = 0.47885599999999995
+first_process = 0.14765799999999984
+load = 1.241848
+reconfigure = 0.07777400000000023
 
 [compile."flat composite, 4 children"]
-first_inline = 0.7295670000000001
-first_process = 0.09901800000000005
-load = 1.228935
-reconfigure = 0.1831710000000002
+first_inline = 0.6901080000000002
+first_process = 0.09665100000000004
+load = 1.254304
+reconfigure = 0.17981700000000034
 
 [compile."nested composite"]
-first_inline = 0.8798440000000001
-first_process = 0.08949699999999972
-load = 1.2311519999999998
-reconfigure = 0.33038000000000034
+first_inline = 0.8575219999999999
+first_process = 0.08902199999999993
+load = 1.2384549999999999
+reconfigure = 0.32528500000000005
 
 [compile."package precompile"]
-precompile = 20.28596975
+precompile = 19.48611225
 
 [compile."route from interval-10 producer"]
-first_inline = 0.520959
-first_process = 0.14134400000000014
-load = 1.224412
-reconfigure = 0.1504380000000003
+first_inline = 0.5105310000000001
+first_process = 0.08334999999999981
+load = 1.246377
+reconfigure = 0.20164999999999988
 
 [compile."wide composite, 32 children"]
-first_inline = 4.226772
-first_process = 0.4245169999999998
-load = 1.243007
-reconfigure = 0.7295049999999996
+first_inline = 4.217918
+first_process = 0.39119800000000016
+load = 1.235377
+reconfigure = 0.6497380000000001
 [meta]
-commit = "9efb17d"
+commit = "def8520"
 cpu = "Apple M5 Pro"
 julia = "1.12.6"
 threads = 1
