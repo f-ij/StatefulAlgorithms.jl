@@ -63,6 +63,18 @@ const COMPILE_CASES = Dict(
     "Routine in Routine" => (
         () -> Routine(Routine(Lin{1}, Lin{2}, (1, 1)), Lin{3}, (1, 1)),
         () -> Routine(Routine(Lin{1}, Lin{2}, (1, 2)), Lin{3}, (1, 1))),
+    "Routine in Routine, repeats" => (
+        () -> Routine(Routine(Lin{1}, Lin{2}, (10, 5)), Lin{3}, (3, 2)),
+        () -> Routine(Routine(Lin{1}, Lin{2}, (10, 6)), Lin{3}, (3, 2))),
+    "3-level Routine" => (
+        () -> Routine(Routine(Routine(Lin{1}, Lin{2}, (1, 2)), Lin{3}, (2, 1)), Lin{4}, (1, 3)),
+        () -> Routine(Routine(Routine(Lin{1}, Lin{2}, (1, 3)), Lin{3}, (2, 1)), Lin{4}, (1, 3))),
+    "Routine in composite" => (
+        () -> CompositeAlgorithm(Routine(Lin{1}, Lin{2}, (2, 3)), Lin{3}, (2, 1)),
+        () -> CompositeAlgorithm(Routine(Lin{1}, Lin{2}, (2, 4)), Lin{3}, (2, 1))),
+    "composite in Routine" => (
+        () -> Routine(CompositeAlgorithm(Lin{1}, Lin{2}, (1, 2)), Lin{3}, (4, 1)),
+        () -> Routine(CompositeAlgorithm(Lin{1}, Lin{2}, (1, 3)), Lin{3}, (4, 1))),
     "DSL, 4 plain-function statements" => (dsl_plan, dsl_plan),   # "reconfigure" = rebuilding the same block
 )
 

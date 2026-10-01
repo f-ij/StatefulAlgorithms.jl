@@ -136,6 +136,61 @@ end
     return (n, acc)
 end
 
+"""Routine(Routine(Lin1, Lin2, (10, 5)), Lin3, (3, 2)): 47 algorithm steps per outer step."""
+@noinline function hand_routine_nested_repeats(N)
+    x1 = x2 = x3 = 0.0
+    for _ in 1:N
+        for _ in 1:3
+            for _ in 1:10; x1 = lin(x1, 1); end
+            for _ in 1:5; x2 = lin(x2, 2); end
+        end
+        for _ in 1:2; x3 = lin(x3, 3); end
+    end
+    return (x1, x2, x3)
+end
+
+"""Routine(Routine(Routine(Lin1, Lin2, (1, 2)), Lin3, (2, 1)), Lin4, (1, 3)): 10 algorithm steps per outer step."""
+@noinline function hand_routine_3level(N)
+    x1 = x2 = x3 = x4 = 0.0
+    for _ in 1:N
+        for _ in 1:2
+            x1 = lin(x1, 1)
+            for _ in 1:2; x2 = lin(x2, 2); end
+        end
+        x3 = lin(x3, 3)
+        for _ in 1:3; x4 = lin(x4, 4); end
+    end
+    return (x1, x2, x3, x4)
+end
+
+"""CompositeAlgorithm(Routine(Lin1, Lin2, (2, 3)), Lin3, (2, 1)): the routine runs every 2nd tick."""
+@noinline function hand_routine_in_composite(N)
+    x1 = x2 = x3 = 0.0
+    for t in 1:N
+        if t % 2 == 0
+            for _ in 1:2; x1 = lin(x1, 1); end
+            for _ in 1:3; x2 = lin(x2, 2); end
+        end
+        x3 = lin(x3, 3)
+    end
+    return (x1, x2, x3)
+end
+
+"""Routine(CompositeAlgorithm(Lin1, Lin2, (1, 2)), Lin3, (4, 1)): the composite keeps its own tick."""
+@noinline function hand_composite_in_routine(N)
+    x1 = x2 = x3 = 0.0
+    k = 0
+    for _ in 1:N
+        for _ in 1:4
+            k += 1
+            x1 = lin(x1, 1)
+            k % 2 == 0 && (x2 = lin(x2, 2))
+        end
+        x3 = lin(x3, 3)
+    end
+    return (x1, x2, x3)
+end
+
 xs(context, ks...) = map(k -> context[Lin{k}].x, ks)
 
 const CASES = PerfCase[
@@ -164,6 +219,18 @@ const CASES = PerfCase[
         plan = () -> Routine(Routine(Lin{1}, Lin{2}, (1, 1)), Lin{3}, (1, 1)),
         hand = hand_routine3, result = c -> xs(c, 1, 2, 3),
         note = "inner _subroutine_step! becomes a dynamic invoke (recursion limit)"),
+    PerfCase(name = "Routine in Routine, repeats", N = 2 * 10^5, inner = 47,
+        plan = () -> Routine(Routine(Lin{1}, Lin{2}, (10, 5)), Lin{3}, (3, 2)),
+        hand = hand_routine_nested_repeats, result = c -> xs(c, 1, 2, 3)),
+    PerfCase(name = "3-level Routine", N = 10^6, inner = 10,
+        plan = () -> Routine(Routine(Routine(Lin{1}, Lin{2}, (1, 2)), Lin{3}, (2, 1)), Lin{4}, (1, 3)),
+        hand = hand_routine_3level, result = c -> xs(c, 1, 2, 3, 4)),
+    PerfCase(name = "Routine in composite", N = 4 * 10^6,
+        plan = () -> CompositeAlgorithm(Routine(Lin{1}, Lin{2}, (2, 3)), Lin{3}, (2, 1)),
+        hand = hand_routine_in_composite, result = c -> xs(c, 1, 2, 3)),
+    PerfCase(name = "composite in Routine", N = 2 * 10^6,
+        plan = () -> Routine(CompositeAlgorithm(Lin{1}, Lin{2}, (1, 2)), Lin{3}, (4, 1)),
+        hand = hand_composite_in_routine, result = c -> xs(c, 1, 2, 3)),
     PerfCase(name = "transient route, produced on step 1", N = 10^7,
         plan = () -> CompositeAlgorithm(Sensor, Controller, (Interval(10, :start), Interval(10, :start)), Route(Sensor => Controller, :reading)),
         hand = hand_transient, result = c -> (c[Sensor].n, c[Controller].acc)),

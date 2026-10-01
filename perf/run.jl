@@ -74,6 +74,7 @@ const COMPILE_MIN_DELTA = 0.1      # ... and it must also be at least this many 
 const COMPILE_SAMPLES = 3          # fresh processes per compile case (minimum is kept)
 const COMPILE_CASE_NAMES = ["flat composite, 4 children", "route from interval-10 producer", "nested composite",
     "wide composite, 32 children", "flat Routine (1, 1, 1)", "Routine (100, 5)", "Routine in Routine",
+    "Routine in Routine, repeats", "3-level Routine", "Routine in composite", "composite in Routine",
     "DSL, 4 plain-function statements"]
 
 """Run perf/compile.jl in fresh processes and keep the minimum of every metric."""
