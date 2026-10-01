@@ -85,6 +85,37 @@ end
 end
 
 """
+Step a routine child that repeats once: the first repeat of `_subroutine_step!` without
+the loop, so the child's `_step!` is emitted once instead of twice.
+"""
+@inline function _subroutine_step_once!(
+    context::C,
+    runtimecontext::RC,
+    func::F,
+    func_cursor::FS,
+    r::R,
+    routine_cursor::RS,
+    process::P,
+    lifetime::LT,
+    idx::Int,
+    subroutine_lifetime::SL,
+    child_step_wiring::W,
+    namespace::N,
+) where {C,RC<:ProcessContext,F,FS<:AbstractLoopCursor,R<:Routine,RS<:Union{DirectRoutineCursor,PausableRoutineCursor},P<:AbstractProcess,LT<:Lifetime,SL<:Lifetime,W,N<:Namespace}
+    resume_point = @inline get_resume_point(routine_cursor, idx)
+    if resume_point <= 1
+        context, runtimecontext = @inline _step!(func, func_cursor, context, runtimecontext, child_step_wiring, namespace, process, lifetime)
+        @inline tick!(process)
+        if @inline routine_breakcondition(subroutine_lifetime, lifetime, process, context, resume_point)
+            if !(@inline _routine_local_breakcondition(subroutine_lifetime, process, context, resume_point))
+                @inline set_resume_point!(routine_cursor, idx, resume_point + 1)
+            end
+        end
+    end
+    return context, runtimecontext
+end
+
+"""
 Step each child routine in sequence with explicit loop runtime.
 
 Each child is run once at its resume point, then repeated until its declared
@@ -102,12 +133,14 @@ Base.@constprop :aggressive @inline @generated function _step!(r::R, cursor::S, 
     for i in 1:algo_count
         repeat_value = repeat_values[i]
         child_namespace_type = fieldtype(child_namespace_tuple_type, i)
+        # Repeat counts are part of the plan type: a single-repeat child needs no loop.
+        substep = repeat_value isa Repeat && repeats(repeat_value) == 1 ? :_subroutine_step_once! : :_subroutine_step!
         push!(exprs, quote
             local func = @inline getfield(algos, $i)
             local func_cursor = @inline child_loop_cursor(cursor, Val($i))
             local child_step_wiring = @inline child_wiring_view(wiring, Val($i))
             local child_namespace = $child_namespace_type()
-            context, runtimecontext = @inline _subroutine_step!(context, runtimecontext, func, func_cursor, r, cursor, process, lifetime, $i, $repeat_value, child_step_wiring, child_namespace)
+            context, runtimecontext = @inline $substep(context, runtimecontext, func, func_cursor, r, cursor, process, lifetime, $i, $repeat_value, child_step_wiring, child_namespace)
         end)
     end
 

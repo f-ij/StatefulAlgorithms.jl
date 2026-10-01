@@ -188,12 +188,15 @@ The view keeps the full root `PlanWiring` and a type-level child path. Incoming
 routes/shares are read at the current path, while return demand can be computed
 from the whole tree for the current namespace.
 """
-struct PlanWiringView{W, Path, DemandAll} <: AbstractWiring
-    wiring::W
+struct PlanWiringView{Root, W, DemandAll} <: AbstractWiring
+    wiring::W   # wiring of the current plan node; child views hold the child's subtree
 end
 
-PlanWiringView(wiring::W, ::Val{Path} = Val(()), ::Val{DemandAll} = Val(false)) where {W<:PlanWiring,Path,DemandAll} =
-    PlanWiringView{W,Path,DemandAll}(wiring)
+# `Root` is the whole plan's wiring type (needed by `return_demand`); it is the same at
+# every level, while `W` shrinks. Keeping every type non-growing down the nested plan lets
+# inference follow nested `_step!` calls instead of cutting them as unbounded recursion.
+PlanWiringView(wiring::W, ::Val = Val(()), ::Val{DemandAll} = Val(false)) where {W<:PlanWiring,DemandAll} =
+    PlanWiringView{W,W,DemandAll}(wiring)
 
 Base.iterate(la::ALA) where {ALA<:LoopSpec} = iterate(getalgos(la))
 

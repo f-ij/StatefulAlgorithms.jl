@@ -14,20 +14,13 @@ shares(w::Wiring) = getfield(w, :shares)
 """Raw wiring has no owner-runtime return demand attached."""
 @inline return_demand(::Wiring) = ReturnDemand{()}()
 
-"""Return the root plan wiring carried by a plan-wiring view."""
-@inline root_wiring(pwv::PlanWiringView) = getfield(pwv, :wiring)
+"""Return the wiring bucket or nested plan wiring of the view's current node."""
+@inline current_wiring(pwv::PlanWiringView) = getfield(pwv, :wiring)
 
-"""Return a child view one level deeper into the same plan-wiring tree."""
-@inline child_wiring_view(pwv::PlanWiringView{W,Path,DemandAll}, ::Val{idx}) where {W,Path,DemandAll,idx} =
-    PlanWiringView(root_wiring(pwv), Val((Path..., idx)), Val(DemandAll))
-
-"""Return the concrete wiring bucket or nested plan at the current view path."""
-@inline @generated function current_wiring(pwv::PlanWiringView{W,Path,DemandAll}) where {W<:PlanWiring,Path,DemandAll}
-    expr = :(root_wiring(pwv))
-    for idx in Path
-        expr = :(getfield(child_wiring($expr), $idx))
-    end
-    return expr
+"""Return a child view holding the child's wiring subtree (same root type)."""
+@inline function child_wiring_view(pwv::PlanWiringView{Root,W,DemandAll}, ::Val{idx}) where {Root,W,DemandAll,idx}
+    child = getfield(child_wiring(current_wiring(pwv)), idx)
+    return PlanWiringView{Root,typeof(child),DemandAll}(child)
 end
 
 """Forward route access through the current plan-wiring view path."""
@@ -103,9 +96,9 @@ function _return_demand_names(::Type{W}, owner::Symbol) where {W<:PlanWiring}
 end
 
 """Compute demanded owner-runtime return names from the full plan-wiring view."""
-@inline @generated function return_demand(::PlanWiringView{W,Path,DemandAll}, ::Namespace{Name}) where {W<:PlanWiring,Path,DemandAll,Name}
+@inline @generated function return_demand(::PlanWiringView{Root,W,DemandAll}, ::Namespace{Name}) where {Root<:PlanWiring,W,DemandAll,Name}
     DemandAll === true && return :(ReturnDemand{:all}())
-    names = _return_demand_names(W, Name)
+    names = _return_demand_names(Root, Name)
     return :(ReturnDemand{$names}())
 end
 
