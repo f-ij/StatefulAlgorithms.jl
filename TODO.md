@@ -4,9 +4,42 @@ Parked on 2026-09-25 while work focuses on core stability and speed. These issue
 the core (entities/identity, registry/routing/context, loop algorithms, loop kernel, Process/InlineProcess).
 Each was reproduced in the September 2026 code review unless marked *(unverified)*.
 
+## HIGH PRIORITY: performance
+- [ ] **Every `Process` built from a DSL block whose `@state` expression captures an outer value gets a brand-new algorithm type, so its loop is recompiled on every construction** (~55 ms and ~19 MiB for a trivial one-step process, ~0.5 s for the Gray-Scott one). Found while benchmarking `Demos/gray_scott` (2026-10-01, single thread). This is a *fixed cost per new Process*, not per iteration: 5 and 30000 iterations both took ~55 ms. Without a capture the type is stable and the second construction costs ~0.02 ms; the loop itself then costs ~7 ns per iteration, i.e. the framework is at ~zero overhead once compiled. Where the new type is minted is **not identified** (no `eval` in `src/CompositeDSL`), and it is not checked whether `main` behaves the same. A profile (`Profile.Allocs`) attributes the allocations to the compiler, running inside `makeloop!` (`src/Process.jl:336`) and `Locations.jl:324`. Verified repro:
+
+  ```julia
+  using StatefulAlgorithms
+  @StepAlgorithm function Touch(U, steps); steps[] += 1; return (;); end
+  function algo_of(captured, n)
+      U0 = ones(Float32, n, n)
+      return captured ?
+          resolve(@CompositeAlgorithm begin
+              @state sim begin; U = copy(U0); steps = Ref(0); end
+              Touch(U, steps)
+          end) :
+          resolve(@CompositeAlgorithm begin
+              @state sim begin; U = ones(Float32, n, n); steps = Ref(0); end
+              Touch(U, steps)
+          end)
+  end
+  for captured in (true, false)    # same call site, called twice
+      println(captured, ": same type? ", typeof(algo_of(captured, 8)) === typeof(algo_of(captured, 8)))
+  end
+  # prints  true: same type? false   /   false: same type? true
+  # then time `run(p); wait(p)` on fresh Process(algo; repeats = k) for captured = true: ~55 ms for any k
+  ```
+  Workaround: build arrays inside the `@state` expression (`U = ones(Float32, n, n)`), as `Demos/gray_scott` does.
+
+## API readability
+- [ ] `Interactive(:sim, :feed, :kill, :pairs, :period)` reads as five equal symbols: nothing shows that the first is the target subcontext and the rest are the fields to wrap. The call works fine; this is only how it looks. Candidates: `Interactive(:sim; fields = (:feed, :kill, :pairs, :period))`, or `Interactive(:sim => (:feed, :kill, :pairs, :period))`. First seen in `Demos/gray_scott/gray_scott_definitions.jl` (`gray_scott_process`).
+- [ ] Step inputs and outputs are not symmetric in the DSL. Inputs are bound positionally, so the composer can use any name (`Relax(s, W, x, free, y)` binds the state field `free` to the step's parameter `beta`). Outputs are bound by name: `renamed = Make(seed); Take(renamed)` fails with `Key renamed not found in SubContext Make_1` when `Make` returns `(; made = ...)`; the left-hand name must equal the step's own return field. So a composition has to know the producer's internal field names. Wanted: let the composer name the connection (positional on the return tuple, or `x = Make(seed).made`), so steps stay reusable. Verified 2026-10-01 with a two-step `@Routine`.
+
 ## Process bookkeeping (touches the `Process` constructor)
 - [ ] `src/ProcessList.jl:6`: the global `processlist` Dict is mutated without a lock, so concurrent `Process` construction (e.g. OnDemandWorkers under threaded execution) corrupts it.
 - [ ] `src/ProcessList.jl:6`: bookkeeping never works: wrong key, `quit` and the finalizer never remove entries, `quitall` throws, and the Dict grows without bound.
+
+## Process lifecycle
+- [ ] `src/ProcessInteraction.jl:122`: `pause(p)` only raises flags and returns before the loop task has stopped, so callers that edit the context right after it race the last in-flight step. There is no synchronous pause (the Gray-Scott demo does `pause(p); wait(p)`).
 
 ## Process managers
 - [ ] `src/Manager/Threaded.jl:239`: `SyncEvery(n)` is silently ignored by ThreadedWorkers and ChannelWorkers.
@@ -33,6 +66,7 @@ Each was reproduced in the September 2026 code review unless marked *(unverified
 - [ ] `src/Threaded/Step.jl:101`: `ThreadedCompositeAlgorithm` runs sequentially; the threaded path is unreachable from `run`/`Process` and broken.
 
 ## DSL front-end
+- [ ] **HIGH (silent wrong results): using the same step type twice in one DSL block with different arguments makes every call use the LAST call's wiring, with no error or warning.** Verified (2026-10-01): `Probe(a)` then `Probe(b)` in one `@Routine` (state `a = 1.0`, `b = 2.0`): the first call received `2.0`. Cause: two `Probe()` values are equal, so they are one identity (documented in `docs/src/user/referencing_algorithms.md`, "reference by the same variable / `Unique`"), but nothing warns when the second use overwrites the first's routes. Workaround that works: `@alias a_use = Unique(Probe())` per use, with *keyword* routing (`a_use(v = a)`); positional routing through a `Unique` alias fails with "Too many positional DSL inputs ... Expected at most 0". Wanted: an error or warning at DSL expansion when one identity gets two different wirings, and positional names kept through `Unique`. Found while writing a free/nudged-phase learning routine (one `Relax` step used for both phases ran the free phase nudged).
 - [ ] `src/CompositeDSL/Statements.jl:545`: `Algo()`-form ProcessState entries are registered as stepped children.
 - [ ] `src/CompositeDSL/Statements.jl:480`: aliased ProcessState entries lose their alias key, so `alias.field` routes point at a missing key.
 - [ ] `src/CompositeDSL/Statements.jl:391`: `@input` inside `@include_if` is ignored, but its name stays routable.
