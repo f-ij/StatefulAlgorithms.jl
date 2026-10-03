@@ -172,3 +172,34 @@ end
     stepped = StatefulAlgorithms.step!(algo, (; target = 2, buffer = prepared.buffer, gain = 3))
     @test stepped == direct
 end
+
+@testset "StepAlgorithm macro @inline opt-in" begin
+    inline_name = Expr(:., :Base, QuoteNode(Symbol("@inline")))
+    function has_inline(ex)
+        ex isa Expr || return false
+        ex.head == :macrocall && ex.args[1] == inline_name && return true
+        return any(has_inline, ex.args)
+    end
+    expand(ex) = macroexpand(@__MODULE__, ex; recursive = false)   # keep the generated @inline unexpanded
+
+    # not forced by default
+    @test !has_inline(expand(:(@StepAlgorithm function PlainForInlineTest(x) return (; x) end)))
+    # forced in every accepted position
+    @test has_inline(expand(:(@StepAlgorithm @inline function InlineDirectForTest(x) return (; x) end)))
+    @test has_inline(expand(:(@StepAlgorithm @config k = 1 @inline function InlineConfigForTest(x) return (; x = x + k) end)))
+    @test has_inline(expand(:(@StepAlgorithm begin
+        @config k = 1
+        @inline function InlineBlockForTest(x)
+            return (; x = x + k)
+        end
+    end)))
+
+    # the algorithm behaves the same
+    @StepAlgorithm @inline function InlinedAccumulatorForTest(x, @managed(total = 0.0))
+        total += x
+        return (; total)
+    end
+    algo = InlinedAccumulatorForTest()
+    @test StatefulAlgorithms.init(algo, (;)).total == 0.0
+    @test StatefulAlgorithms.step!(algo, (; x = 2.0, total = 1.0)).total == 3.0
+end

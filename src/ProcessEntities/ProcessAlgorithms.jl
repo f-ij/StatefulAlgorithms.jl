@@ -36,6 +36,8 @@ _pa_is_macrocall(ex, names::Symbol...) =
 
 _pa_is_inputs_macro(ex) = _pa_is_macrocall(ex, Symbol("@init"), Symbol("@input"), Symbol("@inputs"))
 _pa_is_config_macro(ex) = _pa_is_macrocall(ex, Symbol("@config"))
+_pa_is_inline_macro(ex) = ex isa Expr && ex.head == :macrocall &&
+    (ex.args[1] == Symbol("@inline") || ex.args[1] == Expr(:., :Base, QuoteNode(Symbol("@inline"))))
 _pa_macro_args(ex) = [arg for arg in ex.args[2:end] if !(arg isa LineNumberNode)]
 
 function _pa_unwrap_where(ex)
@@ -93,22 +95,32 @@ function _pa_parse_config_macro(ex)
     return map(_pa_parse_config_decl, entries)
 end
 
+"""
+Split the `@StepAlgorithm` input into `(function_ex, config_fields, force_inline)`.
+`force_inline` is true when the user wrote `@inline` on the function definition.
+"""
 function _pa_extract_processalgorithm_parts(ex)
     if ex isa Expr && ex.head == :function
-        return ex, NamedTuple[]
+        return ex, NamedTuple[], false
+    elseif _pa_is_inline_macro(ex)
+        args = _pa_macro_args(ex)
+        length(args) == 1 || error("@inline used with @StepAlgorithm must wrap exactly one function definition.")
+        function_ex, config_fields, _ = _pa_extract_processalgorithm_parts(args[1])
+        return function_ex, config_fields, true
     elseif _pa_is_config_macro(ex)
         args = _pa_macro_args(ex)
         isempty(args) && error("@config requires at least one field and a function definition when used with @StepAlgorithm.")
         length(args) >= 2 || error("@config used with @StepAlgorithm must wrap a function definition.")
 
-        function_ex, nested_config_fields = _pa_extract_processalgorithm_parts(args[end])
+        function_ex, nested_config_fields, force_inline = _pa_extract_processalgorithm_parts(args[end])
         config_macro = Expr(:macrocall, Symbol("@config"), LineNumberNode(0, Symbol("none")), args[1:end-1]...)
         config_fields = _pa_parse_config_macro(config_macro)
         append!(config_fields, nested_config_fields)
-        return function_ex, config_fields
+        return function_ex, config_fields, force_inline
     elseif ex isa Expr && ex.head == :block
         statements = [stmt for stmt in ex.args if !(stmt isa LineNumberNode)]
-        function_defs = [stmt for stmt in statements if stmt isa Expr && stmt.head == :function]
+        is_definition(stmt) = stmt isa Expr && (stmt.head == :function || _pa_is_inline_macro(stmt))
+        function_defs = [stmt for stmt in statements if is_definition(stmt)]
         length(function_defs) == 1 || error("@StepAlgorithm block form requires exactly one function definition.")
 
         config_fields = NamedTuple[]
@@ -122,7 +134,8 @@ function _pa_extract_processalgorithm_parts(ex)
             end
         end
 
-        return only(function_defs), config_fields
+        function_ex, _, force_inline = _pa_extract_processalgorithm_parts(only(function_defs))
+        return function_ex, config_fields, force_inline
     end
     error("@StepAlgorithm expects a function definition or a block containing `@config` declarations and one function definition.")
 end
@@ -451,6 +464,24 @@ StatefulAlgorithms.step!(MyAlgo(), context)
 This reads plain positional and runtime keyword arguments from `context`, reads managed values
 from the algorithm subcontext, and forwards everything to the generated implementation.
 
+# Inlining the body
+
+The plan always inlines the small generated `step!` that reads the declared values. The user's
+body is a separate function, so Julia decides whether to inline it. That is the right default:
+small bodies are inlined anyway, and a large body that is not inlined is compiled once and reused
+by every plan that contains it. A medium-sized hot kernel (a few nanoseconds per step, e.g. a
+single-spin Metropolis update) can be too big for Julia's size-based heuristic, and then the call
+itself costs about 1 ns per step. Put `@inline` on the function to force the body into the plan:
+
+```julia
+@StepAlgorithm @inline function Metropolis(spins, T, @managed(rng = Xoshiro(1)))
+    # ...
+end
+```
+
+`@inline` also works after `@config` and inside the block form. The trade-off is compile time:
+a forced body is compiled again inside every plan that uses it.
+
 # Type annotations and `where`
 
 Argument type annotations are preserved on the generated public `step!` signatures and on the
@@ -462,7 +493,7 @@ argument annotations still constrain the implementation entrypoint, but the cont
 bindings themselves are intentionally kept simple and untyped.
 """
 function _step_algorithm_macro(ex)
-    function_ex, outer_config_fields = _pa_extract_processalgorithm_parts(ex)
+    function_ex, outer_config_fields, force_inline = _pa_extract_processalgorithm_parts(ex)
     signature = _pa_parse_signature(function_ex.args[1])
     body = function_ex.args[2]
     config_fields = vcat(outer_config_fields, signature.config_fields)
@@ -491,6 +522,9 @@ function _step_algorithm_macro(ex)
 
     config_assignments = _pa_bind_config_fields(config_fields, :_algo)
     impl_def = Expr(:function, impl_signature, Expr(:block, config_assignments..., body))
+    # By default Julia decides whether to inline the body. `@inline` on the definition forces it
+    # into the plan's step, which pays off for medium-sized hot kernels (see the docstring).
+    force_inline && (impl_def = Expr(:macrocall, Expr(:., :Base, QuoteNode(Symbol("@inline"))), nothing, impl_def))
 
     public_defs = Any[]
     kw_forward = [Expr(:kw, kw.name, kw.name) for kw in signature.normal_kwargs]

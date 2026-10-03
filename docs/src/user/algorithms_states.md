@@ -132,6 +132,24 @@ Rules worth knowing:
 - plain positional arguments are runtime-only and are not available while constructing managed state.
 - Julia `where` signatures are supported.
 
+#### Inlining the body
+
+By default Julia decides whether the algorithm body is inlined into the plan's step. That is
+the right choice for small bodies (always inlined) and large ones (compiled once and reused by every
+plan). A medium-sized kernel that runs for only a few nanoseconds per step, such as a single-spin
+Metropolis update, can fall in between: the compiler's size-based heuristic does not know the call
+sits in a hot loop, and the call then costs about 1 ns per step. Write `@inline` on the function to
+force the body into the plan:
+
+```julia
+@StepAlgorithm @inline function Metropolis(spins, T, @managed(rng = Xoshiro(1)))
+    # ...
+end
+```
+
+This also works after `@config` and in the block form. The cost is compile time: a forced body is
+compiled again inside every plan that contains the algorithm.
+
 For a macro-generated algorithm `MyAlgo`, the main entrypoints are:
 
 - direct/bootstrap call: `step!(MyAlgo(), args...; @inputs((; ...)))`
