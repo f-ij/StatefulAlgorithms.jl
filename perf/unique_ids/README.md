@@ -65,3 +65,41 @@ On a concrete normalized plan: `LoopAlgorithm(plan)`, `attach_registry_to_tree` 
 `setup_registry_and_keyed_algos` returns `Tuple{NameSpaceRegistry, Any}` (the keyed plan type is lost in `add_algos_to_registry`) and
 `resolve_plan_wiring` returns `Any`, so `resolve` is `Any` independent of the ids. The erased entry also returns `Any`; the generated (type-stable) entry
 infers it at 4.9 to 8.1 ms per fresh-uuid call.
+
+## In microseconds, and what the `@nospecialize` marker is worth (measure_us.jl, count_specs.jl)
+
+What the "entry" is: a small function in front of `CompositeAlgorithm` that receives the handles as untyped values, renames the random ids to
+1, 2, ... in order of appearance, and calls the normal constructor with the renamed handles (which Julia has already compiled). `@nospecialize`
+tells Julia not to compile a separate version of that function for every argument type; the random-id types are different every call, so without
+the marker the entry itself is recompiled every call.
+
+Cost of one call after the first one, building fresh `Unique`s in the same positions, microseconds (median; min to max in brackets). "compile"
+is Julia's compile-time counter, "wall" is the whole call: construct the plan, resolve, init, run 1000 iterations.
+
+| version | layout | compile, microseconds | wall, microseconds |
+|---|---|---|---|
+| today (random ids, no entry) | plain / route | 436 000 to 535 000 / 534 000 to 624 000 | same |
+| entry with no marker | plain | 10 437 | 10 554 (10 282 to 11 271) |
+| entry with no marker | route | 13 275 | 13 464 (12 393 to 38 980) |
+| entry with `@nospecialize` | plain | 0 | 13.9 (13.3 to 136) |
+| entry with `@nospecialize` | route | 0 | 19.5 (17.4 to 136) |
+| entry with `@nospecialize` + `@nospecializeinfer` | plain | 0 | 15.0 (14.0 to 115) |
+| entry with `@nospecialize` + `@nospecializeinfer` | route | 0 | 19.0 (18.0 to 137) |
+| type-stable generated entry | plain | 3 442 | 3 525 (3 200 to 4 061) |
+| fixed ids by hand (lower bound) | plain / route | 0 / 0 | 17.4 (12.4 to 107) / 15.9 (15.1 to 120) |
+
+Reusing the same handles again costs the same in every version: 14 to 20 microseconds wall, 0 compile.
+
+Compiled variants of the entry functions left behind after N fresh-uuid calls (route layout):
+
+| entry version | N = 1 | N = 5 | N = 20 | N = 50 |
+|---|---|---|---|---|
+| no marker | 8 | 24 | 84 | 204 |
+| `@nospecialize` | 3 | 3 | 3 | 3 |
+| `@nospecialize` + `@nospecializeinfer` | 3 | 3 | 3 | 3 |
+
+`@nospecializeinfer` made no difference here, because the callers hold the handles as untyped values. It matters only when a caller sees the
+concrete types (then plain `@nospecialize` still leaves an inferred-only variant per type); with a 30-type test it was 31 variants against 1.
+
+Phases of one call after compilation (route layout, median of 30), microseconds: create 2 `Unique` handles 4.5; entry, renaming the ids and constructing
+the plan 15.0; resolve 2.5; init below the timer's resolution; run, 1000 iterations 0.5.

@@ -1,0 +1,27 @@
+none plain FIRST 749299 750513
+none plain SAME 0.0 17.1 13.3 209.3
+none plain NEW 10437.4 10554.0 10282.2 11270.9
+none route FIRST 915979 917584
+none route SAME 0.0 19.2 17.0 317.1
+none route NEW 13275.0 13464.1 12392.8 38979.6
+nospec plain FIRST 868301 869720
+nospec plain SAME 0.0 16.7 14.2 251.1
+nospec plain NEW 0.0 13.9 13.3 136.4
+nospec route FIRST 1000546 1002441
+nospec route SAME 0.0 19.1 16.7 246.3
+nospec route NEW 0.0 19.5 17.4 136.4
+both plain FIRST 919725 921358
+both plain SAME 0.0 17.9 15.2 238.3
+both plain NEW 0.0 15.0 14.0 115.2
+both route FIRST 977980 979953
+both route SAME 0.0 20.0 18.8 293.1
+both route NEW 0.0 19.0 18.0 136.6
+typed plain FIRST 739690 740738
+typed plain SAME 0.0 13.6 12.0 238.6
+typed plain NEW 3441.9 3525.2 3199.5 4061.4
+fixed plain FIRST 744730 746103
+fixed plain SAME 0.0 15.9 12.5 473.4
+fixed plain NEW 0.0 17.4 12.4 106.6
+fixed route FIRST 852761 854184
+fixed route SAME 0.0 17.1 15.7 152.4
+fixed route NEW 0.0 15.9 15.1 119.8
