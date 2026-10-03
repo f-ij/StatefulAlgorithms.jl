@@ -1,0 +1,72 @@
+today plain first run (cold)           compile     836.7 ms   wall     838.5 ms
+today plain same handles again #1      compile       0.0 ms   wall       0.2 ms
+today plain same handles again #2      compile       0.0 ms   wall       0.0 ms
+today plain same handles again #3      compile       0.0 ms   wall       0.0 ms
+today plain new uuids, same layout #1  compile     535.3 ms   wall     536.5 ms
+today plain new uuids, same layout #2  compile     460.7 ms   wall     461.6 ms
+today plain new uuids, same layout #3  compile     436.4 ms   wall     437.2 ms
+today plain new uuids, same layout #4  compile     480.6 ms   wall     481.5 ms
+today route first run (cold)           compile    1049.1 ms   wall    1050.9 ms
+today route same handles again #1      compile       0.0 ms   wall       0.2 ms
+today route same handles again #2      compile       0.0 ms   wall       0.0 ms
+today route same handles again #3      compile       0.0 ms   wall       0.1 ms
+today route new uuids, same layout #1  compile     623.8 ms   wall     625.2 ms
+today route new uuids, same layout #2  compile     605.3 ms   wall     606.9 ms
+today route new uuids, same layout #3  compile     565.1 ms   wall     566.4 ms
+today route new uuids, same layout #4  compile     533.6 ms   wall     534.9 ms
+erased plain first run (cold)           compile     772.3 ms   wall     773.5 ms
+erased plain same handles again #1      compile       0.0 ms   wall       0.2 ms
+erased plain same handles again #2      compile       0.0 ms   wall       0.0 ms
+erased plain same handles again #3      compile       0.0 ms   wall       0.0 ms
+erased plain new uuids, same layout #1  compile       0.0 ms   wall       0.1 ms
+erased plain new uuids, same layout #2  compile       0.0 ms   wall       0.0 ms
+erased plain new uuids, same layout #3  compile       0.0 ms   wall       0.0 ms
+erased plain new uuids, same layout #4  compile       0.0 ms   wall       0.0 ms
+erased route first run (cold)           compile    1045.6 ms   wall    1047.4 ms
+erased route same handles again #1      compile       0.0 ms   wall       0.3 ms
+erased route same handles again #2      compile       0.0 ms   wall       0.0 ms
+erased route same handles again #3      compile       0.0 ms   wall       0.1 ms
+erased route new uuids, same layout #1  compile       9.8 ms   wall      10.0 ms
+erased route new uuids, same layout #2  compile      11.0 ms   wall      11.4 ms
+erased route new uuids, same layout #3  compile      11.6 ms   wall      12.0 ms
+erased route new uuids, same layout #4  compile       7.9 ms   wall       8.1 ms
+erased_route plain first run (cold)           compile     771.6 ms   wall     772.8 ms
+erased_route plain same handles again #1      compile       0.0 ms   wall       0.2 ms
+erased_route plain same handles again #2      compile       0.0 ms   wall       0.0 ms
+erased_route plain same handles again #3      compile       0.0 ms   wall       0.0 ms
+erased_route plain new uuids, same layout #1  compile       0.0 ms   wall       0.1 ms
+erased_route plain new uuids, same layout #2  compile       0.0 ms   wall       0.0 ms
+erased_route plain new uuids, same layout #3  compile       0.0 ms   wall       0.0 ms
+erased_route plain new uuids, same layout #4  compile       0.0 ms   wall       0.0 ms
+erased_route route first run (cold)           compile    1055.4 ms   wall    1057.1 ms
+erased_route route same handles again #1      compile       0.0 ms   wall       0.2 ms
+erased_route route same handles again #2      compile       0.0 ms   wall       0.1 ms
+erased_route route same handles again #3      compile       0.0 ms   wall       0.1 ms
+erased_route route new uuids, same layout #1  compile       0.0 ms   wall       0.1 ms
+erased_route route new uuids, same layout #2  compile       0.0 ms   wall       0.0 ms
+erased_route route new uuids, same layout #3  compile       0.0 ms   wall       0.0 ms
+erased_route route new uuids, same layout #4  compile       0.0 ms   wall       0.0 ms
+typed plain first run (cold)           compile     819.6 ms   wall     820.8 ms
+typed plain same handles again #1      compile       0.0 ms   wall       0.2 ms
+typed plain same handles again #2      compile       0.0 ms   wall       0.1 ms
+typed plain same handles again #3      compile       0.0 ms   wall       0.0 ms
+typed plain new uuids, same layout #1  compile       8.1 ms   wall       8.3 ms
+typed plain new uuids, same layout #2  compile       7.0 ms   wall       7.2 ms
+typed plain new uuids, same layout #3  compile       6.8 ms   wall       6.9 ms
+typed plain new uuids, same layout #4  compile       4.9 ms   wall       5.0 ms
+fixed plain first run (cold)           compile     829.1 ms   wall     830.6 ms
+fixed plain same handles again #1      compile       0.0 ms   wall       0.1 ms
+fixed plain same handles again #2      compile       0.0 ms   wall       0.0 ms
+fixed plain same handles again #3      compile       0.0 ms   wall       0.0 ms
+fixed plain new uuids, same layout #1  compile       0.0 ms   wall       0.1 ms
+fixed plain new uuids, same layout #2  compile       0.0 ms   wall       0.0 ms
+fixed plain new uuids, same layout #3  compile       0.0 ms   wall       0.0 ms
+fixed plain new uuids, same layout #4  compile       0.0 ms   wall       0.0 ms
+fixed route first run (cold)           compile     963.4 ms   wall     965.0 ms
+fixed route same handles again #1      compile       0.0 ms   wall       0.2 ms
+fixed route same handles again #2      compile       0.0 ms   wall       0.0 ms
+fixed route same handles again #3      compile       0.0 ms   wall       0.1 ms
+fixed route new uuids, same layout #1  compile       0.0 ms   wall       0.1 ms
+fixed route new uuids, same layout #2  compile       0.0 ms   wall       0.0 ms
+fixed route new uuids, same layout #3  compile       0.0 ms   wall       0.0 ms
+fixed route new uuids, same layout #4  compile       0.0 ms   wall       0.0 ms

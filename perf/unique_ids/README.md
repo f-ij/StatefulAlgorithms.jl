@@ -36,3 +36,32 @@ re-executed. "compile" is Julia's cumulative compile-time counter for the whole 
   that builds an untyped description which the entry turns into the typed object after renaming).
 * Not prototyped: looking up a held handle after construction (`la[b]`, `Init(b)` in `partialinit`). The plan would keep a plain table from
   uuid to ordinal (data, not type) so a held handle is renamed at that entry too; the core keeps matching statically on `SimpleId(n)`.
+
+## Full measurement (measure_ids.jl, one fresh Julia process per approach and layout)
+
+`julia --project=perf/unique_ids perf/unique_ids/measure_ids.jl <today|erased|erased_route|typed|fixed> <plain|route>`.
+Compile milliseconds (Julia's compile-time counter; wall time is within 0.2 ms of it). "first run" is a cold compile; "same handles again"
+reuses the handles three times; "new uuids" builds fresh `Unique`s in the same positions four times (min to max over the four). Raw lines
+are in `results_compile_ms.txt`.
+
+| approach | layout | first run | same handles again, max of 3 | new uuids, same layout |
+|---|---|---|---|---|
+| today (random ids) | plain duplicates | 837 | 0.0 | 436 to 535 |
+| today | held handle in a `Route` | 1049 | 0.0 | 534 to 624 |
+| erased entry | plain | 772 | 0.0 | 0.0 |
+| erased entry, normal `Route` | route | 1046 | 0.0 | 7.9 to 11.6 |
+| erased entry + erased `Route` front end | plain | 772 | 0.0 | 0.0 |
+| erased entry + erased `Route` front end | route | 1055 | 0.0 | 0.0 |
+| type-stable (generated) entry | plain | 820 | 0.0 | 4.9 to 8.1 |
+| fixed ids by hand (lower bound) | plain / route | 829 / 963 | 0.0 | 0.0 |
+
+The harness stores the handles in a `Vector{Any}` and marks `build` as non-specializing: passing fresh-typed handles through specialized functions
+(or a `Tuple` of them) makes those functions compile per call (about 32 ms, then 3.7 ms, in two earlier versions). User code that passes handles to
+helper functions specializes the same way, whatever the entry does; only handles of a fixed type avoid that.
+
+## Type stability today (resolve_infer.jl, infer_check.jl)
+
+On a concrete normalized plan: `LoopAlgorithm(plan)`, `attach_registry_to_tree` and `init` infer to concrete types;
+`setup_registry_and_keyed_algos` returns `Tuple{NameSpaceRegistry, Any}` (the keyed plan type is lost in `add_algos_to_registry`) and
+`resolve_plan_wiring` returns `Any`, so `resolve` is `Any` independent of the ids. The erased entry also returns `Any`; the generated (type-stable) entry
+infers it at 4.9 to 8.1 ms per fresh-uuid call.
