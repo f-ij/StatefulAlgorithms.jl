@@ -19,11 +19,11 @@ function compare(variants, N; rounds = 9, only = nothing)
     end
     best = minimum(wall[1])
     println(ok ? "results identical across variants" : "RESULTS DIFFER")
+    @printf("%-42s %12s %20s %10s %14s\n", "variant", "ns per step", "time / A's time", "CPU s", "alloc B/step")
     for (k, (name, f)) in enumerate(variants)
         w = minimum(wall[k])
         slope = max(0.0, ((@allocated f(N)) - (@allocated f(N ÷ 2))) / (N - N ÷ 2))
-        @printf("%-42s %8.2f ns/step  x%.2f  (cpu %.3f s, range %.3f-%.3f s, %.1f B/step)\n",
-                name, w / N * 1e9, w / best, minimum(cpu[k]), w, maximum(wall[k]), slope)
+        @printf("%-42s %12.2f %20.2f %10.3f %14.1f\n", name, w / N * 1e9, w / best, minimum(cpu[k]), slope)
     end
 end
 

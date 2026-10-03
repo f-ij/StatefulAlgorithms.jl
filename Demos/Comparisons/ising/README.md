@@ -26,15 +26,30 @@ bytes allocated per step. Run it on a quiet machine; the numbers below were take
    A hand-written, B structs, C a `CompositeAlgorithm` of five pieces wired with `Route`, D SciML with three
    callbacks (SciML skips callbacks at the end of `tspan`; the last step's logging is applied by hand).
 
-## Results (ns per step, ratio to A; Julia 1.13.1, load average 3-6, min of 7 interleaved rounds)
+## Head-to-head: StatefulAlgorithms vs SciML
 
-| | hand-written A | structs B | StatefulAlgorithms C (default) | C2 (`@inline` opt-in) | SciML D |
-|---|---|---|---|---|---|
-| Workload 1 | 8.4 | 8.4 (1.00) | 9.4 (1.12) | 8.4 (1.00) | 62-93 (D1 / D1b / D2: 8-11x) |
-| Workload 2 | 12.8 | 13.1 (1.03) | 13.7 (1.07) | 12.9 (1.01) | 167 (13x) |
+"SciML time / ours" is SciML's time per step divided by the time per step of StatefulAlgorithms with the
+`@inline` opt-in (C2), so 7.4 means SciML takes 7.4 times as long as StatefulAlgorithms. SciML is the best
+form of the three tried (`FunctionMap`, no saving, the protocol computed inside the right-hand side for
+workload 1, three callbacks for workload 2).
 
-The SciML single-flip variants vary by run and process (D1 measured 36-67 ns); the order of
-magnitude, 4-13x, is stable.
+| workload | StatefulAlgorithms C2, ns per step | SciML FunctionMap, ns per step | SciML time / ours |
+|---|---|---|---|
+| 1: annealed T, one flip per step | 8.4 | 62 to 67 (36 and 49 in two other runs) | 4.3 to 8.0 (typically 7.4) |
+| 2: protocol + loggers (manuscript style) | 12.9 | 156 to 167 | 12 to 13 |
+
+## All variants, ns per step
+
+"time / A" is the variant's time divided by A's time (A = hand-written loop; below 1.00 is faster than A).
+Julia 1.13.1, load average 3-6, minimum over 7 interleaved rounds.
+
+| variant | workload 1: ns per step | workload 1: time / A | workload 2: ns per step | workload 2: time / A |
+|---|---|---|---|---|
+| A hand-written loop | 8.4 | 1.00 | 12.8 | 1.00 |
+| B structs (all `@inline`) | 8.4 | 1.00 | 13.1 | 1.03 |
+| C StatefulAlgorithms, default | 9.4 | 1.12 | 13.7 | 1.07 |
+| C2 StatefulAlgorithms, `@inline` opt-in | 8.4 | 1.00 | 12.9 | 1.01 |
+| D SciML FunctionMap, best of 3 forms | 62 | 7.4 | 167 | 13.1 |
 
 ## The ~1 ns gap in C, and the opt-in
 

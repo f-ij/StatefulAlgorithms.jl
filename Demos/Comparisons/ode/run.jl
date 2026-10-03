@@ -6,7 +6,7 @@ include(joinpath(@__DIR__, "variants.jl"))
 
 relerr(u, ref) = norm(u .- ref) / norm(ref)
 
-"""Time one variant: minimum over `rounds` of the mean of `reps` solves (variants interleaved by the caller)."""
+"""Time one variant (H = the hand-written loop is the baseline of the "time / H's time" column): minimum over `rounds` of the mean of `reps` solves (variants interleaved by the caller)."""
 function time_solves(f, reps)
     t0 = time_ns()
     for _ in 1:reps; f(); end
@@ -24,11 +24,12 @@ function compare(prob, variants, tols; reps, rounds = 7)
         for _ in 1:rounds, (k, (_, f)) in enumerate(fs)
             GC.gc(false); best[k] = min(best[k], time_solves(f, reps))
         end
-        @printf("  tol %.0e\n", tol)
+        @printf("  tolerance %.0e\n", tol)
+        @printf("    %-44s %13s %20s %22s %10s\n", "variant", "ms per solve", "time / H's time", "attempts (acc + rej)", "rel. error")
         base = best[findfirst(v -> startswith(first(v), "H"), variants)]
         for (k, (name, _)) in enumerate(variants)
             u, na, nr = results[k]
-            @printf("    %-44s %10.3f ms  x%-5.2f  steps %6d (+%d rejected)  rel.err %.1e\n",
+            @printf("    %-44s %13.3f %20.2f %14d + %-6d %10.1e\n",
                     name, best[k] * 1e3, best[k] / base, na, nr, relerr(u, ref))
         end
     end
