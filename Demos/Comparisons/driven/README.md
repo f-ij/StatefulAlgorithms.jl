@@ -149,10 +149,12 @@ not lines, because lines depend on how much is packed onto one line. The integra
 solver, so counting `ChainDP5M` would not be like for like. The checkpointer is counted on both sides: SciML has no stock equivalent
 (its checkpoint callback is inside the 432 tokens below), so the package's `Checkpointer` is user-written too.
 
-| what the user writes | StatefulAlgorithms, tokens | SciML, tokens | SciML / package |
+Ratio = SciML tokens / package tokens (the package is 1.00, so above 1 means SciML is longer).
+
+| what the user writes | package, tokens | SciML, tokens | SciML / package |
 |---|---|---|---|
-| the experiment: composition, setup and run (the drive, checkpointer and modifiers as ready-made components) | 171 | 432 (callbacks, setup, solve) | 2.5 |
-| plus the five components: `SineDrive` 31, `DampingRamp` 57, `ToleranceSchedule` 21, `StateKick` 55, `Checkpointer` 67 | 171 + 231 = 402 | 432 (unchanged: the logic is in the callbacks) | 1.07 |
+| the experiment alone: composition, setup and run (drive, checkpointer and modifiers given) | 171 | 432 | 2.53 |
+| the experiment plus the five components (`SineDrive` 31, `DampingRamp` 57, `ToleranceSchedule` 21, `StateKick` 55, `Checkpointer` 67) | 402 | 432 | 1.07 |
 
 In lines the same code is 14, and 45 with the components, against 30 for SciML, which suggested the package is longer; in tokens it is
 shorter or equal. The package is much shorter when the components exist and about equal when the user writes them all; the difference is
@@ -234,15 +236,17 @@ and that also writes the integrator's state (`u` and `stale`). It was added last
 was written. Edits are counted from a diff of `modifiers.jl` before and after (the shared constant and `using Random` are not
 counted).
 
-| implementation | existing code edited | new code added, in tokens | where |
+Ratio = tokens added / the package's tokens added (package = 1.00; above 1 means longer than the package, below 1 shorter).
+
+| implementation | tokens added | tokens added / package's | existing lines edited |
 |---|---|---|---|
-| hand-written monolith | 2 lines (the function signature, and the line that declares the locals) | net growth of the loop by 61 tokens (4 lines added inside the loop body) | the loop that every composition shares |
-| StatefulAlgorithms | none | 108: the component 88, plus the line in the composition block 20 | a new algorithm and a name in the block |
-| SciML callbacks | none in the builder that selects subsets (a `push!`); 1 line in a fixed experiment (the `CallbackSet(...)` argument list, 2 tokens) | 87: the callback 85 (its own RNG is a closure variable), plus 2 | a new callback in the callback list |
+| hand-written monolith | 61 (net growth of the loop) | 0.56 | 2 |
+| package | 108 (the component 88, the line in the block 20) | 1.00 | 0 |
+| SciML | 87 (the callback 85, 2 in the callback list) | 0.81 | 0 in the builder that selects subsets (a `push!`), 1 in a fixed experiment (the `CallbackSet(...)` list) |
 
 Both SciML and the package define the new component (the callback is SciML's component). In tokens the callback (85) is about the size of
 the package's algorithm (88), which spells out its managed state and its return value, and the package adds 20 more to place it in the
-block, so for this modifier SciML is a little shorter (87 against 108); the monolith is shortest at 61, and the only one that edits the
+block, so for this modifier SciML is shorter than the package (0.81) and the monolith shortest (0.56), and the monolith is the only one that edits the
 existing loop. The package version is bit-identical to the hand-written loop (final state difference 0) and runs at 0.98 times its loop time;
 SciML at 1.31 times (last row of the modifiers table). Both composition styles are additive: existing components are not touched. What
 differs between the package and SciML is the run-time cost of each added callback (0.016 to 0.042 microseconds per attempt) and how a

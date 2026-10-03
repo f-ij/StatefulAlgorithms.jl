@@ -62,11 +62,13 @@ The change made after everything above was written: **in stage 2 only, the dampi
 protocol writing the parameters). The package's integrator already exposed its parameters (`par`) and a `stale` flag from the
 start, so it needed no change. Edits counted from a diff of each file before and after (raw diff lines):
 
-| implementation | existing code changed | new code added, in tokens | where |
+Ratio = tokens added / the package's tokens added (package = 1.00; above 1 means longer than the package, below 1 shorter).
+
+| implementation | tokens added | tokens added / package's | existing lines changed |
 |---|---|---|---|
-| hand-written monolith | 5 lines (the loop header, the parameter used by the step, the recompute condition, and a stage-2 branch) | net growth of `hand_go!` by 68 tokens | inside the loop |
-| StatefulAlgorithms | none | 125: a new `GammaRamp` component 84, and 41 tokens in the experiment (an instance, an alias and a call in stage 2) | a new component, and a line in the stage 2 composite |
-| SciML | 1 line (the `CallbackSet(...)` list) | 149: a new callback 103 (growth of `sciml_setup`), and the shared helper `gamma_after` 46 | a new callback |
+| hand-written monolith | 68 (net growth of `hand_go!`) | 0.54 | 5 (the loop header, the parameter used by the step, the recompute condition, and a stage-2 branch) |
+| package | 125 (a new `GammaRamp` component 84, plus an instance, an alias and a call in stage 2, 41) | 1.00 | 0 |
+| SciML | 149 (a new callback 103, plus the shared helper `gamma_after` 46) | 1.19 | 1 (the `CallbackSet(...)` list) |
 
 The damping ramp changes the dynamics (the trace sum goes from 3430.4 to 3447.6 and the final polarization differs).
 
@@ -80,11 +82,14 @@ these demos because the package has no stock integrator) would not be like for l
 `../ode` does, is the alternative. The loggers and the protocols are user-written in both versions: in the package as reusable algorithms, in
 SciML as callbacks inside `sciml_setup` (and `sciml_go!`, which also holds a one-call fix for the last step).
 
-| what the user writes, in tokens | StatefulAlgorithms | SciML | SciML / package |
+Ratio = SciML tokens / package tokens (the package is 1.00, so above 1 means SciML is longer, below 1 means SciML is shorter).
+
+| what the user writes | package, tokens | SciML, tokens | SciML / package |
 |---|---|---|---|
-| the experiment: stages, core, routine, wiring (package) / solve, callbacks and the closing fix (SciML) | 296 before the damping change, 337 after | 362 before, 465 after (loggers and protocols are inside) | 1.22 before, 1.38 after |
-| loggers and protocols as separate components | 155 before (`Polarization` 38, `FieldLoop` 52, `FieldRamp` 65), 239 after (`GammaRamp` 84) | none: they are the callbacks counted above | |
-| **total user-written, without the integrator** | **451 before, 576 after** | **362 before, 465 after** | **0.80 before, 0.81 after** |
+| the experiment alone, before the damping change (package: stages, core, routine, wiring; SciML: solve, callbacks, closing fix, loggers and protocols included) | 296 | 362 | 1.22 |
+| the experiment alone, after the damping change | 337 | 465 | 1.38 |
+| everything the user writes, before the change (package: the experiment plus `Polarization` 38, `FieldLoop` 52, `FieldRamp` 65 = 155) | 451 | 362 | 0.80 |
+| everything the user writes, after the change (the components add `GammaRamp` 84, 239 in all) | 576 | 465 | 0.81 |
 
 So the package version has to write more for this experiment, about 25% more tokens in total (576 against 465), while the experiment
 description alone (337) is smaller than SciML's (465) because the loggers and protocols are separate, reusable components there. The
