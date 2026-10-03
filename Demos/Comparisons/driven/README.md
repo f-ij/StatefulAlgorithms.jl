@@ -16,10 +16,12 @@ as the reference for correctness and cost.
    (components that read and write the integrator's internals by name) leaves the package at 0.65 microseconds per attempt
    in every combination; SciML's per attempt grows from 0.78 to 0.87 microseconds as callbacks are added (1.20 to 1.34 times
    the package's loop time).
-3. **Front-end code.** The experiment is a 9-line DSL block (14 lines with setup and run) when the components exist,
-   against 30 lines of callbacks and setup in SciML; when the user also writes the four components it is 38 lines against
-   30. The package's components are reusable because they refer to variables by name; a SciML callback is written
-   against the problem's structure (`i.p.par`, `i.opts.reltol`, `u_modified!`).
+3. **Front-end code, counted in tokens.** (Line counts are misleading: the SciML callbacks are written with `->` and `;`, one
+   statement-rich line each; tokens ignore layout.) The experiment is a 9-line DSL block, 171 tokens with setup and run, when the
+   components exist, against 432 tokens of callbacks and setup in SciML (2.5 times). Counting every component the package version
+   needs (the drive, three modifiers and the checkpointer, 231 tokens) it is 402 tokens against 432. The package's components are
+   reusable because they refer to variables by name; a SciML callback is written against the problem's structure (`i.p.par`,
+   `i.opts.reltol`, `u_modified!`).
 4. **Nothing has to be decided in advance in the package, and in SciML the choice does cost something in some loops.** An
    integrator can return all its state and parameters as variables from the start; twelve extra unread variables cost 0.4 to
    1.1% (noise level). SciML needs everything a later experiment may change to be a field of a mutable parameter struct,
@@ -142,29 +144,31 @@ la = init(resolve(experiment), Init(integ; u0 = U0, par = PARAMS, rtol = RTOL))
 run(la; lifetime = Until(t -> t >= TEND, Var(integ, :t)))
 ```
 
-| what the user writes | StatefulAlgorithms, lines | SciML, lines |
-|---|---|---|
-| the experiment: composition, setup and run, with the drive, checkpoints and modifiers taken as ready-made components | 14 (the 9-line block, 3 lines of setup and run, 2 of function wrapper) | 30 (callbacks, setup and solve; there are no ready-made components) |
-| plus defining the four components: `SineDrive` 4, `DampingRamp` 8, `ToleranceSchedule` 4, `StateKick` 8 | 14 + 24 = 38 | 30 (unchanged: the logic is in the callbacks) |
+Size is counted in source tokens (identifiers, literals, operators, keywords, brackets; whitespace and comments ignored; `code_size.jl`),
+not lines, because lines depend on how much is packed onto one line. The integrator is not counted for the package: SciML provides its
+solver, so counting `ChainDP5M` would not be like for like. The checkpointer is counted on both sides: SciML has no stock equivalent
+(its checkpoint callback is inside the 432 tokens below), so the package's `Checkpointer` is user-written too.
 
-A naive count of the whole demo (61 lines of package code against 22 for SciML in the first version) mixes things: the package
-count includes writing the integrator (17 lines, plus an 87-line shared core) that SciML supplies as a library. With the
-integrator hidden and the composition counted as the user writes it, the numbers are the ones above. The package is shorter when
-the components exist and slightly longer when the user writes them all; the difference is reuse. A component reads and writes
-variables by name (`par`, `stale`, `t`), so it works with any integrator that exposes those names; a SciML callback carries the
-structure of the problem with it. SciML callbacks can be packaged as constructor functions, but they keep those field paths.
+| what the user writes | StatefulAlgorithms, tokens | SciML, tokens | SciML / package |
+|---|---|---|---|
+| the experiment: composition, setup and run (the drive, checkpointer and modifiers as ready-made components) | 171 | 432 (callbacks, setup, solve) | 2.5 |
+| plus the five components: `SineDrive` 31, `DampingRamp` 57, `ToleranceSchedule` 21, `StateKick` 55, `Checkpointer` 67 | 171 + 231 = 402 | 432 (unchanged: the logic is in the callbacks) | 1.07 |
+
+In lines the same code is 14, and 45 with the components, against 30 for SciML, which suggested the package is longer; in tokens it is
+shorter or equal. The package is much shorter when the components exist and about equal when the user writes them all; the difference is
+reuse. A component reads and writes variables by name (`par`, `stale`, `t`), so it works with any integrator that exposes those names; a SciML
+callback carries the structure of the problem with it. SciML callbacks can be packaged as constructor functions, but they keep those
+field paths.
 
 ## What has to be decided in advance
 
 **SciML.** Anything a later experiment may change has to live in the parameter struct, which then has to be mutable (or in the
 integrator's options). In this demo the SciML first experiment already had `mutable struct ChainPm; par; F; end` (the
-callback-based force needs `F` writable and `par` sits in the same struct), so the three modifiers needed only 11 more callback
-lines (kick 2, ramp 8, tolerance 1) and no struct change; this flatters SciML. An experiment that kept the sine force inside the
+callback-based force needs `F` writable and `par` sits in the same struct), so the three modifiers needed only 195 more tokens of callbacks (kick 57, ramp 97, tolerance 41) and no struct change; this flatters SciML. An experiment that kept the sine force inside the
 right-hand side with an immutable `p` would have had to turn it into a mutable struct holding every field that might later change.
 
 **StatefulAlgorithms.** The first integrator (`ChainDP5`) happened to have the parameters and the tolerance as constants, so
-adding the modifiers meant rewriting it as `ChainDP5M` with `par`, `rtol` and `stale` as managed variables (about 6 changed
-lines). That was a choice, not a requirement: an integrator can return all its state and parameters as variables from the
+adding the modifiers meant rewriting it as `ChainDP5M` with `par`, `rtol` and `stale` as managed variables (28 more tokens, 207 to 235). That was a choice, not a requirement: an integrator can return all its state and parameters as variables from the
 start, and variables that nothing reads cost nothing at run time. `unread_variables.jl` checks this: the same integrator with
 twelve extra variables of mixed types (scalars, arrays, a NamedTuple) that nothing reads runs at 1.011, 1.004 and 1.006 times
 the loop time of the minimal one (3 to 7 nanoseconds per attempt, the noise level of these runs) with identical results.
@@ -230,24 +234,25 @@ and that also writes the integrator's state (`u` and `stale`). It was added last
 was written. Edits are counted from a diff of `modifiers.jl` before and after (the shared constant and `using Random` are not
 counted).
 
-| implementation | existing lines edited | new lines added | where |
+| implementation | existing code edited | new code added, in tokens | where |
 |---|---|---|---|
-| hand-written monolith | 2 (the function signature, and the line that declares the locals) | 4, inside the loop body | the loop that every composition shares |
-| StatefulAlgorithms | 0 | 9 (the component) + 1 line in the composition block (4 in the builder that selects subsets) | a new algorithm and a name in the block |
-| SciML callbacks | 0 in the builder that selects subsets (a `push!`); 1 in a fixed experiment (the `CallbackSet(...)` argument list) | 5 (the callback; its own RNG is a closure variable) | a new callback in the callback list |
+| hand-written monolith | 2 lines (the function signature, and the line that declares the locals) | net growth of the loop by 61 tokens (4 lines added inside the loop body) | the loop that every composition shares |
+| StatefulAlgorithms | none | 108: the component 88, plus the line in the composition block 20 | a new algorithm and a name in the block |
+| SciML callbacks | none in the builder that selects subsets (a `push!`); 1 line in a fixed experiment (the `CallbackSet(...)` argument list, 2 tokens) | 87: the callback 85 (its own RNG is a closure variable), plus 2 | a new callback in the callback list |
 
-Both SciML and the package define the new component (the callback is SciML's component: 5 lines, against 9 for the package's
-algorithm, which spells out its managed state and its return value). The package version is bit-identical to the hand-written loop
-(final state difference 0) and runs at 0.98 times its loop time; SciML at 1.31 times (last row of the modifiers table). Both
-composition styles are additive: existing components are not touched. The hand-written loop is the one that has to be edited. What differs
-between the package and SciML is the run-time cost of each added callback (0.016 to 0.042 microseconds per attempt) and how a
+Both SciML and the package define the new component (the callback is SciML's component). In tokens the callback (85) is about the size of
+the package's algorithm (88), which spells out its managed state and its return value, and the package adds 20 more to place it in the
+block, so for this modifier SciML is a little shorter (87 against 108); the monolith is shortest at 61, and the only one that edits the
+existing loop. The package version is bit-identical to the hand-written loop (final state difference 0) and runs at 0.98 times its loop time;
+SciML at 1.31 times (last row of the modifiers table). Both composition styles are additive: existing components are not touched. What
+differs between the package and SciML is the run-time cost of each added callback (0.016 to 0.042 microseconds per attempt) and how a
 modifier refers to the integrator (`integ.u`, `integ.stale` by name, against `i.u`, `i.p`, `u_modified!`).
 
 **A new component that reads another component's state** (`shared_state_example.jl`, runs all three variants). `GrowingKick` kicks with
 a size that grows with the number of checkpoints taken so far, which is the checkpointer's own state (its list `snaps`).
-In the package it is one new algorithm and one new line in the block, `GrowingKick(..., snaps = ckpt.snaps)`; the checkpointer is
+In the package it is one new algorithm (68 tokens) and one new line in the block (26 tokens), `GrowingKick(..., snaps = ckpt.snaps)`; the checkpointer is
 not touched. In SciML the checkpoint callback keeps `snaps` as a local variable; a new callback can read it in two ways. Written in one
-function (version A), both callbacks capture the same local, which needs no edit of the checkpoint callback but ties the two together
+function (version A, a 68-token callback), both callbacks capture the same local, which needs no edit of the checkpoint callback but ties the two together
 in that scope. Written as reusable functions that each return a callback (version B), the checkpoint constructor has to be changed to
 hand its list out (`return cb, snaps`) and its call site to receive it. Both give the same result (15318 accepted steps, 765
 checkpoints; SciML within 3.6e-4 of the package). A quantity that must enter the right-hand side is different: it needs the

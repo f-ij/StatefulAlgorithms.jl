@@ -31,8 +31,8 @@ Implementations are interleaved; each value is the minimum over 7 rounds. Julia 
 - **StatefulAlgorithms (`framework.jl`):** the core is one composite, `integ` (the integrator, which owns the field `E`, the
   parameters `par` and a `stale` flag), the polarization logger every step, and the `(E, P)` logger `@every 50`. Each stage is a
   composite that includes the core with `@context c = core()` and adds its own protocol, a `FieldRamp` that writes `c.integ.E`. The
-  experiment is `@Routine begin @repeat n1 stage1(); @repeat n2 stage2(); ... end`. Components: `ChainFixed` (11 lines), `Polarization`
-  (4), `FieldLoop` (4), `FieldRamp` (10).
+  experiment is `@Routine begin @repeat n1 stage1(); @repeat n2 stage2(); ... end`. Components: `ChainFixed` (the integrator), `Polarization`,
+  `FieldLoop`, `FieldRamp`.
 - **SciML (`sciml.jl`):** one fixed-step solve (`adaptive = false`), the field in a mutable parameter that a callback writes after each
   step from a stage table, and two callbacks for the loggers.
 - **Hand-written (`hand.jl`):** one loop over the stage table, everything a local.
@@ -62,38 +62,38 @@ The change made after everything above was written: **in stage 2 only, the dampi
 protocol writing the parameters). The package's integrator already exposed its parameters (`par`) and a `stale` flag from the
 start, so it needed no change. Edits counted from a diff of each file before and after (raw diff lines):
 
-| implementation | existing lines changed or removed | lines added | where |
+| implementation | existing code changed | new code added, in tokens | where |
 |---|---|---|---|
-| hand-written monolith | 5 | 8 | inside the loop: the loop header, the parameter used by the step, the recompute condition, and a stage-2 branch |
-| StatefulAlgorithms | 0 | 15 (13 of them code: the component 10, an instance 1, an alias 1, a call 1) | a new `GammaRamp` component, and two lines in the stage 2 composite |
-| SciML | 1 (the `CallbackSet(...)` list) | 10 | a new callback |
-| shared helper (`gamma_after`, used by the monolith's check and SciML) | 0 | 4 | `scenario.jl` |
+| hand-written monolith | 5 lines (the loop header, the parameter used by the step, the recompute condition, and a stage-2 branch) | net growth of `hand_go!` by 68 tokens | inside the loop |
+| StatefulAlgorithms | none | 125: a new `GammaRamp` component 84, and 41 tokens in the experiment (an instance, an alias and a call in stage 2) | a new component, and a line in the stage 2 composite |
+| SciML | 1 line (the `CallbackSet(...)` list) | 149: a new callback 103 (growth of `sciml_setup`), and the shared helper `gamma_after` 46 | a new callback |
 
 The damping ramp changes the dynamics (the trace sum goes from 3430.4 to 3447.6 and the final polarization differs).
 
 ## Code size, honestly
 
-Non-comment, non-blank lines, counted for what has to be written by the user in each version. The integrator is listed apart because
-SciML provides it and the package does not (yet): `ChainFixed` is 11 lines here, plus the 87-line Dormand-Prince core in
-`../ode/dp5.jl`, both written for these demos; SciML's `DP5()`, `init` and `solve!` cost the user nothing. (Hosting SciML's integrator inside a
-step of the package, as `../ode` does, is the alternative.) The loggers and the protocols are user-written in both versions: in the package
-as reusable algorithms, in SciML as callbacks inside `sciml_setup`.
+Counted in source tokens (identifiers, literals, operators, keywords, brackets; whitespace and comments ignored; `../code_size.jl`), not lines:
+lines depend on how much is packed onto one line (the SciML callbacks are written with `->` and `;`), so a line count made SciML look
+three to four times shorter than it is. The integrator is **not counted** for the package: SciML provides its solver (`DP5()`,
+`init`, `solve!`), so counting `ChainFixed` (151 tokens, plus the 87-line Dormand-Prince core in `../ode/dp5.jl`, both written for
+these demos because the package has no stock integrator) would not be like for like; hosting SciML's integrator inside a step, as
+`../ode` does, is the alternative. The loggers and the protocols are user-written in both versions: in the package as reusable algorithms, in
+SciML as callbacks inside `sciml_setup` (and `sciml_go!`, which also holds a one-call fix for the last step).
 
-| what the user writes | StatefulAlgorithms | SciML |
-|---|---|---|
-| the experiment: stages, core, routine, wiring (package) / solve, callbacks (SciML) | 41 before the damping change, 44 after | 26 after; 16 before, loggers and protocols included |
-| loggers and protocols as separate components | 18 before (`Polarization` 4, `FieldLoop` 4, `FieldRamp` 10), 28 after (`GammaRamp` 10) | none: they are the callbacks counted above |
-| the integrator | 11 + the 87-line core (SciML provides this) | none: provided |
-| **total user-written, without the integrator** | **59 before, 72 after** | **16 before, 26 after** |
+| what the user writes, in tokens | StatefulAlgorithms | SciML | SciML / package |
+|---|---|---|---|
+| the experiment: stages, core, routine, wiring (package) / solve, callbacks and the closing fix (SciML) | 296 before the damping change, 337 after | 362 before, 465 after (loggers and protocols are inside) | 1.22 before, 1.38 after |
+| loggers and protocols as separate components | 155 before (`Polarization` 38, `FieldLoop` 52, `FieldRamp` 65), 239 after (`GammaRamp` 84) | none: they are the callbacks counted above | |
+| **total user-written, without the integrator** | **451 before, 576 after** | **362 before, 465 after** | **0.80 before, 0.81 after** |
 
-So for this experiment, with uniform stages, the package version is about three to four times longer than the SciML one. Two things bear on that.
-The components are reusable (the manuscript reuses its loggers and protocols across all of its experiments), so counting them per
-experiment overstates the package: with them given, it is 41 against 16 before and 44 against 26 after. And for a sweep whose stages all have
-the same shape (a ramp between two values over n steps), a stage table is more compact than four stage composites: the SciML and
-hand-written versions are driven by `stages(Emax)` and a one-line change adds a stage, whereas the package version spells each stage out (about six
-lines per stage). The package's explicit structure pays when the stages differ: a stage with another protocol, its own logger or an extra
-component is a composite with one more line, as the damping ramp was, without a common schema to extend. The table-driven versions would
-need a new column or a branch.
+So the package version has to write more for this experiment, about 25% more tokens in total (576 against 465), while the experiment
+description alone (337) is smaller than SciML's (465) because the loggers and protocols are separate, reusable components there. The
+components are reusable (the manuscript reuses its loggers and protocols across all of its experiments), so counting them per experiment
+overstates the package: with them taken as given the package is 337 against 465 tokens. For a sweep whose stages all have the same shape (a ramp
+between two values over n steps), a stage table is more compact than four stage composites: the SciML and hand-written versions are
+driven by `stages(Emax)` and a small change adds a stage. The package's explicit structure pays when the stages differ: a stage with another
+protocol, its own logger or an extra component is one more call in its composite, as the damping ramp was, without a common schema
+to extend. The table-driven versions need a new column or a branch.
 
 ## Not tested
 
