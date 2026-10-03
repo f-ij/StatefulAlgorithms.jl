@@ -38,6 +38,8 @@ julia --project=Demos/Comparisons/driven Demos/Comparisons/driven/run.jl        
 julia --project=Demos/Comparisons/driven Demos/Comparisons/driven/run_modifiers.jl      # modifiers on internals
 julia --project=Demos/Comparisons/driven Demos/Comparisons/driven/check_frontend.jl     # runs the counted front-end code
 julia --project=Demos/Comparisons/driven Demos/Comparisons/driven/shared_state_example.jl  # a component that reads another's state
+julia --project=Demos/Comparisons/driven Demos/Comparisons/driven/never_fires.jl         # cost of items that never fire
+julia --project=Demos/Comparisons/driven Demos/Comparisons/driven/unique_overhead.jl    # the Unique() cost
 julia --project=Demos/Comparisons/driven Demos/Comparisons/driven/unread_variables.jl   # cost of exposing everything
 julia --project=Demos/Comparisons/driven Demos/Comparisons/driven/mutable_cost.jl       # cost of a mutable parameter struct
 julia --project=Demos/Comparisons/driven Demos/Comparisons/driven/mutable_cost_coupled.jl  # ... with several coupled systems
@@ -252,6 +254,32 @@ checkpoints; SciML within 3.6e-4 of the package). A quantity that must enter the
 right-hand side and the parameter struct changed in the package and in SciML alike (`par` for the package, `p` for SciML); an
 earlier version of this section said SciML would need a field added to `p` where the package would not, which was not supported
 and is withdrawn.
+
+## Items that run every time versus items that are scheduled
+
+SciML evaluates the condition of every `DiscreteCallback` after every accepted step, whether or not the callback fires; only
+the affect is conditional. `never_fires.jl` adds K items that never do anything to the base experiment (sine drive and checkpoints):
+K callbacks whose condition is false in SciML, K components of distinct types scheduled at an interval of one million iterations
+in the package. Loop time only; "extra, microseconds per attempt" is the difference to the same implementation with K = 0.
+
+| extra items that never fire | ours, microseconds per attempt | ours, extra | SciML, microseconds per attempt | SciML, extra |
+|---|---|---|---|---|
+| 0 | 0.662 | 0.000 | 0.794 | 0.000 |
+| 2 | 0.664 | 0.002 | 0.834 | 0.040 |
+| 4 | 0.656 | -0.006 | 0.839 | 0.045 |
+| 8 | 0.657 | -0.005 | 0.894 | 0.100 |
+
+A never-firing callback costs SciML about 0.012 microseconds per attempt (its condition, once per step); a scheduled component that does
+not run costs the package nothing measurable. Two caveats. A package schedule counts loop iterations (attempts, accepted or
+rejected), so a cadence in accepted steps (a checkpoint every 20 accepted steps) is written as a component that runs every
+iteration and checks inside (`nacc != last && nacc % 20 == 0`), which is the same per-step test as a callback condition and is
+what the checkpointer and the kick modifiers here do. And a SciML condition can be any predicate on the state, which the interval
+schedule cannot; the package would use a component that checks the predicate itself.
+
+A construction detail found while measuring this: wrapping a component in `Unique(...)` adds about 3.6 to 4.4 microseconds per
+iteration (`unique_overhead.jl`), even when that component never runs; plain components, including two instances of one type, do not.
+This is a cost in the package, not in the comparison, and is being investigated separately; the experiments in this folder do
+not use `Unique`.
 
 ## State in a mutable container: when it costs something
 
