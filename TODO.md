@@ -96,3 +96,4 @@ Each was reproduced in the September 2026 code review unless marked *(unverified
 - [ ] No CI, so `docs/make.jl` deployment can never run.
 - [ ] `LICENSE:8`: the text was corrupted by a global `sub`→`func` rename.
 - [ ] About 17.5k lines of snapshots/, diagnostics/ and Profiling/ are tracked, plus `.DS_Store` and `LocalPreferences.toml`, with no `.gitignore`.
+- [ ] `src/LoopAlgorithms/Showing.jl:210`: `Base.show(io, ::Type{LA}) where {Plan, LA<:LoopAlgorithm{Plan}}` throws `UndefVarError: Plan` ("not defined in static parameter matching") when printing a `LoopAlgorithm` type whose `Plan` parameter is not bound, e.g. a `UnionAll` inferred type; found when JET printed a report.
