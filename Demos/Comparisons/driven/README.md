@@ -37,13 +37,14 @@ julia --project=Demos/Comparisons/driven -e 'using Pkg; Pkg.instantiate()'     #
 julia --project=Demos/Comparisons/driven Demos/Comparisons/driven/run.jl                # one force at a time
 julia --project=Demos/Comparisons/driven Demos/Comparisons/driven/run_modifiers.jl      # modifiers on internals
 julia --project=Demos/Comparisons/driven Demos/Comparisons/driven/check_frontend.jl     # runs the counted front-end code
+julia --project=Demos/Comparisons/driven Demos/Comparisons/driven/shared_state_example.jl  # a component that reads another's state
 julia --project=Demos/Comparisons/driven Demos/Comparisons/driven/unread_variables.jl   # cost of exposing everything
 julia --project=Demos/Comparisons/driven Demos/Comparisons/driven/mutable_cost.jl       # cost of a mutable parameter struct
 julia --project=Demos/Comparisons/driven Demos/Comparisons/driven/mutable_cost_coupled.jl  # ... with several coupled systems
 julia --project=Demos/Comparisons/driven Demos/Comparisons/driven/escaping_state.jl     # mutable state that escapes, written every iteration
 ```
 
-Files: `scenario.jl` (system, force shapes, constants), `hand.jl` (hand-written reference), `framework.jl` (the package:
+Files (the extra scripts are listed above): `scenario.jl` (system, force shapes, constants), `hand.jl` (hand-written reference), `framework.jl` (the package:
 drives, integrator, checkpointer), `sciml.jl` (SciML with callbacks), `modifiers.jl` (modifiers for all three),
 `frontend.jl` (the user-facing code that is counted).
 
@@ -231,14 +232,26 @@ counted).
 |---|---|---|---|
 | hand-written monolith | 2 (the function signature, and the line that declares the locals) | 4, inside the loop body | the loop that every composition shares |
 | StatefulAlgorithms | 0 | 9 (the component) + 1 line in the composition block (4 in the builder that selects subsets) | a new algorithm and a name in the block |
-| SciML callbacks | 0 | 5 (the callback; its own RNG is a closure variable) | a new callback in the callback list |
+| SciML callbacks | 0 in the builder that selects subsets (a `push!`); 1 in a fixed experiment (the `CallbackSet(...)` argument list) | 5 (the callback; its own RNG is a closure variable) | a new callback in the callback list |
 
-The package version is bit-identical to the hand-written loop (final state difference 0) and runs at 0.98 times its loop time; SciML
-at 1.31 times (last row of the modifiers table). Both composition styles are additive: the hand-written loop is the one that has to be
-edited. What differs between the package and SciML is the run-time cost of each added callback (0.016 to 0.042 microseconds per
-attempt) and how a modifier refers to the integrator (`integ.u`, `integ.stale` by name, against `i.u`, `i.p`, `u_modified!`). This
-test did not require the new modifier to read a new variable that the existing parameter struct lacks; had it, SciML would have needed
-that field added to `p`, which the package does not need because the integrator already exposes everything.
+Both SciML and the package define the new component (the callback is SciML's component: 5 lines, against 9 for the package's
+algorithm, which spells out its managed state and its return value). The package version is bit-identical to the hand-written loop
+(final state difference 0) and runs at 0.98 times its loop time; SciML at 1.31 times (last row of the modifiers table). Both
+composition styles are additive: existing components are not touched. The hand-written loop is the one that has to be edited. What differs
+between the package and SciML is the run-time cost of each added callback (0.016 to 0.042 microseconds per attempt) and how a
+modifier refers to the integrator (`integ.u`, `integ.stale` by name, against `i.u`, `i.p`, `u_modified!`).
+
+**A new component that reads another component's state** (`shared_state_example.jl`, runs all three variants). `GrowingKick` kicks with
+a size that grows with the number of checkpoints taken so far, which is the checkpointer's own state (its list `snaps`).
+In the package it is one new algorithm and one new line in the block, `GrowingKick(..., snaps = ckpt.snaps)`; the checkpointer is
+not touched. In SciML the checkpoint callback keeps `snaps` as a local variable; a new callback can read it in two ways. Written in one
+function (version A), both callbacks capture the same local, which needs no edit of the checkpoint callback but ties the two together
+in that scope. Written as reusable functions that each return a callback (version B), the checkpoint constructor has to be changed to
+hand its list out (`return cb, snaps`) and its call site to receive it. Both give the same result (15318 accepted steps, 765
+checkpoints; SciML within 3.6e-4 of the package). A quantity that must enter the right-hand side is different: it needs the
+right-hand side and the parameter struct changed in the package and in SciML alike (`par` for the package, `p` for SciML); an
+earlier version of this section said SciML would need a field added to `p` where the package would not, which was not supported
+and is withdrawn.
 
 ## State in a mutable container: when it costs something
 
