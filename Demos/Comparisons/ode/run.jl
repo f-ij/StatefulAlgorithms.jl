@@ -36,7 +36,8 @@ function compare(prob, variants, tols; reps, rounds = 7, baseline = "H")
 end
 
 dp5_variants = [
-    "S1 SciML DP5 (same method)"       => (p, r, a) -> sciml_solve(p, DP5(), r, a),
+    "S1 SciML DP5, solve()"            => (p, r, a) -> sciml_solve(p, DP5(), r, a),
+    "S5 SciML DP5, init + step! loop"  => (p, r, a) -> sciml_stepped(p, DP5(), r, a),
     "H  hand-written DP5 loop"         => dp5_hand,
     "H0 hand-written, no function barrier" => dp5_hand_nobarrier,
     "R  DP5 as @StepAlgorithm"         => dp5_framework,
@@ -49,8 +50,9 @@ which in ("brusselator", "all") && compare(brusselator(32), dp5_variants, (1e-6,
 if which in ("robertson", "all")
     # Stiff problem: same solver on both sides (SciML's Rodas5P called directly vs hosted in a step).
     stiff = [
-        "S3 SciML Rodas5P"                        => (p, r, a) -> sciml_solve(p, Rodas5P(), r, a),
+        "S3 SciML Rodas5P, solve()"               => (p, r, a) -> sciml_solve(p, Rodas5P(), r, a),
+        "S6 SciML Rodas5P, init + step! loop"     => (p, r, a) -> sciml_stepped(p, Rodas5P(), r, a),
         "W2 Rodas5P hosted in a step"             => (p, r, a) -> sciml_hosted(p, Rodas5P(), r, a),
     ]
-    compare(robertson(100.0), stiff, (1e-6,); reps = 3, baseline = "S3")
+    compare(robertson(100.0), stiff, (1e-6,); reps = 3, baseline = "S6")
 end

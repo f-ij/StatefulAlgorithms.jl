@@ -11,6 +11,21 @@ function sciml_solve(prob, alg, rtol, atol)
     return (sol.u[end], sol.stats.naccept, sol.stats.nreject)
 end
 
+#### S5. SciML's init + step! loop driven by plain Julia: the baseline for hosting (solve() is a different driver) ####
+# init's return type is not inferable, so the loop runs in a function that receives the integrator.
+@noinline function drive!(integ, tend)
+    while integ.t < tend
+        SciMLBase.step!(integ)
+    end
+    return integ
+end
+function sciml_stepped(prob, alg, rtol, atol)
+    integ = SciMLBase.init(odeprob(prob), alg; reltol = rtol, abstol = atol, dt = prob.dt0, save_everystep = false,
+                           save_start = false, controller = OrdinaryDiffEqCore.IController())
+    drive!(integ, prob.tend)
+    return (copy(integ.u), integ.stats.naccept, integ.stats.nreject)
+end
+
 #### R. the same Dormand-Prince written as a StatefulAlgorithms step: one attempt per call ####
 @StepAlgorithm function DP5Attempt(@managed(prob), @managed(rtol), @managed(atol),
         @managed(u = copy(prob.u0)), @managed(B = dp5_buffers(prob.u0)), @managed(t = 0.0),

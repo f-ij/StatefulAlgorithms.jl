@@ -27,17 +27,34 @@ and a value below 1 means SciML is faster. Ours is the re-implementation as a `@
 | problem | tolerance | StatefulAlgorithms, ms per solve | SciML DP5, ms per solve | SciML time / ours | attempts | relative error |
 |---|---|---|---|---|---|---|
 | Lorenz, 3 variables | 1e-6 | 0.022 | 0.028 | 1.27 | 161 (both) | 9.4e-6 (SciML: 9.3e-6) |
-| Lorenz, 3 variables | 1e-9 | 0.069 | 0.083 | 1.20 | 621 (both) | 9.3e-9 (both) |
-| Brusselator PDE, 2048 variables | 1e-6 | 0.293 | 0.283 | 0.97 | 22 (SciML: 21) | 4.6e-7 (SciML: 4.1e-7) |
+| Lorenz, 3 variables | 1e-9 | 0.068 | 0.081 | 1.19 | 621 (both) | 9.3e-9 (both) |
+| Brusselator PDE, 2048 variables | 1e-6 | 0.284 | 0.269 | 0.95 | 22 (SciML: 21) | 4.6e-7 (SciML: 4.1e-7) |
 
-Hosting SciML inside a StatefulAlgorithms step instead of calling it directly:
+Hosting SciML inside a StatefulAlgorithms step. The baseline is SciML's own `init` + `step!` loop driven
+by plain Julia (inside a function that receives the integrator, so the loop is type-stable). It is not
+`solve()`, which is a different and faster driver in SciML itself (0.028 vs 0.030 ms on Lorenz 1e-6), so
+comparing hosting against `solve()` would charge the framework for SciML's own driver.
 
-| problem | hosted in a step, ms per solve | SciML called directly, ms per solve | hosted time / direct time |
+| problem, solver | hosted in a step, ms per solve | SciML init + step! loop, ms per solve | hosted minus loop, microseconds | hosted time / loop time |
+|---|---|---|---|---|
+| Lorenz 1e-6, DP5 | 0.036 | 0.030 | 6 | 1.20 |
+| Lorenz 1e-9, DP5 | 0.097 | 0.093 | 4 | 1.04 |
+| Brusselator 1e-6, DP5 | 0.290 | 0.278 | 12 | 1.04 |
+| Robertson 1e-6, Rodas5P (stiff) | 0.031 | 0.023 | 8 | 1.35 |
+
+The difference is a fixed cost per run, not a cost per step (`overhead.jl`, `overhead2.jl`, Lorenz,
+hosted minus the plain loop):
+
+| tolerance | attempts | hosted minus SciML loop, microseconds | per attempt, ns |
 |---|---|---|---|
-| Lorenz 1e-6, DP5 | 0.036 | 0.028 | 1.29 |
-| Lorenz 1e-9, DP5 | 0.098 | 0.083 | 1.18 |
-| Brusselator 1e-6, DP5 | 0.299 | 0.283 | 1.06 |
-| Robertson 1e-6, Rodas5P (separate run, two variants only) | 0.033 | 0.025 | 1.32 |
+| 1e-6 | 161 | 5.9 | 36.9 |
+| 1e-9 | 621 | 5.5 | 8.8 |
+| 1e-12 | 2461 | 8.3 | 3.4 |
+
+A linear fit gives about 5.8 microseconds fixed plus 1 ns per attempt (another run gave -4.7 ns per attempt:
+zero within noise). The fixed part is building the process: constructing a trivial `InlineProcess` takes
+3.9 microseconds and running an already built one 0.02 microseconds. A benchmark that builds a new process for every
+30 microsecond solve pays it every time; a process that runs for longer pays it once.
 
 ## All variants
 
@@ -46,11 +63,12 @@ Julia 1.13.1, load average 3-6, minimum over 7 interleaved rounds. The harness p
 
 | variant | Lorenz 1e-6, ms | time / H | Lorenz 1e-9, ms | time / H | Brusselator 1e-6, ms | time / H |
 |---|---|---|---|---|---|---|
-| H hand-written loop | 0.015 | 1.00 | 0.060 | 1.00 | 0.297 | 1.00 |
-| H0 hand-written, no function barrier | 0.036 | 2.32 | 0.133 | 2.24 | 0.291 | 0.98 |
-| R StatefulAlgorithms `@StepAlgorithm` | 0.022 | 1.41 | 0.069 | 1.15 | 0.293 | 0.99 |
-| S1 SciML DP5 | 0.028 | 1.81 | 0.083 | 1.39 | 0.283 | 0.95 |
-| W SciML DP5 hosted in a step | 0.036 | 2.34 | 0.098 | 1.64 | 0.299 | 1.00 |
+| H hand-written loop | 0.015 | 1.00 | 0.059 | 1.00 | 0.286 | 1.00 |
+| H0 hand-written, no function barrier | 0.035 | 2.31 | 0.131 | 2.23 | 0.278 | 0.97 |
+| R StatefulAlgorithms `@StepAlgorithm` | 0.022 | 1.45 | 0.068 | 1.15 | 0.284 | 0.99 |
+| S1 SciML DP5, `solve()` | 0.028 | 1.82 | 0.081 | 1.39 | 0.269 | 0.94 |
+| S5 SciML DP5, `init` + `step!` loop | 0.030 | 2.00 | 0.093 | 1.58 | 0.278 | 0.97 |
+| W SciML DP5 hosted in a step | 0.036 | 2.37 | 0.097 | 1.65 | 0.290 | 1.01 |
 
 ## What the numbers say
 
@@ -58,9 +76,9 @@ Julia 1.13.1, load average 3-6, minimum over 7 interleaved rounds. The harness p
   same steps and reach the same error as SciML's. Against SciML's DP5 the re-implementation is 1.27 and 1.20
   times faster on the 3-variable problem (SciML time / ours) and equal on the 2048-variable PDE (0.97).
   Against the hand-written loop around the same core it costs about 6 µs per run plus a few ns per attempt.
-- **Hosting a solver works too.** SciML's integrator kept in a managed field and stepped from a plan takes
-  1.06 to 1.29 times as long as calling SciML directly (hosted time / direct time), the largest on the
-  smallest problem. That includes the stiff Rodas5P (1.32 in a run with only the two Rodas5P variants; the absolute gap is about 8 µs in every run).
+- **Hosting a solver is a thin wrapper.** SciML's integrator kept in a managed field and stepped from a plan
+  costs about 1 ns per step (zero within noise) plus a fixed 4-8 microseconds per run, which is building the
+  process. That includes the stiff Rodas5P (8 microseconds on 23).
 - **The function barrier is visible.** H0 builds its buffers as a NamedTuple whose shape is only known at
   run time and uses them in the same function: 2.2-2.3x slower than H on the small problem. H (and R, whose
   buffers are built in `init`) get the barrier for free. A user can add the barrier by hand (that is what H
