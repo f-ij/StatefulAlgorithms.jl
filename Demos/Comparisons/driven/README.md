@@ -68,4 +68,23 @@ two different step controllers is not comparable (relative difference 1.1); only
   shrinks every ratio towards 1 (see `../ode`).
 - The force is sampled once per step (zero-order hold) in all implementations. In SciML a force that depends only
   on time could instead sit inside the right-hand side, continuous in time; that is a different model and was not compared.
-- Swapping the force shape at run time, and restoring a checkpoint into a changed configuration, were not part of this comparison.
+- Each run uses one fixed composition (a plan with its drives in a nested `Routine` when there are several); changing it
+  means building a different plan, not changing it while it runs. Restoring a checkpoint into a changed setup was not tested.
+
+## Effort
+
+Non-comment, non-blank lines of each implementation (this includes different things: the package version has three
+drive algorithms, the integrator, the checkpointer, a small algorithm that adds forces, and the plan wiring; the SciML
+version has one setup function with two callbacks):
+
+| implementation | lines |
+|---|---|
+| hand-written loop (`hand.jl`) | 30 |
+| StatefulAlgorithms (`framework.jl`) | 61 |
+| SciML (`sciml.jl`) | 22 |
+
+For one force, SciML is the shorter experiment to write. What the package buys here is speed (SciML takes 20-27% longer)
+and that a new component (a drive, a logger, a checkpointer) is added to the plan without touching the integrator or a
+shared parameter type; what it costs is explicit wiring (algorithms, routes). Where adding a second drive is one line in a
+SciML callback (`F = f1 + f2`), it needed a nested `Routine`, an adder algorithm and routes in the package.
+
