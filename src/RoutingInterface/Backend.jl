@@ -184,8 +184,16 @@ function _resolve_matched_endpoint(reg::NameSpaceRegistry, endpoint_match::Type{
 end
 
 """Resolve a raw or symbol endpoint into a context-name symbol."""
-function _resolve_wiring_endpoint(reg::NameSpaceRegistry, endpoint_match, endpoint, role::String)
-    endpoint_match isa Symbol && return endpoint_match
+@inline function _resolve_wiring_endpoint(reg::NameSpaceRegistry, endpoint_match::Symbol, endpoint, role::String)
+    return endpoint_match
+end
+# A type-matched endpoint (`Route(a => SomeAlgoType, ...)`) is stored as a `DataType` value, which
+# hides the algorithm type from inference. The matcher in the route's type parameters still carries it.
+@inline function _resolve_wiring_endpoint(reg::NameSpaceRegistry, ::Type{EM}, endpoint::Type, role::String) where {EM<:TypeMatcher}
+    return _resolve_type_matched_endpoint(reg, EM, role)
+end
+@inline function _resolve_wiring_endpoint(reg::NameSpaceRegistry, ::Type{EM}, endpoint, role::String) where {EM}
+    endpoint_match = EM
 
     # Prefer direct endpoint refs while raw wiring still has them. This keeps
     # object-id matches precise and only falls back to the type-level endpoint
@@ -206,7 +214,7 @@ function _resolve_wiring_endpoint(reg::NameSpaceRegistry, endpoint_match, endpoi
 end
 
 """Update an endpoint reference when resolved child wiring is inherited."""
-function _update_wiring_endpoint(endpoint, endpoint_match, reg::NameSpaceRegistry)
+@inline function _update_wiring_endpoint(endpoint, endpoint_match, reg::NameSpaceRegistry)
     !isnothing(endpoint) && return update_keys(endpoint, reg)
     endpoint_match isa Symbol && return endpoint_match
     return reg[_resolve_wiring_endpoint(reg, endpoint_match, endpoint, "endpoint")]
