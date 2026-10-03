@@ -104,9 +104,14 @@ end
         return _add_funcwrapper_tuple_to_registry(registry, funcs, multipliers)
     end
 
-    registry, raw_head, name_head = add_algo_to_registry(registry, first(funcs), first(multipliers))
-    registry, raw_tail, name_tail = add_algo_tuple_to_registry(registry, Base.tail(funcs), Base.tail(multipliers))
-    return registry, (raw_head, raw_tail...), (name_head, name_tail...)
+    # Thread (registry, raw children, namespaces) through the children. The registry type grows at every step, which a
+    # self-recursive function (or the recursive `unrollreplace`) cannot infer: inference widens the registry to plain
+    # `NameSpaceRegistry`. `Base.afoldl` is written out explicitly for up to 31 elements, so every step keeps its type.
+    return Base.afoldl(((registry, (), ())), (zip(funcs, multipliers)...,)...) do acc, func_multiplier
+        reg, raws, names = acc
+        reg, raw, name = add_algo_to_registry(reg, func_multiplier[1], func_multiplier[2])
+        return (reg, (raws..., raw), (names..., name))
+    end
 end
 
 @inline function add_algo_to_registry(registry::R, algo::LA, multiplier) where {R<:NameSpaceRegistry, LA<:LoopSpec}
@@ -175,21 +180,23 @@ function _resolve_plan_wiring_tree(la::LA, registry::NameSpaceRegistry, inherite
 
     # Resolve nested plans first. Their own `PlanWiring` then becomes the
     # child-indexed value passed to that child during parent stepping.
-    funcs = ntuple(length(getalgos(la))) do i
+    funcs = ntuple(Val(length(getalgos(la)))) do i
         child = getalgo(la, i)
         if child isa LoopSpec
             return _resolve_plan_wiring_tree(child, registry, combined_global)
         end
         return child
     end
-    la = rebuild_loopalgorithm_funcs(la, funcs)
+    # A new name, not `la = ...`: `la` is captured by the closure above, and a captured variable that is reassigned
+    # is boxed (`Core.Box`), which makes every use of it uninferable.
+    rebuilt = rebuild_loopalgorithm_funcs(la, funcs)
 
-    resolved_children = ntuple(length(funcs)) do i
+    resolved_children = ntuple(Val(length(funcs))) do i
         child = funcs[i]
         if child isa LoopSpec
             return getwiring(child)
         end
-        target = plan_child_namespace(la, i)
+        target = plan_child_namespace(rebuilt, i)
         bucket = getfield(child_wiring(raw_wiring), i)
 
         # Concrete children receive a single resolved `Wiring`: inherited global
@@ -200,7 +207,7 @@ function _resolve_plan_wiring_tree(la::LA, registry::NameSpaceRegistry, inherite
         return resolved
     end
 
-    return setfield(la, :wiring, PlanWiring(combined_global, resolved_children))
+    return setfield(rebuilt, :wiring, PlanWiring(combined_global, resolved_children))
 end
 
 @inline function resolve_plan_wiring(fa::FA, registry::NameSpaceRegistry) where {FA<:FinalizedAlgorithm}

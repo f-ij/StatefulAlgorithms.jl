@@ -1,5 +1,13 @@
+"""Largest options tuple that is filtered by type (`Base.afoldl` is written out explicitly up to 31 elements)."""
+const _ROOT_OPTIONS_STATIC_LIMIT = 31
+
 """Return non-wiring options that must stay on the `LoopAlgorithm` wrapper."""
 function _root_loop_options(options::Options) where {Options<:Tuple}
+    # Small tuples are filtered by type, so the result type is known to the compiler (the loop below returns
+    # `Tuple(::Vector)`, whose type depends on runtime data and is lost for everything that follows).
+    if length(options) <= _ROOT_OPTIONS_STATIC_LIMIT
+        return filter(option -> !(option isa AbstractWiring), options)
+    end
     root_options = Any[]
 
     # Constructor-only filtering. Keep this as a plain loop so large DSL route
@@ -40,9 +48,18 @@ end
 
 """Return non-wiring options stored anywhere in an unresolved loop tree."""
 function _root_loop_options(la::LA) where {LA<:LoopAlgorithm}
-    root_options = Any[]
-    _append_plan_tree_root_options!(root_options, la)
-    return Tuple(root_options)
+    return _root_loop_options_tree(la)
+end
+
+# The same walk as `_append_plan_tree_root_options!` (a wrapper's own options first, then its children), as tuple
+# recursion with no accumulator, so the type of the result is inferred.
+@inline _root_loop_options_tree(la::LoopAlgorithm) = (_root_loop_options(getoptions(la))..., _root_loop_options_children(getalgos(getplan(la)))...)
+@inline _root_loop_options_tree(la::LA) where {LA<:LoopSpec} = _root_loop_options_children(getalgos(la))
+@inline _root_loop_options_children(::Tuple{}) = ()
+@inline function _root_loop_options_children(children::Children) where {Children<:Tuple}
+    child = first(children)
+    head = child isa LoopSpec ? _root_loop_options_tree(child) : ()
+    return (head..., _root_loop_options_children(Base.tail(children))...)
 end
 
 """Collect plan-wide route/share wiring into a `Wiring` value."""
