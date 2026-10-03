@@ -276,10 +276,14 @@ iteration and checks inside (`nacc != last && nacc % 20 == 0`), which is the sam
 what the checkpointer and the kick modifiers here do. And a SciML condition can be any predicate on the state, which the interval
 schedule cannot; the package would use a component that checks the predicate itself.
 
-A construction detail found while measuring this: wrapping a component in `Unique(...)` adds about 3.6 to 4.4 microseconds per
-iteration (`unique_overhead.jl`), even when that component never runs; plain components, including two instances of one type, do not.
-This is a cost in the package, not in the comparison, and is being investigated separately; the experiments in this folder do
-not use `Unique`.
+A note on `Unique(...)`, which looked like a per-iteration cost in an earlier version of this section and is not (`unique_overhead.jl`). `Unique`
+creates a random id that becomes a type parameter, so each call makes a new type, and a plan built with a fresh `Unique` is compiled the first
+time it runs. A benchmark that builds a fresh `Unique` for every repetition therefore times that compilation: about 110 to 130 milliseconds on this
+plan, which spread over the ~18 000 attempts of a run looks like 4 to 5 extra microseconds per attempt. With one `Unique` instance reused across
+repetitions the loop is unchanged (extra 0.002 to 0.004 microseconds per attempt, noise), and a plan with an already compiled type runs its first
+run in 12 milliseconds. Reusing the instance, or giving the algorithm a fixed id so that its type is the same every time
+(`IdentifiableAlgo(f; id = some_fixed_uuid)`: 12 milliseconds on every construction, against 111 for a fresh `Unique`), avoids the compile. The experiments in
+this folder do not use `Unique`.
 
 ## State in a mutable container: when it costs something
 
