@@ -73,18 +73,27 @@ The damping ramp changes the dynamics (the trace sum goes from 3430.4 to 3447.6 
 
 ## Code size, honestly
 
-Counted as non-comment, non-blank lines of what the user writes:
+Non-comment, non-blank lines, counted for what has to be written by the user in each version. The integrator is listed apart because
+SciML provides it and the package does not (yet): `ChainFixed` is 11 lines here, plus the 87-line Dormand-Prince core in
+`../ode/dp5.jl`, both written for these demos; SciML's `DP5()`, `init` and `solve!` cost the user nothing. (Hosting SciML's integrator inside a
+step of the package, as `../ode` does, is the alternative.) The loggers and the protocols are user-written in both versions: in the package
+as reusable algorithms, in SciML as callbacks inside `sciml_setup`.
 
-| | StatefulAlgorithms | SciML |
+| what the user writes | StatefulAlgorithms | SciML |
 |---|---|---|
-| the experiment: stages, core, routine, loggers and protocols | 44 (`framework_experiment`, after the change) | 26 (`sciml_setup`, after the change; 16 before) |
-| the components it uses (integrator, two loggers, ramp) | 29, plus 10 for the damping ramp | none: logic is in callbacks inside the 26 |
+| the experiment: stages, core, routine, wiring (package) / solve, callbacks (SciML) | 41 before the damping change, 44 after | 26 after; 16 before, loggers and protocols included |
+| loggers and protocols as separate components | 18 before (`Polarization` 4, `FieldLoop` 4, `FieldRamp` 10), 28 after (`GammaRamp` 10) | none: they are the callbacks counted above |
+| the integrator | 11 + the 87-line core (SciML provides this) | none: provided |
+| **total user-written, without the integrator** | **59 before, 72 after** | **16 before, 26 after** |
 
-For a sweep whose stages all have the same shape (a ramp between two values over n steps), a stage table is more compact than four stage
-composites: the SciML and hand-written versions are driven by `stages(Emax)` and a one-line change adds a stage, whereas the
-package version spells each stage out (about six lines per stage). The package's explicit structure pays when the stages differ: a stage
-with another protocol, its own logger or an extra component is a composite with one more line, as the damping ramp was, without a
-common schema to extend. The table-driven versions would need a new column or a branch.
+So for this experiment, with uniform stages, the package version is about three to four times longer than the SciML one. Two things bear on that.
+The components are reusable (the manuscript reuses its loggers and protocols across all of its experiments), so counting them per
+experiment overstates the package: with them given, it is 41 against 16 before and 44 against 26 after. And for a sweep whose stages all have
+the same shape (a ramp between two values over n steps), a stage table is more compact than four stage composites: the SciML and
+hand-written versions are driven by `stages(Emax)` and a one-line change adds a stage, whereas the package version spells each stage out (about six
+lines per stage). The package's explicit structure pays when the stages differ: a stage with another protocol, its own logger or an extra
+component is a composite with one more line, as the damping ramp was, without a common schema to extend. The table-driven versions would
+need a new column or a branch.
 
 ## Not tested
 
