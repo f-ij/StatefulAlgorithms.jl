@@ -52,14 +52,20 @@ end
 end
 
 #### H. hand-written adaptive loop ####
-dp5_hand(prob, rtol, atol) = dp5_hand(prob, rtol, atol, dp5_buffers(prob.u0))
-"""Hand-written loop with buffers built by the caller (the function barrier is the call itself)."""
-function dp5_hand(prob, rtol, atol, B)
-    u = copy(prob.u0); t = 0.0; dt = prob.dt0; nacc = 0; nrej = 0
-    prob.f!(B.k1, u, prob.p, t)
+#### H. hand-written adaptive loop: setup (untimed) and the loop itself ####
+mutable struct DP5State{P,U,Bt}
+    prob::P; u::U; B::Bt; t::Float64; dt::Float64; nacc::Int; nrej::Int; rtol::Float64; atol::Float64
+end
+function dp5_state(prob, rtol, atol, B = dp5_buffers(prob.u0))
+    u = copy(prob.u0)
+    prob.f!(B.k1, u, prob.p, 0.0)
+    return DP5State(prob, u, B, 0.0, prob.dt0, 0, 0, Float64(rtol), Float64(atol))
+end
+function dp5_loop!(s::DP5State)
+    prob = s.prob; u = s.u; B = s.B; t = s.t; dt = s.dt; nacc = s.nacc; nrej = s.nrej
     while t < prob.tend
         dtt = min(dt, prob.tend - t)
-        err = dp5_attempt!(prob, B, u, t, dtt, rtol, atol)
+        err = dp5_attempt!(prob, B, u, t, dtt, s.rtol, s.atol)
         fac = dp5_factor(err)
         if err <= 1
             t += dtt; dp5_accept!(u, B); nacc += 1; dt = dtt * fac
@@ -67,22 +73,30 @@ function dp5_hand(prob, rtol, atol, B)
             nrej += 1; dt = dtt * min(1.0, fac)
         end
     end
-    return (u, nacc, nrej)
+    s.t = t; s.dt = dt; s.nacc = nacc; s.nrej = nrej
+    return s
 end
 
-#### H0. hand-written, buffers of unknown type used in the same function (no barrier) ####
-function dp5_hand_nobarrier(prob, rtol, atol)
-    u = copy(prob.u0); B = dp5_buffers_dynamic(u); t = 0.0; dt = prob.dt0; nacc = 0; nrej = 0
-    prob.f!(B.k1, u, prob.p, t)
-    while t < prob.tend
-        dtt = min(dt, prob.tend - t)
-        err = dp5_attempt!(prob, B, u, t, dtt, rtol, atol)
+#### H0. the same, but the buffers are stored in an untyped field: the compiler cannot infer their type ####
+# (what a loop sees when its state comes from a mutable, abstractly typed struct, like a graph
+# with dynamic fields, and nothing converts it to concrete types before the loop)
+mutable struct DP5StateUntyped
+    prob::Any; u::Any; B::Any; t::Float64; dt::Float64; nacc::Int; nrej::Int; rtol::Float64; atol::Float64
+end
+function dp5_state_untyped(prob, rtol, atol)
+    s = dp5_state(prob, rtol, atol, dp5_buffers_dynamic(prob.u0))
+    return DP5StateUntyped(s.prob, s.u, s.B, s.t, s.dt, s.nacc, s.nrej, s.rtol, s.atol)
+end
+function dp5_loop_untyped!(s::DP5StateUntyped)
+    while s.t < s.prob.tend
+        dtt = min(s.dt, s.prob.tend - s.t)
+        err = dp5_attempt!(s.prob, s.B, s.u, s.t, dtt, s.rtol, s.atol)
         fac = dp5_factor(err)
         if err <= 1
-            t += dtt; dp5_accept!(u, B); nacc += 1; dt = dtt * fac
+            s.t += dtt; dp5_accept!(s.u, s.B); s.nacc += 1; s.dt = dtt * fac
         else
-            nrej += 1; dt = dtt * min(1.0, fac)
+            s.nrej += 1; s.dt = dtt * min(1.0, fac)
         end
     end
-    return (u, nacc, nrej)
+    return s
 end
