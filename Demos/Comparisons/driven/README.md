@@ -22,8 +22,11 @@ as the reference for correctness and cost.
    against the problem's structure (`i.p.par`, `i.opts.reltol`, `u_modified!`).
 4. **Nothing has to be decided in advance in the package.** An integrator can return all its state and parameters as
    variables from the start; twelve extra unread variables cost 0.4 to 1.1% (noise level). SciML needs everything a later
-   experiment may change to be a field of a mutable parameter struct, decided up front. A mutable struct costs nothing
-   when the right-hand side reads it once at the top, and 2 to 6% when it reads it inside the loop.
+   experiment may change to be a field of a mutable parameter struct, decided up front. What that costs at run time depends
+   on the kernel: 1.7 to 5.6% when a single chain reads four parameters inside its loop, and no measurable cost (0.99 to 1.02)
+   for up to eight coupled systems, each with its own struct or with the parameters in one `Vector{Float64}`, with or without
+   hoisting them into locals. What did cost 33% in one test was giving the compiler runtime instead of compile-time structure
+   (see the end of the mutable-cost section).
 5. **Limits are listed at the end**: the integrator and checkpointer counted as library, a small kernel, SciML's slightly
    different step counts, noise of about 2%.
 
@@ -36,6 +39,7 @@ julia --project=Demos/Comparisons/driven Demos/Comparisons/driven/run_modifiers.
 julia --project=Demos/Comparisons/driven Demos/Comparisons/driven/check_frontend.jl     # runs the counted front-end code
 julia --project=Demos/Comparisons/driven Demos/Comparisons/driven/unread_variables.jl   # cost of exposing everything
 julia --project=Demos/Comparisons/driven Demos/Comparisons/driven/mutable_cost.jl       # cost of a mutable parameter struct
+julia --project=Demos/Comparisons/driven Demos/Comparisons/driven/mutable_cost_coupled.jl  # ... with several coupled systems
 ```
 
 Files: `scenario.jl` (system, force shapes, constants), `hand.jl` (hand-written reference), `framework.jl` (the package:
@@ -161,7 +165,7 @@ twelve extra variables of mixed types (scalars, arrays, a NamedTuple) that nothi
 the loop time of the minimal one (3 to 7 nanoseconds per attempt, the noise level of these runs) with identical results.
 Compile time was not measured.
 
-**What a mutable parameter struct costs** (`mutable_cost.jl`). The same chain, the sine force computed from `t` inside the
+**What a mutable parameter struct costs** (`mutable_cost.jl`, `mutable_cost_coupled.jl`). The same chain, the sine force computed from `t` inside the
 right-hand side so nothing writes into `p`, with the parameters in an immutable versus a mutable struct. The only difference
 is what the type lets the compiler do. "mutable / immutable" is the loop time with a mutable `p` divided by the loop time with
 an immutable `p`, same implementation and same right-hand side; the range is over two runs. Immutable p, microseconds per
@@ -172,10 +176,36 @@ attempt: SciML 0.625 to 0.639, hand-written 0.643 to 0.658.
 | once, at the top | 1.000 to 1.004 | 0.999 to 1.024 |
 | inside the loop (`p.par.a * x` and so on) | 1.037 to 1.056 | 1.017 to 1.029 |
 
-A mutable struct is free when its fields are read once before the loop. Read inside the loop, the compiler cannot keep the
-values in registers (a store to `du` may alias a field of `p`) and reloads them every iteration: 2 to 6% on this kernel. Results are
-identical in both cases. For comparison, each further callback in the modifiers table adds 0.02 to 0.04 microseconds per attempt
-(2.5 to 5% of 0.78).
+A mutable struct is free when its fields are read once before the loop. Read inside the loop it cost 2 to 6% on this
+kernel; the cause was not investigated (an explanation in terms of aliasing was a guess and is not supported by the
+coupled-systems results below). Results are identical in both cases. For comparison, each further callback in the modifiers
+table adds 0.02 to 0.04 microseconds per attempt (2.5 to 5% of 0.78).
+
+**Several coupled systems** (`mutable_cost_coupled.jl`). M chains of 64 oscillators coupled in a ring, each chain with its own
+parameter struct (a, b, c, gamma and a coupling kappa to the previous chain), in a tuple; the right-hand side reads the fields
+inside the loop the natural way. Hand-written Dormand-Prince loop, nothing writes into the parameters. Time per attempt is
+microseconds; the ratio is the loop time divided by the loop time of the immutable structs reading inside the loop, same M.
+The coupled-systems version of the right-hand side has an inner loop over sites that reads five parameters and the neighbouring
+chain.
+
+| parameters | M = 1: microseconds per attempt | M = 1: time / immutable | M = 4: microseconds per attempt | M = 4: time / immutable | M = 8: microseconds per attempt | M = 8: time / immutable |
+|---|---|---|---|---|---|---|
+| immutable structs, reads in the loop | 0.529 | 1.000 | 2.084 | 1.000 | 4.138 | 1.000 |
+| mutable structs, reads in the loop | 0.525 | 0.992 | 2.095 | 1.005 | 4.146 | 1.002 |
+| mutable structs, fields copied to locals first | 0.535 | 1.012 | 2.091 | 1.004 | 4.151 | 1.003 |
+| one `Vector{Float64}` of parameters, reads in the loop | 0.531 | 1.003 | 2.100 | 1.008 | 4.155 | 1.004 |
+| one `Vector{Float64}` of parameters, copied to locals | 0.538 | 1.017 | 2.101 | 1.008 | 4.142 | 1.001 |
+
+In these runs a mutable struct or a plain `Vector{Float64}` of parameters costs nothing measurable, and hoisting the fields into
+locals changes nothing, so no function barrier or argument threading was needed to avoid a cost. The single-chain result above
+(2 to 6%) shows the cost is not zero in every kernel; I could not reproduce it with coupled systems, and kernels where the compiler
+cannot hoist or vectorize through the parameters may behave differently.
+
+**Static versus dynamic structure.** My first version of the `Vector{Float64}` case looped over the systems at run time with run-time
+offsets, while the struct versions were unrolled over the systems with compile-time offsets (a recursion over the tuple). That version
+was 1.33 times slower at M = 1, 4 and 8, with or without hoisting the parameters. Giving the `Vector` version the same static unrolling
+(the table above) removed the whole difference, so the gap was the loop structure, not the parameter container. Which part of the structure
+(the constant offsets, the unrolling) matters was not isolated.
 
 ## Limits
 
