@@ -71,20 +71,64 @@ two different step controllers is not comparable (relative difference 1.1); only
 - Each run uses one fixed composition (a plan with its drives in a nested `Routine` when there are several); changing it
   means building a different plan, not changing it while it runs. Restoring a checkpoint into a changed setup was not tested.
 
-## Effort
+## Modifiers: rewiring other internal variables without redefining structs
 
-Non-comment, non-blank lines of each implementation (this includes different things: the package version has three
-drive algorithms, the integrator, the checkpointer, a small algorithm that adds forces, and the plan wiring; the SciML
-version has one setup function with two callbacks):
+`modifiers.jl`, `run_modifiers.jl`. The integrator (`ChainDP5M`) is defined once and only exposes its internals as
+variables (the parameters `par`, the tolerance `rtol`, the state `u`, a `stale` flag that says the first stage must be
+recomputed). Modifiers are small algorithms that read and write those variables by name: `DampingRamp` (damping 1.0 to
+0.8 over the run), `ToleranceSchedule` (rtol rising to 10x), `StateKick` (an impulse to oscillator 1 every 500 accepted
+steps). No new struct is defined for an experiment, and which modifiers a run has is decided when the plan is built.
+SciML does the same with callbacks that write into the mutable parameter (`i.p.par = ...`), the options
+(`i.opts.reltol = ...`) and the state (`i.u`), each followed by `u_modified!`.
 
-| implementation | lines |
-|---|---|
-| hand-written loop (`hand.jl`) | 30 |
-| StatefulAlgorithms (`framework.jl`) | 61 |
-| SciML (`sciml.jl`) | 22 |
+Loop time of the whole run (sine force, checkpoints every 20 accepted steps, t in [0, 4000]). "SciML time / ours" is
+SciML's loop time divided by ours. The per-attempt columns are microseconds per attempt.
 
-For one force, SciML is the shorter experiment to write. What the package buys here is speed (SciML takes 20-27% longer)
-and that a new component (a drive, a logger, a checkpointer) is added to the plan without touching the integrator or a
-shared parameter type; what it costs is explicit wiring (algorithms, routes). Where adding a second drive is one line in a
-SciML callback (`F = f1 + f2`), it needed a nested `Routine`, an adder algorithm and routes in the package.
+| modifiers | ours, loop ms | SciML, loop ms | SciML time / ours | ours, microseconds per attempt | SciML, microseconds per attempt |
+|---|---|---|---|---|---|
+| none | 11.86 | 14.21 | 1.20 | 0.653 | 0.783 |
+| damping ramp | 12.29 | 15.53 | 1.26 | 0.653 | 0.825 |
+| damping ramp + tolerance schedule | 11.10 | 14.56 | 1.31 | 0.654 | 0.858 |
+| kick + damping ramp + tolerance schedule | 11.09 | 14.82 | 1.34 | 0.655 | 0.874 |
 
+The package's cost per attempt does not move as modifiers are added (they are compiled into the loop); SciML's grows
+with each callback it carries. The package's final state is bit-identical to the hand-written loop in every row;
+SciML's differs from it by 5.5e-4, 2.0e-3, 1.5e-3 and 5.9e-3. (An earlier version let the damping fall to 0.5, which is
+chaotic: the final states of different step controllers then differ by order 1, which is trajectory divergence and says
+nothing about correctness, so the ramp now stops at 0.8.)
+
+## Front end: what the user writes
+
+Counted for the full experiment above (sine drive, checkpoints, three modifiers), with the library parts hidden:
+for StatefulAlgorithms the integrator and the checkpointer, for SciML the solver. The right-hand side and the force
+functions are shared on both sides and not counted. `frontend.jl` holds exactly this code and is run and checked
+(`check_frontend.jl`).
+
+The StatefulAlgorithms composition, in the DSL, is a block plus initialisation and the run:
+
+```julia
+integ = ChainDP5M()
+experiment = @CompositeAlgorithm begin
+    @alias integ = integ
+    StateKick(u = integ.u, nacc = integ.nacc, stale = integ.stale)
+    DampingRamp(t = integ.t, par = integ.par, stale = integ.stale)
+    ToleranceSchedule(t = integ.t, rtol = integ.rtol)
+    F = SineDrive(t = integ.t)
+    integ(F = F)
+    Checkpointer(u = integ.u, t = integ.t, dt = integ.dt, nacc = integ.nacc)
+end
+la = init(resolve(experiment), Init(integ; u0 = U0, par = PARAMS, rtol = RTOL))
+run(la; lifetime = Until(t -> t >= TEND, Var(integ, :t)))
+```
+
+| what the user writes | StatefulAlgorithms, lines | SciML, lines |
+|---|---|---|
+| the experiment: composition, setup and run (drive, checkpoints and modifiers taken as ready-made components) | 14 (the 9-line block, 3 lines of setup and run, 2 of function wrapper) | 30 (the callbacks, the setup and the solve; there are no ready-made components) |
+| plus defining the four components: `SineDrive` 4, `DampingRamp` 8, `ToleranceSchedule` 4, `StateKick` 8 | 14 + 24 = 38 | 30 (unchanged: the logic is in the callbacks) |
+
+So the front end is shorter when the components exist and a little longer when the user writes them all. The difference is
+in what is reusable: a component reads and writes variables by name (`par`, `stale`, `t`), so it works with any integrator that
+exposes those names; a SciML callback is written against the structure of the problem (`i.p.par`, `i.opts.reltol`,
+`u_modified!`). SciML callbacks can also be packaged as constructor functions, but they carry those field paths with them.
+Rewiring an experiment in the package means adding or removing a line in the block; in SciML it means editing or adding callbacks
+in the `CallbackSet`.
