@@ -85,11 +85,13 @@ What had to change from the first experiment to this one. SciML: nothing in the 
 `mutable struct ChainPm; par; F; end` from the first experiment (the callback-based force needs `F` writable and `par`
 sits in the same struct), so the 11 callback lines (kick 2, ramp 8, tolerance 1) were all that was added; this flatters SciML. A
 SciML experiment that kept the sine force inside the right-hand side with an immutable `p` would have had to turn `p` into a
-mutable struct holding every field one might later modify. StatefulAlgorithms: the first integrator (`ChainDP5`) had the
-parameters and tolerance as constants, so it was rewritten as `ChainDP5M` with `par`, `rtol` and a `stale` flag as managed
-variables (about 6 changed lines); the three modifiers then cost 20 lines of algorithms and 3 lines in the block. In both cases
-the base has to be written with the later modifications in mind: for SciML as a mutable parameter struct, for the package as an
-integrator that exposes its internals, which costs nothing at run time.
+mutable struct holding every field one might later modify, decided in advance. StatefulAlgorithms: the first integrator
+(`ChainDP5`) happened to have the parameters and tolerance as constants, so it was rewritten as `ChainDP5M` with `par`, `rtol`
+and a `stale` flag as managed variables (about 6 changed lines). That was a choice, not a requirement: an integrator can simply
+return all its state and parameters as variables from the start, and nothing has to be decided in advance, because variables that
+nothing reads cost nothing at run time. `unread_variables.jl` checks this: the same integrator with twelve extra variables of mixed
+types (scalars, arrays, a NamedTuple) that nothing reads runs at 1.011, 1.004 and 1.006 times the loop time of the minimal one
+(3 to 7 nanoseconds per attempt, at the noise floor of these runs) with identical results. Compile time was not measured.
 
 Loop time of the whole run (sine force, checkpoints every 20 accepted steps, t in [0, 4000]). "SciML time / ours" is
 SciML's loop time divided by ours. The per-attempt columns are microseconds per attempt.
