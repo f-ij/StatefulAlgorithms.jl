@@ -1,6 +1,7 @@
 export Local
 
 #=
+AI GENERATED
 Declared locals: variables a plan declares for its children to share, like `local x` before a
 Julia loop. A declaration lives on the plan that makes it (in its `PlanWiring`); the values live
 in the runtime context's `_local` subcontext, one slot per declaration.
