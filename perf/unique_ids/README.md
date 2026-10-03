@@ -103,3 +103,29 @@ concrete types (then plain `@nospecialize` still leaves an inferred-only variant
 
 Phases of one call after compilation (route layout, median of 30), microseconds: create 2 `Unique` handles 4.5; entry, renaming the ids and constructing
 the plan 15.0; resolve 2.5; init below the timer's resolution; run, 1000 iterations 0.5.
+
+## Cold and warm, resolve pipeline only (measure_phases.jl)
+
+The resolve pipeline is: the entry (rename the ids, build the untyped `Route` description), construct the plan (`CompositeAlgorithm`), and `resolve`.
+`init` and `run` are not part of it: after `resolve` the ids are gone and the key names are deterministic, and even with random ids `init` and
+a one-iteration `run` compiled nothing in these runs. "Cold" is the first call in a fresh Julia process (compile counter, microseconds; five
+fresh processes, min / median / max). "Warm" is a later call with new `Unique`s in the same positions (median of 8, microseconds; min to max of the wall time).
+`plain` is two `Unique` counters and a `Tally`, nothing connected; `route` adds a `Reader` that takes its input from the second counter through a `Route`.
+Raw lines: `results_phases_raw.txt` (all phases, cold and warm) and `results_cold_raw.txt` (the five cold samples).
+
+| version | layout | cold, compile µs (min / median / max) | warm, compile µs | warm, wall µs (min to max) |
+|---|---|---|---|---|
+| today (random ids, no entry) | plain | 385 186 / 439 315 / 460 803 | 290 420 | 291 113 (273 496 to 307 419) |
+| today | route | 495 435 / 544 120 / 573 380 | 356 875 | 357 720 (344 552 to 365 002) |
+| entry with `@nospecialize` | plain | 462 126 / 519 930 / 575 379 | 0 | 72 (45 to 84) |
+| entry with `@nospecialize` | route | 554 410 / 645 719 / 650 601 | 0 | 112 (82 to 140) |
+| fixed ids by hand (lower bound) | plain | 384 412 / 401 234 / 445 519 | 0 | 18 (12 to 43) |
+| fixed ids by hand (lower bound) | route | 488 901 / 517 971 / 582 394 | 0 | 23 (16 to 45) |
+
+Phases of the warm call with the entry (median, wall µs): plain: entry 7, construct 54, resolve 8; route: entry 19, construct 69, resolve 20.
+Phases of the cold call with the entry (one process, compile µs): plain: entry 32 912, construct 234 016, resolve 213 620; route: entry 40 228,
+construct 249 646, resolve 289 041. Without the `@nospecialize` annotation the warm entry alone costs 10 079 (plain) and 11 582 (route) µs.
+
+Reading: warm goes from about 290 000 to 357 000 µs down to 72 to 112 µs. Cold gets worse by the entry's own first-time compile, about 33 000 to 40 000 µs
+measured in one process, and 80 000 to 100 000 µs between the medians of five processes, whose spread (about 60 000 µs) is larger than the effect.
+Most of the cold cost, about 450 000 to 540 000 µs, is compiling `construct` and `resolve` themselves, with or without the entry.
