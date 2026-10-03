@@ -20,13 +20,13 @@ as the reference for correctness and cost.
    against 30 lines of callbacks and setup in SciML; when the user also writes the four components it is 38 lines against
    30. The package's components are reusable because they refer to variables by name; a SciML callback is written
    against the problem's structure (`i.p.par`, `i.opts.reltol`, `u_modified!`).
-4. **Nothing has to be decided in advance in the package.** An integrator can return all its state and parameters as
-   variables from the start; twelve extra unread variables cost 0.4 to 1.1% (noise level). SciML needs everything a later
-   experiment may change to be a field of a mutable parameter struct, decided up front. What that costs at run time depends
-   on the kernel: 1.7 to 5.6% when a single chain reads four parameters inside its loop, and no measurable cost (0.99 to 1.02)
-   for up to eight coupled systems, each with its own struct or with the parameters in one `Vector{Float64}`, with or without
-   hoisting them into locals. What did cost 33% in one test was giving the compiler runtime instead of compile-time structure
-   (see the end of the mutable-cost section).
+4. **Nothing has to be decided in advance in the package, and in SciML the choice does cost something in some loops.** An
+   integrator can return all its state and parameters as variables from the start; twelve extra unread variables cost 0.4 to
+   1.1% (noise level). SciML needs everything a later experiment may change to be a field of a mutable parameter struct,
+   decided up front. Parameters that are only read cost little (0 to 9%). State that is written and read on every iteration
+   in a mutable container costs 2.1 to 2.4 nanoseconds per iteration, 1.25 to 2.9 times the loop time, as soon as the loop
+   hands that container to a call (a callback, a logger); the same state held as an immutable value threaded through the loop,
+   which is how the package passes values in the context, costs nothing in every scenario tested.
 5. **Limits are listed at the end**: the integrator and checkpointer counted as library, a small kernel, SciML's slightly
    different step counts, noise of about 2%.
 
@@ -40,6 +40,7 @@ julia --project=Demos/Comparisons/driven Demos/Comparisons/driven/check_frontend
 julia --project=Demos/Comparisons/driven Demos/Comparisons/driven/unread_variables.jl   # cost of exposing everything
 julia --project=Demos/Comparisons/driven Demos/Comparisons/driven/mutable_cost.jl       # cost of a mutable parameter struct
 julia --project=Demos/Comparisons/driven Demos/Comparisons/driven/mutable_cost_coupled.jl  # ... with several coupled systems
+julia --project=Demos/Comparisons/driven Demos/Comparisons/driven/escaping_state.jl     # mutable state that escapes, written every iteration
 ```
 
 Files: `scenario.jl` (system, force shapes, constants), `hand.jl` (hand-written reference), `framework.jl` (the package:
@@ -196,8 +197,9 @@ chain.
 | one `Vector{Float64}` of parameters, reads in the loop | 0.531 | 1.003 | 2.100 | 1.008 | 4.155 | 1.004 |
 | one `Vector{Float64}` of parameters, copied to locals | 0.538 | 1.017 | 2.101 | 1.008 | 4.142 | 1.001 |
 
-In these runs a mutable struct or a plain `Vector{Float64}` of parameters costs nothing measurable, and hoisting the fields into
-locals changes nothing, so no function barrier or argument threading was needed to avoid a cost. The single-chain result above
+In these runs a mutable struct or a plain `Vector{Float64}` of parameters that is only read costs nothing measurable, and hoisting the fields into
+locals changes nothing, so no function barrier or argument threading was needed to avoid a cost for read-only parameters. State that is
+written in the loop behaves differently: see the next section. The single-chain result above
 (2 to 6%) shows the cost is not zero in every kernel; I could not reproduce it with coupled systems, and kernels where the compiler
 cannot hoist or vectorize through the parameters may behave differently.
 
@@ -206,6 +208,61 @@ offsets, while the struct versions were unrolled over the systems with compile-t
 was 1.33 times slower at M = 1, 4 and 8, with or without hoisting the parameters. Giving the `Vector` version the same static unrolling
 (the table above) removed the whole difference, so the gap was the loop structure, not the parameter container. Which part of the structure
 (the constant offsets, the unrolling) matters was not isolated.
+
+## State in a mutable container: when it costs something
+
+`escaping_state.jl`. The experiments above read parameters and never wrote the state they depend on inside the loop, and
+their containers could be optimised away. This one is built to make the container matter. Julia can only replace a mutable
+object by registers when the optimizer sees its whole lifetime, that is when it does not escape
+([Julia escape analysis](https://docs.julialang.org/en/v1/devdocs/EscapeAnalysis),
+[why SVector is faster than MVector](https://discourse.julialang.org/t/why-is-svector-faster-than-mvector/55174)), so every container
+here is created by the caller and passed to a `@noinline` loop function: it escapes. A variable `x` is updated on every iteration
+(`x = kernel(x, c, i)`, so each iteration depends on the previous one) at three kernel weights, tiny (1.2 nanoseconds per
+iteration), small (4.1) and medium (8.0 to 8.7), in these containers: a plain local (registers, the baseline), the immutable value
+threaded through the loop (`s = State(kernel(s.x, s.c, i), s.c)`, the way the package passes context values), a mutable struct that does
+not escape, a `Base.RefValue{Float64}`, a whole mutable struct, an immutable struct with a `RefValue` field, and an immutable struct with a one-element
+`Vector{Float64}` field. Each is run with four things the loop may also do on every iteration. Times are nanoseconds per iteration;
+"/ local" is the time divided by the plain local's time in the same scenario and weight. Results are identical in every case.
+
+**Where it costs.** The loop calls a function that is handed the state (a logger, a callback): the value for the local and
+threaded cases, the container for the others, so the compiler must store the new `x` before the call and reload it after.
+
+| container of `x`; the loop calls a function handed the state | tiny, ns per iteration | small, ns per iteration | medium, ns per iteration | tiny / local | small / local | medium / local |
+|---|---|---|---|---|---|---|
+| local variable (registers) | 1.25 | 4.16 | 8.67 | 1.00 | 1.00 | 1.00 |
+| immutable value threaded through the loop | 1.24 | 4.17 | 8.67 | 0.99 | 1.00 | 1.00 |
+| mutable struct, not escaping (compiled away) | 1.22 | 4.19 | 8.73 | 0.98 | 1.01 | 1.01 |
+| `Base.RefValue{Float64}`, escaping | 3.60 | 6.63 | 10.81 | 2.89 | 1.59 | 1.25 |
+| whole mutable struct, escaping | 3.61 | 6.70 | 10.96 | 2.90 | 1.61 | 1.26 |
+| immutable struct with a `RefValue` field | 2.69 | 6.43 | 10.97 | 2.16 | 1.55 | 1.27 |
+| immutable struct with a one-element `Vector{Float64}` field | 2.34 | 6.50 | 11.25 | 1.88 | 1.56 | 1.30 |
+
+The extra cost is a fixed 2.1 to 2.5 nanoseconds per iteration (store, call, reload: the next iteration waits for the memory round trip),
+so it is 1.25 times the loop at 8.7 nanoseconds per iteration and 2.9 times at 1.25. Per-step kernels of 1 to 10 nanoseconds are
+the regime of Monte Carlo sweeps and cheap protocols.
+
+**A second case.** State held in a one-element `Vector{Float64}` while the loop also stores into another `Vector{Float64}`
+(for example a recorded trace): two arrays of the same element type may alias, so the value is written and reloaded every iteration.
+
+| container of `x`; the loop also stores x into an array | tiny, ns per iteration | small, ns per iteration | medium, ns per iteration | tiny / local | small / local | medium / local |
+|---|---|---|---|---|---|---|
+| local variable (registers) | 1.17 | 4.15 | 8.20 | 1.00 | 1.00 | 1.00 |
+| immutable struct with a one-element `Vector{Float64}` field | 2.52 | 5.52 | 11.06 | 2.16 | 1.33 | 1.35 |
+
+**Where it does not cost** (the same containers, ratios to the local in the same scenario, range over the three weights):
+- nothing else in the loop: 0.99 to 1.01 for the `Ref`, the mutable struct and the struct with a `Ref` field (the one-element
+  `Vector` varied, 0.99 to 1.19 across runs);
+- the loop stores into an array: 1.00 to 1.02 for the same three;
+- the loop calls a function the compiler can see does not touch the container (it only writes an array passed to it):
+  0.94 to 1.00;
+- the immutable value threaded through the loop: 0.98 to 1.02 in every scenario above, which is the package's way of passing values;
+- a parameter that is read on every iteration and written every 4096 iterations, in any of the containers and any of the four
+  loop variants: 0.86 to 1.09 (about 6 to 9% at the medium weight, none at the tiny and small weights).
+
+Two things were left out on purpose. An abstract `Ref{Float64}` field type (a known type-instability mistake, not a property of
+mutable containers) was measured at 3.5 to 26 times slower and is not part of the comparison. And these are single-variable
+kernels; with the state of several coupled systems in mutable containers that are handed to code in the loop, the extra
+cost would be paid for each round trip.
 
 ## Limits
 
