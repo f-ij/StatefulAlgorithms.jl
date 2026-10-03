@@ -111,6 +111,7 @@ options (`i.opts.reltol = ...`) and the state (`i.u`), each followed by `u_modif
 | damping ramp | 12.29 | 15.53 | 1.26 | 0.653 | 0.825 |
 | damping ramp + tolerance schedule | 11.10 | 14.56 | 1.31 | 0.654 | 0.858 |
 | kick + damping ramp + tolerance schedule | 11.09 | 14.82 | 1.34 | 0.655 | 0.874 |
+| noise + kick + damping ramp + tolerance schedule (the noise modifier has its own RNG state, added last) | 11.15 | 14.98 | 1.34 | 0.658 | 0.884 |
 
 The package's final state is bit-identical to the hand-written loop in every row; SciML's differs from it by 5.5e-4, 2.0e-3,
 1.5e-3 and 5.9e-3. An earlier version let the damping fall to 0.5, which is chaotic: the final states of different step
@@ -209,10 +210,42 @@ was 1.33 times slower at M = 1, 4 and 8, with or without hoisting the parameters
 (the table above) removed the whole difference, so the gap was the loop structure, not the parameter container. Which part of the structure
 (the constant offsets, the unrolling) matters was not isolated.
 
+## What the claim is, and what it is not
+
+The claim is not that mutable state is free in the package. A monolithic hand-written loop that keeps all its state as locals
+compiles to the same code the package produces, and so does any simulation written with its shared state spelled out for one
+known composition. What the package avoids is having to write that: each component declares its own state, and when the
+components are composed the compiler produces the loop a hand-written monolith would have been. So the comparisons that matter are
+(a) speed against the hand-written monolith, (b) speed against other ways of composing reusable parts, which share state through
+mutable containers or callbacks, and (c) what has to be edited to change the composition. (a) and (b) are in the tables above:
+0.96 to 0.98 times the monolith, against 1.15 to 1.34 times for SciML callbacks. (c) is next.
+
+## Adding a component that has its own state
+
+`run_modifiers.jl` now has a fifth combination. `NoiseKick` is a new modifier with an internal state that it writes (its own RNG)
+and that also writes the integrator's state (`u` and `stale`). It was added last, to all three implementations, after everything else
+was written. Edits are counted from a diff of `modifiers.jl` before and after (the shared constant and `using Random` are not
+counted).
+
+| implementation | existing lines edited | new lines added | where |
+|---|---|---|---|
+| hand-written monolith | 2 (the function signature, and the line that declares the locals) | 4, inside the loop body | the loop that every composition shares |
+| StatefulAlgorithms | 0 | 9 (the component) + 1 line in the composition block (4 in the builder that selects subsets) | a new algorithm and a name in the block |
+| SciML callbacks | 0 | 5 (the callback; its own RNG is a closure variable) | a new callback in the callback list |
+
+The package version is bit-identical to the hand-written loop (final state difference 0) and runs at 0.98 times its loop time; SciML
+at 1.31 times (last row of the modifiers table). Both composition styles are additive: the hand-written loop is the one that has to be
+edited. What differs between the package and SciML is the run-time cost of each added callback (0.016 to 0.042 microseconds per
+attempt) and how a modifier refers to the integrator (`integ.u`, `integ.stale` by name, against `i.u`, `i.p`, `u_modified!`). This
+test did not require the new modifier to read a new variable that the existing parameter struct lacks; had it, SciML would have needed
+that field added to `p`, which the package does not need because the integrator already exposes everything.
+
 ## State in a mutable container: when it costs something
 
 `escaping_state.jl`. The experiments above read parameters and never wrote the state they depend on inside the loop, and
-their containers could be optimised away. This one is built to make the container matter. Julia can only replace a mutable
+their containers could be optimised away. This one is built to make the container matter. It measures the alternative to threading
+values (state shared through mutable containers that other code is handed); it does not claim the package gets mutability for free,
+only that it does not need the shared state to be spelled out in advance (previous section). Julia can only replace a mutable
 object by registers when the optimizer sees its whole lifetime, that is when it does not escape
 ([Julia escape analysis](https://docs.julialang.org/en/v1/devdocs/EscapeAnalysis),
 [why SVector is faster than MVector](https://discourse.julialang.org/t/why-is-svector-faster-than-mvector/55174)), so every container

@@ -4,18 +4,19 @@
 #   StateKick           adds an impulse to the integrator's state every KICK_EVERY accepted steps
 # The integrator (ChainDP5M) only exposes its internals as variables; it knows nothing about the modifiers, and no
 # new struct is defined for any experiment. Which modifiers a run has is a choice made when the plan is built.
-using StatefulAlgorithms, SciMLBase, OrdinaryDiffEqCore, OrdinaryDiffEqLowOrderRK
+using Random, StatefulAlgorithms, SciMLBase, OrdinaryDiffEqCore, OrdinaryDiffEqLowOrderRK
 
 const KICK_EVERY = 500                 # accepted steps between kicks
 const KICK = 0.05                      # impulse added to the velocity of oscillator 1
+const NOISE_EVERY = 100                # accepted steps between noise bursts (the noise modifier owns an RNG)
 gamma_at(t) = PARAMS.γ * (1 - 0.2 * t / TEND)     # damping 1.0 -> 0.8 (stays out of the chaotic regime)
 rtol_at(t) = RTOL * (1 + 9 * t / TEND)
 
 #### the force is the same sine drive as before ####
 #### hand-written reference, the modifiers selected at compile time ####
-function hand_mod_loop!(s::HandState, ::Val{kick}, ::Val{ramp}, ::Val{tol}) where {kick,ramp,tol}
+function hand_mod_loop!(s::HandState, ::Val{kick}, ::Val{ramp}, ::Val{tol}, ::Val{noise} = Val(false)) where {kick,ramp,tol,noise}
     (; u, B, snaps) = s
-    N = PARAMS.N; par = PARAMS; rtol = RTOL
+    N = PARAMS.N; par = PARAMS; rtol = RTOL; noise_rng = Xoshiro(7)
     t = s.t; dt = s.dt; nacc = s.nacc; nrej = s.nrej
     F = sine_force(t, u, N); Fk = F
     p = ChainP(par, F); prob = (; f! = chain!, p)
@@ -30,6 +31,10 @@ function hand_mod_loop!(s::HandState, ::Val{kick}, ::Val{ramp}, ::Val{tol}) wher
             stale = false
             if kick && nacc % KICK_EVERY == 0
                 u[N+1] += KICK; stale = true
+            end
+            if noise && nacc % NOISE_EVERY == 0
+                @inbounds for i in 1:N; u[N+i] += 0.001 * (rand(noise_rng) - 0.5); end
+                stale = true
             end
             if ramp
                 γ = gamma_at(t)
@@ -94,12 +99,25 @@ end
     return (; last, stale)
 end
 
+@StepAlgorithm function NoiseKick(u, nacc, stale, @managed(rng = Xoshiro(7)), @managed(last = 0))
+    if nacc != last && nacc % NOISE_EVERY == 0
+        @inbounds for i in 1:PARAMS.N; u[PARAMS.N+i] += 0.001 * (rand(rng) - 0.5); end
+        stale = true
+    end
+    last = nacc
+    return (; last, stale)
+end
+
 function modified_setup(mods)
     integ = ChainDP5M(); ckpt = Checkpointer(); drive = SineDrive()
     parts = Any[]; routes = Any[]
     if :kick in mods
         k = StateKick(); push!(parts, k)
         push!(routes, Route(integ => k, :u), Route(integ => k, :nacc), Route(integ => k, :stale))
+    end
+    if :noise in mods
+        w = NoiseKick(); push!(parts, w)
+        push!(routes, Route(integ => w, :u), Route(integ => w, :nacc), Route(integ => w, :stale))
     end
     if :ramp in mods
         r = DampingRamp(); push!(parts, r)
@@ -128,6 +146,11 @@ function sciml_modified_setup(mods)
     if :kick in mods
         push!(cbs, DiscreteCallback((u, t, i) -> i.stats.naccept % KICK_EVERY == 0,
             i -> (i.u[N+1] += KICK; SciMLBase.u_modified!(i, true); nothing); nosave...))
+    end
+    if :noise in mods
+        noise_rng = Xoshiro(7)
+        push!(cbs, DiscreteCallback((u, t, i) -> i.stats.naccept % NOISE_EVERY == 0,
+            i -> (@inbounds(for k in 1:N; i.u[N+k] += 0.001 * (rand(noise_rng) - 0.5); end); SciMLBase.u_modified!(i, true); nothing); nosave...))
     end
     if :ramp in mods
         push!(cbs, DiscreteCallback((u, t, i) -> true,

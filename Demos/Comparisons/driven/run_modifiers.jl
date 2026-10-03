@@ -9,7 +9,7 @@ include(joinpath(@__DIR__, "framework.jl")); include(joinpath(@__DIR__, "sciml.j
 struct Impl; name::String; setup::Function; go!::Function; result::Function; end
 function impls(mods)
     val(m) = Val(m in mods)
-    [Impl("H  hand-written loop", () -> hand_setup(sine_force), s -> hand_mod_loop!(s, val(:kick), val(:ramp), val(:tol)), s -> (s.u, s.nacc, s.nrej, length(s.snaps))),
+    [Impl("H  hand-written loop", () -> hand_setup(sine_force), s -> hand_mod_loop!(s, val(:kick), val(:ramp), val(:tol), val(:noise)), s -> (s.u, s.nacc, s.nrej, length(s.snaps))),
      Impl("P  StatefulAlgorithms", () -> modified_setup(mods), framework_go!, framework_result),
      Impl("S  SciML (callbacks)", () -> sciml_modified_setup(mods), sciml_go!, sciml_result)]
 end
@@ -23,7 +23,7 @@ function loop_time(im::Impl, reps)
 end
 
 println("Driven chain, sine force, checkpoint every ", CKPT_EVERY, " accepted steps, t in [0, ", TEND, "]. Loop time only.")
-for mods in ((), (:ramp,), (:ramp, :tol), (:kick, :ramp, :tol))
+for mods in ((), (:ramp,), (:ramp, :tol), (:kick, :ramp, :tol), (:kick, :noise, :ramp, :tol))
     ims = impls(mods)
     println("\nmodifiers: ", isempty(mods) ? "none" : join(string.(mods), " + "))
     local results
