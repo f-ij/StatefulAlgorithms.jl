@@ -1,0 +1,7 @@
+[deps]
+Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"
+StatefulAlgorithms = "3c03ca44-5aad-4ad5-81af-1baae4bc194b"
+UUIDs = "cf7118a7-6976-5b1a-9a39-7adc72f591a4"
+
+[sources]
+StatefulAlgorithms = {path = "../.."}
