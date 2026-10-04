@@ -96,8 +96,9 @@ struct _CannotRename <: Exception
 end
 
 """
-Rename the random ids of `la`. Returns `(renamed, ids)`, or `(la, nothing)` when a mutable object in the plan
-would change type; the plan then resolves with its original ids, which is correct but compiles per uuid.
+Rename the random ids of `la`. Returns `(renamed, ids)`. When a mutable object in the plan would change type it
+gives up and returns the original plan with an empty id table; that plan resolves with its original ids, which is
+correct but compiles per uuid.
 """
 Base.@nospecializeinfer function rename_random_ids(@nospecialize(la))
     r = _IdRenamer()
@@ -105,7 +106,7 @@ Base.@nospecializeinfer function rename_random_ids(@nospecialize(la))
         _rename_value(r, la)
     catch e
         e isa _CannotRename || rethrow()
-        return la, nothing
+        return la, Dict{UUID, Int}()
     end
     return renamed, r.ids
 end
@@ -127,12 +128,11 @@ end
 Function barrier of `resolve` for plans with random ids: rename, resolve the renamed type, keep held handles findable.
 
 `@nospecializeinfer`: the caller knows the concrete random-id type, and plain `@nospecialize` would still infer this
-body (and the typed fallback below) for that type, which is the whole compile cost this barrier exists to avoid.
+body for that type, and the typed `resolve` it calls, which is the whole compile cost this barrier exists to avoid.
 """
 @noinline Base.@nospecializeinfer function _resolve_renamed(@nospecialize(la))
     renamed, ids = rename_random_ids(la)
-    isnothing(ids) && return _resolve_typed(la)
     resolved = _resolve_typed(renamed)
-    register_original_ids!(getregistry(resolved), ids)
+    register_original_ids!(getregistry(resolved), ids)   # nothing to do when ids is empty
     return resolved
 end
