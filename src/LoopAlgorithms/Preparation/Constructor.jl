@@ -115,18 +115,17 @@ nested plan whose own children are registered too), and per child its context na
     return _add_algo_tuple_in_order(registry, funcs, multipliers)
 end
 
-@inline _add_algo_tuple_in_order(registry::R, ::Tuple{}, ::Tuple{}) where {R<:NameSpaceRegistry} = registry, (), ()
-
-# Adds the children one by one, first to last (see `add_algo_tuple_to_registry`). Written as recursion over the front
-# of the tuple that adds the last child to the registry it gets back, so that the registry's type stays known: it
-# grows with every child, and recursing over the tail instead (passing the growing registry down as an argument)
-# makes Julia give up and use plain `NameSpaceRegistry`. Here the arguments only get shorter, which works for any
-# number of children.
+"""Add the children one by one, first to last; returns the same three values as `add_algo_tuple_to_registry`."""
 @inline function _add_algo_tuple_in_order(registry::R, funcs::F, multipliers::M) where {R<:NameSpaceRegistry, F<:Tuple, M<:Tuple}
+    # Written as recursion over the front of the tuple that adds the last child to the registry it gets back, so that
+    # the registry's type stays known: it grows with every child, and recursing over the tail instead (passing the
+    # growing registry down as an argument) makes Julia give up and use plain `NameSpaceRegistry`. Here the arguments
+    # only get shorter, which works for any number of children.
     reg, raws, names = _add_algo_tuple_in_order(registry, Base.front(funcs), Base.front(multipliers))
     reg, raw, name = add_algo_to_registry(reg, last(funcs), last(multipliers))
     return reg, (raws..., raw), (names..., name)
 end
+@inline _add_algo_tuple_in_order(registry::R, ::Tuple{}, ::Tuple{}) where {R<:NameSpaceRegistry} = registry, (), ()
 
 @inline function add_algo_to_registry(registry::R, algo::LA, multiplier) where {R<:NameSpaceRegistry, LA<:LoopSpec}
     inner = algo isa LoopAlgorithm ? getplan(algo) : algo
