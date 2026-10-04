@@ -9,12 +9,20 @@ registry_entrytype(obj) = nothing
 registry_allowmerge(::Type) = false
 registry_allowmerge(obj) = registry_allowmerge(obj isa Type ? obj : typeof(obj))
 
-@inline function _assign_entrytype_of(::Type{T}) where {T}
-    entry_t = registry_entrytype(T)
-    isnothing(entry_t) && (entry_t = T)
-    return Base.typename(entry_t).wrapper
+function assign_entrytype(obj)
+    entry_t = nothing
+    if obj isa Type
+        entry_t = registry_entrytype(obj)
+    else
+        entry_t = registry_entrytype(typeof(obj))
+    end
+    if isnothing(entry_t)
+        if obj isa Type
+            entry_t = obj
+        else
+            entry_t = typeof(obj)
+        end
+    end
+    entry_t = Base.typename(entry_t).wrapper
+    return entry_t
 end
-
-# Dispatch on the type parameter so the entry type constant-folds when `obj` is a type.
-@inline assign_entrytype(::Type{T}) where {T} = _assign_entrytype_of(T)
-@inline assign_entrytype(obj) = _assign_entrytype_of(typeof(obj))
