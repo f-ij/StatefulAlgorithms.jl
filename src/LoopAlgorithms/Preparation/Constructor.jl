@@ -197,11 +197,10 @@ Resolve a plan tree and inlay inherited global wiring into concrete children.
 this node's own `Local` declarations shadow inherited ones of the same name. It is stored
 in the node's `PlanWiring` type; concrete children's views turn it into routes from `_local`.
 """
-function _resolve_plan_wiring_tree(la::LA, registry::NameSpaceRegistry, inherited_global::NamedTuple, inherited_locals::NamedTuple = (;), path::Tuple = ()) where {LA<:AbstractPlan}
+function _resolve_plan_wiring_tree(la::LA, registry::NameSpaceRegistry, inherited_global::NamedTuple, inherited_locals::NamedTuple = (;), path::String = "") where {LA<:AbstractPlan}
     raw_wiring = getwiring(la)
     own_locals = getfield(raw_wiring, :locals)
-    visible_locals = isempty(own_locals) ? inherited_locals :
-        merge(inherited_locals, NamedTuple{keys(own_locals)}(map(name -> local_storage_name(name, path), keys(own_locals))))
+    visible_locals = _visible_locals(inherited_locals, own_locals, path)
 
     # Global wiring is grouped by resolved target namespace once per plan node.
     # Child buckets below receive the relevant global wiring already inlaid, so
@@ -211,10 +210,10 @@ function _resolve_plan_wiring_tree(la::LA, registry::NameSpaceRegistry, inherite
 
     # Resolve nested plans first. Their own `PlanWiring` then becomes the
     # child-indexed value passed to that child during parent stepping.
-    funcs = ntuple(Val(length(getalgos(la)))) do i
+    funcs = ntuple(Val(length(getalgos(la)))) do i   # unrolled: every child keeps its concrete type
         child = getalgo(la, i)
         if child isa LoopSpec
-            return _resolve_plan_wiring_tree(child, registry, combined_global, visible_locals, (path..., i))
+            return _resolve_plan_wiring_tree(child, registry, combined_global, visible_locals, isempty(path) ? string(i) : string(path, ".", i))
         end
         return child
     end
