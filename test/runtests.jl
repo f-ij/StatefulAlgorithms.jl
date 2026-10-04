@@ -27,7 +27,7 @@ const TEST_FILES = [
     "ContextAnalyzerTest.jl",
     "InspectionTest.jl",
     "LocalTest.jl",
-    "ExecutableTest.jl",
+    "CallableTest.jl",
     "SavingTest.jl",
     "ContextDeltaTest.jl",
 ]

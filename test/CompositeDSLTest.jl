@@ -83,12 +83,12 @@ end
         wrapped = FuncWrapper(x -> 2x, (:x,), (:y,))
         @test StatefulAlgorithms.step!(wrapped, (; x = 4)) == (; y = 8)
         @test StatefulAlgorithms.init(wrapped, (; x = 4)) == (;)
-        @test occursin("(x) -> (; y)", sprint(summary, wrapped))
+        @test occursin("y = ", sprint(summary, wrapped)) && occursin("(x))", sprint(summary, wrapped))
 
         kw_wrapped = FuncWrapper((x; scale = 1) -> scale * x, (:external,), (:y,), (; scale = 3))
         @test StatefulAlgorithms.step!(kw_wrapped, (; external = 4)) == (; y = 12)
         @test StatefulAlgorithms.init(kw_wrapped, (; external = 4)) == (;)
-        @test occursin("(external; scale = 3) -> (; y)", sprint(summary, kw_wrapped))
+        @test occursin("(external; scale = 3))", sprint(summary, kw_wrapped))
 
         kw_from_context = FuncWrapper((x; scale = 1) -> scale * x, (:external,), (:y,), (; scale = :factor))
         @test StatefulAlgorithms.step!(kw_from_context, (; external = 4, factor = 5)) == (; y = 20)
@@ -101,8 +101,8 @@ end
         literal_wrapped = FuncWrapper(println, ("Num: ", :value), ())
         literal_show = sprint(show, literal_wrapped)
         literal_plain = sprint(io -> show(io, MIME("text/plain"), literal_wrapped))
-        @test occursin("(\"Num: \", value) -> nothing", literal_show)
-        @test occursin("function = println", literal_plain)
+        @test occursin("Callable(println(\"Num: \", value))", literal_show)
+        @test occursin("println", literal_plain)
     end
 
     @testset "Inline state supports defaults and required inputs" begin
@@ -702,7 +702,7 @@ end
         _, sharedvars = StatefulAlgorithms._resolve_options(resolved)
         routes = sharedvars[wrapper_key]
         @test length(routes) == 1
-        @test_broken occursin("c1.plus_capture.captured", sprint(show, wrapper))   # DSL source text is not kept by `Executable` (TODO: DSL display)
+        @test occursin("nested_identity(plus_capture.captured)", sprint(show, StatefulAlgorithms.getplan(resolved)))   # the plan prints a call with its wires as argument sources
 
         p = Process(resolved, repeat = 1)
         StatefulAlgorithms.run(p)
@@ -728,8 +728,8 @@ end
         resolved = resolve(algo)
         wrapper = StatefulAlgorithms.getalgo(resolved, 2)
         wrapper_key = StatefulAlgorithms.plan_child_namespace(resolved, 2)
-        @test_broken occursin("@transform", sprint(show, wrapper))   # DSL source text is not kept by `Executable` (TODO: DSL display)
-        @test_broken occursin("c1.plus_capture.captured", sprint(show, wrapper))   # DSL source text is not kept by `Executable` (TODO: DSL display)
+        @test occursin("@transform", sprint(show, StatefulAlgorithms.getplan(resolved)))
+        @test occursin("plus_capture.captured", sprint(show, StatefulAlgorithms.getplan(resolved)))
 
         p = Process(resolved, repeat = 1)
         StatefulAlgorithms.run(p)
@@ -753,8 +753,8 @@ end
         routes = sharedvars[wrapper_key]
         @test length(routes) == 1
         @test StatefulAlgorithms.gettransform(first(routes)) !== nothing
-        @test_broken occursin("@transform", sprint(show, wrapper))   # DSL source text is not kept by `Executable` (TODO: DSL display)
-        @test_broken occursin("clamping_beta", sprint(show, wrapper))   # DSL source text is not kept by `Executable` (TODO: DSL display)
+        @test occursin("@transform", sprint(show, StatefulAlgorithms.getplan(resolved)))
+        @test occursin("_state.clamping_beta", sprint(show, StatefulAlgorithms.getplan(resolved)))
 
         p = Process(resolved, repeat = 1)
         StatefulAlgorithms.run(p)
@@ -911,7 +911,7 @@ end
 
         resolved = resolve(algo)
         wrapper = StatefulAlgorithms.getalgo(resolved, 2)
-        @test_broken occursin("value = c1.plus_capture.captured", sprint(show, wrapper))   # DSL source text is not kept by `Executable` (TODO: DSL display)
+        @test occursin("value = plus_capture.captured", sprint(show, StatefulAlgorithms.getplan(resolved)))
 
         p = Process(resolved, repeat = 1)
         StatefulAlgorithms.run(p)
@@ -931,10 +931,10 @@ end
 
         resolved = resolve(algo)
         wrapper = StatefulAlgorithms.getalgo(resolved, 1)
-        wrapper_summary = sprint(show, wrapper)
-        @test_broken occursin("a = b", wrapper_summary)   # DSL source text is not kept by `Executable` (TODO: DSL display)
-        @test occursin("x = x", wrapper_summary)
-        @test occursin("y = y", wrapper_summary)
+        wrapper_summary = sprint(show, StatefulAlgorithms.getplan(resolved))
+        @test occursin("a = _state.b", wrapper_summary)
+        @test occursin("x = _state.x", wrapper_summary)
+        @test occursin("y = _state.y", wrapper_summary)
 
         p = Process(resolved, repeat = 1)
         run(p)

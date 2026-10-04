@@ -1,26 +1,21 @@
 """
 The children a plan stores and their child-indexed wiring. `WithWiring` children bring their
-wires along by position; DSL `FuncWrapper`s become `Executable`s once their child-local options
-(matched to the wrapper object) are assigned.
+wires along by position.
 """
 function _plan_children(funcs::Tuple, options::Tuple)
     raw = map(_unwrap_with_wiring, funcs)
-    child_wiring = map(_add_slot_wiring, funcs, _plan_child_wiring(raw, options))
-    return map(_as_plan_child, raw), child_wiring
+    return raw, map(_add_slot_wiring, funcs, _plan_child_wiring(raw, options))
 end
 @inline _unwrap_with_wiring(child) = child
 @inline _unwrap_with_wiring(w::WithWiring) = getfield(w, :child)
 @inline _add_slot_wiring(child, bucket) = bucket
 @inline _add_slot_wiring(w::WithWiring, bucket::Wiring) = Wiring((routes(bucket)..., getfield(w, :wires)...), shares(bucket))
 _add_slot_wiring(w::WithWiring, bucket) = error("`WithWiring` can only wire a concrete child, not the nested plan $(getfield(w, :child)).")
-@inline _as_plan_child(child) = child
-@inline _as_plan_child(fw::FuncWrapper) = Executable(fw)
 
 """Point the routes that belong to this child (`OwnerMatcher` target) at its namespace."""
 function _retarget_owner_routes(bucket::Wiring, target::Symbol)
     retarget(r) = to_match_by(r) === OwnerMatcher ?
-        Route((isnothing(getfrom(r)) ? from_match_by(r) : getfrom(r)) => target, map(Pair, getvarnames(r), getaliases(r))...;
-              transform = gettransform(r), reverse_transform = getreverse_transform(r)) : r
+        Route{from_match_by(r), target, gettransform(r), getreverse_transform(r), getvarnames(r), getaliases(r), typeof(getfrom(r)), Nothing}(getfrom(r), nothing) : r
     return Wiring(map(retarget, routes(bucket)), shares(bucket))
 end
 
@@ -121,33 +116,10 @@ end
 """Return route/share wiring wrapped by a child-scoped plan option."""
 @inline _wrapped_plan_wiring(option::LocalPlanOption) = getfield(option, :option)
 
-"""Return whether a child type is addressed by a symbol endpoint."""
-function _child_matches_endpoint_match(::Type{Child}, endpoint_match::Symbol) where {Child}
-    Child <: AbstractIdentifiableAlgo || return false
-    return getkey(Child) == endpoint_match
-end
-
-"""Return whether a child type is addressed by a type matcher identity."""
-function _child_matches_endpoint_match(::Type{Child}, ::Type{<:TypeMatcher{Target}}) where {Child, Target}
-    if Child <: AbstractIdentifiableAlgo
-        child_algo = algotype(Child)
-        return child_algo == Target || (child_algo isa Type && Target isa Type && child_algo <: Target)
-    end
-    return Child == Target || (Target isa Type && Child <: Target)
-end
-
-"""Return whether a child type is addressed by a matcher identity."""
-function _child_matches_endpoint_match(::Type{Child}, endpoint_match::Type{<:AbstractMatcher}) where {Child}
-    Child <: AbstractIdentifiableAlgo || return false
-    return _matches_endpoint_match(match_by(Child), endpoint_match)
-end
-
-"""Return whether a child value is addressed by an endpoint identity."""
-@inline _child_matches_endpoint_match(child, endpoint_match) = _child_matches_endpoint_match(typeof(child), endpoint_match)
 
 function _scoped_wiring_matches_child_type(::Type{Child}, ::Type{Owner}, ::Type{Option}) where {Child, Owner, Option}
     if Option <: Route
-        return _child_matches_endpoint_match(Child, to_match_by(Option))
+        return child_matches_scref(Child, to_match_by(Option))
     end
     if Owner === Any || Owner === DataType || Owner === UnionAll
         return false
@@ -178,8 +150,8 @@ end
 
     scoped_wiring = _wrapped_plan_wiring(option)
     if scoped_wiring isa Share
-        if _child_matches_endpoint_match(child, first_match_by(scoped_wiring)) ||
-           _child_matches_endpoint_match(child, second_match_by(scoped_wiring))
+        if child_matches_scref(child, first_match_by(scoped_wiring)) ||
+           child_matches_scref(child, second_match_by(scoped_wiring))
             return (scoped_wiring, tail...)
         end
     end
@@ -216,6 +188,8 @@ end
     return getwiring(child)
 end
 
+# A named nested plan (see `add_algo_to_registry` for one): its name plays no part in wiring.
+# TODO (TODO.md, "named plans as context slices"): keep it that way, a plan name is read-only.
 """Return nested plan wiring for identifiable loop-plan children."""
 @inline function _child_wiring_for_child(child::IA, bucket::Wiring) where {F<:LoopSpec, IA<:AbstractIdentifiableAlgo{F}}
     isempty(bucket) || construction_error("Child-scoped wiring ", bucket, " was assigned to nested plan child ", child, ". Attach the route/share to a concrete child inside the nested plan.")
@@ -228,7 +202,7 @@ Base.@nospecializeinfer function _runtime_scoped_wiring_matches_child(@nospecial
     if scoped_wiring isa Route
         # A route into a function call names the call object itself.
         to_match_by(scoped_wiring) === OwnerMatcher && return match(child, getfield(option, :owner))
-        return _child_matches_endpoint_match(child, to_match_by(scoped_wiring))
+        return child_matches_scref(child, to_match_by(scoped_wiring))
     end
 
     if match(child, getfield(option, :owner))
@@ -236,8 +210,8 @@ Base.@nospecializeinfer function _runtime_scoped_wiring_matches_child(@nospecial
     end
 
     if scoped_wiring isa Share
-        return _child_matches_endpoint_match(child, first_match_by(scoped_wiring)) ||
-            _child_matches_endpoint_match(child, second_match_by(scoped_wiring))
+        return child_matches_scref(child, first_match_by(scoped_wiring)) ||
+            child_matches_scref(child, second_match_by(scoped_wiring))
     end
     return false
 end

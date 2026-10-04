@@ -83,15 +83,55 @@ function _composite_dsl_add_routes!(options::Vector{Any}, producers::Dict{Symbol
     return options
 end
 
-"""Return whether a DSL owner writes its outputs into runtime globals."""
-@inline _composite_dsl_runtime_owner(owner::FuncWrapper) = true
-@inline _composite_dsl_runtime_owner(owner::AbstractIdentifiableAlgo{<:FuncWrapper}) = true
-@inline _composite_dsl_runtime_owner(owner) = false
+"""
+Wires for one DSL call, attached to it with `WithWiring`: reads from algorithm state (an
+algorithm statement's output, `owner.field`) and transforms. A plain name produced by an
+earlier call needs no wire: the call reads it by name from the shared `_runtime` bucket.
+"""
+_composite_dsl_call_wires(entity, producers::Dict{Symbol, Any}, inputs::Tuple) = ()
+function _composite_dsl_call_wires(entity::Callable, producers::Dict{Symbol, Any}, inputs::Tuple)
+    @nospecialize entity inputs
+    wires = Any[]
+    for input in inputs
+        transform = hasproperty(input, :transform) ? input.transform : nothing
+        source_owner = if input.kind in (:simple, :simple_transform)
+            haskey(producers, input.source) || continue   # an outside input, read by name
+            producers[input.source]
+        else
+            input.owner
+        end
+        # Same name from the shared bucket, untransformed: read by name, no wire.
+        source_owner === :_runtime && input.source === input.destination && isnothing(transform) && continue
+        push!(wires, Route(source_owner => ThisChild(), input.source => input.destination; transform))
+    end
+    return Tuple(wires)
+end
+
+"""Record the outside inputs (`@input`) a DSL call reads by name."""
+function _composite_dsl_register_call_inputs!(external_inputs::Vector{Pair{Symbol, Symbol}}, producers::Dict{Symbol, Any}, inputs::Tuple)
+    @nospecialize inputs
+    for input in inputs
+        input.kind == :simple && !haskey(producers, input.source) || continue
+        mapping = input.source => input.source
+        mapping in external_inputs || push!(external_inputs, mapping)
+    end
+    return external_inputs
+end
+
+"""The inputs of a DSL statement: a call records the outside names it reads; an algorithm gets routes."""
+_composite_dsl_add_inputs!(options::Vector{Any}, producers::Dict{Symbol, Any}, external_inputs::Vector{Pair{Symbol, Symbol}}, owner, entity::Callable, inputs::Tuple) =
+    _composite_dsl_register_call_inputs!(external_inputs, producers, inputs)
+_composite_dsl_add_inputs!(options::Vector{Any}, producers::Dict{Symbol, Any}, external_inputs::Vector{Pair{Symbol, Symbol}}, owner, entity, inputs::Tuple) =
+    _composite_dsl_add_routes!(options, producers, external_inputs, owner, inputs)
+
+"""A DSL call as a plan child: wrapped with its wires when it has any."""
+_composite_dsl_with_wires(entity, wires::Tuple) = isempty(wires) ? entity : WithWiring(entity, wires)
 
 """Register outputs as the current producer for later routed lookups."""
 function _composite_dsl_register_outputs!(producers::Dict{Symbol, Any}, owner, outputs::Tuple{Vararg{Symbol}})
     @nospecialize owner outputs
-    owner = _composite_dsl_runtime_owner(owner) ? :_runtime : owner
+    # A call's outputs belong to its fixed namespace (`_runtime`), not to the call.
+    owner = something(fixed_namespace(owner), owner)
     for output in outputs
         # Later statements resolve symbols by asking this table who currently
         # owns a given output name.
@@ -117,8 +157,8 @@ owner and add a writeback route instead of rebinding the symbol.
 """
 function _composite_dsl_bind_outputs!(options::Vector{Any}, producers::Dict{Symbol, Any}, state_owners::Dict{Symbol, Any}, target, outputs::Tuple{Vararg{Symbol}})
     @nospecialize target outputs
-    if _composite_dsl_runtime_owner(target)
-        _composite_dsl_register_outputs!(producers, :_runtime, outputs)
+    if !isnothing(fixed_namespace(target))
+        _composite_dsl_register_outputs!(producers, target, outputs)
         return producers
     end
 

@@ -24,17 +24,20 @@ shares(w::Wiring) = getfield(w, :shares)
 end
 
 """
-Routes for a concrete child's view: one from `_local` per visible local, then the
-child's own routes. Built from types, so they cost nothing at runtime.
+The routes at the current plan node: the child's own routes, plus one from `_local` for each
+declared local visible here, so a view built with them reads and writes those locals by name.
+Built from types, so they cost nothing at runtime.
+
+A local binding has no target algorithm: those routes target `LocalScope()`, the view they are
+in. (A view reads only a route's source and names; the target must still be a resolved
+endpoint, since views rebuild their routes from their types.)
 """
-@inline @generated function view_routes(pwv::PlanWiringView{Root,W,DemandAll,Visible}, ::Namespace{Name}) where {Root,W,DemandAll,Visible,Name}
-    isempty(Visible) && return :(@inline routes(pwv))
-    local_routes = (Route{:_local, Name, nothing, nothing, (Visible[i],), (keys(Visible)[i],), Nothing, Nothing}(nothing, nothing) for i in 1:length(Visible))
-    return :(($(local_routes...), (@inline routes(pwv))...))
+@inline @generated function routes(pwv::PlanWiringView{Root,W,DemandAll,Visible}) where {Root,W,DemandAll,Visible}
+    isempty(Visible) && return :(@inline routes(current_wiring(pwv)))
+    local_routes = (Route{:_local, LocalScope(), nothing, nothing, (Visible[i],), (keys(Visible)[i],), Nothing, Nothing}(nothing, nothing) for i in 1:length(Visible))
+    return :(($(local_routes...), (@inline routes(current_wiring(pwv)))...))
 end
 
-"""Forward route access through the current plan-wiring view path."""
-@inline routes(pwv::PlanWiringView) = routes(@inline current_wiring(pwv))
 
 """Forward share access through the current plan-wiring view path."""
 @inline shares(pwv::PlanWiringView) = shares(@inline current_wiring(pwv))
@@ -93,13 +96,13 @@ function _append_route_demand_names(names::Tuple, route_varnames::Tuple)
     return merged
 end
 
-"""Every name read by an `Executable` anywhere in a plan-wiring tree."""
-_executable_reads_in_tree(::Type) = ()
-function _executable_reads_in_tree(::Type{W}) where {W<:PlanWiring}
-    names = executable_reads(W)
+"""Every name read by a `Callable` anywhere in a plan-wiring tree."""
+_callable_reads_in_tree(::Type) = ()
+function _callable_reads_in_tree(::Type{W}) where {W<:PlanWiring}
+    names = callable_reads(W)
     children = fieldtype(W, :child_wiring)
     for i in 1:fieldcount(children)
-        names = _append_route_demand_names(names, _executable_reads_in_tree(fieldtype(children, i)))
+        names = _append_route_demand_names(names, _callable_reads_in_tree(fieldtype(children, i)))
     end
     return names
 end
@@ -113,8 +116,8 @@ function _return_demand_names(::Type{W}, owner::Symbol) where {W<:PlanWiring}
             names = _append_route_demand_names(names, route_name)
         end
     end
-    # Executables read names from the shared `_runtime` bucket without routes.
-    owner === :_runtime && (names = _append_route_demand_names(names, _executable_reads_in_tree(W)))
+    # Callables read names from the shared `_runtime` bucket without routes.
+    owner === :_runtime && (names = _append_route_demand_names(names, _callable_reads_in_tree(W)))
     return names
 end
 
@@ -173,76 +176,4 @@ end
 
 @noinline function _route_target_lookup_error(matcher, reg::NameSpaceRegistry, role::String, err)
     error("Error finding $role of wiring: $(matcher)\n in registry: $(reg). Original error: $(err)")
-end
-
-@noinline function _route_missing_algos_error(reg::NameSpaceRegistry, endpoint, role::String)
-    available = all_keys(reg)
-    available_str = isempty(available) ? "<none>" : join(string.(available), ", ")
-    error("Wiring references $role not found in registry.\nRequested: $(endpoint)\nAvailable names: $available_str")
-end
-
-"""Return the algorithm type carried by a `TypeMatcher` identity."""
-_typematcher_target(::Type{<:TypeMatcher{T}}) where {T} = T
-
-"""Return the value carried by a `ValMatcher` identity."""
-_valmatcher_target(::Type{<:ValMatcher{V}}) where {V} = V
-
-"""Return whether a matcher value has the same type-level endpoint identity."""
-_matches_endpoint_match(value, endpoint_match) = value isa endpoint_match
-_matches_endpoint_match(value, ::Type{<:ValMatcher{V}}) where {V} = value == V || value isa ValMatcher{V}
-# A state merged from several (`@merge`) is matched by any of their ids.
-_matches_endpoint_match(value::MatchAny, endpoint_match) = any(m -> _matches_endpoint_match(m, endpoint_match), getmatchers(value))
-
-"""Resolve a type-matched endpoint without invoking unrelated matcher equality."""
-function _resolve_type_matched_endpoint(reg::NameSpaceRegistry, endpoint_match::Type{<:TypeMatcher}, role::String)
-    matches = findall(_typematcher_target(endpoint_match), reg)
-    isempty(matches) && _route_missing_algos_error(reg, endpoint_match, role)
-    return getkey(first(matches))
-end
-
-"""Resolve a matcher-identified endpoint by comparing registry entry matchers."""
-function _resolve_matched_endpoint(reg::NameSpaceRegistry, endpoint_match::Type{<:AbstractMatcher}, role::String)
-    for entry in all_algos(reg)
-        _matches_endpoint_match(match_by(entry), endpoint_match) && return getkey(entry)
-    end
-    _route_missing_algos_error(reg, endpoint_match, role)
-end
-
-"""Resolve a raw or symbol endpoint into a context-name symbol."""
-@inline function _resolve_wiring_endpoint(reg::NameSpaceRegistry, endpoint_match::Symbol, endpoint, role::String)
-    return endpoint_match
-end
-# A type-matched endpoint (`Route(a => SomeAlgoType, ...)`) is stored as a `DataType` value, which
-# hides the algorithm type from inference. The matcher in the route's type parameters still carries it.
-@inline function _resolve_wiring_endpoint(reg::NameSpaceRegistry, ::Type{EM}, endpoint::Type, role::String) where {EM<:TypeMatcher}
-    return _resolve_type_matched_endpoint(reg, EM, role)
-end
-@inline function _resolve_wiring_endpoint(reg::NameSpaceRegistry, ::Type{EM}, endpoint, role::String) where {EM}
-    endpoint_match = EM
-    # Function calls read and write the shared `_runtime` bucket.
-    (endpoint isa FuncWrapper || endpoint isa Executable) && return :_runtime
-
-    # Prefer direct endpoint refs while raw wiring still has them. This keeps
-    # object-id matches precise and only falls back to the type-level endpoint
-    # identity when a resolved or inherited wiring value no longer carries a ref.
-    if endpoint isa AbstractIdentifiableAlgo
-        endpoint_key = getkey(endpoint)
-        if !isnothing(endpoint_key) && endpoint_key != Symbol()
-            return endpoint_key
-        end
-    end
-    if !isnothing(endpoint)
-        endpoint_key = getkey(reg, endpoint)
-        isnothing(endpoint_key) || return endpoint_key
-    end
-    endpoint_match isa Type && endpoint_match <: TypeMatcher && return _resolve_type_matched_endpoint(reg, endpoint_match, role)
-    endpoint_match isa Type && endpoint_match <: AbstractMatcher && return _resolve_matched_endpoint(reg, endpoint_match, role)
-    _route_missing_algos_error(reg, endpoint, role)
-end
-
-"""Update an endpoint reference when resolved child wiring is inherited."""
-@inline function _update_wiring_endpoint(endpoint, endpoint_match, reg::NameSpaceRegistry)
-    !isnothing(endpoint) && return update_keys(endpoint, reg)
-    endpoint_match isa Symbol && return endpoint_match
-    return reg[_resolve_wiring_endpoint(reg, endpoint_match, endpoint, "endpoint")]
 end

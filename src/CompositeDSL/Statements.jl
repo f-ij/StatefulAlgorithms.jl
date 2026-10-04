@@ -523,15 +523,19 @@ function _dsl_build_statement(stmt, alias_map, context_map, known_outputs::Set{S
     keyword_display_expr = _dsl_function_keyword_display_expr(parsed.keyword_specs)
     inputs_expr = _dsl_inputs_expr(parsed.inputs)
     customname = _dsl_customname(parsed.spec_expr, parsed.alias_name)
-    algo_entry_expr = _dsl_maybe_conditional_entry_expr(_dsl_algorithm_entry_expr(parsed.alias_name), include_condition)
+    algo_entry_expr = _dsl_maybe_conditional_entry_expr(_dsl_algorithm_entry_expr(parsed.alias_name, :(StatefulAlgorithms._composite_dsl_with_wires(_dsl_entity, _dsl_call_wires))), include_condition)
     share_target_expr = _dsl_share_endpoint_expr(parsed.alias_name)
+    # A plain function call carries its own wires (`WithWiring`); a direct algorithm call keeps
+    # routes. Decided by dispatch in one helper call each, to keep the generated code small.
+    call_wires_expr = :(local _dsl_call_wires = StatefulAlgorithms._composite_dsl_call_wires(_dsl_resolved.entity, _dsl_producers, _dsl_resolved.inputs))
+    call_inputs_expr = :(StatefulAlgorithms._composite_dsl_add_inputs!(_dsl_options, _dsl_producers, _dsl_external_inputs, _dsl_owner, _dsl_resolved.entity, _dsl_resolved.inputs))
 
     if parsed.kind == :keyword_call
         metadata_expr = quote
             $(map(parsed.shares) do share_source
                 :(StatefulAlgorithms._composite_dsl_push_local_option!(_dsl_options, _dsl_owner, StatefulAlgorithms.Share($(share_source), _dsl_owner)))
             end...)
-            StatefulAlgorithms._composite_dsl_add_routes!(_dsl_options, _dsl_producers, _dsl_external_inputs, _dsl_owner, _dsl_resolved.inputs)
+            $call_inputs_expr
             StatefulAlgorithms._composite_dsl_bind_outputs!(_dsl_options, _dsl_producers, _dsl_state_owners, _dsl_owner, _dsl_outputs)
         end
         return quote
@@ -546,6 +550,7 @@ function _dsl_build_statement(stmt, alias_map, context_map, known_outputs::Set{S
             )
             local _dsl_entity = $entity_expr
             local _dsl_owner = $share_target_expr
+        $call_wires_expr
             push!(_dsl_algos, $algo_entry_expr)
             push!(_dsl_specification, $schedule_expr)
             $context_index_expr
@@ -554,13 +559,13 @@ function _dsl_build_statement(stmt, alias_map, context_map, known_outputs::Set{S
     end
 
     metadata_expr = quote
-        StatefulAlgorithms._composite_dsl_add_routes!(_dsl_options, _dsl_producers, _dsl_external_inputs, _dsl_owner, _dsl_resolved.inputs)
+        $call_inputs_expr
         StatefulAlgorithms._composite_dsl_bind_outputs!(_dsl_options, _dsl_producers, _dsl_state_owners, _dsl_owner, _dsl_outputs)
     end
     return quote
         local _dsl_outputs = $outputs_expr
         # Function-call syntax stays on a dedicated path so we can recover
-        # positional inputs and keyword captures for `FuncWrapper`.
+        # positional inputs and keyword values for the call's signature.
         local _dsl_resolved = StatefulAlgorithms._resolve_composite_dsl_call(
             $(esc(parsed.spec_expr)),
             $keyword_args_expr,
@@ -574,6 +579,7 @@ function _dsl_build_statement(stmt, alias_map, context_map, known_outputs::Set{S
         )
         local _dsl_entity = $entity_expr
         local _dsl_owner = $share_target_expr
+        $call_wires_expr
         push!(_dsl_algos, $algo_entry_expr)
         push!(_dsl_specification, $schedule_expr)
         $context_index_expr

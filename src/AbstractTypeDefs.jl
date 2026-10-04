@@ -11,6 +11,13 @@ run) and `Replace` (where a stored field lives). `resolve` collects them from ev
 abstract type RootOption <: AbstractOption end
 """Route/share wiring of a plan (`Route`, `Share`, ...); kept in the plan's `wiring`, separate from its options."""
 abstract type AbstractWiring end
+
+"""
+A scope a name can be bound in, used as the resolved target of routes that do not connect two
+algorithms but bind a name inside a view (e.g. `LocalScope()` for declared locals). Used as a
+value, like a context key, so it is never mistaken for an unresolved matcher type.
+"""
+abstract type AbstractScope end
 """A state of a plan (`@state`, `@input`, a `AlgoState` passed to a constructor); kept in the plan's `states`."""
 abstract type AlgoState end
 abstract type ParserOption end
@@ -184,7 +191,7 @@ struct PlanWiring{GlobalWiring, ChildWiring, Locals<:NamedTuple, Visible, Reads}
     child_wiring::ChildWiring
     locals::Locals   # `Local` declarations of this plan node: name => initial value
 end
-# `Reads` (set by resolve) is every name this node's `Executable` children read.
+# `Reads` (set by resolve) is every name this node's `Callable` children read.
 # `Visible` (set by resolve) is every local this node's children can see, as
 # `(; name = storage_name, ...)`: its own and its ancestors', nearest declaration first.
 
@@ -194,8 +201,8 @@ PlanWiring(global_wiring::GlobalWiring, child_wiring::ChildWiring, locals::Local
 """Locals visible to the children of a plan node, `(; name = storage_name, ...)`."""
 visible_locals(::Type{<:PlanWiring{G, C, L, Visible}}) where {G, C, L, Visible} = Visible
 
-"""Names the `Executable` children of a plan node read by name (they count as demand for the `_runtime` bucket)."""
-executable_reads(::Type{<:PlanWiring{G, C, L, V, Reads}}) where {G, C, L, V, Reads} = Reads
+"""Names the `Callable` children of a plan node read by name (they count as demand for the `_runtime` bucket)."""
+callable_reads(::Type{<:PlanWiring{G, C, L, V, Reads}}) where {G, C, L, V, Reads} = Reads
 PlanWiring() = PlanWiring(Wiring(), ())
 
 """

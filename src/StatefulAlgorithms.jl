@@ -42,6 +42,7 @@ module StatefulAlgorithms
     # The general state (`@state`) is an algorithm state like the others in ProcessEntities/AlgoStates, but it needs
     # the matching and registry merge rules above.
     include("ProcessEntities/AlgoStates/GeneralState.jl")
+    include("SubContextRefs.jl")
 
     include("RoutingInterface/RoutingInterface.jl")
     include("Context/Context.jl")
