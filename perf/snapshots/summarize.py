@@ -1,7 +1,7 @@
 # Medians over processes (and over the chosen repetitions) per snapshot, scenario, phase.
 import sys, statistics as st, collections as cl
 rows = [l.rstrip('\n').split('\t') for l in open(sys.argv[1]) if l.startswith('ROW')]
-snaps = ['main', 'inference-fix', 'route-fix']
+snaps = sys.argv[2].split(',') if len(sys.argv) > 2 else ['main', 'inference-fix', 'route-fix']
 data = cl.defaultdict(list)  # (snap, scen, reps-group, phase) -> [(compile, wall)]
 for _, snap, proc, scen, rep, phase, c, w in rows:
     rep = int(rep)
@@ -16,7 +16,7 @@ def f(x): return '—' if x is None else f'{x:,.1f}'
 for k, what in ((0, 'compile time'), (1, 'wall time')):
     for g in groups:
         print(f'\n### {g}: {what} (µs, median)\n')
-        print('| Phase | main (µs) | inference fix (µs) | route fix (µs) | route fix vs main (×) |')
+        print('| Phase | ' + ' | '.join(f'{x} (µs)' for x in snaps) + f' | {snaps[-1]} vs {snaps[0]} (×) |')
         print('|---|---|---|---|---|')
         tot = [0, 0, 0]
         for ph in phases:
