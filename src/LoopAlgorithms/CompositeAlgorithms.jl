@@ -25,15 +25,6 @@ getmultipliers_from_specification_num(::Type{CA}, specification_num) where {CA<:
 
 CompositeAlgorithm(args...) = parse_la_input(CompositeAlgorithm, args...)
 
-"""
-Construct a composite execution plan, wrapping it only when root runtime data exists.
-
-`LocalPlanOption` route/share metadata is split into child-aligned wiring;
-plain route/share wiring is stored on the plan. States and other
-non-plan options stay on the `LoopAlgorithm` wrapper.
-"""
-Base.@nospecializeinfer LoopAlgorithm(::Type{CompositeAlgorithm}, @nospecialize(funcs::Tuple), @nospecialize(states::Tuple), @nospecialize(options::Tuple), @nospecialize(intervals); id = nothing) =
-    _construct_plan(CompositeAlgorithm, funcs, states, options, intervals, id)
 
 function newfuncs(ca::CompositeAlgorithm, funcs)
     # CompositeAlgorithm{typeof(funcs), intervals(ca), typeof(ca.registry), typeof(ca.options)}(funcs, ca.inc, ca.registry , ca.options)

@@ -20,15 +20,6 @@ function Routine(args...)
     parse_la_input(Routine, args...)
 end
 
-"""
-Construct a routine execution plan, wrapping it only when root runtime data exists.
-
-`LocalPlanOption` route/share metadata is stored in per-child wiring; plain
-route/share wiring is stored on the plan. Root states and other
-non-plan options remain on the `LoopAlgorithm` wrapper.
-"""
-Base.@nospecializeinfer LoopAlgorithm(::Type{Routine}, @nospecialize(funcs::Tuple), @nospecialize(states::Tuple), @nospecialize(options::Tuple), @nospecialize(repeats); id = nothing) =
-    _construct_plan(Routine, funcs, states, options, repeats, id)
 
 function newfuncs(r::Routine, funcs)
     setfield(r, :funcs, funcs)

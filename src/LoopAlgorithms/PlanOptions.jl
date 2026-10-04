@@ -233,21 +233,6 @@ Base.@nospecializeinfer function _plan_child_wiring(@nospecialize(funcs::Tuple),
     return _plan_child_wiring_runtime(funcs, options)
 end
 
-"""
-Build a `CompositeAlgorithm`/`Routine`/`ThreadedCompositeAlgorithm` node from parsed constructor input.
-
-Untyped (`@nospecialize`): construction runs once per plan, usually at top level, and the values (and their types)
-are only known at run time. A typed body compiled again for every plan type, which includes every new `Unique`
-handle. Only the final struct creation is compiled per type.
-"""
-Base.@nospecializeinfer function _construct_plan(PlanType::Type, @nospecialize(funcs::Tuple), @nospecialize(states::Tuple), @nospecialize(options::Tuple), @nospecialize(schedule), id)
-    namespaces = Tuple(Any[Namespace{nothing}() for _ in 1:length(funcs)])
-    wiring = PlanWiring(_plan_wiring_untyped(options), _plan_child_wiring_runtime(funcs, options))
-    plan = PlanType{typeof(funcs), schedule, typeof(namespaces), typeof(wiring), id}(funcs, schedule, namespaces, wiring)
-    root_options = _root_loop_options_untyped(options)
-    return isempty(states) && isempty(root_options) ? plan : LoopAlgorithm(plan; states, options = root_options, id)
-end
-
 """`_plan_wiring` for construction: the same `Wiring`, built from untyped values."""
 Base.@nospecializeinfer function _plan_wiring_untyped(@nospecialize(options::Tuple))
     routes = Any[]

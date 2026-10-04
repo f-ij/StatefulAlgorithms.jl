@@ -184,6 +184,30 @@ function parse_la_input(laType::Type{LA}, args...) where {LA<:AbstractPlan}
     return LoopAlgorithm(laType, processalgos, pstates, options, intervals_or_repeats)
 end
 
+"""
+    LoopAlgorithm(PlanType, funcs, states, options, schedule; id = nothing)
+
+Build a plan of type `PlanType` (`CompositeAlgorithm`, `Routine` or `ThreadedCompositeAlgorithm`) from parsed
+constructor input: its children `funcs`, their intervals or repeats `schedule`, and its route/share wiring taken from
+`options`. Child-scoped wiring (`LocalPlanOption`) is split per child; plain routes and shares are stored on the plan.
+The plan is wrapped in a `LoopAlgorithm` only when there are `states` or other options to keep on the wrapper.
+
+`parse_la_input` above and the DSL (`_dsl_build_loopalgorithm`) both end here.
+"""
+Base.@nospecializeinfer LoopAlgorithm(PlanType::Type{<:AbstractPlan}, @nospecialize(funcs::Tuple), @nospecialize(states::Tuple), @nospecialize(options::Tuple), @nospecialize(schedule); id = nothing) =
+    _build_plan(PlanType, funcs, states, options, schedule, id)
+
+# Untyped (`@nospecialize`): construction runs once per plan, usually at top level, and the values (and their types)
+# are only known at run time. A typed body compiled again for every plan type, which includes every new `Unique`
+# handle. Only the final struct creation is compiled per type.
+Base.@nospecializeinfer function _build_plan(PlanType::Type, @nospecialize(funcs::Tuple), @nospecialize(states::Tuple), @nospecialize(options::Tuple), @nospecialize(schedule), id)
+    namespaces = Tuple(Any[Namespace{nothing}() for _ in 1:length(funcs)])
+    wiring = PlanWiring(_plan_wiring_untyped(options), _plan_child_wiring_runtime(funcs, options))
+    plan = PlanType{typeof(funcs), schedule, typeof(namespaces), typeof(wiring), id}(funcs, schedule, namespaces, wiring)
+    root_options = _root_loop_options_untyped(options)
+    return isempty(states) && isempty(root_options) ? plan : LoopAlgorithm(plan; states, options = root_options, id)
+end
+
 
 """
 Add all algos and states in one or more loop algorithms to a shared registry with
