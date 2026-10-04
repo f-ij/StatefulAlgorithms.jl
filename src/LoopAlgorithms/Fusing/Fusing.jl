@@ -35,6 +35,32 @@ Base.@nospecializeinfer function _flatten_comp_funcs!(flat_funcs::Vector{Any}, f
 end
 
 """
+    flatten_comp_funcs_typed(funcs::Tuple, intervals::Tuple, stop_at_options = true)
+
+Typed version of `flatten_comp_funcs`, with the same result: the children with every nested `CompositeAlgorithm`
+replaced by its own children (intervals multiplied), keeping composites with route/share options whole when
+`stop_at_options`. Written as typed tuple recursion (`flat_tree_property_recursion`), so the result type is known to
+the compiler when the input types are.
+
+Not used. It is compiled again for every plan type, which includes every new `Unique` handle, and for larger plans
+Julia's compiler fails while inferring it ("irinterp is unable to handle heavy recursion correctly"): the call still
+works, but that compile time is wasted and repeated on the next run. Kept for a typed construction path; a front
+recursion like `_add_algo_tuple_in_order` would avoid the compiler failure.
+"""
+function flatten_comp_funcs_typed(funcs, _intervals, stop_at_options = true)
+    flat_funcs, flat_intervals = flat_tree_property_recursion(funcs, _intervals) do el, trait
+        if !iscomposite(el) || (stop_at_options && !isempty(getoptions(el)))
+            return nothing, nothing
+        end
+        newels = getalgos(el)
+        newtraits = intervals(el)
+        multiplied_newtraits = map(x -> x*trait, newtraits)
+        return newels, multiplied_newtraits
+    end
+    return flat_funcs, flat_intervals
+end
+
+"""
 Deconstruct a `CompositeAlgorithm` into its leaf child algorithms and intervals.
 
 This is the public "old flatten" behavior: route/share options do not make the

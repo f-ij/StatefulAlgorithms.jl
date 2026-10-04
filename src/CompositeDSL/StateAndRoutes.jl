@@ -316,6 +316,68 @@ Base.@nospecializeinfer function _composite_dsl_map_states(func::F, @nospecializ
     return mapped
 end
 
+#=
+Typed versions of the state walk above (`_composite_dsl_map_states` and its helpers), with the same results: tuple
+recursion specialized on the plan type, so the type of the returned plan is known to the compiler.
+
+Not used: the walk runs for every `@context` entry on values whose types are only known at run time, and the typed
+version is compiled again for every plan type, which includes every new `Unique` handle, even when no state changes.
+Kept for a typed construction path.
+=#
+@inline _composite_dsl_map_state_entries_typed(::F, entries::Tuple{}) where {F} = entries, false
+
+function _composite_dsl_map_state_entries_typed(func::F, entries::Entries) where {F, Entries<:Tuple}
+    head, head_changed = _composite_dsl_map_state_entry(func, first(entries))
+    tail, tail_changed = _composite_dsl_map_state_entries_typed(func, Base.tail(entries))
+    (head_changed || tail_changed) || return entries, false
+    return (head, tail...), true
+end
+
+@inline _composite_dsl_map_state_children_typed(::F, children::Tuple{}) where {F} = children, false
+
+function _composite_dsl_map_state_children_typed(func::F, children::Children) where {F, Children<:Tuple}
+    head, head_changed = _composite_dsl_map_states_changed_typed(func, first(children))
+    tail, tail_changed = _composite_dsl_map_state_children_typed(func, Base.tail(children))
+    (head_changed || tail_changed) || return children, false
+    return (head, tail...), true
+end
+
+function _composite_dsl_map_states_changed_typed(func::F, entity::LA) where {F, LA<:LoopAlgorithm}
+    plan, plan_changed = _composite_dsl_map_states_changed_typed(func, getplan(entity))
+    states, states_changed = _composite_dsl_map_state_entries_typed(func, getstates(entity))
+    (plan_changed || states_changed) || return entity, false
+    return LoopAlgorithm(
+        plan;
+        states,
+        options = getoptions(entity),
+        registry = getregistry(entity),
+        context = getstoredcontext(entity),
+        inits = getstoredinits(entity),
+        overrides = getstoredoverrides(entity),
+        id = getid(entity),
+    ), true
+end
+
+function _composite_dsl_map_states_changed_typed(func::F, entity::LA) where {F, LA<:Union{CompositeAlgorithm, Routine}}
+    funcs, funcs_changed = _composite_dsl_map_state_children_typed(func, getalgos(entity))
+    funcs_changed || return entity, false
+    return rebuild_loopalgorithm_funcs(entity, funcs), true
+end
+
+function _composite_dsl_map_states_changed_typed(func::F, entity::IA) where {F, Inner<:LoopSpec, IA<:AbstractIdentifiableAlgo{Inner}}
+    inner, inner_changed = _composite_dsl_map_states_changed_typed(func, getalgo(entity))
+    inner_changed || return entity, false
+    return setfield(entity, :func, inner), true
+end
+
+_composite_dsl_map_states_changed_typed(::F, entity::E) where {F, E} = entity, false
+
+"""Typed version of `_composite_dsl_map_states` (see the note above)."""
+function _composite_dsl_map_states_typed(func::F, entity::E) where {F, E}
+    mapped, _ = _composite_dsl_map_states_changed_typed(func, entity)
+    return mapped
+end
+
 """Prefix diagnostic state-field paths with a parent `@context` alias.
 
 Warnings for overlapping anonymous `@state` fields are only useful when they

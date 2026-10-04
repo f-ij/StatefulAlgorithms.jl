@@ -208,6 +208,24 @@ Base.@nospecializeinfer function _build_plan(PlanType::Type, @nospecialize(funcs
     return isempty(states) && isempty(root_options) ? plan : LoopAlgorithm(plan; states, options = root_options, id)
 end
 
+"""
+    _build_plan_typed(PlanType, funcs, states, options, schedule, id)
+
+Typed version of `_build_plan`, with the same result. Specialized on the argument types, so the type of the built plan
+is known to the compiler when the input types are (useful when plans are built inside functions, many times).
+
+Not used: construction runs on values whose types are only known at run time, and a typed body is compiled again for
+every plan type, which includes every new `Unique` handle (about 175 ms per re-run of the benchmark block in
+`perf/snapshots`). Kept for a typed construction path.
+"""
+function _build_plan_typed(::Type{PlanType}, funcs::F, states::Tuple, options::Tuple, schedule, id) where {PlanType<:AbstractPlan, F<:Tuple}
+    namespaces = ntuple(_ -> Namespace{nothing}(), length(funcs))
+    wiring = PlanWiring(_plan_wiring(options), _plan_child_wiring(funcs, options))
+    plan = PlanType{typeof(funcs), schedule, typeof(namespaces), typeof(wiring), id}(funcs, schedule, namespaces, wiring)
+    root_options = _root_loop_options(options)
+    return isempty(states) && isempty(root_options) ? plan : LoopAlgorithm(plan; states, options = root_options, id)
+end
+
 
 """
 Add all algos and states in one or more loop algorithms to a shared registry with
