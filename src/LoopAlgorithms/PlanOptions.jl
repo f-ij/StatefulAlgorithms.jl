@@ -1,8 +1,15 @@
-"""Return non-wiring options that must stay on the `LoopAlgorithm` wrapper."""
+"""
+    _root_loop_options(options::Tuple)
+
+Return the options that stay on the outer `LoopAlgorithm`: every option except routes and shares
+(`AbstractWiring`), in their original order. Routes and shares are not kept here because they are stored in the
+plan's wiring instead. For example `(state, route, runtime_inputs)` gives `(state, runtime_inputs)`.
+"""
 @inline _root_loop_options(::Tuple{}) = ()
 
-# Recursion on the front of the tuple, keeping or dropping the last option on the way back: the arguments only get
-# shorter, so the result type is inferred for any number of options (a loop, or `filter` beyond 32 elements, loses it).
+# Written as recursion instead of `filter` so that the result type stays known for any number of options: Base's
+# `filter` on a tuple of 32 or more elements goes through a `Vector`, which loses the types. The recursion runs on
+# the front of the tuple and decides about the last option on the way back, so its argument only gets shorter.
 @inline function _root_loop_options(options::Options) where {Options<:Tuple}
     kept = _root_loop_options(Base.front(options))
     option = last(options)

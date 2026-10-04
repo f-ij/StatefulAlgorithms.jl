@@ -97,6 +97,14 @@ function _add_funcwrapper_tuple_to_registry(registry::R, funcs::Funcs, multiplie
     return NameSpaceRegistry{typeof(registry_entries)}(registry_entries), funcs, namespaces
 end
 
+"""
+    add_algo_tuple_to_registry(registry, funcs, multipliers) -> (registry, raw_funcs, namespaces)
+
+Register the children of one plan, first to last, each with its multiplier. Returns the registry with the children
+added, the children as the plan stores them afterwards (a plain algorithm without its identifiable wrapper, or a
+nested plan whose own children are registered too), and per child its context name as a `Namespace` type
+(`Namespace{:Counter_1}`, or `Namespace{nothing}` for a nested plan).
+"""
 @inline function add_algo_tuple_to_registry(registry::R, funcs::F, multipliers::M) where {R<:NameSpaceRegistry, F<:Tuple, M<:Tuple}
     if length(funcs) > _REGISTRY_BATCH_CHILD_LIMIT &&
        isnothing(find_typeidx(registry, FuncWrapper)) &&
@@ -109,10 +117,11 @@ end
 
 @inline _add_algo_tuple_in_order(registry::R, ::Tuple{}, ::Tuple{}) where {R<:NameSpaceRegistry} = registry, (), ()
 
-# Children are added first to last. The recursion goes over the front of the tuple and adds the last child to the
-# registry it returns: the registry type grows at every step, and passing it down as an argument (recursing on the
-# tail) makes inference widen it to plain `NameSpaceRegistry`. Here the arguments only get shorter, which inference
-# accepts for any number of children.
+# Adds the children one by one, first to last (see `add_algo_tuple_to_registry`). Written as recursion over the front
+# of the tuple that adds the last child to the registry it gets back, so that the registry's type stays known: it
+# grows with every child, and recursing over the tail instead (passing the growing registry down as an argument)
+# makes Julia give up and use plain `NameSpaceRegistry`. Here the arguments only get shorter, which works for any
+# number of children.
 @inline function _add_algo_tuple_in_order(registry::R, funcs::F, multipliers::M) where {R<:NameSpaceRegistry, F<:Tuple, M<:Tuple}
     reg, raws, names = _add_algo_tuple_in_order(registry, Base.front(funcs), Base.front(multipliers))
     reg, raw, name = add_algo_to_registry(reg, last(funcs), last(multipliers))
