@@ -1,5 +1,0 @@
-[deps]
-StatefulAlgorithms = "3c03ca44-5aad-4ad5-81af-1baae4bc194b"
-
-[sources]
-StatefulAlgorithms = {path = ".."}
