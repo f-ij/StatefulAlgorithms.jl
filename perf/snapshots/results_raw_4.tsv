@@ -1,0 +1,756 @@
+ROW	main	1	cold	1	1 create Unique handles	13091.2	13460.5
+ROW	main	1	cold	1	2 expand macro: nested @Routine	18023.0	18920.0
+ROW	main	1	cold	1	3 construct: nested @Routine	48156.7	49685.7
+ROW	main	1	cold	1	2 expand macro: @CompositeAlgorithm	50030.8	51451.0
+ROW	main	1	cold	1	3 construct: @CompositeAlgorithm	488018.5	492235.8
+ROW	main	1	cold	1	4 resolve	838695.1	839692.6
+ROW	main	1	warm, same uuids	1	2 expand macro: nested @Routine	0.2	458.0
+ROW	main	1	warm, same uuids	1	3 construct: nested @Routine	0.0	1073.3
+ROW	main	1	warm, same uuids	1	2 expand macro: @CompositeAlgorithm	0.2	956.2
+ROW	main	1	warm, same uuids	1	3 construct: @CompositeAlgorithm	15102.6	17619.9
+ROW	main	1	warm, same uuids	1	4 resolve	0.0	201.8
+ROW	main	1	warm, same uuids	2	2 expand macro: nested @Routine	0.1	411.9
+ROW	main	1	warm, same uuids	2	3 construct: nested @Routine	0.0	972.6
+ROW	main	1	warm, same uuids	2	2 expand macro: @CompositeAlgorithm	0.1	878.1
+ROW	main	1	warm, same uuids	2	3 construct: @CompositeAlgorithm	0.2	2155.6
+ROW	main	1	warm, same uuids	2	4 resolve	0.0	120.3
+ROW	main	1	warm, same uuids	3	2 expand macro: nested @Routine	0.0	353.1
+ROW	main	1	warm, same uuids	3	3 construct: nested @Routine	0.0	910.1
+ROW	main	1	warm, same uuids	3	2 expand macro: @CompositeAlgorithm	0.0	830.0
+ROW	main	1	warm, same uuids	3	3 construct: @CompositeAlgorithm	0.1	2322.8
+ROW	main	1	warm, same uuids	3	4 resolve	0.0	114.9
+ROW	main	1	warm, same uuids	4	2 expand macro: nested @Routine	0.0	359.8
+ROW	main	1	warm, same uuids	4	3 construct: nested @Routine	0.0	901.5
+ROW	main	1	warm, same uuids	4	2 expand macro: @CompositeAlgorithm	0.0	843.9
+ROW	main	1	warm, same uuids	4	3 construct: @CompositeAlgorithm	0.1	2091.3
+ROW	main	1	warm, same uuids	4	4 resolve	0.0	110.9
+ROW	main	1	warm, same uuids	5	2 expand macro: nested @Routine	0.0	347.7
+ROW	main	1	warm, same uuids	5	3 construct: nested @Routine	0.0	907.0
+ROW	main	1	warm, same uuids	5	2 expand macro: @CompositeAlgorithm	0.0	823.7
+ROW	main	1	warm, same uuids	5	3 construct: @CompositeAlgorithm	0.1	2072.4
+ROW	main	1	warm, same uuids	5	4 resolve	0.0	108.5
+ROW	main	1	same shape, new uuids	1	1 create Unique handles	0.0	222.8
+ROW	main	1	same shape, new uuids	1	2 expand macro: nested @Routine	0.1	561.2
+ROW	main	1	same shape, new uuids	1	3 construct: nested @Routine	34849.4	35988.5
+ROW	main	1	same shape, new uuids	1	2 expand macro: @CompositeAlgorithm	0.2	976.3
+ROW	main	1	same shape, new uuids	1	3 construct: @CompositeAlgorithm	199839.8	203196.6
+ROW	main	1	same shape, new uuids	1	4 resolve	601643.7	602695.5
+ROW	main	1	same shape, new uuids	2	1 create Unique handles	0.0	277.8
+ROW	main	1	same shape, new uuids	2	2 expand macro: nested @Routine	0.3	454.8
+ROW	main	1	same shape, new uuids	2	3 construct: nested @Routine	37543.8	38796.8
+ROW	main	1	same shape, new uuids	2	2 expand macro: @CompositeAlgorithm	0.2	978.5
+ROW	main	1	same shape, new uuids	2	3 construct: @CompositeAlgorithm	188738.4	192018.9
+ROW	main	1	same shape, new uuids	2	4 resolve	495640.0	496578.9
+ROW	main	1	same shape, new uuids	3	1 create Unique handles	0.0	235.2
+ROW	main	1	same shape, new uuids	3	2 expand macro: nested @Routine	0.2	426.7
+ROW	main	1	same shape, new uuids	3	3 construct: nested @Routine	33524.1	34709.6
+ROW	main	1	same shape, new uuids	3	2 expand macro: @CompositeAlgorithm	0.2	973.2
+ROW	main	1	same shape, new uuids	3	3 construct: @CompositeAlgorithm	194965.5	198072.8
+ROW	main	1	same shape, new uuids	3	4 resolve	576480.4	577611.9
+ROW	main	1	same shape, new uuids	4	1 create Unique handles	0.0	272.8
+ROW	main	1	same shape, new uuids	4	2 expand macro: nested @Routine	0.3	462.5
+ROW	main	1	same shape, new uuids	4	3 construct: nested @Routine	42532.8	43911.6
+ROW	main	1	same shape, new uuids	4	2 expand macro: @CompositeAlgorithm	0.2	1003.1
+ROW	main	1	same shape, new uuids	4	3 construct: @CompositeAlgorithm	195930.8	199132.7
+ROW	main	1	same shape, new uuids	4	4 resolve	540883.3	541837.5
+ROW	main	1	same shape, new uuids	5	1 create Unique handles	0.0	257.2
+ROW	main	1	same shape, new uuids	5	2 expand macro: nested @Routine	0.2	434.2
+ROW	main	1	same shape, new uuids	5	3 construct: nested @Routine	39203.3	40426.8
+ROW	main	1	same shape, new uuids	5	2 expand macro: @CompositeAlgorithm	0.5	1018.3
+ROW	main	1	same shape, new uuids	5	3 construct: @CompositeAlgorithm	238597.0	242372.5
+ROW	main	1	same shape, new uuids	5	4 resolve	516959.1	517700.5
+NAMES	main	Counter_1,Counter_2,c,total,Watch_1,Reader_1,echo
+INTERNALERR	main	1	7
+ROW	fix-types	1	cold	1	1 create Unique handles	12401.3	12740.8
+ROW	fix-types	1	cold	1	2 expand macro: nested @Routine	17454.0	18280.2
+ROW	fix-types	1	cold	1	3 construct: nested @Routine	50334.4	51825.3
+ROW	fix-types	1	cold	1	2 expand macro: @CompositeAlgorithm	59859.7	61520.2
+ROW	fix-types	1	cold	1	3 construct: @CompositeAlgorithm	532601.5	537476.4
+ROW	fix-types	1	cold	1	4 resolve	590395.0	590885.9
+ROW	fix-types	1	warm, same uuids	1	2 expand macro: nested @Routine	0.1	464.5
+ROW	fix-types	1	warm, same uuids	1	3 construct: nested @Routine	0.0	1046.4
+ROW	fix-types	1	warm, same uuids	1	2 expand macro: @CompositeAlgorithm	0.1	913.4
+ROW	fix-types	1	warm, same uuids	1	3 construct: @CompositeAlgorithm	16656.5	19215.0
+ROW	fix-types	1	warm, same uuids	1	4 resolve	0.0	142.4
+ROW	fix-types	1	warm, same uuids	2	2 expand macro: nested @Routine	0.2	383.2
+ROW	fix-types	1	warm, same uuids	2	3 construct: nested @Routine	0.0	941.0
+ROW	fix-types	1	warm, same uuids	2	2 expand macro: @CompositeAlgorithm	0.2	853.7
+ROW	fix-types	1	warm, same uuids	2	3 construct: @CompositeAlgorithm	0.3	2111.4
+ROW	fix-types	1	warm, same uuids	2	4 resolve	0.0	100.7
+ROW	fix-types	1	warm, same uuids	3	2 expand macro: nested @Routine	0.0	356.8
+ROW	fix-types	1	warm, same uuids	3	3 construct: nested @Routine	0.0	920.8
+ROW	fix-types	1	warm, same uuids	3	2 expand macro: @CompositeAlgorithm	0.0	826.4
+ROW	fix-types	1	warm, same uuids	3	3 construct: @CompositeAlgorithm	0.3	2387.9
+ROW	fix-types	1	warm, same uuids	3	4 resolve	0.0	106.2
+ROW	fix-types	1	warm, same uuids	4	2 expand macro: nested @Routine	0.0	379.0
+ROW	fix-types	1	warm, same uuids	4	3 construct: nested @Routine	0.0	925.8
+ROW	fix-types	1	warm, same uuids	4	2 expand macro: @CompositeAlgorithm	0.0	838.4
+ROW	fix-types	1	warm, same uuids	4	3 construct: @CompositeAlgorithm	0.2	2133.6
+ROW	fix-types	1	warm, same uuids	4	4 resolve	0.0	102.2
+ROW	fix-types	1	warm, same uuids	5	2 expand macro: nested @Routine	0.0	351.0
+ROW	fix-types	1	warm, same uuids	5	3 construct: nested @Routine	0.0	911.0
+ROW	fix-types	1	warm, same uuids	5	2 expand macro: @CompositeAlgorithm	0.0	828.9
+ROW	fix-types	1	warm, same uuids	5	3 construct: @CompositeAlgorithm	0.2	2097.2
+ROW	fix-types	1	warm, same uuids	5	4 resolve	0.0	97.7
+ROW	fix-types	1	same shape, new uuids	1	1 create Unique handles	0.0	238.9
+ROW	fix-types	1	same shape, new uuids	1	2 expand macro: nested @Routine	0.0	578.5
+ROW	fix-types	1	same shape, new uuids	1	3 construct: nested @Routine	33175.5	34324.9
+ROW	fix-types	1	same shape, new uuids	1	2 expand macro: @CompositeAlgorithm	0.1	980.5
+ROW	fix-types	1	same shape, new uuids	1	3 construct: @CompositeAlgorithm	196632.7	199719.2
+ROW	fix-types	1	same shape, new uuids	1	4 resolve	302002.7	302491.2
+ROW	fix-types	1	same shape, new uuids	2	1 create Unique handles	0.0	236.9
+ROW	fix-types	1	same shape, new uuids	2	2 expand macro: nested @Routine	0.2	431.5
+ROW	fix-types	1	same shape, new uuids	2	3 construct: nested @Routine	32884.4	34051.4
+ROW	fix-types	1	same shape, new uuids	2	2 expand macro: @CompositeAlgorithm	0.2	964.2
+ROW	fix-types	1	same shape, new uuids	2	3 construct: @CompositeAlgorithm	181417.8	184534.8
+ROW	fix-types	1	same shape, new uuids	2	4 resolve	304125.5	304558.6
+ROW	fix-types	1	same shape, new uuids	3	1 create Unique handles	0.0	232.1
+ROW	fix-types	1	same shape, new uuids	3	2 expand macro: nested @Routine	0.2	436.7
+ROW	fix-types	1	same shape, new uuids	3	3 construct: nested @Routine	33050.1	34242.2
+ROW	fix-types	1	same shape, new uuids	3	2 expand macro: @CompositeAlgorithm	0.1	976.7
+ROW	fix-types	1	same shape, new uuids	3	3 construct: @CompositeAlgorithm	189570.5	192717.1
+ROW	fix-types	1	same shape, new uuids	3	4 resolve	306857.0	307243.4
+ROW	fix-types	1	same shape, new uuids	4	1 create Unique handles	0.0	233.8
+ROW	fix-types	1	same shape, new uuids	4	2 expand macro: nested @Routine	0.1	454.9
+ROW	fix-types	1	same shape, new uuids	4	3 construct: nested @Routine	32622.5	33809.2
+ROW	fix-types	1	same shape, new uuids	4	2 expand macro: @CompositeAlgorithm	0.3	948.3
+ROW	fix-types	1	same shape, new uuids	4	3 construct: @CompositeAlgorithm	181467.3	184740.7
+ROW	fix-types	1	same shape, new uuids	4	4 resolve	306588.5	306992.9
+ROW	fix-types	1	same shape, new uuids	5	1 create Unique handles	0.0	229.5
+ROW	fix-types	1	same shape, new uuids	5	2 expand macro: nested @Routine	0.1	427.9
+ROW	fix-types	1	same shape, new uuids	5	3 construct: nested @Routine	32934.2	34095.1
+ROW	fix-types	1	same shape, new uuids	5	2 expand macro: @CompositeAlgorithm	0.2	959.0
+ROW	fix-types	1	same shape, new uuids	5	3 construct: @CompositeAlgorithm	206301.5	209691.0
+ROW	fix-types	1	same shape, new uuids	5	4 resolve	321045.5	321469.8
+NAMES	fix-types	Counter_1,Counter_2,c,total,Watch_1,Reader_1,echo
+INTERNALERR	fix-types	1	7
+ROW	fix-construction	1	cold	1	1 create Unique handles	15151.3	15609.2
+ROW	fix-construction	1	cold	1	2 expand macro: nested @Routine	22226.5	23284.0
+ROW	fix-construction	1	cold	1	3 construct: nested @Routine	31524.5	33444.5
+ROW	fix-construction	1	cold	1	2 expand macro: @CompositeAlgorithm	59246.3	60904.5
+ROW	fix-construction	1	cold	1	3 construct: @CompositeAlgorithm	119841.8	123974.4
+ROW	fix-construction	1	cold	1	4 resolve	675812.0	676316.2
+ROW	fix-construction	1	warm, same uuids	1	2 expand macro: nested @Routine	0.3	457.5
+ROW	fix-construction	1	warm, same uuids	1	3 construct: nested @Routine	0.0	1077.0
+ROW	fix-construction	1	warm, same uuids	1	2 expand macro: @CompositeAlgorithm	0.2	925.6
+ROW	fix-construction	1	warm, same uuids	1	3 construct: @CompositeAlgorithm	0.0	2508.4
+ROW	fix-construction	1	warm, same uuids	1	4 resolve	0.0	143.7
+ROW	fix-construction	1	warm, same uuids	2	2 expand macro: nested @Routine	0.1	378.6
+ROW	fix-construction	1	warm, same uuids	2	3 construct: nested @Routine	0.0	927.0
+ROW	fix-construction	1	warm, same uuids	2	2 expand macro: @CompositeAlgorithm	0.0	856.8
+ROW	fix-construction	1	warm, same uuids	2	3 construct: @CompositeAlgorithm	0.0	2141.6
+ROW	fix-construction	1	warm, same uuids	2	4 resolve	0.0	101.4
+ROW	fix-construction	1	warm, same uuids	3	2 expand macro: nested @Routine	0.1	354.0
+ROW	fix-construction	1	warm, same uuids	3	3 construct: nested @Routine	0.0	916.4
+ROW	fix-construction	1	warm, same uuids	3	2 expand macro: @CompositeAlgorithm	0.1	855.4
+ROW	fix-construction	1	warm, same uuids	3	3 construct: @CompositeAlgorithm	0.0	2142.4
+ROW	fix-construction	1	warm, same uuids	3	4 resolve	0.0	98.2
+ROW	fix-construction	1	warm, same uuids	4	2 expand macro: nested @Routine	0.0	353.1
+ROW	fix-construction	1	warm, same uuids	4	3 construct: nested @Routine	0.0	1087.1
+ROW	fix-construction	1	warm, same uuids	4	2 expand macro: @CompositeAlgorithm	0.0	841.5
+ROW	fix-construction	1	warm, same uuids	4	3 construct: @CompositeAlgorithm	0.0	2090.4
+ROW	fix-construction	1	warm, same uuids	4	4 resolve	0.0	97.8
+ROW	fix-construction	1	warm, same uuids	5	2 expand macro: nested @Routine	0.0	348.7
+ROW	fix-construction	1	warm, same uuids	5	3 construct: nested @Routine	0.0	910.7
+ROW	fix-construction	1	warm, same uuids	5	2 expand macro: @CompositeAlgorithm	0.0	830.0
+ROW	fix-construction	1	warm, same uuids	5	3 construct: @CompositeAlgorithm	0.0	2133.8
+ROW	fix-construction	1	warm, same uuids	5	4 resolve	0.0	99.6
+ROW	fix-construction	1	same shape, new uuids	1	1 create Unique handles	0.0	229.1
+ROW	fix-construction	1	same shape, new uuids	1	2 expand macro: nested @Routine	0.1	396.1
+ROW	fix-construction	1	same shape, new uuids	1	3 construct: nested @Routine	10824.2	11947.4
+ROW	fix-construction	1	same shape, new uuids	1	2 expand macro: @CompositeAlgorithm	0.1	911.7
+ROW	fix-construction	1	same shape, new uuids	1	3 construct: @CompositeAlgorithm	36907.5	39931.6
+ROW	fix-construction	1	same shape, new uuids	1	4 resolve	307369.2	307791.0
+ROW	fix-construction	1	same shape, new uuids	2	1 create Unique handles	0.0	231.9
+ROW	fix-construction	1	same shape, new uuids	2	2 expand macro: nested @Routine	0.2	429.8
+ROW	fix-construction	1	same shape, new uuids	2	3 construct: nested @Routine	10602.2	11776.2
+ROW	fix-construction	1	same shape, new uuids	2	2 expand macro: @CompositeAlgorithm	0.2	955.3
+ROW	fix-construction	1	same shape, new uuids	2	3 construct: @CompositeAlgorithm	38137.3	41060.7
+ROW	fix-construction	1	same shape, new uuids	2	4 resolve	319179.5	319586.1
+ROW	fix-construction	1	same shape, new uuids	3	1 create Unique handles	0.0	243.5
+ROW	fix-construction	1	same shape, new uuids	3	2 expand macro: nested @Routine	0.2	429.4
+ROW	fix-construction	1	same shape, new uuids	3	3 construct: nested @Routine	10624.1	11824.8
+ROW	fix-construction	1	same shape, new uuids	3	2 expand macro: @CompositeAlgorithm	0.1	963.5
+ROW	fix-construction	1	same shape, new uuids	3	3 construct: @CompositeAlgorithm	38184.9	41326.1
+ROW	fix-construction	1	same shape, new uuids	3	4 resolve	314681.4	315108.2
+ROW	fix-construction	1	same shape, new uuids	4	1 create Unique handles	0.0	243.1
+ROW	fix-construction	1	same shape, new uuids	4	2 expand macro: nested @Routine	0.2	445.1
+ROW	fix-construction	1	same shape, new uuids	4	3 construct: nested @Routine	11280.5	12489.0
+ROW	fix-construction	1	same shape, new uuids	4	2 expand macro: @CompositeAlgorithm	0.0	968.4
+ROW	fix-construction	1	same shape, new uuids	4	3 construct: @CompositeAlgorithm	37785.2	40718.9
+ROW	fix-construction	1	same shape, new uuids	4	4 resolve	318247.5	318679.1
+ROW	fix-construction	1	same shape, new uuids	5	1 create Unique handles	0.0	240.0
+ROW	fix-construction	1	same shape, new uuids	5	2 expand macro: nested @Routine	0.1	430.7
+ROW	fix-construction	1	same shape, new uuids	5	3 construct: nested @Routine	10646.5	11841.4
+ROW	fix-construction	1	same shape, new uuids	5	2 expand macro: @CompositeAlgorithm	0.1	929.5
+ROW	fix-construction	1	same shape, new uuids	5	3 construct: @CompositeAlgorithm	37709.0	40841.5
+ROW	fix-construction	1	same shape, new uuids	5	4 resolve	318418.0	318859.0
+NAMES	fix-construction	Counter_1,Counter_2,c,total,Watch_1,Reader_1,echo
+INTERNALERR	fix-construction	1	0
+ROW	perf	1	cold	1	1 create Unique handles	12206.2	12534.5
+ROW	perf	1	cold	1	2 expand macro: nested @Routine	17378.7	18182.8
+ROW	perf	1	cold	1	3 construct: nested @Routine	24358.6	26020.2
+ROW	perf	1	cold	1	2 expand macro: @CompositeAlgorithm	48011.1	49288.5
+ROW	perf	1	cold	1	3 construct: @CompositeAlgorithm	102636.9	106256.3
+ROW	perf	1	cold	1	4 resolve	666199.6	666815.9
+ROW	perf	1	warm, same uuids	1	2 expand macro: nested @Routine	0.1	450.7
+ROW	perf	1	warm, same uuids	1	3 construct: nested @Routine	0.0	1048.0
+ROW	perf	1	warm, same uuids	1	2 expand macro: @CompositeAlgorithm	0.2	925.7
+ROW	perf	1	warm, same uuids	1	3 construct: @CompositeAlgorithm	0.0	2514.0
+ROW	perf	1	warm, same uuids	1	4 resolve	0.0	164.7
+ROW	perf	1	warm, same uuids	2	2 expand macro: nested @Routine	0.0	354.8
+ROW	perf	1	warm, same uuids	2	3 construct: nested @Routine	0.0	919.2
+ROW	perf	1	warm, same uuids	2	2 expand macro: @CompositeAlgorithm	0.0	841.9
+ROW	perf	1	warm, same uuids	2	3 construct: @CompositeAlgorithm	0.0	2089.8
+ROW	perf	1	warm, same uuids	2	4 resolve	0.0	128.0
+ROW	perf	1	warm, same uuids	3	2 expand macro: nested @Routine	0.0	347.8
+ROW	perf	1	warm, same uuids	3	3 construct: nested @Routine	0.0	914.8
+ROW	perf	1	warm, same uuids	3	2 expand macro: @CompositeAlgorithm	0.0	836.3
+ROW	perf	1	warm, same uuids	3	3 construct: @CompositeAlgorithm	0.0	2090.2
+ROW	perf	1	warm, same uuids	3	4 resolve	0.0	114.3
+ROW	perf	1	warm, same uuids	4	2 expand macro: nested @Routine	0.0	348.2
+ROW	perf	1	warm, same uuids	4	3 construct: nested @Routine	0.0	1089.5
+ROW	perf	1	warm, same uuids	4	2 expand macro: @CompositeAlgorithm	0.0	856.4
+ROW	perf	1	warm, same uuids	4	3 construct: @CompositeAlgorithm	0.0	2127.5
+ROW	perf	1	warm, same uuids	4	4 resolve	0.0	114.4
+ROW	perf	1	warm, same uuids	5	2 expand macro: nested @Routine	0.0	341.5
+ROW	perf	1	warm, same uuids	5	3 construct: nested @Routine	0.0	934.7
+ROW	perf	1	warm, same uuids	5	2 expand macro: @CompositeAlgorithm	0.0	833.0
+ROW	perf	1	warm, same uuids	5	3 construct: @CompositeAlgorithm	0.0	2100.8
+ROW	perf	1	warm, same uuids	5	4 resolve	0.0	118.4
+ROW	perf	1	same shape, new uuids	1	1 create Unique handles	0.0	223.5
+ROW	perf	1	same shape, new uuids	1	2 expand macro: nested @Routine	0.1	374.8
+ROW	perf	1	same shape, new uuids	1	3 construct: nested @Routine	10955.6	12117.7
+ROW	perf	1	same shape, new uuids	1	2 expand macro: @CompositeAlgorithm	0.1	904.5
+ROW	perf	1	same shape, new uuids	1	3 construct: @CompositeAlgorithm	37278.2	40239.8
+ROW	perf	1	same shape, new uuids	1	4 resolve	2105.8	2296.4
+ROW	perf	1	same shape, new uuids	2	1 create Unique handles	0.0	223.5
+ROW	perf	1	same shape, new uuids	2	2 expand macro: nested @Routine	0.0	399.0
+ROW	perf	1	same shape, new uuids	2	3 construct: nested @Routine	10437.0	11578.8
+ROW	perf	1	same shape, new uuids	2	2 expand macro: @CompositeAlgorithm	0.2	929.4
+ROW	perf	1	same shape, new uuids	2	3 construct: @CompositeAlgorithm	36734.3	39580.8
+ROW	perf	1	same shape, new uuids	2	4 resolve	2143.2	2330.9
+ROW	perf	1	same shape, new uuids	3	1 create Unique handles	0.0	219.9
+ROW	perf	1	same shape, new uuids	3	2 expand macro: nested @Routine	0.1	409.3
+ROW	perf	1	same shape, new uuids	3	3 construct: nested @Routine	10304.2	11437.0
+ROW	perf	1	same shape, new uuids	3	2 expand macro: @CompositeAlgorithm	0.0	915.2
+ROW	perf	1	same shape, new uuids	3	3 construct: @CompositeAlgorithm	44798.2	47856.9
+ROW	perf	1	same shape, new uuids	3	4 resolve	2839.2	3076.1
+ROW	perf	1	same shape, new uuids	4	1 create Unique handles	0.0	255.3
+ROW	perf	1	same shape, new uuids	4	2 expand macro: nested @Routine	0.3	434.0
+ROW	perf	1	same shape, new uuids	4	3 construct: nested @Routine	12492.5	13723.8
+ROW	perf	1	same shape, new uuids	4	2 expand macro: @CompositeAlgorithm	0.3	1006.0
+ROW	perf	1	same shape, new uuids	4	3 construct: @CompositeAlgorithm	42865.4	45892.2
+ROW	perf	1	same shape, new uuids	4	4 resolve	2442.5	2690.8
+ROW	perf	1	same shape, new uuids	5	1 create Unique handles	0.0	248.3
+ROW	perf	1	same shape, new uuids	5	2 expand macro: nested @Routine	0.2	462.9
+ROW	perf	1	same shape, new uuids	5	3 construct: nested @Routine	11360.3	12572.2
+ROW	perf	1	same shape, new uuids	5	2 expand macro: @CompositeAlgorithm	0.1	986.7
+ROW	perf	1	same shape, new uuids	5	3 construct: @CompositeAlgorithm	39799.7	43008.8
+ROW	perf	1	same shape, new uuids	5	4 resolve	2484.1	2726.2
+NAMES	perf	Counter_1,Counter_2,c,total,Watch_1,Reader_1,echo
+INTERNALERR	perf	1	0
+ROW	main	2	cold	1	1 create Unique handles	28690.8	29067.3
+ROW	main	2	cold	1	2 expand macro: nested @Routine	18642.6	19549.5
+ROW	main	2	cold	1	3 construct: nested @Routine	52225.5	53968.5
+ROW	main	2	cold	1	2 expand macro: @CompositeAlgorithm	49608.0	51001.6
+ROW	main	2	cold	1	3 construct: @CompositeAlgorithm	479014.4	483323.8
+ROW	main	2	cold	1	4 resolve	884421.5	885594.8
+ROW	main	2	warm, same uuids	1	2 expand macro: nested @Routine	0.3	482.1
+ROW	main	2	warm, same uuids	1	3 construct: nested @Routine	0.0	1051.0
+ROW	main	2	warm, same uuids	1	2 expand macro: @CompositeAlgorithm	0.1	927.2
+ROW	main	2	warm, same uuids	1	3 construct: @CompositeAlgorithm	15377.6	17959.8
+ROW	main	2	warm, same uuids	1	4 resolve	0.0	226.5
+ROW	main	2	warm, same uuids	2	2 expand macro: nested @Routine	0.2	421.4
+ROW	main	2	warm, same uuids	2	3 construct: nested @Routine	0.0	969.2
+ROW	main	2	warm, same uuids	2	2 expand macro: @CompositeAlgorithm	0.1	868.0
+ROW	main	2	warm, same uuids	2	3 construct: @CompositeAlgorithm	0.2	2111.4
+ROW	main	2	warm, same uuids	2	4 resolve	0.0	126.2
+ROW	main	2	warm, same uuids	3	2 expand macro: nested @Routine	0.1	361.5
+ROW	main	2	warm, same uuids	3	3 construct: nested @Routine	0.0	912.5
+ROW	main	2	warm, same uuids	3	2 expand macro: @CompositeAlgorithm	0.2	866.6
+ROW	main	2	warm, same uuids	3	3 construct: @CompositeAlgorithm	0.6	2453.5
+ROW	main	2	warm, same uuids	3	4 resolve	0.0	175.2
+ROW	main	2	warm, same uuids	4	2 expand macro: nested @Routine	0.1	385.4
+ROW	main	2	warm, same uuids	4	3 construct: nested @Routine	0.0	975.5
+ROW	main	2	warm, same uuids	4	2 expand macro: @CompositeAlgorithm	0.2	865.7
+ROW	main	2	warm, same uuids	4	3 construct: @CompositeAlgorithm	0.4	2171.0
+ROW	main	2	warm, same uuids	4	4 resolve	0.0	126.4
+ROW	main	2	warm, same uuids	5	2 expand macro: nested @Routine	0.0	355.2
+ROW	main	2	warm, same uuids	5	3 construct: nested @Routine	0.0	914.4
+ROW	main	2	warm, same uuids	5	2 expand macro: @CompositeAlgorithm	0.0	839.2
+ROW	main	2	warm, same uuids	5	3 construct: @CompositeAlgorithm	0.5	2240.7
+ROW	main	2	warm, same uuids	5	4 resolve	0.0	146.3
+ROW	main	2	same shape, new uuids	1	1 create Unique handles	0.0	260.0
+ROW	main	2	same shape, new uuids	1	2 expand macro: nested @Routine	0.2	628.8
+ROW	main	2	same shape, new uuids	1	3 construct: nested @Routine	36876.7	38055.1
+ROW	main	2	same shape, new uuids	1	2 expand macro: @CompositeAlgorithm	0.2	975.0
+ROW	main	2	same shape, new uuids	1	3 construct: @CompositeAlgorithm	185299.3	188519.6
+ROW	main	2	same shape, new uuids	1	4 resolve	540153.0	540962.8
+ROW	main	2	same shape, new uuids	2	1 create Unique handles	0.0	244.9
+ROW	main	2	same shape, new uuids	2	2 expand macro: nested @Routine	0.2	443.7
+ROW	main	2	same shape, new uuids	2	3 construct: nested @Routine	34460.9	35690.6
+ROW	main	2	same shape, new uuids	2	2 expand macro: @CompositeAlgorithm	0.3	983.8
+ROW	main	2	same shape, new uuids	2	3 construct: @CompositeAlgorithm	194405.8	197690.2
+ROW	main	2	same shape, new uuids	2	4 resolve	511323.5	512275.4
+ROW	main	2	same shape, new uuids	3	1 create Unique handles	0.0	244.8
+ROW	main	2	same shape, new uuids	3	2 expand macro: nested @Routine	0.4	428.5
+ROW	main	2	same shape, new uuids	3	3 construct: nested @Routine	34800.5	35981.7
+ROW	main	2	same shape, new uuids	3	2 expand macro: @CompositeAlgorithm	0.4	976.5
+ROW	main	2	same shape, new uuids	3	3 construct: @CompositeAlgorithm	219453.5	222820.2
+ROW	main	2	same shape, new uuids	3	4 resolve	562273.5	563237.9
+ROW	main	2	same shape, new uuids	4	1 create Unique handles	0.0	252.5
+ROW	main	2	same shape, new uuids	4	2 expand macro: nested @Routine	0.3	450.0
+ROW	main	2	same shape, new uuids	4	3 construct: nested @Routine	35960.9	37164.2
+ROW	main	2	same shape, new uuids	4	2 expand macro: @CompositeAlgorithm	0.2	958.9
+ROW	main	2	same shape, new uuids	4	3 construct: @CompositeAlgorithm	197501.3	200760.9
+ROW	main	2	same shape, new uuids	4	4 resolve	512532.0	513320.8
+ROW	main	2	same shape, new uuids	5	1 create Unique handles	0.0	258.2
+ROW	main	2	same shape, new uuids	5	2 expand macro: nested @Routine	0.3	451.0
+ROW	main	2	same shape, new uuids	5	3 construct: nested @Routine	40422.8	41758.3
+ROW	main	2	same shape, new uuids	5	2 expand macro: @CompositeAlgorithm	0.4	1017.2
+ROW	main	2	same shape, new uuids	5	3 construct: @CompositeAlgorithm	229097.0	232530.8
+ROW	main	2	same shape, new uuids	5	4 resolve	528918.3	529648.6
+NAMES	main	Counter_1,Counter_2,c,total,Watch_1,Reader_1,echo
+INTERNALERR	main	2	7
+ROW	fix-types	2	cold	1	1 create Unique handles	12126.2	12446.4
+ROW	fix-types	2	cold	1	2 expand macro: nested @Routine	17454.7	18309.3
+ROW	fix-types	2	cold	1	3 construct: nested @Routine	47448.0	48927.8
+ROW	fix-types	2	cold	1	2 expand macro: @CompositeAlgorithm	50414.0	51824.8
+ROW	fix-types	2	cold	1	3 construct: @CompositeAlgorithm	498766.1	503407.3
+ROW	fix-types	2	cold	1	4 resolve	573245.0	573722.2
+ROW	fix-types	2	warm, same uuids	1	2 expand macro: nested @Routine	0.2	479.9
+ROW	fix-types	2	warm, same uuids	1	3 construct: nested @Routine	0.0	1069.8
+ROW	fix-types	2	warm, same uuids	1	2 expand macro: @CompositeAlgorithm	0.1	969.7
+ROW	fix-types	2	warm, same uuids	1	3 construct: @CompositeAlgorithm	16436.5	18883.5
+ROW	fix-types	2	warm, same uuids	1	4 resolve	0.0	146.2
+ROW	fix-types	2	warm, same uuids	2	2 expand macro: nested @Routine	0.2	395.9
+ROW	fix-types	2	warm, same uuids	2	3 construct: nested @Routine	0.0	952.8
+ROW	fix-types	2	warm, same uuids	2	2 expand macro: @CompositeAlgorithm	0.2	873.2
+ROW	fix-types	2	warm, same uuids	2	3 construct: @CompositeAlgorithm	0.2	2123.6
+ROW	fix-types	2	warm, same uuids	2	4 resolve	0.0	101.5
+ROW	fix-types	2	warm, same uuids	3	2 expand macro: nested @Routine	0.0	347.7
+ROW	fix-types	2	warm, same uuids	3	3 construct: nested @Routine	0.0	919.1
+ROW	fix-types	2	warm, same uuids	3	2 expand macro: @CompositeAlgorithm	0.0	820.8
+ROW	fix-types	2	warm, same uuids	3	3 construct: @CompositeAlgorithm	0.2	2355.8
+ROW	fix-types	2	warm, same uuids	3	4 resolve	0.0	105.2
+ROW	fix-types	2	warm, same uuids	4	2 expand macro: nested @Routine	0.1	367.2
+ROW	fix-types	2	warm, same uuids	4	3 construct: nested @Routine	0.0	915.6
+ROW	fix-types	2	warm, same uuids	4	2 expand macro: @CompositeAlgorithm	0.1	841.0
+ROW	fix-types	2	warm, same uuids	4	3 construct: @CompositeAlgorithm	0.0	2091.3
+ROW	fix-types	2	warm, same uuids	4	4 resolve	0.0	97.1
+ROW	fix-types	2	warm, same uuids	5	2 expand macro: nested @Routine	0.0	344.1
+ROW	fix-types	2	warm, same uuids	5	3 construct: nested @Routine	0.0	910.7
+ROW	fix-types	2	warm, same uuids	5	2 expand macro: @CompositeAlgorithm	0.0	825.7
+ROW	fix-types	2	warm, same uuids	5	3 construct: @CompositeAlgorithm	0.3	2113.5
+ROW	fix-types	2	warm, same uuids	5	4 resolve	0.0	104.0
+ROW	fix-types	2	same shape, new uuids	1	1 create Unique handles	0.0	223.0
+ROW	fix-types	2	same shape, new uuids	1	2 expand macro: nested @Routine	0.1	573.3
+ROW	fix-types	2	same shape, new uuids	1	3 construct: nested @Routine	32842.0	33985.9
+ROW	fix-types	2	same shape, new uuids	1	2 expand macro: @CompositeAlgorithm	0.1	951.0
+ROW	fix-types	2	same shape, new uuids	1	3 construct: @CompositeAlgorithm	196477.5	199581.8
+ROW	fix-types	2	same shape, new uuids	1	4 resolve	314747.3	315241.0
+ROW	fix-types	2	same shape, new uuids	2	1 create Unique handles	0.0	282.2
+ROW	fix-types	2	same shape, new uuids	2	2 expand macro: nested @Routine	0.3	463.1
+ROW	fix-types	2	same shape, new uuids	2	3 construct: nested @Routine	36749.5	38078.4
+ROW	fix-types	2	same shape, new uuids	2	2 expand macro: @CompositeAlgorithm	0.3	972.0
+ROW	fix-types	2	same shape, new uuids	2	3 construct: @CompositeAlgorithm	188479.7	191699.5
+ROW	fix-types	2	same shape, new uuids	2	4 resolve	356167.6	356731.0
+ROW	fix-types	2	same shape, new uuids	3	1 create Unique handles	0.0	266.2
+ROW	fix-types	2	same shape, new uuids	3	2 expand macro: nested @Routine	0.4	437.5
+ROW	fix-types	2	same shape, new uuids	3	3 construct: nested @Routine	40628.0	41867.3
+ROW	fix-types	2	same shape, new uuids	3	2 expand macro: @CompositeAlgorithm	0.3	977.5
+ROW	fix-types	2	same shape, new uuids	3	3 construct: @CompositeAlgorithm	213079.7	217493.3
+ROW	fix-types	2	same shape, new uuids	3	4 resolve	344544.2	345046.8
+ROW	fix-types	2	same shape, new uuids	4	1 create Unique handles	0.0	284.8
+ROW	fix-types	2	same shape, new uuids	4	2 expand macro: nested @Routine	0.4	716.5
+ROW	fix-types	2	same shape, new uuids	4	3 construct: nested @Routine	42629.3	43977.9
+ROW	fix-types	2	same shape, new uuids	4	2 expand macro: @CompositeAlgorithm	0.2	986.8
+ROW	fix-types	2	same shape, new uuids	4	3 construct: @CompositeAlgorithm	223634.3	227510.7
+ROW	fix-types	2	same shape, new uuids	4	4 resolve	372181.5	372816.8
+ROW	fix-types	2	same shape, new uuids	5	1 create Unique handles	0.0	256.9
+ROW	fix-types	2	same shape, new uuids	5	2 expand macro: nested @Routine	0.3	431.0
+ROW	fix-types	2	same shape, new uuids	5	3 construct: nested @Routine	39454.4	40690.0
+ROW	fix-types	2	same shape, new uuids	5	2 expand macro: @CompositeAlgorithm	0.2	1019.1
+ROW	fix-types	2	same shape, new uuids	5	3 construct: @CompositeAlgorithm	215837.1	219735.0
+ROW	fix-types	2	same shape, new uuids	5	4 resolve	367644.3	368154.7
+NAMES	fix-types	Counter_1,Counter_2,c,total,Watch_1,Reader_1,echo
+INTERNALERR	fix-types	2	7
+ROW	fix-construction	2	cold	1	1 create Unique handles	14157.9	14566.4
+ROW	fix-construction	2	cold	1	2 expand macro: nested @Routine	18286.4	19132.0
+ROW	fix-construction	2	cold	1	3 construct: nested @Routine	25489.5	27160.1
+ROW	fix-construction	2	cold	1	2 expand macro: @CompositeAlgorithm	48816.7	50185.7
+ROW	fix-construction	2	cold	1	3 construct: @CompositeAlgorithm	105255.9	108916.7
+ROW	fix-construction	2	cold	1	4 resolve	632233.8	632711.2
+ROW	fix-construction	2	warm, same uuids	1	2 expand macro: nested @Routine	0.2	455.0
+ROW	fix-construction	2	warm, same uuids	1	3 construct: nested @Routine	0.0	1044.0
+ROW	fix-construction	2	warm, same uuids	1	2 expand macro: @CompositeAlgorithm	0.2	925.5
+ROW	fix-construction	2	warm, same uuids	1	3 construct: @CompositeAlgorithm	0.0	2460.6
+ROW	fix-construction	2	warm, same uuids	1	4 resolve	0.0	137.8
+ROW	fix-construction	2	warm, same uuids	2	2 expand macro: nested @Routine	0.1	386.9
+ROW	fix-construction	2	warm, same uuids	2	3 construct: nested @Routine	0.0	970.2
+ROW	fix-construction	2	warm, same uuids	2	2 expand macro: @CompositeAlgorithm	0.0	866.4
+ROW	fix-construction	2	warm, same uuids	2	3 construct: @CompositeAlgorithm	0.0	2108.4
+ROW	fix-construction	2	warm, same uuids	2	4 resolve	0.0	109.1
+ROW	fix-construction	2	warm, same uuids	3	2 expand macro: nested @Routine	0.1	366.3
+ROW	fix-construction	2	warm, same uuids	3	3 construct: nested @Routine	0.0	929.5
+ROW	fix-construction	2	warm, same uuids	3	2 expand macro: @CompositeAlgorithm	0.0	846.7
+ROW	fix-construction	2	warm, same uuids	3	3 construct: @CompositeAlgorithm	0.0	2089.6
+ROW	fix-construction	2	warm, same uuids	3	4 resolve	0.0	98.8
+ROW	fix-construction	2	warm, same uuids	4	2 expand macro: nested @Routine	0.0	352.5
+ROW	fix-construction	2	warm, same uuids	4	3 construct: nested @Routine	0.0	1124.8
+ROW	fix-construction	2	warm, same uuids	4	2 expand macro: @CompositeAlgorithm	0.0	888.4
+ROW	fix-construction	2	warm, same uuids	4	3 construct: @CompositeAlgorithm	0.0	2180.2
+ROW	fix-construction	2	warm, same uuids	4	4 resolve	0.0	105.2
+ROW	fix-construction	2	warm, same uuids	5	2 expand macro: nested @Routine	0.0	361.8
+ROW	fix-construction	2	warm, same uuids	5	3 construct: nested @Routine	0.0	968.1
+ROW	fix-construction	2	warm, same uuids	5	2 expand macro: @CompositeAlgorithm	0.0	850.4
+ROW	fix-construction	2	warm, same uuids	5	3 construct: @CompositeAlgorithm	0.0	2107.2
+ROW	fix-construction	2	warm, same uuids	5	4 resolve	0.0	100.7
+ROW	fix-construction	2	same shape, new uuids	1	1 create Unique handles	0.0	230.0
+ROW	fix-construction	2	same shape, new uuids	1	2 expand macro: nested @Routine	0.1	402.0
+ROW	fix-construction	2	same shape, new uuids	1	3 construct: nested @Routine	10835.9	11961.8
+ROW	fix-construction	2	same shape, new uuids	1	2 expand macro: @CompositeAlgorithm	0.1	952.5
+ROW	fix-construction	2	same shape, new uuids	1	3 construct: @CompositeAlgorithm	37538.8	40540.1
+ROW	fix-construction	2	same shape, new uuids	1	4 resolve	318135.9	318541.4
+ROW	fix-construction	2	same shape, new uuids	2	1 create Unique handles	0.0	231.5
+ROW	fix-construction	2	same shape, new uuids	2	2 expand macro: nested @Routine	0.1	424.5
+ROW	fix-construction	2	same shape, new uuids	2	3 construct: nested @Routine	10654.9	11813.7
+ROW	fix-construction	2	same shape, new uuids	2	2 expand macro: @CompositeAlgorithm	0.1	926.1
+ROW	fix-construction	2	same shape, new uuids	2	3 construct: @CompositeAlgorithm	36094.3	38869.0
+ROW	fix-construction	2	same shape, new uuids	2	4 resolve	323768.9	324212.2
+ROW	fix-construction	2	same shape, new uuids	3	1 create Unique handles	0.0	248.6
+ROW	fix-construction	2	same shape, new uuids	3	2 expand macro: nested @Routine	0.2	463.0
+ROW	fix-construction	2	same shape, new uuids	3	3 construct: nested @Routine	11646.3	12855.5
+ROW	fix-construction	2	same shape, new uuids	3	2 expand macro: @CompositeAlgorithm	0.2	991.6
+ROW	fix-construction	2	same shape, new uuids	3	3 construct: @CompositeAlgorithm	47388.2	50882.0
+ROW	fix-construction	2	same shape, new uuids	3	4 resolve	364140.9	364711.1
+ROW	fix-construction	2	same shape, new uuids	4	1 create Unique handles	0.0	263.0
+ROW	fix-construction	2	same shape, new uuids	4	2 expand macro: nested @Routine	0.2	445.1
+ROW	fix-construction	2	same shape, new uuids	4	3 construct: nested @Routine	23319.4	24603.5
+ROW	fix-construction	2	same shape, new uuids	4	2 expand macro: @CompositeAlgorithm	0.3	1001.0
+ROW	fix-construction	2	same shape, new uuids	4	3 construct: @CompositeAlgorithm	45241.0	48365.0
+ROW	fix-construction	2	same shape, new uuids	4	4 resolve	364817.8	365432.1
+ROW	fix-construction	2	same shape, new uuids	5	1 create Unique handles	0.0	257.8
+ROW	fix-construction	2	same shape, new uuids	5	2 expand macro: nested @Routine	0.3	453.5
+ROW	fix-construction	2	same shape, new uuids	5	3 construct: nested @Routine	11863.0	13076.8
+ROW	fix-construction	2	same shape, new uuids	5	2 expand macro: @CompositeAlgorithm	0.0	989.3
+ROW	fix-construction	2	same shape, new uuids	5	3 construct: @CompositeAlgorithm	40789.4	43884.3
+ROW	fix-construction	2	same shape, new uuids	5	4 resolve	382561.7	383095.6
+NAMES	fix-construction	Counter_1,Counter_2,c,total,Watch_1,Reader_1,echo
+INTERNALERR	fix-construction	2	0
+ROW	perf	2	cold	1	1 create Unique handles	12438.0	12791.8
+ROW	perf	2	cold	1	2 expand macro: nested @Routine	18634.9	19540.8
+ROW	perf	2	cold	1	3 construct: nested @Routine	25486.5	27114.2
+ROW	perf	2	cold	1	2 expand macro: @CompositeAlgorithm	49877.2	51303.8
+ROW	perf	2	cold	1	3 construct: @CompositeAlgorithm	105401.7	109097.6
+ROW	perf	2	cold	1	4 resolve	678234.7	678892.3
+ROW	perf	2	warm, same uuids	1	2 expand macro: nested @Routine	0.4	490.5
+ROW	perf	2	warm, same uuids	1	3 construct: nested @Routine	0.0	1020.2
+ROW	perf	2	warm, same uuids	1	2 expand macro: @CompositeAlgorithm	0.2	904.5
+ROW	perf	2	warm, same uuids	1	3 construct: @CompositeAlgorithm	0.0	2528.3
+ROW	perf	2	warm, same uuids	1	4 resolve	0.0	170.8
+ROW	perf	2	warm, same uuids	2	2 expand macro: nested @Routine	0.1	362.9
+ROW	perf	2	warm, same uuids	2	3 construct: nested @Routine	0.0	917.6
+ROW	perf	2	warm, same uuids	2	2 expand macro: @CompositeAlgorithm	0.1	833.9
+ROW	perf	2	warm, same uuids	2	3 construct: @CompositeAlgorithm	0.0	2180.6
+ROW	perf	2	warm, same uuids	2	4 resolve	0.0	134.5
+ROW	perf	2	warm, same uuids	3	2 expand macro: nested @Routine	0.1	372.1
+ROW	perf	2	warm, same uuids	3	3 construct: nested @Routine	0.0	924.5
+ROW	perf	2	warm, same uuids	3	2 expand macro: @CompositeAlgorithm	0.1	854.3
+ROW	perf	2	warm, same uuids	3	3 construct: @CompositeAlgorithm	0.0	2089.3
+ROW	perf	2	warm, same uuids	3	4 resolve	0.0	120.8
+ROW	perf	2	warm, same uuids	4	2 expand macro: nested @Routine	0.0	397.3
+ROW	perf	2	warm, same uuids	4	3 construct: nested @Routine	0.0	1105.8
+ROW	perf	2	warm, same uuids	4	2 expand macro: @CompositeAlgorithm	0.0	838.0
+ROW	perf	2	warm, same uuids	4	3 construct: @CompositeAlgorithm	0.0	2153.0
+ROW	perf	2	warm, same uuids	4	4 resolve	0.0	132.5
+ROW	perf	2	warm, same uuids	5	2 expand macro: nested @Routine	0.1	403.5
+ROW	perf	2	warm, same uuids	5	3 construct: nested @Routine	0.0	945.2
+ROW	perf	2	warm, same uuids	5	2 expand macro: @CompositeAlgorithm	0.0	864.3
+ROW	perf	2	warm, same uuids	5	3 construct: @CompositeAlgorithm	0.0	2113.9
+ROW	perf	2	warm, same uuids	5	4 resolve	0.0	125.2
+ROW	perf	2	same shape, new uuids	1	1 create Unique handles	0.0	231.8
+ROW	perf	2	same shape, new uuids	1	2 expand macro: nested @Routine	0.2	384.0
+ROW	perf	2	same shape, new uuids	1	3 construct: nested @Routine	11110.4	12265.0
+ROW	perf	2	same shape, new uuids	1	2 expand macro: @CompositeAlgorithm	0.2	895.5
+ROW	perf	2	same shape, new uuids	1	3 construct: @CompositeAlgorithm	37770.8	40803.6
+ROW	perf	2	same shape, new uuids	1	4 resolve	2172.0	2381.2
+ROW	perf	2	same shape, new uuids	2	1 create Unique handles	0.0	220.2
+ROW	perf	2	same shape, new uuids	2	2 expand macro: nested @Routine	0.2	416.3
+ROW	perf	2	same shape, new uuids	2	3 construct: nested @Routine	10561.2	11703.8
+ROW	perf	2	same shape, new uuids	2	2 expand macro: @CompositeAlgorithm	0.2	950.2
+ROW	perf	2	same shape, new uuids	2	3 construct: @CompositeAlgorithm	36752.9	39621.5
+ROW	perf	2	same shape, new uuids	2	4 resolve	2273.5	2503.5
+ROW	perf	2	same shape, new uuids	3	1 create Unique handles	0.0	225.8
+ROW	perf	2	same shape, new uuids	3	2 expand macro: nested @Routine	0.3	408.7
+ROW	perf	2	same shape, new uuids	3	3 construct: nested @Routine	10737.3	11892.8
+ROW	perf	2	same shape, new uuids	3	2 expand macro: @CompositeAlgorithm	0.2	949.2
+ROW	perf	2	same shape, new uuids	3	3 construct: @CompositeAlgorithm	36942.5	40021.8
+ROW	perf	2	same shape, new uuids	3	4 resolve	9585.5	9797.8
+ROW	perf	2	same shape, new uuids	4	1 create Unique handles	0.0	240.8
+ROW	perf	2	same shape, new uuids	4	2 expand macro: nested @Routine	0.3	422.7
+ROW	perf	2	same shape, new uuids	4	3 construct: nested @Routine	10592.2	11768.0
+ROW	perf	2	same shape, new uuids	4	2 expand macro: @CompositeAlgorithm	0.2	933.8
+ROW	perf	2	same shape, new uuids	4	3 construct: @CompositeAlgorithm	36356.4	39142.0
+ROW	perf	2	same shape, new uuids	4	4 resolve	2241.8	2464.6
+ROW	perf	2	same shape, new uuids	5	1 create Unique handles	0.0	236.9
+ROW	perf	2	same shape, new uuids	5	2 expand macro: nested @Routine	0.3	425.7
+ROW	perf	2	same shape, new uuids	5	3 construct: nested @Routine	10692.9	11865.1
+ROW	perf	2	same shape, new uuids	5	2 expand macro: @CompositeAlgorithm	0.2	979.4
+ROW	perf	2	same shape, new uuids	5	3 construct: @CompositeAlgorithm	36655.1	39707.5
+ROW	perf	2	same shape, new uuids	5	4 resolve	2161.2	2376.3
+NAMES	perf	Counter_1,Counter_2,c,total,Watch_1,Reader_1,echo
+INTERNALERR	perf	2	0
+ROW	main	3	cold	1	1 create Unique handles	26468.2	26821.0
+ROW	main	3	cold	1	2 expand macro: nested @Routine	18371.1	19328.0
+ROW	main	3	cold	1	3 construct: nested @Routine	47868.0	49388.5
+ROW	main	3	cold	1	2 expand macro: @CompositeAlgorithm	48624.8	49968.0
+ROW	main	3	cold	1	3 construct: @CompositeAlgorithm	473371.9	477578.4
+ROW	main	3	cold	1	4 resolve	837645.8	838705.6
+ROW	main	3	warm, same uuids	1	2 expand macro: nested @Routine	0.2	451.8
+ROW	main	3	warm, same uuids	1	3 construct: nested @Routine	0.0	1033.3
+ROW	main	3	warm, same uuids	1	2 expand macro: @CompositeAlgorithm	0.2	907.7
+ROW	main	3	warm, same uuids	1	3 construct: @CompositeAlgorithm	12777.8	15283.3
+ROW	main	3	warm, same uuids	1	4 resolve	0.0	215.6
+ROW	main	3	warm, same uuids	2	2 expand macro: nested @Routine	0.1	409.3
+ROW	main	3	warm, same uuids	2	3 construct: nested @Routine	0.0	981.5
+ROW	main	3	warm, same uuids	2	2 expand macro: @CompositeAlgorithm	0.2	868.7
+ROW	main	3	warm, same uuids	2	3 construct: @CompositeAlgorithm	0.1	2121.6
+ROW	main	3	warm, same uuids	2	4 resolve	0.0	124.2
+ROW	main	3	warm, same uuids	3	2 expand macro: nested @Routine	0.0	351.7
+ROW	main	3	warm, same uuids	3	3 construct: nested @Routine	0.0	910.5
+ROW	main	3	warm, same uuids	3	2 expand macro: @CompositeAlgorithm	0.0	837.9
+ROW	main	3	warm, same uuids	3	3 construct: @CompositeAlgorithm	0.5	2351.8
+ROW	main	3	warm, same uuids	3	4 resolve	0.0	133.5
+ROW	main	3	warm, same uuids	4	2 expand macro: nested @Routine	0.1	358.8
+ROW	main	3	warm, same uuids	4	3 construct: nested @Routine	0.0	917.3
+ROW	main	3	warm, same uuids	4	2 expand macro: @CompositeAlgorithm	0.0	840.8
+ROW	main	3	warm, same uuids	4	3 construct: @CompositeAlgorithm	0.1	2103.7
+ROW	main	3	warm, same uuids	4	4 resolve	0.0	129.6
+ROW	main	3	warm, same uuids	5	2 expand macro: nested @Routine	0.0	351.9
+ROW	main	3	warm, same uuids	5	3 construct: nested @Routine	0.0	913.7
+ROW	main	3	warm, same uuids	5	2 expand macro: @CompositeAlgorithm	0.0	820.7
+ROW	main	3	warm, same uuids	5	3 construct: @CompositeAlgorithm	0.0	2054.5
+ROW	main	3	warm, same uuids	5	4 resolve	0.0	108.9
+ROW	main	3	same shape, new uuids	1	1 create Unique handles	0.0	230.2
+ROW	main	3	same shape, new uuids	1	2 expand macro: nested @Routine	0.1	576.8
+ROW	main	3	same shape, new uuids	1	3 construct: nested @Routine	34798.1	35959.2
+ROW	main	3	same shape, new uuids	1	2 expand macro: @CompositeAlgorithm	0.2	935.0
+ROW	main	3	same shape, new uuids	1	3 construct: @CompositeAlgorithm	183244.9	186397.2
+ROW	main	3	same shape, new uuids	1	4 resolve	516612.0	517367.3
+ROW	main	3	same shape, new uuids	2	1 create Unique handles	0.0	239.9
+ROW	main	3	same shape, new uuids	2	2 expand macro: nested @Routine	0.2	431.4
+ROW	main	3	same shape, new uuids	2	3 construct: nested @Routine	33981.2	35181.2
+ROW	main	3	same shape, new uuids	2	2 expand macro: @CompositeAlgorithm	0.2	987.0
+ROW	main	3	same shape, new uuids	2	3 construct: @CompositeAlgorithm	183186.9	186410.1
+ROW	main	3	same shape, new uuids	2	4 resolve	545400.2	546575.0
+ROW	main	3	same shape, new uuids	3	1 create Unique handles	0.0	255.8
+ROW	main	3	same shape, new uuids	3	2 expand macro: nested @Routine	0.3	438.6
+ROW	main	3	same shape, new uuids	3	3 construct: nested @Routine	34962.9	36148.1
+ROW	main	3	same shape, new uuids	3	2 expand macro: @CompositeAlgorithm	0.2	991.9
+ROW	main	3	same shape, new uuids	3	3 construct: @CompositeAlgorithm	193697.6	196763.9
+ROW	main	3	same shape, new uuids	3	4 resolve	482190.5	482840.7
+ROW	main	3	same shape, new uuids	4	1 create Unique handles	0.0	228.0
+ROW	main	3	same shape, new uuids	4	2 expand macro: nested @Routine	0.2	410.5
+ROW	main	3	same shape, new uuids	4	3 construct: nested @Routine	33474.0	34652.0
+ROW	main	3	same shape, new uuids	4	2 expand macro: @CompositeAlgorithm	0.2	950.2
+ROW	main	3	same shape, new uuids	4	3 construct: @CompositeAlgorithm	181938.3	184946.0
+ROW	main	3	same shape, new uuids	4	4 resolve	491087.7	491807.8
+ROW	main	3	same shape, new uuids	5	1 create Unique handles	0.0	238.2
+ROW	main	3	same shape, new uuids	5	2 expand macro: nested @Routine	0.3	416.4
+ROW	main	3	same shape, new uuids	5	3 construct: nested @Routine	33873.0	35036.5
+ROW	main	3	same shape, new uuids	5	2 expand macro: @CompositeAlgorithm	0.2	946.3
+ROW	main	3	same shape, new uuids	5	3 construct: @CompositeAlgorithm	194955.3	198033.4
+ROW	main	3	same shape, new uuids	5	4 resolve	488574.0	489258.8
+NAMES	main	Counter_1,Counter_2,c,total,Watch_1,Reader_1,echo
+INTERNALERR	main	3	7
+ROW	fix-types	3	cold	1	1 create Unique handles	12645.2	12983.8
+ROW	fix-types	3	cold	1	2 expand macro: nested @Routine	17928.4	18872.8
+ROW	fix-types	3	cold	1	3 construct: nested @Routine	47779.2	49291.7
+ROW	fix-types	3	cold	1	2 expand macro: @CompositeAlgorithm	50059.1	51428.9
+ROW	fix-types	3	cold	1	3 construct: @CompositeAlgorithm	487149.0	491332.9
+ROW	fix-types	3	cold	1	4 resolve	591030.4	591506.7
+ROW	fix-types	3	warm, same uuids	1	2 expand macro: nested @Routine	0.2	458.8
+ROW	fix-types	3	warm, same uuids	1	3 construct: nested @Routine	0.0	1036.5
+ROW	fix-types	3	warm, same uuids	1	2 expand macro: @CompositeAlgorithm	0.1	927.8
+ROW	fix-types	3	warm, same uuids	1	3 construct: @CompositeAlgorithm	15245.1	17729.8
+ROW	fix-types	3	warm, same uuids	1	4 resolve	0.0	155.5
+ROW	fix-types	3	warm, same uuids	2	2 expand macro: nested @Routine	0.1	392.5
+ROW	fix-types	3	warm, same uuids	2	3 construct: nested @Routine	0.0	937.8
+ROW	fix-types	3	warm, same uuids	2	2 expand macro: @CompositeAlgorithm	0.1	852.7
+ROW	fix-types	3	warm, same uuids	2	3 construct: @CompositeAlgorithm	0.2	2102.3
+ROW	fix-types	3	warm, same uuids	2	4 resolve	0.0	100.6
+ROW	fix-types	3	warm, same uuids	3	2 expand macro: nested @Routine	0.0	349.2
+ROW	fix-types	3	warm, same uuids	3	3 construct: nested @Routine	0.0	911.3
+ROW	fix-types	3	warm, same uuids	3	2 expand macro: @CompositeAlgorithm	0.0	821.0
+ROW	fix-types	3	warm, same uuids	3	3 construct: @CompositeAlgorithm	0.3	2407.1
+ROW	fix-types	3	warm, same uuids	3	4 resolve	0.0	120.2
+ROW	fix-types	3	warm, same uuids	4	2 expand macro: nested @Routine	0.0	388.2
+ROW	fix-types	3	warm, same uuids	4	3 construct: nested @Routine	0.0	930.2
+ROW	fix-types	3	warm, same uuids	4	2 expand macro: @CompositeAlgorithm	0.0	852.0
+ROW	fix-types	3	warm, same uuids	4	3 construct: @CompositeAlgorithm	0.2	2138.3
+ROW	fix-types	3	warm, same uuids	4	4 resolve	0.0	109.1
+ROW	fix-types	3	warm, same uuids	5	2 expand macro: nested @Routine	0.0	358.9
+ROW	fix-types	3	warm, same uuids	5	3 construct: nested @Routine	0.0	936.2
+ROW	fix-types	3	warm, same uuids	5	2 expand macro: @CompositeAlgorithm	0.0	841.8
+ROW	fix-types	3	warm, same uuids	5	3 construct: @CompositeAlgorithm	0.1	2148.0
+ROW	fix-types	3	warm, same uuids	5	4 resolve	0.0	106.4
+ROW	fix-types	3	same shape, new uuids	1	1 create Unique handles	0.0	224.6
+ROW	fix-types	3	same shape, new uuids	1	2 expand macro: nested @Routine	0.1	588.7
+ROW	fix-types	3	same shape, new uuids	1	3 construct: nested @Routine	33542.1	34678.8
+ROW	fix-types	3	same shape, new uuids	1	2 expand macro: @CompositeAlgorithm	0.2	996.0
+ROW	fix-types	3	same shape, new uuids	1	3 construct: @CompositeAlgorithm	200969.8	204092.9
+ROW	fix-types	3	same shape, new uuids	1	4 resolve	308754.7	309193.0
+ROW	fix-types	3	same shape, new uuids	2	1 create Unique handles	0.0	234.6
+ROW	fix-types	3	same shape, new uuids	2	2 expand macro: nested @Routine	0.0	433.3
+ROW	fix-types	3	same shape, new uuids	2	3 construct: nested @Routine	33511.9	34701.7
+ROW	fix-types	3	same shape, new uuids	2	2 expand macro: @CompositeAlgorithm	0.2	974.1
+ROW	fix-types	3	same shape, new uuids	2	3 construct: @CompositeAlgorithm	184165.8	187379.0
+ROW	fix-types	3	same shape, new uuids	2	4 resolve	313290.4	313729.6
+ROW	fix-types	3	same shape, new uuids	3	1 create Unique handles	0.0	250.3
+ROW	fix-types	3	same shape, new uuids	3	2 expand macro: nested @Routine	0.1	482.4
+ROW	fix-types	3	same shape, new uuids	3	3 construct: nested @Routine	33927.5	35123.3
+ROW	fix-types	3	same shape, new uuids	3	2 expand macro: @CompositeAlgorithm	0.1	995.9
+ROW	fix-types	3	same shape, new uuids	3	3 construct: @CompositeAlgorithm	185534.6	196848.1
+ROW	fix-types	3	same shape, new uuids	3	4 resolve	311052.3	311479.8
+ROW	fix-types	3	same shape, new uuids	4	1 create Unique handles	0.0	237.0
+ROW	fix-types	3	same shape, new uuids	4	2 expand macro: nested @Routine	0.1	433.5
+ROW	fix-types	3	same shape, new uuids	4	3 construct: nested @Routine	33852.5	35018.7
+ROW	fix-types	3	same shape, new uuids	4	2 expand macro: @CompositeAlgorithm	0.1	1029.8
+ROW	fix-types	3	same shape, new uuids	4	3 construct: @CompositeAlgorithm	187479.4	190812.4
+ROW	fix-types	3	same shape, new uuids	4	4 resolve	310225.5	310635.2
+ROW	fix-types	3	same shape, new uuids	5	1 create Unique handles	0.0	239.5
+ROW	fix-types	3	same shape, new uuids	5	2 expand macro: nested @Routine	0.1	434.5
+ROW	fix-types	3	same shape, new uuids	5	3 construct: nested @Routine	32995.8	34136.5
+ROW	fix-types	3	same shape, new uuids	5	2 expand macro: @CompositeAlgorithm	0.2	941.2
+ROW	fix-types	3	same shape, new uuids	5	3 construct: @CompositeAlgorithm	193076.9	196081.7
+ROW	fix-types	3	same shape, new uuids	5	4 resolve	296781.2	297167.2
+NAMES	fix-types	Counter_1,Counter_2,c,total,Watch_1,Reader_1,echo
+INTERNALERR	fix-types	3	7
+ROW	fix-construction	3	cold	1	1 create Unique handles	11944.4	12260.1
+ROW	fix-construction	3	cold	1	2 expand macro: nested @Routine	17354.7	18218.7
+ROW	fix-construction	3	cold	1	3 construct: nested @Routine	24246.3	25836.5
+ROW	fix-construction	3	cold	1	2 expand macro: @CompositeAlgorithm	47715.1	49001.5
+ROW	fix-construction	3	cold	1	3 construct: @CompositeAlgorithm	102154.4	105815.8
+ROW	fix-construction	3	cold	1	4 resolve	635106.7	635579.7
+ROW	fix-construction	3	warm, same uuids	1	2 expand macro: nested @Routine	0.2	447.4
+ROW	fix-construction	3	warm, same uuids	1	3 construct: nested @Routine	0.0	1017.3
+ROW	fix-construction	3	warm, same uuids	1	2 expand macro: @CompositeAlgorithm	0.2	904.3
+ROW	fix-construction	3	warm, same uuids	1	3 construct: @CompositeAlgorithm	0.0	2445.9
+ROW	fix-construction	3	warm, same uuids	1	4 resolve	0.0	168.8
+ROW	fix-construction	3	warm, same uuids	2	2 expand macro: nested @Routine	0.0	383.5
+ROW	fix-construction	3	warm, same uuids	2	3 construct: nested @Routine	0.0	942.5
+ROW	fix-construction	3	warm, same uuids	2	2 expand macro: @CompositeAlgorithm	0.0	871.6
+ROW	fix-construction	3	warm, same uuids	2	3 construct: @CompositeAlgorithm	0.0	2122.9
+ROW	fix-construction	3	warm, same uuids	2	4 resolve	0.0	102.4
+ROW	fix-construction	3	warm, same uuids	3	2 expand macro: nested @Routine	0.0	358.1
+ROW	fix-construction	3	warm, same uuids	3	3 construct: nested @Routine	0.0	917.3
+ROW	fix-construction	3	warm, same uuids	3	2 expand macro: @CompositeAlgorithm	0.0	835.7
+ROW	fix-construction	3	warm, same uuids	3	3 construct: @CompositeAlgorithm	0.0	2108.0
+ROW	fix-construction	3	warm, same uuids	3	4 resolve	0.0	99.0
+ROW	fix-construction	3	warm, same uuids	4	2 expand macro: nested @Routine	0.0	354.0
+ROW	fix-construction	3	warm, same uuids	4	3 construct: nested @Routine	0.0	1162.6
+ROW	fix-construction	3	warm, same uuids	4	2 expand macro: @CompositeAlgorithm	0.1	897.4
+ROW	fix-construction	3	warm, same uuids	4	3 construct: @CompositeAlgorithm	0.0	2082.5
+ROW	fix-construction	3	warm, same uuids	4	4 resolve	0.0	101.0
+ROW	fix-construction	3	warm, same uuids	5	2 expand macro: nested @Routine	0.0	354.4
+ROW	fix-construction	3	warm, same uuids	5	3 construct: nested @Routine	0.0	922.4
+ROW	fix-construction	3	warm, same uuids	5	2 expand macro: @CompositeAlgorithm	0.0	831.4
+ROW	fix-construction	3	warm, same uuids	5	3 construct: @CompositeAlgorithm	0.0	2116.5
+ROW	fix-construction	3	warm, same uuids	5	4 resolve	0.0	94.3
+ROW	fix-construction	3	same shape, new uuids	1	1 create Unique handles	0.0	247.6
+ROW	fix-construction	3	same shape, new uuids	1	2 expand macro: nested @Routine	0.1	380.5
+ROW	fix-construction	3	same shape, new uuids	1	3 construct: nested @Routine	10710.8	11809.8
+ROW	fix-construction	3	same shape, new uuids	1	2 expand macro: @CompositeAlgorithm	0.1	917.5
+ROW	fix-construction	3	same shape, new uuids	1	3 construct: @CompositeAlgorithm	38177.8	41226.0
+ROW	fix-construction	3	same shape, new uuids	1	4 resolve	320091.1	320491.3
+ROW	fix-construction	3	same shape, new uuids	2	1 create Unique handles	0.0	233.2
+ROW	fix-construction	3	same shape, new uuids	2	2 expand macro: nested @Routine	0.2	429.4
+ROW	fix-construction	3	same shape, new uuids	2	3 construct: nested @Routine	10955.0	12136.5
+ROW	fix-construction	3	same shape, new uuids	2	2 expand macro: @CompositeAlgorithm	0.2	954.2
+ROW	fix-construction	3	same shape, new uuids	2	3 construct: @CompositeAlgorithm	36604.5	39504.6
+ROW	fix-construction	3	same shape, new uuids	2	4 resolve	305138.0	305522.4
+ROW	fix-construction	3	same shape, new uuids	3	1 create Unique handles	0.0	232.5
+ROW	fix-construction	3	same shape, new uuids	3	2 expand macro: nested @Routine	0.2	428.8
+ROW	fix-construction	3	same shape, new uuids	3	3 construct: nested @Routine	10398.2	11571.9
+ROW	fix-construction	3	same shape, new uuids	3	2 expand macro: @CompositeAlgorithm	0.1	938.5
+ROW	fix-construction	3	same shape, new uuids	3	3 construct: @CompositeAlgorithm	36887.6	39988.4
+ROW	fix-construction	3	same shape, new uuids	3	4 resolve	296869.1	297286.5
+ROW	fix-construction	3	same shape, new uuids	4	1 create Unique handles	0.0	283.7
+ROW	fix-construction	3	same shape, new uuids	4	2 expand macro: nested @Routine	0.2	421.6
+ROW	fix-construction	3	same shape, new uuids	4	3 construct: nested @Routine	10746.9	11943.2
+ROW	fix-construction	3	same shape, new uuids	4	2 expand macro: @CompositeAlgorithm	0.2	951.1
+ROW	fix-construction	3	same shape, new uuids	4	3 construct: @CompositeAlgorithm	45065.4	47862.1
+ROW	fix-construction	3	same shape, new uuids	4	4 resolve	299014.6	299448.2
+ROW	fix-construction	3	same shape, new uuids	5	1 create Unique handles	0.0	239.7
+ROW	fix-construction	3	same shape, new uuids	5	2 expand macro: nested @Routine	0.2	434.9
+ROW	fix-construction	3	same shape, new uuids	5	3 construct: nested @Routine	11406.0	12616.2
+ROW	fix-construction	3	same shape, new uuids	5	2 expand macro: @CompositeAlgorithm	0.3	954.8
+ROW	fix-construction	3	same shape, new uuids	5	3 construct: @CompositeAlgorithm	37738.2	40886.2
+ROW	fix-construction	3	same shape, new uuids	5	4 resolve	334649.9	335045.0
+NAMES	fix-construction	Counter_1,Counter_2,c,total,Watch_1,Reader_1,echo
+INTERNALERR	fix-construction	3	0
+ROW	perf	3	cold	1	1 create Unique handles	12213.7	12559.8
+ROW	perf	3	cold	1	2 expand macro: nested @Routine	17939.8	18811.2
+ROW	perf	3	cold	1	3 construct: nested @Routine	24705.9	26329.6
+ROW	perf	3	cold	1	2 expand macro: @CompositeAlgorithm	49339.8	50698.0
+ROW	perf	3	cold	1	3 construct: @CompositeAlgorithm	105195.8	108861.3
+ROW	perf	3	cold	1	4 resolve	744685.9	745463.1
+ROW	perf	3	warm, same uuids	1	2 expand macro: nested @Routine	0.2	597.6
+ROW	perf	3	warm, same uuids	1	3 construct: nested @Routine	0.0	1114.4
+ROW	perf	3	warm, same uuids	1	2 expand macro: @CompositeAlgorithm	0.2	959.7
+ROW	perf	3	warm, same uuids	1	3 construct: @CompositeAlgorithm	0.0	2607.6
+ROW	perf	3	warm, same uuids	1	4 resolve	0.0	197.6
+ROW	perf	3	warm, same uuids	2	2 expand macro: nested @Routine	0.2	377.0
+ROW	perf	3	warm, same uuids	2	3 construct: nested @Routine	0.0	942.8
+ROW	perf	3	warm, same uuids	2	2 expand macro: @CompositeAlgorithm	0.1	894.9
+ROW	perf	3	warm, same uuids	2	3 construct: @CompositeAlgorithm	0.0	2551.6
+ROW	perf	3	warm, same uuids	2	4 resolve	0.0	165.4
+ROW	perf	3	warm, same uuids	3	2 expand macro: nested @Routine	0.2	385.2
+ROW	perf	3	warm, same uuids	3	3 construct: nested @Routine	0.0	970.4
+ROW	perf	3	warm, same uuids	3	2 expand macro: @CompositeAlgorithm	0.3	875.0
+ROW	perf	3	warm, same uuids	3	3 construct: @CompositeAlgorithm	0.0	2284.7
+ROW	perf	3	warm, same uuids	3	4 resolve	0.0	157.7
+ROW	perf	3	warm, same uuids	4	2 expand macro: nested @Routine	0.1	399.0
+ROW	perf	3	warm, same uuids	4	3 construct: nested @Routine	0.0	1203.0
+ROW	perf	3	warm, same uuids	4	2 expand macro: @CompositeAlgorithm	0.0	974.6
+ROW	perf	3	warm, same uuids	4	3 construct: @CompositeAlgorithm	0.0	2617.2
+ROW	perf	3	warm, same uuids	4	4 resolve	0.0	169.2
+ROW	perf	3	warm, same uuids	5	2 expand macro: nested @Routine	0.1	401.7
+ROW	perf	3	warm, same uuids	5	3 construct: nested @Routine	0.0	969.8
+ROW	perf	3	warm, same uuids	5	2 expand macro: @CompositeAlgorithm	0.0	873.0
+ROW	perf	3	warm, same uuids	5	3 construct: @CompositeAlgorithm	0.0	2176.6
+ROW	perf	3	warm, same uuids	5	4 resolve	0.0	131.8
+ROW	perf	3	same shape, new uuids	1	1 create Unique handles	0.0	256.5
+ROW	perf	3	same shape, new uuids	1	2 expand macro: nested @Routine	0.2	402.5
+ROW	perf	3	same shape, new uuids	1	3 construct: nested @Routine	13220.0	14470.7
+ROW	perf	3	same shape, new uuids	1	2 expand macro: @CompositeAlgorithm	0.2	985.6
+ROW	perf	3	same shape, new uuids	1	3 construct: @CompositeAlgorithm	42732.4	45989.3
+ROW	perf	3	same shape, new uuids	1	4 resolve	2637.0	2882.7
+ROW	perf	3	same shape, new uuids	2	1 create Unique handles	0.0	290.3
+ROW	perf	3	same shape, new uuids	2	2 expand macro: nested @Routine	0.2	438.3
+ROW	perf	3	same shape, new uuids	2	3 construct: nested @Routine	12657.5	13856.9
+ROW	perf	3	same shape, new uuids	2	2 expand macro: @CompositeAlgorithm	0.2	1215.8
+ROW	perf	3	same shape, new uuids	2	3 construct: @CompositeAlgorithm	41658.7	44684.6
+ROW	perf	3	same shape, new uuids	2	4 resolve	2177.2	2430.8
+ROW	perf	3	same shape, new uuids	3	1 create Unique handles	0.0	236.2
+ROW	perf	3	same shape, new uuids	3	2 expand macro: nested @Routine	0.3	434.2
+ROW	perf	3	same shape, new uuids	3	3 construct: nested @Routine	12165.0	13707.0
+ROW	perf	3	same shape, new uuids	3	2 expand macro: @CompositeAlgorithm	0.2	1008.9
+ROW	perf	3	same shape, new uuids	3	3 construct: @CompositeAlgorithm	42504.5	45755.5
+ROW	perf	3	same shape, new uuids	3	4 resolve	2550.5	2963.4
+ROW	perf	3	same shape, new uuids	4	1 create Unique handles	0.0	243.5
+ROW	perf	3	same shape, new uuids	4	2 expand macro: nested @Routine	0.2	445.1
+ROW	perf	3	same shape, new uuids	4	3 construct: nested @Routine	20929.7	22194.8
+ROW	perf	3	same shape, new uuids	4	2 expand macro: @CompositeAlgorithm	0.2	1006.9
+ROW	perf	3	same shape, new uuids	4	3 construct: @CompositeAlgorithm	42868.2	45871.1
+ROW	perf	3	same shape, new uuids	4	4 resolve	2613.7	2858.1
+ROW	perf	3	same shape, new uuids	5	1 create Unique handles	0.0	239.1
+ROW	perf	3	same shape, new uuids	5	2 expand macro: nested @Routine	0.2	433.7
+ROW	perf	3	same shape, new uuids	5	3 construct: nested @Routine	11311.1	12498.1
+ROW	perf	3	same shape, new uuids	5	2 expand macro: @CompositeAlgorithm	0.3	987.2
+ROW	perf	3	same shape, new uuids	5	3 construct: @CompositeAlgorithm	42433.7	45928.0
+ROW	perf	3	same shape, new uuids	5	4 resolve	2289.5	2552.5
+NAMES	perf	Counter_1,Counter_2,c,total,Watch_1,Reader_1,echo
+INTERNALERR	perf	3	0

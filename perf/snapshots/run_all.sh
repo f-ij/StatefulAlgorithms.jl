@@ -1,9 +1,9 @@
 #!/bin/zsh
 # Interleaved: for each round, one fresh process per snapshot. Restores src to HEAD at the end.
 cd /Users/fabianijpelaar/dev/StatefulAlgorithms.jl-perf
-E=$1; TMPF=$2; OUT=perf/snapshots/results_raw_main_fix_perf.tsv; : > $OUT
+E=$1; TMPF=$2; OUT=perf/snapshots/results_raw_4.tsv; : > $OUT
 for round in 1 2 3; do
-  for snap in "main:5cccbef" "fix:08c81fe" "perf:2a1bbd8"; do
+  for snap in "main:5cccbef" "fix-types:08c81fe" "fix-construction:fd707cc" "perf:72744d6"; do
     label=${snap%%:*}; commit=${snap##*:}
     git checkout -q $commit -- src
     julia --project=$E perf/snapshots/measure.jl $label $round > $TMPF 2>&1

@@ -18,12 +18,12 @@ for k, what in ((0, 'compile time'), (1, 'wall time')):
         print(f'\n### {g}: {what} (µs, median)\n')
         print('| Phase | ' + ' | '.join(f'{x} (µs)' for x in snaps) + f' | {snaps[-1]} vs {snaps[0]} (×) |')
         print('|---|---|---|---|---|')
-        tot = [0, 0, 0]
+        tot = [0] * len(snaps)
         for ph in phases:
             vals = [med(s, g, ph, k) for s in snaps]
             if all(v is None for v in vals): continue
             for i, v in enumerate(vals): tot[i] += v or 0
-            ratio = '—' if not vals[0] or vals[2] is None else f'{vals[2]/vals[0]:.3f} ×'
+            ratio = '—' if not vals[0] or vals[-1] is None else f'{vals[-1]/vals[0]:.3f} ×'
             print(f'| {ph} | ' + ' | '.join(f(v) for v in vals) + f' | {ratio} |')
-        ratio = f'{tot[2]/tot[0]:.3f} ×' if tot[0] else '—'
+        ratio = f'{tot[-1]/tot[0]:.3f} ×' if tot[0] else '—'
         print('| **total** | ' + ' | '.join(f'**{v:,.1f}**' for v in tot) + f' | {ratio} |')
