@@ -48,8 +48,10 @@ function _parse_loopalgorithm_entity_input(el)
 end
 
 Base.@nospecializeinfer function _normalize_loopalgorithm_entity_input(@nospecialize(el))
-    el isa Union{FuncWrapper, Executable} && return el   # calls have no identity: not wrapped, not registered
+    # A child with a fixed namespace (a call) has no identity: not named, wrapped or registered.
+    el isa Pair && !isnothing(fixed_namespace(el.second)) && return _normalize_loopalgorithm_entity_input(el.second)
     el isa WithWiring && return WithWiring(_normalize_loopalgorithm_entity_input(getfield(el, :child)), getfield(el, :wires))
+    isnothing(fixed_namespace(el)) || return el
     if el isa Pair
         !(el.second isa LoopAlgorithmTypes) || construction_assert_error("Loop plans cannot currently be passed as pairs (aliased), but got: ", el.second, " in pair ", el)
         return IdentifiableAlgo(el.second, el.first)
@@ -132,13 +134,13 @@ function parse_la_input(laType::Type{LA}, args...) where {LA<:AbstractPlan}
             args = args[2:end] # Remove the intervals from the arguments list for further processing
         elseif iscomposite(laType)
             intervals_or_repeats = ntuple(_ -> Interval(1), length(processalgos))
-
         end
-
     elseif iscomposite(laType)
         intervals_or_repeats = ntuple(_ -> Interval(1), length(processalgos))
-    else
-        construction_error("For routines, please pass the number of repeats after all ProcessAlgorithms as a tuple, even if it's just one repeat, e.g. (10,). Got: ", firstargs)
+    end
+    if isnothing(intervals_or_repeats)
+        got = isempty(args) ? "no repeats" : repr(first(args))
+        construction_error("For routines, please pass the number of repeats after all ProcessAlgorithms as a tuple, even if it's just one repeat, e.g. (10,). Got: ", got)
     end
 
     ### FLATTEN ###

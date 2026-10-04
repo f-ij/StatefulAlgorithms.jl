@@ -38,8 +38,8 @@ end
 
 """Resolve share wiring into target-keyed pairs for tuple-recursive grouping."""
 function resolve_wiring_pairs(reg::NameSpaceRegistry, s::S) where {S<:Share}
-    fromname = _resolve_wiring_endpoint(reg, first_match_by(s), get_firstalgo(s), "share origin")
-    toname = _resolve_wiring_endpoint(reg, second_match_by(s), get_secondalgo(s), "share target")
+    fromname = resolve_scref(reg, first_match_by(s), get_firstalgo(s), "share origin")
+    toname = resolve_scref(reg, second_match_by(s), get_secondalgo(s), "share target")
     forward = Share{fromname, toname, is_directional(s), Nothing, Nothing}()
     is_directional(s) && return (toname => forward,)
     backward = Share{toname, fromname, is_directional(s), Nothing, Nothing}()
@@ -49,7 +49,7 @@ end
 """Update unresolved share endpoints against a parent registry."""
 function update_keys(s::S, reg::NameSpaceRegistry) where {S<:Share}
     isresolved(s) && return s
-    newfirst = _update_wiring_endpoint(get_firstalgo(s), first_match_by(s), reg)
-    newsecond = _update_wiring_endpoint(get_secondalgo(s), second_match_by(s), reg)
+    newfirst = update_scref(reg, first_match_by(s), get_firstalgo(s))
+    newsecond = update_scref(reg, second_match_by(s), get_secondalgo(s))
     return Share(newfirst, newsecond; directional = is_directional(s))
 end

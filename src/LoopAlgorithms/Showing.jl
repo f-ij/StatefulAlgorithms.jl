@@ -20,6 +20,10 @@ function _print_tree_lines(io::IO, idx::Int, total::Int, lines::AbstractVector{<
     end
 end
 
+"""A plan child as printed in its plan; a `Callable` shows its wires as argument sources."""
+_plan_child_string(child, wiring, ctx) = repr(child; context = ctx)
+_plan_child_string(child::Callable, wiring::Wiring, ctx) = _callable_string(child, wiring)
+
 function Base.show(io::IO, ca::CompositeAlgorithm)
     println(io, "CompositeAlgorithm")
     funcs = getalgos(ca)
@@ -33,7 +37,7 @@ function Base.show(io::IO, ca::CompositeAlgorithm)
     total = length(funcs)
     for (idx, thisfunc) in enumerate(funcs)
         interval = _intervals[idx]
-        func_str = repr(thisfunc; context = show_ctx)
+        func_str = _plan_child_string(thisfunc, getfield(child_wiring(getwiring(ca)), idx), show_ctx)
         lines = split(func_str, '\n')
         suffix = " (every " * string(interval) * " time(s))"
         _print_tree_lines(io, idx, total, lines; suffix)
@@ -58,7 +62,7 @@ function Base.show(io::IO, r::Routine)
     for (idx, thisfunc) in enumerate(funcs)
         rep = reps_is_type ? reps : reps[idx]
         suffix = reps_is_type ? " (repeats " * string(rep) * ")" : " (repeats " * string(rep) * " time(s))"
-        func_str = repr(thisfunc; context = show_ctx)
+        func_str = _plan_child_string(thisfunc, getfield(child_wiring(getwiring(r)), idx), show_ctx)
         lines = split(func_str, '\n')
         _print_tree_lines(io, idx, total, lines; suffix)
         if idx < total

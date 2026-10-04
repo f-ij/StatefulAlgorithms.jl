@@ -141,3 +141,26 @@ end
     @test final[ScopeOutside].seen == 100
     @test final[ScopePeek].seen == 6
 end
+
+@testset "A local keeps its type after its first value" begin
+    # Reads its own local: starts as `nothing`, then is written back with the same type. Fine.
+    struct KeepLowest <: ProcessAlgorithm end
+    StatefulAlgorithms.init(::KeepLowest, context) = (; n = 0)
+    StatefulAlgorithms.step!(::KeepLowest, context) =
+        (; n = context.n + 1, best = context.best === nothing ? Float64(context.n) : min(context.best, Float64(context.n)))
+    final = run(InlineProcess(CompositeAlgorithm(KeepLowest, (1,), Local(best = nothing)); repeats = 5))
+    @test StatefulAlgorithms.getlocals(final).best isa StatefulAlgorithms.Maybe{Float64}
+
+    # Starts as a Float64, then written as a String: an error before the run, naming the local.
+    struct ChangesType <: ProcessAlgorithm end
+    StatefulAlgorithms.init(::ChangesType, context) = (;)
+    StatefulAlgorithms.step!(::ChangesType, context) = (; x = context.x === nothing ? 1.0 : "changed")
+    err = try
+        run(InlineProcess(CompositeAlgorithm(ChangesType, (1,), Local(x = nothing)); repeats = 3)); nothing
+    catch e
+        e
+    end
+    @test err isa ErrorException
+    message = sprint(showerror, err)
+    @test occursin("`ChangesType_1` (ChangesType) takes the local `x` as input with type Float64 and emits it with a different type, String", message)
+end

@@ -3,27 +3,6 @@
 ################################################
 
 """
-Return the type-level endpoint identity used by route and share wiring.
-
-Symbols are already resolved context names. Other endpoints are normalized to a
-matcher type so unresolved wiring can be matched through the registry later.
-"""
-function _wiring_endpoint_match(endpoint)
-    endpoint isa Symbol && return endpoint
-
-    # Raw endpoint references should not leak value identity into resolved
-    # wiring. Store the matcher type in the route/share type and keep the
-    # original endpoint only in the value field until registry resolution.
-    matcher = match_by(endpoint)
-    matcher isa AbstractMatcher && return typeof(matcher)
-    matcher isa Type && return typeof(TypeMatcher(matcher))
-    return typeof(ValMatcher(matcher))
-end
-
-"""Store the original endpoint only while wiring is unresolved."""
-_wiring_endpoint_ref(endpoint) = endpoint isa Symbol ? nothing : endpoint
-
-"""
 Route one or more variables from one subcontext to another.
 
 The first two type parameters are either unresolved endpoint identities or resolved
@@ -64,11 +43,11 @@ Base.@nospecializeinfer function Route(
 
     ((!isnothing(transform) || !isnothing(reverse_transform)) ? (length(originalname_or_aliaspairs) == 1) : true) || construction_assert_error("Transform-based routes must have exactly one variable mapping, but got ", originalname_or_aliaspairs)
 
-    from_ref = _wiring_endpoint_ref(from)
-    to_ref = _wiring_endpoint_ref(to)
+    from_ref = scref_object(from)
+    to_ref = scref_object(to)
     return Route{
-        _wiring_endpoint_match(from),
-        _wiring_endpoint_match(to),
+        scref_match(from),
+        scref_match(to),
         transform,
         reverse_transform,
         varnames,
@@ -98,6 +77,7 @@ end
 """Require resolved wiring endpoints to be context-name symbols."""
 function _assert_resolved_endpoint(endpoint, role::String)
     endpoint isa Symbol && return nothing
+    endpoint isa AbstractScope && return nothing   # e.g. `LocalScope()`: a binding inside a view
     construction_error(role, " endpoint must be resolved to a Symbol, got ", endpoint, ".")
 end
 
@@ -108,8 +88,8 @@ The returned route carries only context-name symbols in its type parameters and
 stores no endpoint references.
 """
 function resolve_wiring(reg::NameSpaceRegistry, r::R) where {R<:Route}
-    fromname = _resolve_wiring_endpoint(reg, from_match_by(r), getfrom(r), "origin")
-    toname = _resolve_wiring_endpoint(reg, to_match_by(r), getto(r), "target")
+    fromname = resolve_scref(reg, from_match_by(r), getfrom(r), "origin")
+    toname = resolve_scref(reg, to_match_by(r), getto(r), "target")
 
     # Resolved routes are pure type data: endpoint refs are dropped so
     # `typeof(route)()` reconstructs the same route without runtime lookup.
@@ -120,8 +100,8 @@ end
 """Update unresolved endpoint references against a parent registry."""
 function update_keys(r::R, reg::NameSpaceRegistry) where {R<:Route}
     isresolved(r) && return r
-    newfrom = _update_wiring_endpoint(getfrom(r), from_match_by(r), reg)
-    newto = _update_wiring_endpoint(getto(r), to_match_by(r), reg)
+    newfrom = update_scref(reg, from_match_by(r), getfrom(r))
+    newto = update_scref(reg, to_match_by(r), getto(r))
     varnames = getvarnames(r)
     aliases = getaliases(r)
     mappings = ntuple(i -> varnames[i] == aliases[i] ? varnames[i] : (varnames[i] => aliases[i]), length(varnames))

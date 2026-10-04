@@ -72,7 +72,7 @@ function _resolve_composite_dsl_entity(spec, inputs::Tuple, output_symbols::Tupl
         # Bare functions are wrapped so the rest of the system can treat them like
         # normal algorithms with routed inputs/outputs.
         isempty(inputs) || error("Plain functions should use regular call syntax in the DSL, e.g. `f(x)` or `f(x; scale = 2)`.")
-        wrapped = FuncWrapper(spec, (), output_symbols)
+        wrapped = _callable_from_call(spec, (), output_symbols)
         resolved = _dsl_with_customname(wrapped, Val(Name))
         return _CompositeDSLResolved{:algo, typeof(resolved), typeof(inputs)}(resolved, inputs)
     else
@@ -131,9 +131,9 @@ function _resolve_composite_dsl_call(
 
     spec isa Function || error("Direct-call DSL syntax requires either a plain function or a ProcessAlgorithm. Got `$spec`.")
 
-    # FuncWrapper handles the runtime call; the DSL only has to recover how the
-    # wrapper should receive its routed inputs.
-    wrapped = FuncWrapper(spec, positional_values, output_symbols, keyword_args, display_positional_values, display_keyword_args)
+    # The `Callable` holds the call's signature; values that come from algorithm state or
+    # transforms are wired to it by the statement (`_composite_dsl_call_wires`).
+    wrapped = _callable_from_call(spec, positional_values, output_symbols, keyword_args)
     resolved = _dsl_with_customname(wrapped, Val(Name))
 
     inputs = Any[routed_positional_inputs...]
@@ -152,7 +152,7 @@ function _resolve_composite_dsl_keyword_call(
     ::Val{Name},
 ) where {Name}
     if spec isa Function
-        wrapped = FuncWrapper(spec, (), output_symbols, keyword_args, (), display_keyword_args)
+        wrapped = _callable_from_call(spec, (), output_symbols, keyword_args)
         resolved = _dsl_with_customname(wrapped, Val(Name))
         return _CompositeDSLResolved{:algo, typeof(resolved), typeof(routed_inputs)}(resolved, routed_inputs)
     end

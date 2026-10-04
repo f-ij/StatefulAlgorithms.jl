@@ -41,11 +41,11 @@ function Replace(
     end
     varnames = first.(completed_pairs)
     aliases = last.(completed_pairs)
-    from_ref = _wiring_endpoint_ref(from)
-    to_ref = _wiring_endpoint_ref(to)
+    from_ref = scref_object(from)
+    to_ref = scref_object(to)
     return Replace{
-        _wiring_endpoint_match(from),
-        _wiring_endpoint_match(to),
+        scref_match(from),
+        scref_match(to),
         varnames,
         aliases,
         typeof(from_ref),
@@ -84,16 +84,16 @@ isresolved(r::Union{Replace{Fmatch, Tmatch}, Type{<:Replace{Fmatch, Tmatch}}}) w
 
 """Resolve replacement endpoints against a registry."""
 function resolve_replacement(reg::NameSpaceRegistry, r::R) where {R<:Replace}
-    fromname = _resolve_wiring_endpoint(reg, from_match_by(r), getfrom(r), "origin")
-    toname = _resolve_wiring_endpoint(reg, to_match_by(r), getto(r), "target")
+    fromname = resolve_scref(reg, from_match_by(r), getfrom(r), "origin")
+    toname = resolve_scref(reg, to_match_by(r), getto(r), "target")
     return Replace{fromname, toname, getvarnames(r), getaliases(r), Nothing, Nothing}()
 end
 
 """Update unresolved endpoint references against a parent registry."""
 function update_keys(r::R, reg::NameSpaceRegistry) where {R<:Replace}
     isresolved(r) && return r
-    newfrom = _update_wiring_endpoint(getfrom(r), from_match_by(r), reg)
-    newto = _update_wiring_endpoint(getto(r), to_match_by(r), reg)
+    newfrom = update_scref(reg, from_match_by(r), getfrom(r))
+    newto = update_scref(reg, to_match_by(r), getto(r))
     varnames = getvarnames(r)
     aliases = getaliases(r)
     mappings = ntuple(i -> varnames[i] == aliases[i] ? varnames[i] : (varnames[i] => aliases[i]), length(varnames))

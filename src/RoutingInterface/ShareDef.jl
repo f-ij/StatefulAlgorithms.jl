@@ -20,14 +20,14 @@ Endpoint symbols are treated as already-resolved context names. Other endpoints
 are retained until registry resolution.
 """
 Base.@nospecializeinfer function Share(@nospecialize(algo1), @nospecialize(algo2); directional::Bool = false)
-    a1 = _wiring_endpoint_ref(algo1)
-    a2 = _wiring_endpoint_ref(algo2)
+    a1 = scref_object(algo1)
+    a2 = scref_object(algo2)
 
     # Like routes, raw shares keep endpoint refs only until resolution. Symbol
     # endpoints are already names and therefore have `Nothing` value fields.
     return Share{
-        _wiring_endpoint_match(algo1),
-        _wiring_endpoint_match(algo2),
+        scref_match(algo1),
+        scref_match(algo2),
         directional,
         typeof(a1),
         typeof(a2),
