@@ -330,10 +330,17 @@ Get the static entry from the registry
 """
 
 
+"""Runtime lookup key of a held `Unique` handle whose id `resolve` renamed (see `register_original_ids!`)."""
+_held_id_key(m) = m
+_held_id_key(::SimpleId{id}) where {id} = id isa UUID ? id : SimpleId{id}()
+
 function static_get(reg::NameSpaceRegistry, v::V) where {V}
     entries = get_type_entries(reg, v)
     idx = findfirst_match(entries, v)
     if isnothing(idx)
+        # A held `Unique` handle whose id `resolve` renamed is only in the runtime lookup table (NormalizeIds.jl).
+        didx = get(getdynamiclookup(entries), _held_id_key(match_by(v)), nothing)
+        isnothing(didx) || return getentries(entries)[didx]
         return static_get(entries, v)
     end
     return entries[idx]

@@ -12,12 +12,19 @@ registry. The returned value is always a runtime wrapper unless the input was a
 `FinalizedAlgorithm`, in which case the finalized outer shape is preserved and
 its inner loop is materialized.
 """
-@inline function resolve(la::LA) where {LA<:LoopSpec}
+# Generated so that a plan with random `Unique` ids compiles to a single call into the renaming barrier:
+# a plain `if` would make Julia infer the typed body for the random-id type as well (NormalizeIds.jl).
+@generated function resolve(la::LA) where {LA<:LoopSpec}
+    call = _type_has_random_ids(LA, Base.IdSet{Any}()) ? :(_resolve_renamed(la)) : :(_resolve_typed(la))
+    return Expr(:block, Expr(:meta, :inline), call)
+end
+
+@inline function _resolve_typed(la::LA) where {LA<:LoopSpec}
     if la isa FinalizedAlgorithm
-        return finalstep(resolve(inneralgorithm(la)), finalfunction(la))
+        return finalstep(_resolve_typed(inneralgorithm(la)), finalfunction(la))
     end
     if !(la isa LoopAlgorithm)
-        return resolve(LoopAlgorithm(la))
+        return _resolve_typed(LoopAlgorithm(la))
     end
     if isresolved(la)
         return la
