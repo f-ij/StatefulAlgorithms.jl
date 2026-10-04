@@ -44,7 +44,7 @@ Base.convert(::Type{M}, m::M) where {M<:Maybe} = m
 # `Local(x = undef)` declares a local without a value, like `local x` in Julia but without
 # making `x` a `Union`. The first value written fixes the type; later writes are converted
 # to it. Reads always see that type; reading before the first write throws `UndefRefError`.
-@noinline _throw_undef() = throw(UndefRefError())
+_throw_undef() = throw(UndefRefError())
 @inline subcontext_view_value(::UndefInitializer, view::V) where {V<:SubContextView} = _throw_undef()
 
 # `Local(x = nothing)` works like `x = nothing` before a Julia loop: reads see `nothing`
@@ -72,8 +72,40 @@ _storage_fieldtype(::Type{T}) where {T} = (T isa Union && Nothing <: T && T !== 
 @inline _local_values(l::Local) = getvalues(l)
 @inline _local_values(::Any) = (;)
 
+"""`options` plus a `Local` that rebuilds the plan wiring's declarations (for plan edits)."""
+_with_local_options(options::Tuple, wiring::PlanWiring) =
+    isempty(getfield(wiring, :locals)) ? options : (options..., Local{typeof(getfield(wiring, :locals))}(getfield(wiring, :locals)))
+
+"""
+Name of a local's slot in the runtime `_local` subcontext. A local declared on the root
+plan keeps its name; one declared on a nested plan is suffixed with that plan's position.
+"""
+local_storage_name(name::Symbol, path::Tuple{}) = name
+local_storage_name(name::Symbol, path::Tuple) = Symbol(name, "@", join(path, "."))
+
+"""
+Initial values of every local declared in a plan tree, keyed by storage name: the
+memory for all of them is allocated in `_local` when a run starts.
+"""
+@generated function _tree_locals(plan::P) where {P<:AbstractPlan}
+    names = Symbol[]
+    values = Any[]
+    function collect!(::Type{T}, expr, path) where {T}
+        for name in fieldnames(fieldtype(fieldtype(T, :wiring), :locals))
+            push!(names, local_storage_name(name, path))
+            push!(values, :(getfield(getfield(getfield($expr, :wiring), :locals), $(QuoteNode(name)))))
+        end
+        F = fieldtype(T, :funcs)
+        for i in 1:fieldcount(F)
+            fieldtype(F, i) <: AbstractPlan && collect!(fieldtype(F, i), :(getfield(getfield($expr, :funcs), $i)), (path..., i))
+        end
+    end
+    collect!(P, :plan, ())
+    return :(NamedTuple{$(Tuple(names))}(($(values...),)))
+end
+
 """Initial values of the locals declared on a loop algorithm's plan tree."""
-@inline declared_locals(la::LoopAlgorithm) = declared_locals(getoptions(la))
+@inline declared_locals(la::LoopAlgorithm) = _tree_locals(getplan(la))
 @inline declared_locals(fa::FinalizedAlgorithm) = declared_locals(inneralgorithm(fa))
 @inline declared_locals(::Any) = (;)
 

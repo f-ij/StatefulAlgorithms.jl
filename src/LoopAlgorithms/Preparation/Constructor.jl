@@ -190,9 +190,18 @@ end
     return setfield(la, :plan, _resolve_plan_wiring_tree(getplan(la), registry, (;)))
 end
 
-"""Resolve a plan tree and inlay inherited global wiring into concrete children."""
-function _resolve_plan_wiring_tree(la::LA, registry::NameSpaceRegistry, inherited_global::NamedTuple) where {LA<:AbstractPlan}
+"""
+Resolve a plan tree and inlay inherited global wiring into concrete children.
+
+`visible_locals` maps each local name visible at this node to its `_local` storage name;
+this node's own `Local` declarations shadow inherited ones of the same name. It is stored
+in the node's `PlanWiring` type; concrete children's views turn it into routes from `_local`.
+"""
+function _resolve_plan_wiring_tree(la::LA, registry::NameSpaceRegistry, inherited_global::NamedTuple, inherited_locals::NamedTuple = (;), path::Tuple = ()) where {LA<:AbstractPlan}
     raw_wiring = getwiring(la)
+    own_locals = getfield(raw_wiring, :locals)
+    visible_locals = isempty(own_locals) ? inherited_locals :
+        merge(inherited_locals, NamedTuple{keys(own_locals)}(map(name -> local_storage_name(name, path), keys(own_locals))))
 
     # Global wiring is grouped by resolved target namespace once per plan node.
     # Child buckets below receive the relevant global wiring already inlaid, so
@@ -205,7 +214,7 @@ function _resolve_plan_wiring_tree(la::LA, registry::NameSpaceRegistry, inherite
     funcs = ntuple(Val(length(getalgos(la)))) do i
         child = getalgo(la, i)
         if child isa LoopSpec
-            return _resolve_plan_wiring_tree(child, registry, combined_global)
+            return _resolve_plan_wiring_tree(child, registry, combined_global, visible_locals, (path..., i))
         end
         return child
     end
@@ -229,7 +238,8 @@ function _resolve_plan_wiring_tree(la::LA, registry::NameSpaceRegistry, inherite
         return resolved
     end
 
-    return setfield(rebuilt, :wiring, PlanWiring(combined_global, resolved_children))
+    visible = isempty(visible_locals) ? Val((;)) : Val(visible_locals)
+    return setfield(rebuilt, :wiring, PlanWiring(combined_global, resolved_children, own_locals, visible))
 end
 
 @inline function resolve_plan_wiring(fa::FA, registry::NameSpaceRegistry) where {FA<:FinalizedAlgorithm}

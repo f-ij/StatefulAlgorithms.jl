@@ -18,9 +18,19 @@ shares(w::Wiring) = getfield(w, :shares)
 @inline current_wiring(pwv::PlanWiringView) = getfield(pwv, :wiring)
 
 """Return a child view holding the child's wiring subtree (same root type)."""
-@inline function child_wiring_view(pwv::PlanWiringView{Root,W,DemandAll}, ::Val{idx}) where {Root,W,DemandAll,idx}
+@inline function child_wiring_view(pwv::PlanWiringView{Root,W,DemandAll}, ::Val{idx}) where {Root,W<:PlanWiring,DemandAll,idx}
     child = getfield(child_wiring(current_wiring(pwv)), idx)
-    return PlanWiringView{Root,typeof(child),DemandAll}(child)
+    return PlanWiringView{Root,typeof(child),DemandAll,visible_locals(W)}(child)
+end
+
+"""
+Routes for a concrete child's view: one from `_local` per visible local, then the
+child's own routes. Built from types, so they cost nothing at runtime.
+"""
+@inline @generated function view_routes(pwv::PlanWiringView{Root,W,DemandAll,Visible}, ::Namespace{Name}) where {Root,W,DemandAll,Visible,Name}
+    isempty(Visible) && return :(@inline routes(pwv))
+    local_routes = (Route{:_local, Name, nothing, nothing, (Visible[i],), (keys(Visible)[i],), Nothing, Nothing}(nothing, nothing) for i in 1:length(Visible))
+    return :(($(local_routes...), (@inline routes(pwv))...))
 end
 
 """Forward route access through the current plan-wiring view path."""
