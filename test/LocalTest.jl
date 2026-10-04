@@ -49,8 +49,11 @@ end
     struct Blinker <: ProcessAlgorithm end
     StatefulAlgorithms.init(::Blinker, context) = (; n = 0)
     StatefulAlgorithms.step!(::Blinker, context) = (; n = context.n + 1, reading = isodd(context.n) ? nothing : Float64(context.n))
-    final = run(InlineProcess(CompositeAlgorithm(Blinker, UnionReader, (1, 1), Local(reading = nothing)); repeats = 6))
+    final = run(InlineProcess(CompositeAlgorithm(Blinker, UnionReader, (1, 1), Local(declared)); repeats = 6))
     @test final[UnionReader].acc == 0.0 + 2.0 + 4.0
+    # `isodd(n) ? nothing : x` inside a returned named tuple does not infer to a concrete type,
+    # so an untyped local cannot be typed from it: declare the type instead.
+    @test_throws ErrorException run(InlineProcess(CompositeAlgorithm(Blinker, UnionReader, (1, 1), Local(reading = nothing)); repeats = 6))
 end
 
 @testset "undef locals take the type of their first value" begin
@@ -64,7 +67,7 @@ end
     # Written in the first step.
     final = run(InlineProcess(CompositeAlgorithm(SlotSensor, SlotReader, (1, 1), Local(reading = undef)); repeats = 10))
     @test final[SlotReader].acc == 55.0
-    @test fieldtype(typeof(StatefulAlgorithms.getlocals(final)), :reading) == Float64
+    @test fieldtype(typeof(StatefulAlgorithms.getlocals(final)), :reading) <: StatefulAlgorithms.Maybe{Float64}
     # First written at step 10 (scheduled later): the loop continues with the new type.
     final = run(InlineProcess(CompositeAlgorithm(SlotSensor, SlotReader, (10, 10), Local(reading = undef)); repeats = 30))
     @test final[SlotReader].acc == 1.0 + 2.0 + 3.0
@@ -85,7 +88,7 @@ end
     plan = CompositeAlgorithm(LateSensor, GuardedReader, (1, 1), Local(reading = undef))
     final = run(InlineProcess(plan; repeats = 8))
     @test final[GuardedReader].acc == 5.0 + 6.0 + 7.0 + 8.0
-    @test fieldtype(typeof(StatefulAlgorithms.getlocals(final)), :reading) == Float64
+    @test fieldtype(typeof(StatefulAlgorithms.getlocals(final)), :reading) <: StatefulAlgorithms.Maybe{Float64}
 
     # Once written, the loop allocates nothing per step.
     small = InlineProcess(plan; repeats = 1_000); large = InlineProcess(plan; repeats = 101_000)
@@ -97,16 +100,17 @@ end
     final = run(InlineProcess(CompositeAlgorithm(LateSensor, GuardedReader, (1, 1), Local(reading = undef)); repeats = 4))
     @test final[GuardedReader].acc == 0.0
 
-    # The first value fixes the type; later values are converted to it.
-    struct IntThenFloat <: ProcessAlgorithm end
-    StatefulAlgorithms.init(::IntThenFloat, context) = (; n = 0)
-    StatefulAlgorithms.step!(::IntThenFloat, context) = (; n = context.n + 1, reading = context.n == 0 ? 1 : 2.0)
-    final = run(InlineProcess(CompositeAlgorithm(IntThenFloat, (1,), Local(reading = undef)); repeats = 3))
-    @test StatefulAlgorithms.getlocals(final).reading === 2
-    struct IntThenFraction <: ProcessAlgorithm end
-    StatefulAlgorithms.init(::IntThenFraction, context) = (; n = 0)
-    StatefulAlgorithms.step!(::IntThenFraction, context) = (; n = context.n + 1, reading = context.n == 0 ? 1 : 2.5)
-    @test_throws InexactError run(InlineProcess(CompositeAlgorithm(IntThenFraction, (1,), Local(reading = undef)); repeats = 3))
+    # Like a Julia variable, the type comes from every value written: here an `Int` and a
+    # `Float64` from two writers, promoted to `Float64` before the run starts.
+    struct IntWriter <: ProcessAlgorithm end
+    struct FractionWriter <: ProcessAlgorithm end
+    StatefulAlgorithms.init(::IntWriter, context) = (;)
+    StatefulAlgorithms.step!(::IntWriter, context) = (; reading = 1)
+    StatefulAlgorithms.init(::FractionWriter, context) = (;)
+    StatefulAlgorithms.step!(::FractionWriter, context) = (; reading = 2.5)
+    final = run(InlineProcess(CompositeAlgorithm(IntWriter, FractionWriter, (1, 2), Local(reading = undef)); repeats = 3))
+    @test fieldtype(typeof(StatefulAlgorithms.getlocals(final)), :reading) <: StatefulAlgorithms.Maybe{Float64}
+    @test StatefulAlgorithms.getlocals(final).reading.value === 1.0
 end
 
 @testset "Locals are scoped to the plan that declares them" begin

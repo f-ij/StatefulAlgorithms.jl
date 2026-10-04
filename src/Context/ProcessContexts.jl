@@ -25,7 +25,7 @@ end
 
 """Return a context containing one named subcontext."""
 @inline _single_subcontext_context(::Val{name}, data::D) where {name,D<:NamedTuple} =
-    ProcessContext(NamedTuple{(name,)}((SubContext(name, data),)), nothing)
+    ProcessContext(NamedTuple{(name,)}((SubContext{name}(data),)), nothing)
 
 @inline Base.@constprop :aggressive function Base.getproperty(pc::ProcessContext, name::Symbol)
     subcontexts = @inline get_subcontexts(pc)
@@ -204,7 +204,7 @@ Merge runtime globals into a runtime context.
 """
 @inline function _merge_into_globals(pc::ProcessContext, args::NamedTuple)
     runtime = @inline merge(getglobals(pc), args)
-    return @inline with_subcontext(pc, Val(:_runtime), SubContext(:_runtime, runtime))
+    return @inline with_subcontext(pc, Val(:_runtime), SubContext{:_runtime}(runtime))
 end
 
 @inline merge_runtime_return(context::C, ::Nothing) where {C<:ProcessContext} = context
@@ -224,13 +224,13 @@ end
     subcontexts = @inline get_subcontexts(runtimecontext)
     old_data = haskey(subcontexts, owner) ? getdata(getproperty(subcontexts, owner)) : (;)
     new_data = @inline merge(old_data, args)
-    return @inline with_subcontext(runtimecontext, Val(owner), SubContext(owner, new_data))
+    return @inline with_subcontext(runtimecontext, Val(owner), SubContext{owner}(new_data))
 end
 
 """Declared locals keep their declared field types when written."""
 @inline function merge_owner_runtime_return(runtimecontext::C, ::Val{:_local}, args::A) where {C<:ProcessContext,A<:NamedTuple}
     locals = @inline _merge_declared(getlocals(runtimecontext), args)
-    return @inline with_subcontext(runtimecontext, Val(:_local), SubContext(:_local, locals))
+    return @inline with_subcontext(runtimecontext, Val(:_local), SubContext{:_local}(locals))
 end
 
 @inline function merge_owner_runtime_return(runtimecontext::C, ::Val{owner}, args::A, demand::ReturnDemand{Names}) where {C<:ProcessContext,owner,A<:NamedTuple,Names}
