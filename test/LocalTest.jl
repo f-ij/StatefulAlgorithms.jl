@@ -108,3 +108,32 @@ end
     StatefulAlgorithms.step!(::IntThenFraction, context) = (; n = context.n + 1, reading = context.n == 0 ? 1 : 2.5)
     @test_throws InexactError run(InlineProcess(CompositeAlgorithm(IntThenFraction, (1,), Local(reading = undef)); repeats = 3))
 end
+
+@testset "Locals are scoped to the plan that declares them" begin
+    struct ScopeInc <: ProcessAlgorithm end
+    struct ScopeOutside <: ProcessAlgorithm end
+    struct ScopePeek <: ProcessAlgorithm end
+    StatefulAlgorithms.init(::ScopeInc, context) = (;)
+    StatefulAlgorithms.step!(::ScopeInc, context) = (; counter = context.counter + 1)
+    StatefulAlgorithms.init(::ScopeOutside, context) = (; seen = -1)
+    StatefulAlgorithms.step!(::ScopeOutside, context) = (; seen = context.counter)
+    StatefulAlgorithms.init(::ScopePeek, context) = (; seen = -1)
+    StatefulAlgorithms.step!(::ScopePeek, context) = (; seen = context.counter)
+    inner() = Routine(ScopeInc, (3,), Local(counter = 0))
+
+    # The declaration stays on its plan's wiring; it is not lifted to the root.
+    plan = CompositeAlgorithm(inner(), ScopeOutside, (1, 1))
+    @test isempty(StatefulAlgorithms.getoptions(resolve(plan)))
+    # A sibling outside the declaring routine does not see it.
+    @test_throws Exception run(InlineProcess(plan; repeats = 2))
+
+    # Two instances of the same routine get one local each.
+    final = run(InlineProcess(CompositeAlgorithm(inner(), inner(), (1, 1)); repeats = 2))
+    @test values(StatefulAlgorithms.getlocals(final)) == (6, 6)
+
+    # The nearest declaration wins.
+    shadowing = CompositeAlgorithm(Routine(ScopeInc, ScopePeek, (3, 1), Local(counter = 0)), ScopeOutside, (1, 1), Local(counter = 100))
+    final = run(InlineProcess(shadowing; repeats = 2))
+    @test final[ScopeOutside].seen == 100
+    @test final[ScopePeek].seen == 6
+end

@@ -58,6 +58,7 @@ function get_routed_locations(sct::Type{SCT}) where {SCT<:SubContextView{CType, 
 
     routedvars = named_flat_collect_broadcast(sharedvars) do sv
         fromname = get_fromname(sv)
+        fromname === :_local && return (;)   # declared locals: see `get_declared_locations`
         _localnames = localnames(sv)
         _subvarcontextnames = subvarcontextnames(sv)
         _transform = gettransform(sv)
@@ -71,17 +72,17 @@ function get_routed_locations(sct::Type{SCT}) where {SCT<:SubContextView{CType, 
 end
 
 """
-Declared loop-local variables (`Local`) => runtime locations in `_local`.
-Every view sees them by name; own fields, routes and shares take precedence.
+Declared loop-local variables (`Local`) visible to this view => runtime locations in `_local`.
+Resolve gives each child one route from `_local` per local declared on an enclosing plan;
+own fields, routes and shares take precedence.
 """
-function get_declared_locations(::Type{SCT}) where {SCT<:SubContextView{CType, SubKey, RuntimeCType}} where {CType, SubKey, RuntimeCType}
-    names = _declared_local_names(RuntimeCType)
-    return NamedTuple{names}(ntuple(i -> VarLocation{:runtime}(:_local, names[i]), length(names)))
+function get_declared_locations(::Type{SCT}) where {SCT<:SubContextView}
+    sharedvars = _view_shared_types(view_sharedvars(SCT))
+    return named_flat_collect_broadcast(sharedvars) do sv
+        get_fromname(sv) === :_local || return (;)
+        return NamedTuple{(only(localnames(sv)),)}((VarLocation{:runtime}(:_local, only(subvarcontextnames(sv))),))
+    end
 end
-
-_declared_local_names(::Type{<:ProcessContext{D}}) where {D} =
-    :_local in fieldnames(D) ? fieldnames(getdatatype(fieldtype(D, :_local))) : ()
-_declared_local_names(::Type) = ()
 
 function get_injected_locations(sct::Type{SCT}) where {SCT<:SubContextView{CType, SubKey}} where {CType, SubKey}
     injected_vars = injectedfieldnames(SCT)

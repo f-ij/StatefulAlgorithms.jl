@@ -179,13 +179,19 @@ child position and contains the exact wiring value passed to that child:
 `Wiring` for concrete executable children and `PlanWiring` for nested loop
 plans.
 """
-struct PlanWiring{GlobalWiring, ChildWiring} <: AbstractWiring
+struct PlanWiring{GlobalWiring, ChildWiring, Locals<:NamedTuple, Visible} <: AbstractWiring
     global_wiring::GlobalWiring
     child_wiring::ChildWiring
+    locals::Locals   # `Local` declarations of this plan node: name => initial value
 end
+# `Visible` (set by resolve) is every local this node's children can see, as
+# `(; name = storage_name, ...)`: its own and its ancestors', nearest declaration first.
 
-PlanWiring(global_wiring::GlobalWiring, child_wiring::ChildWiring) where {GlobalWiring, ChildWiring<:Tuple} =
-    PlanWiring{GlobalWiring, ChildWiring}(global_wiring, child_wiring)
+PlanWiring(global_wiring::GlobalWiring, child_wiring::ChildWiring, locals::Locals = (;), ::Val{Visible} = Val((;))) where {GlobalWiring, ChildWiring<:Tuple, Locals<:NamedTuple, Visible} =
+    PlanWiring{GlobalWiring, ChildWiring, Locals, Visible}(global_wiring, child_wiring, locals)
+
+"""Locals visible to the children of a plan node, `(; name = storage_name, ...)`."""
+visible_locals(::Type{<:PlanWiring{G, C, L, Visible}}) where {G, C, L, Visible} = Visible
 PlanWiring() = PlanWiring(Wiring(), ())
 
 """
@@ -195,15 +201,17 @@ The view keeps the full root `PlanWiring` and a type-level child path. Incoming
 routes/shares are read at the current path, while return demand can be computed
 from the whole tree for the current namespace.
 """
-struct PlanWiringView{Root, W, DemandAll} <: AbstractWiring
+struct PlanWiringView{Root, W, DemandAll, Visible} <: AbstractWiring
     wiring::W   # wiring of the current plan node; child views hold the child's subtree
 end
+# `Visible` is the locals visible at the current node, taken from the parent plan's wiring
+# type (a concrete child's own `Wiring` does not carry them).
 
 # `Root` is the whole plan's wiring type (needed by `return_demand`); it is the same at
 # every level, while `W` shrinks. Keeping every type non-growing down the nested plan lets
 # inference follow nested `_step!` calls instead of cutting them as unbounded recursion.
 PlanWiringView(wiring::W, ::Val = Val(()), ::Val{DemandAll} = Val(false)) where {W<:PlanWiring,DemandAll} =
-    PlanWiringView{W,W,DemandAll}(wiring)
+    PlanWiringView{W,W,DemandAll,visible_locals(W)}(wiring)
 
 Base.iterate(la::ALA) where {ALA<:LoopSpec} = iterate(getalgos(la))
 

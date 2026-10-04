@@ -1,8 +1,9 @@
 """
     _non_wiring(options::Tuple)
 
-The options that are not routes or shares (`AbstractWiring`), in their original order: what a plan keeps in its
-`options` field, next to its `wiring`. For example `(route, runtime_inputs, replace)` gives `(runtime_inputs, replace)`.
+The options that are not routes, shares (`AbstractWiring`) or declared locals (`Local`, kept in the plan's wiring),
+in their original order: what a plan keeps in its `options` field, next to its `wiring`. For example
+`(route, runtime_inputs, replace)` gives `(runtime_inputs, replace)`.
 """
 @inline function _non_wiring(options::Options) where {Options<:Tuple}
     # Written as recursion instead of `filter` so that the result type stays known for any number of options: Base's
@@ -10,7 +11,7 @@ The options that are not routes or shares (`AbstractWiring`), in their original 
     # the front of the tuple and decides about the last option on the way back, so its argument only gets shorter.
     kept = _non_wiring(Base.front(options))
     option = last(options)
-    return option isa AbstractWiring ? kept : (kept..., option)
+    return option isa Union{AbstractWiring, Local} ? kept : (kept..., option)
 end
 @inline _non_wiring(::Tuple{}) = ()
 
@@ -270,11 +271,11 @@ Base.@nospecializeinfer function _plan_wiring_untyped(@nospecialize(options::Tup
     return Wiring(Tuple(routes), Tuple(shares))
 end
 
-"""`_non_wiring` for construction: the options that are not routes or shares, from untyped values."""
+"""`_non_wiring` for construction: the options that are not routes, shares or declared locals, from untyped values."""
 Base.@nospecializeinfer function _non_wiring_untyped(@nospecialize(options::Tuple))
     kept = Any[]
     for option in options
-        option isa AbstractWiring || push!(kept, option)
+        option isa Union{AbstractWiring, Local} || push!(kept, option)
     end
     return Tuple(kept)
 end
