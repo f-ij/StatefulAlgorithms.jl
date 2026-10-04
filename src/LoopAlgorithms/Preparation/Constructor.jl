@@ -11,12 +11,14 @@ keys the child algorithms, and resolves route/share options against that
 registry. The returned value is always a runtime wrapper unless the input was a
 `FinalizedAlgorithm`, in which case the finalized outer shape is preserved and
 its inner loop is materialized.
+
+Plans with `Unique` handles are resolved with their random ids normalized, so the typed part is compiled once per
+plan shape (NormalizeIds.jl); other plans go straight to the typed body, compiled once per plan type.
 """
-# Generated so that a plan with random `Unique` ids compiles to a single call into the normalizing barrier:
-# a plain `if` would make Julia infer the typed body for the random-id type as well (NormalizeIds.jl).
-@generated function resolve(la::LA) where {LA<:LoopSpec}
-    call = _type_has_random_ids(LA, Base.IdSet{Any}()) ? :(_resolve_normalized(la)) : :(_resolve_typed(la))
-    return Expr(:block, Expr(:meta, :inline), call)
+Base.@nospecializeinfer function resolve(@nospecialize(la::LoopSpec))
+    # Untyped entry: compiled once, not per plan type (a new set of `Unique` ids is a new plan type). The trait is
+    # computed at run time, then the dispatch picks the path.
+    return _resolve_by_trait(_unique_handles_trait(la), la)
 end
 
 @inline function _resolve_typed(la::LA) where {LA<:LoopSpec}

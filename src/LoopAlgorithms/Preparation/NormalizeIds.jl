@@ -17,24 +17,49 @@ last step puts the original ones back there, so a handle the user still holds is
 All of this runs on values held as `Any`, with `@nospecialize`, so it does not compile per uuid.
 =#
 
-"""Whether `T` contains a `SimpleId` with a random UUID anywhere in its type parameters."""
-function _type_has_random_ids(@nospecialize(T), seen::Base.IdSet{Any})
-    T isa DataType || return T isa Union ? (_type_has_random_ids(T.a, seen) || _type_has_random_ids(T.b, seen)) : false
-    T in seen && return false
-    push!(seen, T)
-    T <: SimpleId && !isempty(T.parameters) && T.parameters[1] isa UUID && return true
-    for p in T.parameters
-        _param_has_random_ids(p, seen) && return true
+"""Whether a plan holds `Unique` handles (handles with a random id), as a value to dispatch on."""
+struct _HasUniqueHandles end
+struct _NoUniqueHandles end
+
+"""
+    _has_unique_handles(x) -> Bool
+
+Whether `x` holds a `Unique` handle (an `IdentifiableAlgo` whose id is a `SimpleId` with a random UUID): among a plan's
+children (recursively, also inside a handle that wraps a plan), its states, its options, stored inits and overrides,
+and its routes and shares. Stops at the first one found.
+
+Reads fields and type parameters only, so it compiles nothing per handle type. A `Unique` handle it does not reach
+(inside a `Package`, for example) only means that plan is resolved with its random ids, which is correct but compiles
+again on every re-run.
+"""
+Base.@nospecializeinfer function _has_unique_handles(@nospecialize(x))::Bool
+    if x isa IdentifiableAlgo
+        id = typeof(x).parameters[2]
+        id isa SimpleId && typeof(id).parameters[1] isa UUID && return true
+        return _has_unique_handles(getfield(x, :func))
+    elseif x isa LoopAlgorithm
+        return _has_unique_handles(getfield(x, :plan)) || _has_unique_handles(getfield(x, :states)) ||
+               _has_unique_handles(getfield(x, :options)) || _has_unique_handles(getfield(x, :inits)) ||
+               _has_unique_handles(getfield(x, :overrides))
+    elseif x isa FinalizedAlgorithm
+        return _has_unique_handles(getfield(x, :inner))
+    elseif x isa AbstractPlan
+        return _has_unique_handles(getfield(x, :funcs)) || _has_unique_handles(getfield(x, :wiring))
+    elseif x isa Union{Tuple, NamedTuple, PlanWiring, Wiring, Route, Share}
+        for i in 1:nfields(x)
+            _has_unique_handles(getfield(x, i)) && return true
+        end
     end
     return false
 end
 
-function _param_has_random_ids(@nospecialize(p), seen::Base.IdSet{Any})
-    p isa Type && return _type_has_random_ids(p, seen)
-    p isa Tuple && return any(x -> _param_has_random_ids(x, seen), p)
-    p isa TypeVar && return false
-    return _type_has_random_ids(typeof(p), seen)
-end
+Base.@nospecializeinfer _unique_handles_trait(@nospecialize(la)) =
+    _has_unique_handles(la) ? _HasUniqueHandles() : _NoUniqueHandles()
+
+# Without `Unique` handles: the typed body, compiled once per plan type.
+@inline _resolve_by_trait(::_NoUniqueHandles, la::LA) where {LA<:LoopSpec} = _resolve_typed(la)
+# With `Unique` handles: the untyped normalizing path (below), compiled once.
+Base.@nospecializeinfer _resolve_by_trait(::_HasUniqueHandles, @nospecialize(la)) = _resolve_normalized(la)
 
 ############################
 ###### NORMALIZING ######
@@ -185,11 +210,8 @@ tables need no change: their keys are those of the original ids already.
 Base.@nospecializeinfer restore_original_ids(@nospecialize(resolved)) = _restore_value(resolved, IdDict{Any, Bool}())
 
 """
-Function barrier of `resolve` for plans with random ids: normalize, resolve the normalized type, then put the
-original handles back (see the top of this file).
-
-`@nospecializeinfer`: the caller knows the concrete random-id type, and plain `@nospecialize` would still infer this
-body for that type, and the typed `resolve` it calls, which is the whole compile cost this barrier exists to avoid.
+`resolve` for plans with `Unique` handles: normalize, resolve the normalized type, then put the original handles back
+(see the top of this file). Untyped, so it is compiled once, not per set of uuids.
 """
 @noinline Base.@nospecializeinfer function _resolve_normalized(@nospecialize(la))
     return restore_original_ids(_resolve_typed(normalize_ids(la)))
