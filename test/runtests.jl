@@ -26,6 +26,7 @@ const TEST_FILES = [
     "ProcessAlgorithmMacroTest.jl",
     "ContextAnalyzerTest.jl",
     "InspectionTest.jl",
+    "LocalTest.jl",
     "SavingTest.jl",
     "ContextDeltaTest.jl",
 ]

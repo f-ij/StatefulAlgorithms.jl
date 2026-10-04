@@ -23,33 +23,41 @@ is still visible. The runtime context is intentionally not returned.
     return cleaned_context, (@inline _loop_final_result(func, final_context, cleaned_runtimecontext))
 end
 
-"""Build the loop-local runtime context for one execution."""
-@inline function _initial_runtime_context(inputs::NamedTuple, process::P, lifetime::LT) where {P<:AbstractProcess,LT<:Lifetime}
+"""Build the loop-local runtime context for one execution: globals, runtime inputs and declared locals."""
+@inline function _initial_runtime_context(inputs::NamedTuple, process::P, lifetime::LT, locals::NamedTuple = (;)) where {P<:AbstractProcess,LT<:Lifetime}
     runtime = @inline _merge_into_globals(_empty_context(), (; process, lifetime))
-    return isempty(inputs) ? runtime : @inline with_subcontext(runtime, Val(:_input), SubContext{:_input}(inputs))
+    runtime = isempty(inputs) ? runtime : @inline with_subcontext(runtime, Val(:_input), SubContext(:_input, inputs))
+    return isempty(locals) ? runtime : @inline with_subcontext(runtime, Val(:_local), SubContext(:_local, locals))
 end
 
-"""Build the visible paused context that keeps runtime inputs for resuming."""
+"""Build the visible paused context that keeps runtime inputs and declared locals for resuming."""
 @inline function _paused_visible_context(context::C, runtimecontext::RC) where {C<:ProcessContext,RC<:ProcessContext}
     inputs = @inline getruntimeinput(runtimecontext)
-    return isempty(inputs) ? context : @inline with_subcontext(context, Val(:_input), SubContext{:_input}(inputs))
+    context = isempty(inputs) ? context : @inline with_subcontext(context, Val(:_input), SubContext(:_input, inputs))
+    locals = @inline getlocals(runtimecontext)
+    return isempty(locals) ? context : @inline with_subcontext(context, Val(:_local), SubContext(:_local, locals))
 end
 
-"""Clear pause-only runtime inputs before re-entering the hot loop."""
+"""Clear pause-only runtime inputs and declared locals before re-entering the hot loop."""
 @inline function _paused_state_context(context::C) where {C<:ProcessContext}
-    return haskey(get_subcontexts(context), :_input) ? (@inline with_subcontext(context, Val(:_input), SubContext{:_input}((;)))) : context
+    # Written out per field: reassigning `context` in a loop would change its type per iteration.
+    context = @inline _clear_paused_subcontext(context, Val(:_input))
+    return @inline _clear_paused_subcontext(context, Val(:_local))
 end
+
+@inline _clear_paused_subcontext(context::C, ::Val{name}) where {C<:ProcessContext,name} =
+    haskey(get_subcontexts(context), name) ? (@inline with_subcontext(context, Val(name), SubContext(name, (;)))) : context
 
 @inline _loop_state_context(stored_context::C, ::Resuming{false}) where {C<:ProcessContext} = stored_context
 @inline _loop_state_context(stored_context::C, ::Resuming{true}) where {C<:ProcessContext} = @inline _paused_state_context(stored_context)
 
-@inline function _loop_runtime_context(inputs::NamedTuple, process::P, lifetime::LT, stored_context::C, ::Resuming{false}) where {P<:AbstractProcess,LT<:Lifetime,C<:ProcessContext}
-    return @inline _initial_runtime_context(inputs, process, lifetime)
+@inline function _loop_runtime_context(algo::F, inputs::NamedTuple, process::P, lifetime::LT, stored_context::C, ::Resuming{false}) where {F,P<:AbstractProcess,LT<:Lifetime,C<:ProcessContext}
+    return @inline _initial_runtime_context(inputs, process, lifetime, declared_locals(algo))
 end
 
-@inline function _loop_runtime_context(inputs::NamedTuple, process::P, lifetime::LT, stored_context::C, ::Resuming{true}) where {P<:AbstractProcess,LT<:Lifetime,C<:ProcessContext}
+@inline function _loop_runtime_context(algo::F, inputs::NamedTuple, process::P, lifetime::LT, stored_context::C, ::Resuming{true}) where {F,P<:AbstractProcess,LT<:Lifetime,C<:ProcessContext}
     runtime_inputs = @inline getruntimeinput(stored_context)
-    return @inline _initial_runtime_context(runtime_inputs, process, lifetime)
+    return @inline _initial_runtime_context(runtime_inputs, process, lifetime, getlocals(stored_context))
 end
 
 """Return whether this loop exit is a pause rather than a final completion."""
@@ -112,7 +120,7 @@ Run a single function in a loop indefinitely.
     resume = Resuming{isresuming}()
     step_cursor = @inline _loop_cursor(process, step_plan, resume)
     context = @inline _loop_state_context(stored_context, resume)
-    runtimecontext = @inline _loop_runtime_context(inputs, process, lifetime, stored_context, resume)
+    runtimecontext = @inline _loop_runtime_context(func, inputs, process, lifetime, stored_context, resume)
 
     if isresuming
         @atomic process.paused = false
@@ -162,7 +170,7 @@ Base.@constprop :aggressive @inline function loop(process::P, algo::F, stored_co
     resume = Resuming{isresuming}()
     step_cursor = @inline _loop_cursor(process, step_plan, resume)
     context = @inline _loop_state_context(stored_context, resume)
-    runtimecontext = @inline _loop_runtime_context(inputs, process, lifetime, stored_context, resume)
+    runtimecontext = @inline _loop_runtime_context(algo, inputs, process, lifetime, stored_context, resume)
 
     if isresuming
         @atomic process.paused = false

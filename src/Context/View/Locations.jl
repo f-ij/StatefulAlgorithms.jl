@@ -70,6 +70,19 @@ function get_routed_locations(sct::Type{SCT}) where {SCT<:SubContextView{CType, 
     return routedvars
 end
 
+"""
+Declared loop-local variables (`Local`) => runtime locations in `_local`.
+Every view sees them by name; own fields, routes and shares take precedence.
+"""
+function get_declared_locations(::Type{SCT}) where {SCT<:SubContextView{CType, SubKey, RuntimeCType}} where {CType, SubKey, RuntimeCType}
+    names = _declared_local_names(RuntimeCType)
+    return NamedTuple{names}(ntuple(i -> VarLocation{:runtime}(:_local, names[i]), length(names)))
+end
+
+_declared_local_names(::Type{<:ProcessContext{D}}) where {D} =
+    :_local in fieldnames(D) ? fieldnames(getdatatype(fieldtype(D, :_local))) : ()
+_declared_local_names(::Type) = ()
+
 function get_injected_locations(sct::Type{SCT}) where {SCT<:SubContextView{CType, SubKey}} where {CType, SubKey}
     injected_vars = injectedfieldnames(SCT)
     injst = ntuple(i ->VarLocation{:injected}(SubKey, injected_vars[i]), length(injected_vars))
@@ -85,8 +98,10 @@ function _compute_varlocations(::Type{C}) where {C<:SubContextView{CType, SubKey
     sharedvars = get_shared_locations(C)
     routedvars = get_routed_locations(C)
     injectedvars = get_injected_locations(C)
-    # On a name clash: injected over routes, routes over the namespace's own state, own state over shares
-    return (;sharedvars..., locals..., routedvars..., injectedvars...)
+    declaredvars = get_declared_locations(C)
+    # On a name clash: injected over routes, routes over the namespace's own state, own state over shares, shares over
+    # declared loop locals
+    return (;declaredvars..., sharedvars..., locals..., routedvars..., injectedvars...)
 end
 
 """
@@ -98,8 +113,10 @@ function _compute_all_locations(::Type{SCT}) where {SCT<:SubContextView}
     sharedvars = get_shared_locations(SCT)
     routedvars = get_routed_locations(SCT)
     injectedvars = get_injected_locations(SCT)
-    # On a name clash: injected over routes, routes over the namespace's own state, own state over shares
-    return (;sharedvars..., locals..., routedvars..., injectedvars...)
+    declaredvars = get_declared_locations(SCT)
+    # On a name clash: injected over routes, routes over the namespace's own state, own state over shares, shares over
+    # declared loop locals
+    return (;declaredvars..., sharedvars..., locals..., routedvars..., injectedvars...)
 end
 
 @inline @generated function _generated_varlocations(::Type{C}) where {C<:SubContextView}
@@ -132,6 +149,9 @@ function _compute_location(::Type{SCT}, name::Symbol) where {SCT<:SubContextView
 
     shared = get_shared_locations(SCT)
     hasproperty(shared, subcontext_name) && return getproperty(shared, subcontext_name), subcontext_name
+
+    declared = get_declared_locations(SCT)
+    hasproperty(declared, name) && return getproperty(declared, name), name
 
     return nothing, subcontext_name
 end
