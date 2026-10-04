@@ -4,26 +4,18 @@ Normalizing the random ids of `Unique` handles around `resolve`.
 `Unique(f)` puts a random UUID in the handle's type (`SimpleId{uuid}()`), so every re-run of the same user code
 gives a plan of a new type, and the whole typed `resolve` compiles again. For a plan with such ids, `resolve` does:
 
-    normalized, uuids = normalize_ids(la)          # SimpleId{uuid} -> NormalizedId{k}, k = order of first appearance
-    resolved = _resolve_typed(normalized)          # typed resolve, compiled once per plan shape
-    registry = unnormalize_registry(getregistry(resolved), uuids)
-    attach_registry_to_tree(resolved, registry)    # NormalizedId{k} -> SimpleId{uuid} again, in the registry only
+    normalized = normalize_ids(la)        # SimpleId{uuid} -> NormalizedId{k, R}, k = order of first appearance;
+                                          # a handle keeps its original id in its `reconstructor` field
+    resolved = _resolve_typed(normalized) # typed resolve, compiled once per plan shape
+    restore_original_ids(resolved)        # every normalized handle back to the original one
 
-After `resolve` the plan itself holds no ids, only each child's context name (`Namespace{:Counter_1}`). The ids are
-only needed in the registry, where a handle the user still holds (`context[handle]`, `Init(handle; ...)`) is matched
-at compile time by its id to that name. So the registry gets the original uuids back.
+While `resolve` runs, the registry holds the normalized handles, so its type is the same for every uuid, and their
+runtime lookup keys are already those of the original ids (`dynamic_lookup_key`, IdReconstruction.jl). After
+`resolve` the plan itself holds no ids, only each child's context name; the handles live in the registry, and the
+last step puts the original ones back there, so a handle the user still holds is matched at compile time as before.
 
-The (un)normalizing runs on type objects and values held as `Any`, with `@nospecialize`, so it does not compile per
-uuid.
+All of this runs on values held as `Any`, with `@nospecialize`, so it does not compile per uuid.
 =#
-
-"""
-    NormalizedId{k}
-
-Matcher that stands in for the `k`-th random `Unique` id (in order of first appearance) while `resolve` runs. A type of
-its own, so it cannot clash with ids users choose (`SimpleId(...)`). It never appears outside `resolve`.
-"""
-struct NormalizedId{k} <: AbstractMatcher{k} end
 
 """Whether `T` contains a `SimpleId` with a random UUID anywhere in its type parameters."""
 function _type_has_random_ids(@nospecialize(T), seen::Base.IdSet{Any})
@@ -44,135 +36,161 @@ function _param_has_random_ids(@nospecialize(p), seen::Base.IdSet{Any})
     return _type_has_random_ids(typeof(p), seen)
 end
 
-"""
-Rewrites ids in types and values, in one direction:
-`SimpleId{uuid}` to `NormalizedId{k}` (`normalize = true`, filling `uuids` in order of first appearance), or
-`NormalizedId{k}` back to `SimpleId{uuids[k]}` (`normalize = false`).
-"""
-struct _IdRewriter
-    normalize::Bool
-    uuids::Vector{UUID}
+############################
+###### NORMALIZING ######
+############################
+
+"""Normalizes random ids in types and values; `ordinals` numbers each uuid in order of first appearance."""
+struct _IdNormalizer
     ordinals::Dict{UUID, Int}
     types::IdDict{Any, Any}
 end
-_IdRewriter(normalize::Bool, uuids::Vector{UUID} = UUID[]) =
-    _IdRewriter(normalize, uuids, Dict{UUID, Int}(u => k for (k, u) in enumerate(uuids)), IdDict{Any, Any}())
+_IdNormalizer() = _IdNormalizer(Dict{UUID, Int}(), IdDict{Any, Any}())
 
-function _ordinal!(r::_IdRewriter, u::UUID)
-    k = get(r.ordinals, u, nothing)
-    isnothing(k) || return k
-    push!(r.uuids, u)
-    return r.ordinals[u] = length(r.uuids)
-end
-
-"""The rewritten type of an id matcher type, or `nothing` when `T` is not an id this rewriter changes."""
-function _rewrite_id_type(r::_IdRewriter, @nospecialize(T::DataType))
-    if r.normalize
-        T <: SimpleId && T.parameters[1] isa UUID && return NormalizedId{_ordinal!(r, T.parameters[1])}
-    else
-        T <: NormalizedId && return SimpleId{r.uuids[T.parameters[1]]}
-    end
-    return nothing
-end
+_ordinal!(r::_IdNormalizer, u::UUID) = get!(r.ordinals, u, length(r.ordinals) + 1)
 
 # No closures, `map` or `all` below: a closure capturing a fresh type, or `map` over a fresh tuple type, compiles per uuid.
-function _rewrite_type(r::_IdRewriter, @nospecialize(T))
-    T isa Union && return Union{_rewrite_type(r, T.a), _rewrite_type(r, T.b)}
+function _normalize_type(r::_IdNormalizer, @nospecialize(T))
+    T isa Union && return Union{_normalize_type(r, T.a), _normalize_type(r, T.b)}
     T isa DataType || return T
     isempty(T.parameters) && return T
     cached = get(r.types, T, nothing)
     isnothing(cached) || return cached
-    rewritten = _rewrite_id_type(r, T)
-    if isnothing(rewritten)
+    normalized = if T <: SimpleId && T.parameters[1] isa UUID
+        NormalizedId{_ordinal!(r, T.parameters[1]), IdReconstructor{SimpleId, UUID}}
+    else
         params = T.parameters
         newparams = Vector{Any}(undef, length(params))
         changed = false
         for i in eachindex(newparams)
-            newparams[i] = _rewrite_param(r, params[i])
+            newparams[i] = _normalize_param(r, params[i])
             changed |= newparams[i] !== params[i]
         end
-        rewritten = changed ? Core.apply_type(T.name.wrapper, newparams...) : T
+        # A normalized handle's last parameter is the type of its reconstructor (it was `Nothing`).
+        if T <: IdentifiableAlgo && newparams[2] isa NormalizedId
+            newparams[6] = typeof(newparams[2]).parameters[2]
+        end
+        changed ? Core.apply_type(T.name.wrapper, newparams...) : T
     end
-    r.types[T] = rewritten
-    return rewritten
+    r.types[T] = normalized
+    return normalized
 end
 
-function _rewrite_param(r::_IdRewriter, @nospecialize(p))
-    p isa Type && return _rewrite_type(r, p)
+function _normalize_param(r::_IdNormalizer, @nospecialize(p))
+    p isa Type && return _normalize_type(r, p)
     p isa TypeVar && return p
-    return _rewrite_value(r, p)
+    return _normalize_value(r, p)
 end
 
-"""Rebuild `v` with rewritten ids. Throws `_CannotRewrite` for mutable objects whose type would change."""
-function _rewrite_value(r::_IdRewriter, @nospecialize(v))
+"""Rebuild `v` with normalized ids. Throws `_CannotNormalize` for mutable objects whose type would change."""
+function _normalize_value(r::_IdNormalizer, @nospecialize(v))
     T = typeof(v)
-    T2 = _rewrite_type(r, T)
+    T2 = _normalize_type(r, T)
     T2 === T && return v
-    (ismutable(v) || !(T2 isa DataType) || !isconcretetype(T2)) && throw(_CannotRewrite(T))
+    (ismutable(v) || !(T2 isa DataType) || !isconcretetype(T2)) && throw(_CannotNormalize(T))
     n = fieldcount(T)
     fields = Vector{Any}(undef, n)
     for i in 1:n
-        fields[i] = _rewrite_value(r, getfield(v, i))
+        fields[i] = _normalize_value(r, getfield(v, i))
     end
     v isa Tuple && return Core._apply_iterate(iterate, tuple, fields)
+    if v isa IdentifiableAlgo && T2.parameters[6] !== T.parameters[6]
+        fields[2] = IdReconstructor(T.parameters[2])    # keep the original id to rebuild it after `resolve`
+    end
     return ccall(:jl_new_structv, Any, (Any, Ptr{Any}, UInt32), T2, fields, n)
 end
 
-struct _CannotRewrite <: Exception
+struct _CannotNormalize <: Exception
     type::Any
 end
 
 """
-    normalize_ids(la) -> (normalized, uuids)
+    normalize_ids(la)
 
-Replace every random `Unique` id in `la` by `NormalizedId{k}`, numbered in order of first appearance; `uuids[k]` is
-the original uuid. The same plan shape with other uuids gives the same normalized type. When a mutable object in the
-plan would change type it gives up and returns `la` unchanged with no uuids; that plan then resolves with its
-original ids, which is correct but compiles per uuid.
+Replace every random `Unique` id in `la` by `NormalizedId{k, R}`, numbered in order of first appearance; each
+normalized handle keeps its original id in its `reconstructor` field. The same plan shape with other uuids gives the
+same normalized type. When a mutable object in the plan would change type it gives up and returns `la` unchanged;
+that plan then resolves with its original ids, which is correct but compiles per uuid.
 """
 Base.@nospecializeinfer function normalize_ids(@nospecialize(la))
-    r = _IdRewriter(true)
-    normalized = try
-        _rewrite_value(r, la)
+    try
+        return _normalize_value(_IdNormalizer(), la)
     catch e
-        e isa _CannotRewrite || rethrow()
-        return la, UUID[]
+        e isa _CannotNormalize || rethrow()
+        return la
     end
-    return normalized, r.uuids
 end
 
-"""
-    unnormalize_registry(registry, uuids) -> registry
+############################
+##### RESTORING ######
+############################
 
-The same registry with every `NormalizedId{k}` replaced by the original `SimpleId{uuids[k]}`, in the entries' types
-and in the keys of their runtime lookup tables: the registry `resolve` would have built from the original plan.
-"""
-Base.@nospecializeinfer function unnormalize_registry(@nospecialize(registry::NameSpaceRegistry), uuids::Vector{UUID})
-    r = _IdRewriter(false, uuids)
-    type_entries = getentries(registry)
-    rewritten = Vector{Any}(undef, length(type_entries))
-    for i in eachindex(rewritten)
-        rte = type_entries[i]
-        lookup = Dict{Any, Int}()
-        for (matcher, idx) in getdynamiclookup(rte)
-            lookup[_rewrite_value(r, matcher)] = idx
+"""Whether `T` contains a normalized id (`NormalizedId` or `IdReconstructor`) anywhere; results are cached in `cache`."""
+function _type_has_normalized_ids(@nospecialize(T), cache::IdDict{Any, Bool})
+    T isa Union && return _type_has_normalized_ids(T.a, cache) || _type_has_normalized_ids(T.b, cache)
+    T isa DataType || return false
+    cached = get(cache, T, nothing)
+    isnothing(cached) || return cached
+    cache[T] = false        # guards against recursion through the same type
+    found = T <: NormalizedId || T <: IdReconstructor
+    if !found
+        for p in T.parameters
+            found = p isa Type ? _type_has_normalized_ids(p, cache) :
+                    p isa TypeVar ? false : _type_has_normalized_ids(typeof(p), cache)
+            found && break
         end
-        rewritten[i] = RegistryTypeEntry{gettype(rte)}(_rewrite_value(r, getentries(rte)), copy(getmultipliers(rte)), lookup)
     end
-    entries = Tuple(rewritten)
-    return NameSpaceRegistry{typeof(entries)}(entries)
+    cache[T] = found
+    return found
 end
 
 """
-Function barrier of `resolve` for plans with random ids: normalize, resolve the normalized type, then put the original
-ids back into the registry (see the top of this file).
+Rebuild `v` with every normalized handle replaced by the original one (`reconstruct_id` on its reconstructor). Only
+the parts of `v` whose type contains a normalized id are rebuilt; a struct type parameter that is the type of a
+rebuilt field gets that field's new type.
+"""
+function _restore_value(@nospecialize(v), cache::IdDict{Any, Bool})
+    T = typeof(v)
+    (ismutable(v) || !_type_has_normalized_ids(T, cache)) && return v
+    if v isa IdentifiableAlgo && getfield(v, :reconstructor) isa IdReconstructor
+        func = _restore_value(getfield(v, :func), cache)
+        p = T.parameters
+        return IdentifiableAlgo{typeof(func), reconstruct_id(getfield(v, :reconstructor)), p[3], p[4], p[5], Nothing}(func, nothing)
+    end
+    n = fieldcount(T)
+    fields = Vector{Any}(undef, n)
+    params = Any[T.parameters...]
+    changed = false
+    for i in 1:n
+        old = getfield(v, i)
+        new = _restore_value(old, cache)
+        fields[i] = new
+        new === old && continue
+        changed = true
+        for j in eachindex(params)
+            params[j] === typeof(old) && (params[j] = typeof(new))
+        end
+    end
+    changed || return v
+    v isa Tuple && return Core._apply_iterate(iterate, tuple, fields)
+    return ccall(:jl_new_structv, Any, (Any, Ptr{Any}, UInt32), Core.apply_type(T.name.wrapper, params...), fields, n)
+end
+
+"""
+    restore_original_ids(resolved)
+
+Put the original handles back wherever `resolve` left normalized ones, which is in the registry. The runtime lookup
+tables need no change: their keys are those of the original ids already.
+"""
+Base.@nospecializeinfer restore_original_ids(@nospecialize(resolved)) = _restore_value(resolved, IdDict{Any, Bool}())
+
+"""
+Function barrier of `resolve` for plans with random ids: normalize, resolve the normalized type, then put the
+original handles back (see the top of this file).
 
 `@nospecializeinfer`: the caller knows the concrete random-id type, and plain `@nospecialize` would still infer this
 body for that type, and the typed `resolve` it calls, which is the whole compile cost this barrier exists to avoid.
 """
 @noinline Base.@nospecializeinfer function _resolve_normalized(@nospecialize(la))
-    normalized, uuids = normalize_ids(la)
-    resolved = _resolve_typed(normalized)
-    isempty(uuids) && return resolved
-    return attach_registry_to_tree(resolved, unnormalize_registry(getregistry(resolved), uuids))
+    return restore_original_ids(_resolve_typed(normalize_ids(la)))
 end

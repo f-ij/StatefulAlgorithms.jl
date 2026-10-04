@@ -22,10 +22,10 @@ end
 end
 
 @inline function _merged_identifiable(
-    sa::IdentifiableAlgo{F, Id, Aliases, AlgoName, ScopeName},
+    sa::IdentifiableAlgo{F, Id, Aliases, AlgoName, ScopeName, R},
     merged_algo,
-) where {F, Id, Aliases, AlgoName, ScopeName}
-    return IdentifiableAlgo{typeof(merged_algo), Id, Aliases, AlgoName, ScopeName}(merged_algo)
+) where {F, Id, Aliases, AlgoName, ScopeName, R}
+    return IdentifiableAlgo{typeof(merged_algo), Id, Aliases, AlgoName, ScopeName, R}(merged_algo, getfield(sa, :reconstructor))
 end
 
 function Base.merge(sa::IdentifiableAlgo, other)

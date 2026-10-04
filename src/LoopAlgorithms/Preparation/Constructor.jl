@@ -95,7 +95,7 @@ function _add_funcwrapper_tuple_to_registry(registry::R, funcs::Funcs, multiplie
     # each autokeyed wrapper, but avoid building every intermediate entry tuple.
     for i in eachindex(entries)
         push!(multiplier_values, Float64(getfield(multipliers, i)))
-        lookup[match_by(getfield(entries, i))] = i
+        lookup[dynamic_lookup_key(getfield(entries, i))] = i
     end
 
     entry = RegistryTypeEntry{FuncWrapper, typeof(entries)}(entries, multiplier_values, lookup)

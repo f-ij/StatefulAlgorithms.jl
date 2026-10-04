@@ -19,14 +19,12 @@ setentries(rte::RegistryTypeEntry{T}, newentries) where {T} = RegistryTypeEntry{
 setdynamic(rte::RegistryTypeEntry{T}, newdynamic) where {T} = RegistryTypeEntry{T,typeof(getdefault(rte)),typeof(getentries(rte)), typeof(newdynamic)}(getdefault(rte), getentries(rte), newdynamic, getdynamiclookup(rte))
 
 function add_dynamic_link!(obj, location::Symbol, idx::Int, rte::RegistryTypeEntry)
-    matching_obj = match_by(obj)
-    getdynamiclookup(rte)[matching_obj] = idx
+    getdynamiclookup(rte)[dynamic_lookup_key(obj)] = idx
     return nothing
 end
 
 function remove_dynamic_link!(obj, rte::RegistryTypeEntry)
-    matching_obj = match_by(obj)
-    delete!(getdynamiclookup(rte), matching_obj)
+    delete!(getdynamiclookup(rte), dynamic_lookup_key(obj))
     return nothing
 end
 
@@ -82,7 +80,7 @@ end
 #     return :($idx)
 # end
 
-@inline dynamic_find_match(rte::RegistryTypeEntry{T}, val) where {T} = get(getdynamiclookup(rte), match_by(val), nothing)
+@inline dynamic_find_match(rte::RegistryTypeEntry{T}, val) where {T} = get(getdynamiclookup(rte), dynamic_lookup_key(val), nothing)
 @inline findfirst_match(rte::RegistryTypeEntry, val) = isstaticallyfindable(val) ? static_findfirst_match(rte, val) : dynamic_find_match(rte, val)
 
 ##########################
@@ -134,7 +132,7 @@ Match either a scoped or non scope value with one of the entries
 This is faster for runtime, slower for inlining
 =#
 
-dynamic_lookup(rte::RegistryTypeEntry{T}, val) where {T} = get(getdynamiclookup(rte), match_by(val), nothing)
+dynamic_lookup(rte::RegistryTypeEntry{T}, val) where {T} = get(getdynamiclookup(rte), dynamic_lookup_key(val), nothing)
 
 @inline function dynamic_get(rte::RegistryTypeEntry{T}, val) where {T}
     idx = dynamic_lookup(rte, val)

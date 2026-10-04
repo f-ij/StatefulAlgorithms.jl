@@ -1,5 +1,5 @@
-function setcontextkey(sa::IdentifiableAlgo{F}, newname::Symbol) where {F}
-    IdentifiableAlgo{F, id(sa), varaliases(sa), algoname(sa), newname}(sa.func)
+function setcontextkey(sa::IdentifiableAlgo{F, Id, VA, AlgoName, Key, R}, newname::Symbol) where {F, Id, VA, AlgoName, Key, R}
+    IdentifiableAlgo{F, Id, VA, AlgoName, newname, R}(sa.func, getfield(sa, :reconstructor))
 end
 
 ########################################

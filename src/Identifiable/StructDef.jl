@@ -22,6 +22,13 @@ Algorithm assigned to a namespace in a context
     AlgoName can be used when fusing multiple algorithms to give them custom names
 
 """
-struct IdentifiableAlgo{F, Id, VarAliases, AlgoName, Key} <: AbstractIdentifiableAlgo{F, Id, VarAliases, AlgoName, Key}
+struct IdentifiableAlgo{F, Id, VarAliases, AlgoName, Key, R} <: AbstractIdentifiableAlgo{F, Id, VarAliases, AlgoName, Key}
     func::F
+    # `nothing` (`R = Nothing`, no extra bytes), or an `IdReconstructor` when `Id` is a `NormalizedId` that `resolve`
+    # put in place of a random id; it holds what is needed to rebuild the original id (IdReconstruction.jl).
+    reconstructor::R
 end
+
+# Every handle except a normalized one: no reconstructor.
+IdentifiableAlgo{F, Id, VarAliases, AlgoName, Key}(func) where {F, Id, VarAliases, AlgoName, Key} =
+    IdentifiableAlgo{F, Id, VarAliases, AlgoName, Key, Nothing}(func, nothing)
