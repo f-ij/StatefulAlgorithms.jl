@@ -12,10 +12,10 @@ registry. The returned value is always a runtime wrapper unless the input was a
 `FinalizedAlgorithm`, in which case the finalized outer shape is preserved and
 its inner loop is materialized.
 """
-# Generated so that a plan with random `Unique` ids compiles to a single call into the renaming barrier:
+# Generated so that a plan with random `Unique` ids compiles to a single call into the normalizing barrier:
 # a plain `if` would make Julia infer the typed body for the random-id type as well (NormalizeIds.jl).
 @generated function resolve(la::LA) where {LA<:LoopSpec}
-    call = _type_has_random_ids(LA, Base.IdSet{Any}()) ? :(_resolve_renamed(la)) : :(_resolve_typed(la))
+    call = _type_has_random_ids(LA, Base.IdSet{Any}()) ? :(_resolve_normalized(la)) : :(_resolve_typed(la))
     return Expr(:block, Expr(:meta, :inline), call)
 end
 
