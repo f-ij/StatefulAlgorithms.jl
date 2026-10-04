@@ -1,22 +1,12 @@
-"""Largest options tuple that is filtered by type (`Base.afoldl` is written out explicitly up to 31 elements)."""
-const _ROOT_OPTIONS_STATIC_LIMIT = 31
-
 """Return non-wiring options that must stay on the `LoopAlgorithm` wrapper."""
-function _root_loop_options(options::Options) where {Options<:Tuple}
-    # Small tuples are filtered by type, so the result type is known to the compiler (the loop below returns
-    # `Tuple(::Vector)`, whose type depends on runtime data and is lost for everything that follows).
-    if length(options) <= _ROOT_OPTIONS_STATIC_LIMIT
-        return filter(option -> !(option isa AbstractWiring), options)
-    end
-    root_options = Any[]
+@inline _root_loop_options(::Tuple{}) = ()
 
-    # Constructor-only filtering. Keep this as a plain loop so large DSL route
-    # lists do not compile one recursive tuple-builder method per option.
-    for option in options
-        option isa AbstractWiring && continue
-        push!(root_options, option)
-    end
-    return Tuple(root_options)
+# Recursion on the front of the tuple, keeping or dropping the last option on the way back: the arguments only get
+# shorter, so the result type is inferred for any number of options (a loop, or `filter` beyond 32 elements, loses it).
+@inline function _root_loop_options(options::Options) where {Options<:Tuple}
+    kept = _root_loop_options(Base.front(options))
+    option = last(options)
+    return option isa AbstractWiring ? kept : (kept..., option)
 end
 
 """Append non-wiring options to `root_options` without constructing a large tuple."""

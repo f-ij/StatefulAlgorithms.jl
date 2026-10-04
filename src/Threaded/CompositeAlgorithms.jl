@@ -90,8 +90,8 @@ function reset!(cursor::CompositeLoopCursor, tca::ThreadedCompositeAlgorithm)
     reset!.(getalgos(tca))
 end
 
-multipliers(tca::ThreadedCompositeAlgorithm) = map(x -> 1 / getinterval(x), intervals(tca))
-multipliers(tcaT::Type{TCA}) where {TCA<:ThreadedCompositeAlgorithm} = map(x -> 1 / getinterval(x), intervals(tcaT))
+multipliers(tca::ThreadedCompositeAlgorithm) = tuplemap(x -> 1 / getinterval(x), intervals(tca))
+multipliers(tcaT::Type{TCA}) where {TCA<:ThreadedCompositeAlgorithm} = tuplemap(x -> 1 / getinterval(x), intervals(tcaT))
 multiplier(tca::ThreadedCompositeAlgorithm, idx) = 1 / interval(tca, idx)
 
 @inline function getvals(tca::ThreadedCompositeAlgorithm{FT, Is}) where {FT, Is}

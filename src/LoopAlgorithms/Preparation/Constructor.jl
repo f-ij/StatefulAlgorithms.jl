@@ -44,14 +44,14 @@ end
 
 @inline function add_algos_to_registry(registry::R, la::LA, multiplier) where {R<:NameSpaceRegistry, LA<:AbstractPlan}
     funcs = getalgos(la)
-    algo_multipliers = multiplier .* multipliers(la)
+    algo_multipliers = tuplemap(m -> multiplier * m, multipliers(la))
     registry, raw_funcs, namespaces = add_algo_tuple_to_registry(registry, funcs, algo_multipliers)
     return registry, setfield(rebuild_loopalgorithm_funcs(la, raw_funcs), :namespaces, namespaces)
 end
 
 @inline function add_algos_to_registry(registry::R, la::LA, multiplier) where {R<:NameSpaceRegistry, LA<:LoopSpec}
     funcs = getalgos(la)
-    algo_multipliers = multiplier .* multipliers(la)
+    algo_multipliers = tuplemap(m -> multiplier * m, multipliers(la))
     registry, raw_funcs, _ = add_algo_tuple_to_registry(registry, funcs, algo_multipliers)
     return registry, rebuild_loopalgorithm_funcs(la, raw_funcs)
 end
@@ -104,14 +104,19 @@ end
         return _add_funcwrapper_tuple_to_registry(registry, funcs, multipliers)
     end
 
-    # Thread (registry, raw children, namespaces) through the children. The registry type grows at every step, which a
-    # self-recursive function (or the recursive `unrollreplace`) cannot infer: inference widens the registry to plain
-    # `NameSpaceRegistry`. `Base.afoldl` is written out explicitly for up to 31 elements, so every step keeps its type.
-    return Base.afoldl(((registry, (), ())), (zip(funcs, multipliers)...,)...) do acc, func_multiplier
-        reg, raws, names = acc
-        reg, raw, name = add_algo_to_registry(reg, func_multiplier[1], func_multiplier[2])
-        return (reg, (raws..., raw), (names..., name))
-    end
+    return _add_algo_tuple_in_order(registry, funcs, multipliers)
+end
+
+@inline _add_algo_tuple_in_order(registry::R, ::Tuple{}, ::Tuple{}) where {R<:NameSpaceRegistry} = registry, (), ()
+
+# Children are added first to last. The recursion goes over the front of the tuple and adds the last child to the
+# registry it returns: the registry type grows at every step, and passing it down as an argument (recursing on the
+# tail) makes inference widen it to plain `NameSpaceRegistry`. Here the arguments only get shorter, which inference
+# accepts for any number of children.
+@inline function _add_algo_tuple_in_order(registry::R, funcs::F, multipliers::M) where {R<:NameSpaceRegistry, F<:Tuple, M<:Tuple}
+    reg, raws, names = _add_algo_tuple_in_order(registry, Base.front(funcs), Base.front(multipliers))
+    reg, raw, name = add_algo_to_registry(reg, last(funcs), last(multipliers))
+    return reg, (raws..., raw), (names..., name)
 end
 
 @inline function add_algo_to_registry(registry::R, algo::LA, multiplier) where {R<:NameSpaceRegistry, LA<:LoopSpec}
@@ -152,7 +157,7 @@ end
 end
 
 @inline function attach_registry_to_tree(la::LA, registry::R) where {LA<:LoopSpec, R<:NameSpaceRegistry}
-    funcs = map(getalgos(la)) do func
+    funcs = tuplemap(getalgos(la)) do func
         func isa LoopSpec ? attach_registry_to_tree(func, registry) : func
     end
     return rebuild_loopalgorithm_funcs(la, funcs)

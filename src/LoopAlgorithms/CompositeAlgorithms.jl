@@ -149,7 +149,7 @@ get_funcs(ca::CompositeAlgorithm{FT}) where FT = FT.parameters
 # repeats(ca::CompositeAlgorithm) = 1 ./ intervals(ca)
 # repeats(ca::CompositeAlgorithm, idx) = 1 / interval(ca, idx)
 function multipliers(ca::Union{CA, Type{CA}}) where {CA<:CompositeAlgorithm}
-    map(x -> 1/getinterval(x), intervals(ca))
+    tuplemap(x -> 1/getinterval(x), intervals(ca))
 end
 
 multiplier(ca::CompositeAlgorithm, idx) = 1 / getinterval(getalgo(ca, idx))

@@ -195,6 +195,14 @@ end
 end
 
 """
+`map(f, t)` for a tuple of any length, with the element types known to the compiler.
+
+`map` and broadcasting over a tuple longer than 32 elements go through a `Vector` in Base, so the result type is lost;
+`ntuple` with a `Val` length is written out for any length.
+"""
+@inline tuplemap(f::F, t::Tuple) where {F} = ntuple(i -> f(t[i]), Val(length(t)))
+
+"""
 For a function that will return a viariable number of outputs
     that is broadcasted over a variable number of inputs,
     recursively splat the outputs in a tuple

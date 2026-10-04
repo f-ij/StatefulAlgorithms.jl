@@ -112,8 +112,8 @@ end
 @inline numalgos(r::Union{Routine{T,R,NS}, Type{<:Routine{T,R,NS}}}) where {T,R,NS} = length(T.parameters)
 
 """Return registry multiplier weights for each routine child."""
-multipliers(r::R) where {R<:Routine} = map(_routine_schedule_multiplier, lifetimes(r))
-multipliers(rT::Type{R}) where {R<:Routine} = map(_routine_schedule_multiplier, lifetimes(rT))
+multipliers(r::R) where {R<:Routine} = tuplemap(_routine_schedule_multiplier, lifetimes(r))
+multipliers(rT::Type{R}) where {R<:Routine} = tuplemap(_routine_schedule_multiplier, lifetimes(rT))
 getid(r::Union{Routine{T,R,NS,W,id},Type{<:Routine{T,R,NS,W,id}}}) where {T,R,NS,W,id} = id
 
 """Return the child lifetime schedule tuple for a routine."""
