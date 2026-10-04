@@ -4,7 +4,7 @@ _is_identified_state(arg) = arg isa AbstractIdentifiableAlgo && getalgo(arg) isa
 """Return `true` for loop-constructor children that run or describe runnable children."""
 function _is_loop_child_input(arg)
     _is_identified_state(arg) && return false
-    return arg isa Union{SteppableAlgorithm, AbstractPlan, Type{<:SteppableAlgorithm}, Type{<:AbstractPlan}}
+    return arg isa Union{SteppableAlgorithm, AbstractPlan, Type{<:SteppableAlgorithm}, Type{<:AbstractPlan}, WithWiring}
 end
 
 """
@@ -48,6 +48,8 @@ function _parse_loopalgorithm_entity_input(el)
 end
 
 Base.@nospecializeinfer function _normalize_loopalgorithm_entity_input(@nospecialize(el))
+    el isa Union{FuncWrapper, Executable} && return el   # calls have no identity: not wrapped, not registered
+    el isa WithWiring && return WithWiring(_normalize_loopalgorithm_entity_input(getfield(el, :child)), getfield(el, :wires))
     if el isa Pair
         !(el.second isa LoopAlgorithmTypes) || construction_assert_error("Loop plans cannot currently be passed as pairs (aliased), but got: ", el.second, " in pair ", el)
         return IdentifiableAlgo(el.second, el.first)
@@ -190,7 +192,8 @@ Base.@nospecializeinfer LoopAlgorithm(PlanType::Type{<:AbstractPlan}, @nospecial
 # handle. Only the final struct creation is compiled per type.
 Base.@nospecializeinfer function _build_plan(PlanType::Type, @nospecialize(funcs::Tuple), @nospecialize(states::Tuple), @nospecialize(options::Tuple), @nospecialize(schedule), id)
     namespaces = Tuple(Any[Namespace{nothing}() for _ in 1:length(funcs)])
-    wiring = PlanWiring(_plan_wiring_untyped(options), _plan_child_wiring_runtime(funcs, options), declared_locals(options))
+    funcs, child_wiring = _plan_children(funcs, options)
+    wiring = PlanWiring(_plan_wiring_untyped(options), child_wiring, declared_locals(options))
     plan_options = _non_wiring_untyped(options)
     return PlanType{typeof(funcs), schedule, typeof(namespaces), typeof(wiring), id, typeof(states), typeof(plan_options)}(funcs, schedule, namespaces, wiring, states, plan_options)
 end
@@ -207,7 +210,8 @@ every plan type, which includes every new `Unique` handle (about 175 ms per re-r
 """
 function _build_plan_typed(::Type{PlanType}, funcs::F, states::Tuple, options::Tuple, schedule, id) where {PlanType<:AbstractPlan, F<:Tuple}
     namespaces = ntuple(_ -> Namespace{nothing}(), length(funcs))
-    wiring = PlanWiring(_plan_wiring(options), _plan_child_wiring(funcs, options), declared_locals(options))
+    funcs, child_wiring = _plan_children(funcs, options)
+    wiring = PlanWiring(_plan_wiring(options), child_wiring, declared_locals(options))
     plan_options = _non_wiring(options)
     return PlanType{typeof(funcs), schedule, typeof(namespaces), typeof(wiring), id, typeof(states), typeof(plan_options)}(funcs, schedule, namespaces, wiring, states, plan_options)
 end

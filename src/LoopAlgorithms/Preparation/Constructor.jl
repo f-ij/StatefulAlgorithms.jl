@@ -1,8 +1,5 @@
 export resolve
 
-"""Child-count threshold where registry construction switches to batch insertion."""
-const _REGISTRY_BATCH_CHILD_LIMIT = 16
-
 """
 Materialize a loop algorithm for context construction.
 
@@ -67,44 +64,9 @@ end
 
 @inline add_algo_tuple_to_registry(registry::R, ::Tuple{}, ::Tuple{}) where {R<:NameSpaceRegistry} = registry, (), ()
 
-"""Return whether every child is a raw `FuncWrapper` value."""
-function _all_funcwrapper_values(funcs::Funcs) where {Funcs<:Tuple}
-    for func in funcs
-        func isa FuncWrapper || return false
-    end
-    return true
-end
-
-"""Return the same autokey shape used for raw `FuncWrapper` DSL children."""
-@inline function _funcwrapper_autokey(func::F, idx::Int) where {F<:FuncWrapper}
-    return IdentifiableAlgo(func, Symbol(:FuncWrapper_, idx))
-end
-
-"""Add a large tuple of raw `FuncWrapper`s to the registry in one pass.
-
-Large DSL function-call chains usually produce many unique `FuncWrapper`
-children. Adding them one-by-one creates and compiles one intermediate registry
-tuple type per child; batching keeps the same final registry shape while only
-materializing the final `RegistryTypeEntry{FuncWrapper}` once.
-"""
-function _add_funcwrapper_tuple_to_registry(registry::R, funcs::Funcs, multipliers::Multipliers) where {R<:NameSpaceRegistry, Funcs<:Tuple, Multipliers<:Tuple}
-    entries = ntuple(i -> _funcwrapper_autokey(getfield(funcs, i), i), length(funcs))
-    multiplier_values = Float64[]
-    sizehint!(multiplier_values, length(multipliers))
-    lookup = Dict{Any, Int}()
-
-    # Mirror `RegistryTypeEntry.add`: store multipliers and dynamic lookup for
-    # each autokeyed wrapper, but avoid building every intermediate entry tuple.
-    for i in eachindex(entries)
-        push!(multiplier_values, Float64(getfield(multipliers, i)))
-        lookup[dynamic_lookup_key(getfield(entries, i))] = i
-    end
-
-    entry = RegistryTypeEntry{FuncWrapper, typeof(entries)}(entries, multiplier_values, lookup)
-    registry_entries = (getentries(registry)..., entry)
-    namespaces = ntuple(i -> Namespace{getkey(getfield(entries, i))}(), length(entries))
-    return NameSpaceRegistry{typeof(registry_entries)}(registry_entries), funcs, namespaces
-end
+"""Plain function calls have no state or identity: not registered, all in the shared `_runtime` namespace."""
+@inline add_algo_to_registry(registry::R, ex::EX, multiplier) where {R<:NameSpaceRegistry, EX<:Executable} =
+    registry, ex, Namespace{:_runtime}()
 
 """
     add_algo_tuple_to_registry(registry, funcs, multipliers) -> (registry, raw_funcs, namespaces)
@@ -115,12 +77,6 @@ nested plan whose own children are registered too), and per child its context na
 (`Namespace{:Counter_1}`, or `Namespace{nothing}` for a nested plan).
 """
 @inline function add_algo_tuple_to_registry(registry::R, funcs::F, multipliers::M) where {R<:NameSpaceRegistry, F<:Tuple, M<:Tuple}
-    if length(funcs) > _REGISTRY_BATCH_CHILD_LIMIT &&
-       isnothing(find_typeidx(registry, FuncWrapper)) &&
-       _all_funcwrapper_values(funcs)
-        return _add_funcwrapper_tuple_to_registry(registry, funcs, multipliers)
-    end
-
     return _add_algo_tuple_in_order(registry, funcs, multipliers)
 end
 
@@ -227,7 +183,7 @@ function _resolve_plan_wiring_tree(la::LA, registry::NameSpaceRegistry, inherite
             return getwiring(child)
         end
         target = plan_child_namespace(rebuilt, i)
-        bucket = getfield(child_wiring(raw_wiring), i)
+        bucket = _retarget_owner_routes(getfield(child_wiring(raw_wiring), i), target)
 
         # Concrete children receive a single resolved `Wiring`: inherited global
         # wiring for their namespace, occluded by child-scoped routes.
@@ -238,7 +194,8 @@ function _resolve_plan_wiring_tree(la::LA, registry::NameSpaceRegistry, inherite
     end
 
     visible = isempty(visible_locals) ? Val((;)) : Val(visible_locals)
-    return setfield(rebuilt, :wiring, PlanWiring(combined_global, resolved_children, own_locals, visible))
+    reads = executable_reads(funcs)
+    return setfield(rebuilt, :wiring, PlanWiring(combined_global, resolved_children, own_locals, visible, isempty(reads) ? Val(()) : Val(reads)))
 end
 
 @inline function resolve_plan_wiring(fa::FA, registry::NameSpaceRegistry) where {FA<:FinalizedAlgorithm}

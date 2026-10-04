@@ -111,7 +111,7 @@ runtime_input_bucket(ctx) = getproperty(StatefulAlgorithms.get_subcontexts(ctx),
 
     runtime_result = run(initialized_runtime; temp = 1.5, scale = 2)
     runtime_context = StatefulAlgorithms.context(runtime_result)
-    @test isempty(runtime_context[:FuncWrapper_1])
+    @test !haskey(StatefulAlgorithms.get_subcontexts(runtime_context), :FuncWrapper_1)   # function calls have no persistent state
     @test !haskey(StatefulAlgorithms.getglobals(runtime_context), :value)
     @test isempty(StatefulAlgorithms.getruntimeinput(runtime_context))
     @test isempty(runtime_input_bucket(runtime_context))
@@ -125,7 +125,7 @@ runtime_input_bucket(ctx) = getproperty(StatefulAlgorithms.get_subcontexts(ctx),
         @test isnothing(process.runtime_context)
         fetched_context = fetch(process)
         @test !haskey(StatefulAlgorithms.getglobals(fetched_context), :value)
-        @test isempty(StatefulAlgorithms.context(process)[:FuncWrapper_1])
+        @test !haskey(StatefulAlgorithms.get_subcontexts(StatefulAlgorithms.context(process)), :FuncWrapper_1)   # function calls have no persistent state
         @test !haskey(StatefulAlgorithms.getglobals(StatefulAlgorithms.context(process)), :value)
         @test isempty(StatefulAlgorithms.getruntimeinput(StatefulAlgorithms.context(process)))
         @test isempty(runtime_input_bucket(StatefulAlgorithms.context(process)))
@@ -138,7 +138,7 @@ runtime_input_bucket(ctx) = getproperty(StatefulAlgorithms.get_subcontexts(ctx),
     @test StatefulAlgorithms._has_typed_runtime_context(inline_worker)
     @test isnothing(inline_worker.runtime_context)
     @test !haskey(StatefulAlgorithms.getglobals(fetch(inline_worker)), :value)
-    @test isempty(StatefulAlgorithms.context(inline_worker)[:FuncWrapper_1])
+    @test !haskey(StatefulAlgorithms.get_subcontexts(StatefulAlgorithms.context(inline_worker)), :FuncWrapper_1)   # function calls have no persistent state
     @test !haskey(StatefulAlgorithms.getglobals(StatefulAlgorithms.context(inline_worker)), :value)
     @test isempty(StatefulAlgorithms.getruntimeinput(StatefulAlgorithms.context(inline_worker)))
     @test isempty(runtime_input_bucket(StatefulAlgorithms.context(inline_worker)))
@@ -164,7 +164,7 @@ runtime_input_bucket(ctx) = getproperty(StatefulAlgorithms.get_subcontexts(ctx),
     inline_process = InlineProcess(runtime_algo; repeats = 1)
     inline_result = run(inline_process; temp = 2.0, scale = 3)
     @test !haskey(StatefulAlgorithms.getglobals(inline_result), :value)
-    @test isempty(StatefulAlgorithms.context(inline_process)[:FuncWrapper_1])
+    @test !haskey(StatefulAlgorithms.get_subcontexts(StatefulAlgorithms.context(inline_process)), :FuncWrapper_1)   # function calls have no persistent state
     @test !haskey(StatefulAlgorithms.getglobals(StatefulAlgorithms.context(inline_process)), :value)
     @test isempty(StatefulAlgorithms.getruntimeinput(StatefulAlgorithms.context(inline_process)))
     @test isempty(getproperty(StatefulAlgorithms.get_subcontexts(StatefulAlgorithms.context(inline_process)), :_input))

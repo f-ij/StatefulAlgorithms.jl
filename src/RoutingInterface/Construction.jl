@@ -39,10 +39,10 @@ end
 end
 
 """Construct resolved plan wiring from type data. Declared locals hold values, so only an empty set can be rebuilt."""
-@inline PlanWiring{GlobalWiring, ChildWiring}() where {GlobalWiring, ChildWiring<:Tuple} = PlanWiring{GlobalWiring, ChildWiring, @NamedTuple{}, (;)}()
-@inline @generated function PlanWiring{GlobalWiring, ChildWiring, Locals, Visible}() where {GlobalWiring, ChildWiring<:Tuple, Locals<:NamedTuple, Visible}
+@inline PlanWiring{GlobalWiring, ChildWiring}() where {GlobalWiring, ChildWiring<:Tuple} = PlanWiring{GlobalWiring, ChildWiring, @NamedTuple{}, (;), ()}()
+@inline @generated function PlanWiring{GlobalWiring, ChildWiring, Locals, Visible, Reads}() where {GlobalWiring, ChildWiring<:Tuple, Locals<:NamedTuple, Visible, Reads}
     fieldcount(Locals) == 0 || return :(error("PlanWiring with declared locals cannot be rebuilt from its type"))
-    plan_wiring_type = PlanWiring{GlobalWiring, ChildWiring, Locals, Visible}
+    plan_wiring_type = PlanWiring{GlobalWiring, ChildWiring, Locals, Visible, Reads}
     return :($plan_wiring_type(
         $(_wiring_value_expr(GlobalWiring)),
         $(_wiring_value_expr(ChildWiring)),

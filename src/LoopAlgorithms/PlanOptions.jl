@@ -1,4 +1,30 @@
 """
+The children a plan stores and their child-indexed wiring. `WithWiring` children bring their
+wires along by position; DSL `FuncWrapper`s become `Executable`s once their child-local options
+(matched to the wrapper object) are assigned.
+"""
+function _plan_children(funcs::Tuple, options::Tuple)
+    raw = map(_unwrap_with_wiring, funcs)
+    child_wiring = map(_add_slot_wiring, funcs, _plan_child_wiring(raw, options))
+    return map(_as_plan_child, raw), child_wiring
+end
+@inline _unwrap_with_wiring(child) = child
+@inline _unwrap_with_wiring(w::WithWiring) = getfield(w, :child)
+@inline _add_slot_wiring(child, bucket) = bucket
+@inline _add_slot_wiring(w::WithWiring, bucket::Wiring) = Wiring((routes(bucket)..., getfield(w, :wires)...), shares(bucket))
+_add_slot_wiring(w::WithWiring, bucket) = error("`WithWiring` can only wire a concrete child, not the nested plan $(getfield(w, :child)).")
+@inline _as_plan_child(child) = child
+@inline _as_plan_child(fw::FuncWrapper) = Executable(fw)
+
+"""Point the routes that belong to this child (`OwnerMatcher` target) at its namespace."""
+function _retarget_owner_routes(bucket::Wiring, target::Symbol)
+    retarget(r) = to_match_by(r) === OwnerMatcher ?
+        Route((isnothing(getfrom(r)) ? from_match_by(r) : getfrom(r)) => target, map(Pair, getvarnames(r), getaliases(r))...;
+              transform = gettransform(r), reverse_transform = getreverse_transform(r)) : r
+    return Wiring(map(retarget, routes(bucket)), shares(bucket))
+end
+
+"""
     _non_wiring(options::Tuple)
 
 The options that are not routes, shares (`AbstractWiring`) or declared locals (`Local`, kept in the plan's wiring),
@@ -200,6 +226,8 @@ end
 Base.@nospecializeinfer function _runtime_scoped_wiring_matches_child(@nospecialize(child), @nospecialize(option::LocalPlanOption))::Bool
     scoped_wiring = _wrapped_plan_wiring(option)
     if scoped_wiring isa Route
+        # A route into a function call names the call object itself.
+        to_match_by(scoped_wiring) === OwnerMatcher && return match(child, getfield(option, :owner))
         return _child_matches_endpoint_match(child, to_match_by(scoped_wiring))
     end
 
