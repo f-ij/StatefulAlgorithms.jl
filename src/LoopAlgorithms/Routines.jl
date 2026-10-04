@@ -27,13 +27,8 @@ Construct a routine execution plan, wrapping it only when root runtime data exis
 route/share wiring is stored on the plan. Root states and other
 non-plan options remain on the `LoopAlgorithm` wrapper.
 """
-function LoopAlgorithm(::Type{Routine}, funcs::F, states::Tuple, options::Tuple, repeats; id = nothing) where F
-    namespaces = ntuple(_ -> Namespace{nothing}(), length(funcs))
-    wiring = PlanWiring(_plan_wiring(options), _plan_child_wiring(funcs, options))
-    plan = Routine{typeof(funcs), repeats, typeof(namespaces), typeof(wiring), id}(funcs, repeats, namespaces, wiring)
-    root_options = _root_loop_options(options)
-    return isempty(states) && isempty(root_options) ? plan : LoopAlgorithm(plan; states, options = root_options, id)
-end
+Base.@nospecializeinfer LoopAlgorithm(::Type{Routine}, @nospecialize(funcs::Tuple), @nospecialize(states::Tuple), @nospecialize(options::Tuple), @nospecialize(repeats); id = nothing) =
+    _construct_plan(Routine, funcs, states, options, repeats, id)
 
 function newfuncs(r::Routine, funcs)
     setfield(r, :funcs, funcs)

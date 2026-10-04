@@ -32,13 +32,8 @@ Construct a composite execution plan, wrapping it only when root runtime data ex
 plain route/share wiring is stored on the plan. States and other
 non-plan options stay on the `LoopAlgorithm` wrapper.
 """
-function LoopAlgorithm(::Type{CompositeAlgorithm}, funcs::F, states::Tuple, options::Tuple, intervals; id = nothing) where F
-    namespaces = ntuple(_ -> Namespace{nothing}(), length(funcs))
-    wiring = PlanWiring(_plan_wiring(options), _plan_child_wiring(funcs, options))
-    plan = CompositeAlgorithm{typeof(funcs), intervals, typeof(namespaces), typeof(wiring), id}(funcs, intervals, namespaces, wiring)
-    root_options = _root_loop_options(options)
-    return isempty(states) && isempty(root_options) ? plan : LoopAlgorithm(plan; states, options = root_options, id)
-end
+Base.@nospecializeinfer LoopAlgorithm(::Type{CompositeAlgorithm}, @nospecialize(funcs::Tuple), @nospecialize(states::Tuple), @nospecialize(options::Tuple), @nospecialize(intervals); id = nothing) =
+    _construct_plan(CompositeAlgorithm, funcs, states, options, intervals, id)
 
 function newfuncs(ca::CompositeAlgorithm, funcs)
     # CompositeAlgorithm{typeof(funcs), intervals(ca), typeof(ca.registry), typeof(ca.options)}(funcs, ca.inc, ca.registry , ca.options)

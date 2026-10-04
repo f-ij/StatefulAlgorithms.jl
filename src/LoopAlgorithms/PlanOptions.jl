@@ -170,7 +170,7 @@ end
 end
 
 """Return whether a child value receives one runtime-scoped wiring option."""
-function _runtime_scoped_wiring_matches_child(child, option::LocalPlanOption)
+Base.@nospecializeinfer function _runtime_scoped_wiring_matches_child(@nospecialize(child), @nospecialize(option::LocalPlanOption))::Bool
     scoped_wiring = _wrapped_plan_wiring(option)
     if scoped_wiring isa Route
         return _child_matches_endpoint_match(child, to_match_by(scoped_wiring))
@@ -187,8 +187,13 @@ function _runtime_scoped_wiring_matches_child(child, option::LocalPlanOption)
     return false
 end
 
-"""Construct child wiring without generating an O(children * options) method body."""
-function _plan_child_wiring_runtime(funcs::Funcs, options::Options) where {Funcs<:Tuple, Options<:Tuple}
+"""
+Construct child wiring without generating an O(children * options) method body.
+
+Untyped (`@nospecialize`): the result is built from runtime vectors, so its type was never inferable, and a typed
+version compiled again for every plan type.
+"""
+Base.@nospecializeinfer function _plan_child_wiring_runtime(@nospecialize(funcs::Tuple), @nospecialize(options::Tuple))
     route_buckets = [Any[] for _ in 1:length(funcs)]
     share_buckets = [Any[] for _ in 1:length(funcs)]
 
@@ -199,7 +204,7 @@ function _plan_child_wiring_runtime(funcs::Funcs, options::Options) where {Funcs
         scoped_wiring = _wrapped_plan_wiring(option)
         assigned = false
         for i in eachindex(route_buckets)
-            _runtime_scoped_wiring_matches_child(getfield(funcs, i), option) || continue
+            _runtime_scoped_wiring_matches_child(funcs[i], option) || continue
             if scoped_wiring isa Route
                 push!(route_buckets[i], scoped_wiring)
             elseif scoped_wiring isa Share
@@ -210,8 +215,11 @@ function _plan_child_wiring_runtime(funcs::Funcs, options::Options) where {Funcs
         assigned || construction_error("Child-scoped wiring ", option, " could not be assigned to any child in plan funcs ", funcs, ".")
     end
 
-    raw_buckets = ntuple(i -> Wiring(Tuple(route_buckets[i]), Tuple(share_buckets[i])), length(funcs))
-    return ntuple(i -> _child_wiring_for_child(getfield(funcs, i), getfield(raw_buckets, i)), length(funcs))
+    child_wiring = Vector{Any}(undef, length(funcs))
+    for i in eachindex(child_wiring)
+        child_wiring[i] = _child_wiring_for_child(funcs[i], Wiring(Tuple(route_buckets[i]), Tuple(share_buckets[i])))
+    end
+    return Tuple(child_wiring)
 end
 
 """
@@ -221,8 +229,43 @@ For every child position this produces exactly the value that `step!` receives:
 a `Wiring(routes, shares)` bucket for concrete children, or a nested
 `PlanWiring` for child loop plans.
 """
-function _plan_child_wiring(funcs::Funcs, options::Options) where {Funcs<:Tuple, Options<:Tuple}
+Base.@nospecializeinfer function _plan_child_wiring(@nospecialize(funcs::Tuple), @nospecialize(options::Tuple))
     return _plan_child_wiring_runtime(funcs, options)
+end
+
+"""
+Build a `CompositeAlgorithm`/`Routine`/`ThreadedCompositeAlgorithm` node from parsed constructor input.
+
+Untyped (`@nospecialize`): construction runs once per plan, usually at top level, and the values (and their types)
+are only known at run time. A typed body compiled again for every plan type, which includes every new `Unique`
+handle. Only the final struct creation is compiled per type.
+"""
+Base.@nospecializeinfer function _construct_plan(PlanType::Type, @nospecialize(funcs::Tuple), @nospecialize(states::Tuple), @nospecialize(options::Tuple), @nospecialize(schedule), id)
+    namespaces = Tuple(Any[Namespace{nothing}() for _ in 1:length(funcs)])
+    wiring = PlanWiring(_plan_wiring_untyped(options), _plan_child_wiring_runtime(funcs, options))
+    plan = PlanType{typeof(funcs), schedule, typeof(namespaces), typeof(wiring), id}(funcs, schedule, namespaces, wiring)
+    root_options = _root_loop_options_untyped(options)
+    return isempty(states) && isempty(root_options) ? plan : LoopAlgorithm(plan; states, options = root_options, id)
+end
+
+"""`_plan_wiring` for construction: the same `Wiring`, built from untyped values."""
+Base.@nospecializeinfer function _plan_wiring_untyped(@nospecialize(options::Tuple))
+    routes = Any[]
+    shares = Any[]
+    for option in options
+        option isa Route && push!(routes, option)
+        option isa Share && push!(shares, option)
+    end
+    return Wiring(Tuple(routes), Tuple(shares))
+end
+
+"""`_root_loop_options` for construction: the non-wiring options, from untyped values."""
+Base.@nospecializeinfer function _root_loop_options_untyped(@nospecialize(options::Tuple))
+    root_options = Any[]
+    for option in options
+        option isa AbstractWiring || push!(root_options, option)
+    end
+    return Tuple(root_options)
 end
 
 #=

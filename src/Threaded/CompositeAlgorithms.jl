@@ -20,13 +20,8 @@ iscomposite(::Type{TCA}) where {TCA<:ThreadedCompositeAlgorithm} = true
 
 ThreadedCompositeAlgorithm(args...) = parse_la_input(ThreadedCompositeAlgorithm, args...)
 
-function LoopAlgorithm(::Type{ThreadedCompositeAlgorithm}, funcs::F, states::Tuple, options::Tuple, intervals; id = nothing) where {F}
-    namespaces = ntuple(_ -> Namespace{nothing}(), length(funcs))
-    wiring = PlanWiring(_plan_wiring(options), _plan_child_wiring(funcs, options))
-    plan = ThreadedCompositeAlgorithm{typeof(funcs), intervals, typeof(namespaces), typeof(wiring), id}(funcs, intervals, namespaces, wiring)
-    root_options = _root_loop_options(options)
-    return isempty(states) && isempty(root_options) ? plan : LoopAlgorithm(plan; states, options = root_options, id)
-end
+Base.@nospecializeinfer LoopAlgorithm(::Type{ThreadedCompositeAlgorithm}, @nospecialize(funcs::Tuple), @nospecialize(states::Tuple), @nospecialize(options::Tuple), @nospecialize(intervals); id = nothing) =
+    _construct_plan(ThreadedCompositeAlgorithm, funcs, states, options, intervals, id)
 
 function setoptions(tca::ThreadedCompositeAlgorithm, options)
     wiring = PlanWiring(_plan_wiring(options), _plan_child_wiring(getalgos(tca), options))

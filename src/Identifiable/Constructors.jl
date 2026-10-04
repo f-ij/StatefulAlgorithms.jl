@@ -25,6 +25,10 @@ end
 
 IdentifiableAlgo(f::F; key = Symbol(), id = nothing, customname = Symbol(), aliases...) where F = @inline IdentifiableAlgo(f, key, id; customname, aliases...)
 
+# The same as the method above for an already identifiable value with no keywords (it only resets the key), without
+# compiling the keyword path for every handle type, e.g. every `Unique` handle passed to a constructor.
+Base.@nospecializeinfer IdentifiableAlgo(@nospecialize(f::AbstractIdentifiableAlgo)) = setcontextkey(f, Symbol())
+
 """
 Scoped Algorithms don't wrap other IdentifiableAlgos
     We just change the name of the algorithm

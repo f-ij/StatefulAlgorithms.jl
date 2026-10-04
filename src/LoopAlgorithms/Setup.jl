@@ -43,7 +43,7 @@ function _parse_loopalgorithm_entity_input(el)
     return el
 end
 
-function _normalize_loopalgorithm_entity_input(el)
+Base.@nospecializeinfer function _normalize_loopalgorithm_entity_input(@nospecialize(el))
     if el isa Pair
         !(el.second isa LoopAlgorithmTypes) || construction_assert_error("Loop plans cannot currently be passed as pairs (aliased), but got: ", el.second, " in pair ", el)
         return IdentifiableAlgo(el.second, el.first)

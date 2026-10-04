@@ -45,8 +45,8 @@ state references are kept in the value fields until registry resolution.
 `transform` maps source values into the target view. `reverse_transform` maps a
 returned target-view value back into source storage during merge/writeback.
 """
-function Route(
-    from_to::Pair,
+Base.@nospecializeinfer function Route(
+    @nospecialize(from_to::Pair),
     originalname_or_aliaspairs::Union{Symbol, Pair{Symbol, Symbol}, Pair{NTuple{N, Symbol}, Symbol}}...;
     transform = nothing,
     reverse_transform = nothing,

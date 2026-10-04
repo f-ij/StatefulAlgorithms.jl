@@ -19,7 +19,7 @@ Construct namespace-sharing wiring between two endpoints.
 Endpoint symbols are treated as already-resolved context names. Other endpoints
 are retained until registry resolution.
 """
-function Share(algo1, algo2; directional::Bool = false)
+Base.@nospecializeinfer function Share(@nospecialize(algo1), @nospecialize(algo2); directional::Bool = false)
     a1 = _wiring_endpoint_ref(algo1)
     a2 = _wiring_endpoint_ref(algo2)
 
