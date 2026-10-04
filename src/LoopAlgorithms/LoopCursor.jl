@@ -55,6 +55,15 @@ end
     end
 end
 
+"""
+A cursor with the same positions and its own mutable counters. A cursor handed to a
+non-inlined call escapes to memory; a fresh copy made inside that call stays in registers.
+"""
+@inline copy_cursor(cursor::AbstractLoopCursor) = cursor
+@inline copy_cursor(cursor::CompositeLoopCursor) = CompositeLoopCursor(Ref(getfield(cursor, :inc)[]), map(copy_cursor, getfield(cursor, :children)))
+@inline copy_cursor(cursor::DirectRoutineCursor) = DirectRoutineCursor(map(copy_cursor, getfield(cursor, :children)))
+@inline copy_cursor(cursor::PausableRoutineCursor) = PausableRoutineCursor(TupleBox(getfield(getfield(cursor, :resume_idxs), :data)), map(copy_cursor, getfield(cursor, :children)))
+
 """Return the current resume point for a pausable routine child."""
 @inline get_resume_point(cursor::PausableRoutineCursor, idx::Int) = getfield(cursor, :resume_idxs)[idx]
 

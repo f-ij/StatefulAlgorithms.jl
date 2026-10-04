@@ -37,7 +37,74 @@ end
     plan = CompositeAlgorithm(UnionSensor, UnionReader, (10, 1), Local(declared))
     final = run(InlineProcess(plan; repeats = 25))
     @test final[UnionReader].acc == 10 * 1.0 + 6 * 2.0
-    @test fieldtype(typeof(StatefulAlgorithms.getlocals(final)), :reading) == Union{Nothing, Float64}
+    @test fieldtype(typeof(StatefulAlgorithms.getlocals(final)), :reading) <: StatefulAlgorithms.Maybe{Float64}
 
-    @test_throws Exception run(InlineProcess(CompositeAlgorithm(UnionSensor, UnionReader, (10, 1), Local(reading = nothing)); repeats = 25))
+
+    # `reading = nothing` behaves the same: `nothing` until the first write, then a `Union{Nothing,Float64}`.
+    final = run(InlineProcess(CompositeAlgorithm(UnionSensor, UnionReader, (10, 1), Local(reading = nothing)); repeats = 25))
+    @test final[UnionReader].acc == 10 * 1.0 + 6 * 2.0
+    @test fieldtype(typeof(StatefulAlgorithms.getlocals(final)), :reading) <: StatefulAlgorithms.Maybe{Float64}
+
+    # Writing `nothing` again after a value is allowed, like in a Julia loop.
+    struct Blinker <: ProcessAlgorithm end
+    StatefulAlgorithms.init(::Blinker, context) = (; n = 0)
+    StatefulAlgorithms.step!(::Blinker, context) = (; n = context.n + 1, reading = isodd(context.n) ? nothing : Float64(context.n))
+    final = run(InlineProcess(CompositeAlgorithm(Blinker, UnionReader, (1, 1), Local(reading = nothing)); repeats = 6))
+    @test final[UnionReader].acc == 0.0 + 2.0 + 4.0
+end
+
+@testset "undef locals take the type of their first value" begin
+    struct SlotSensor <: ProcessAlgorithm end
+    struct SlotReader <: ProcessAlgorithm end
+    StatefulAlgorithms.init(::SlotSensor, context) = (; n = 0)
+    StatefulAlgorithms.step!(::SlotSensor, context) = (; n = context.n + 1, reading = context.n + 1.0)
+    StatefulAlgorithms.init(::SlotReader, context) = (; acc = 0.0)
+    StatefulAlgorithms.step!(::SlotReader, context) = (; acc = context.acc + context.reading)
+
+    # Written in the first step.
+    final = run(InlineProcess(CompositeAlgorithm(SlotSensor, SlotReader, (1, 1), Local(reading = undef)); repeats = 10))
+    @test final[SlotReader].acc == 55.0
+    @test fieldtype(typeof(StatefulAlgorithms.getlocals(final)), :reading) == Float64
+    # First written at step 10 (scheduled later): the loop continues with the new type.
+    final = run(InlineProcess(CompositeAlgorithm(SlotSensor, SlotReader, (10, 10), Local(reading = undef)); repeats = 30))
+    @test final[SlotReader].acc == 1.0 + 2.0 + 3.0
+    # Reading before the first write throws.
+    @test_throws UndefRefError run(InlineProcess(CompositeAlgorithm(SlotSensor, SlotReader, (10, 1), Local(reading = undef)); repeats = 3))
+end
+
+@testset "undef locals written conditionally" begin
+    # The writer only returns the local once a runtime condition holds.
+    struct LateSensor <: ProcessAlgorithm end
+    struct GuardedReader <: ProcessAlgorithm end
+    StatefulAlgorithms.init(::LateSensor, context) = (; n = 0)
+    StatefulAlgorithms.step!(::LateSensor, context) =
+        context.n >= 4 ? (; n = context.n + 1, reading = context.n + 1.0) : (; n = context.n + 1)
+    StatefulAlgorithms.init(::GuardedReader, context) = (; k = 0, acc = 0.0)
+    StatefulAlgorithms.step!(::GuardedReader, context) = (; k = context.k + 1, acc = context.k >= 4 ? context.acc + context.reading : context.acc)
+
+    plan = CompositeAlgorithm(LateSensor, GuardedReader, (1, 1), Local(reading = undef))
+    final = run(InlineProcess(plan; repeats = 8))
+    @test final[GuardedReader].acc == 5.0 + 6.0 + 7.0 + 8.0
+    @test fieldtype(typeof(StatefulAlgorithms.getlocals(final)), :reading) == Float64
+
+    # Once written, the loop allocates nothing per step.
+    small = InlineProcess(plan; repeats = 1_000); large = InlineProcess(plan; repeats = 101_000)
+    run(small); run(large)
+    allocs_small = @allocated run(small); allocs_large = @allocated run(large)
+    @test allocs_large - allocs_small < 1_000
+
+    # A guarded read that never fires is fine when the local is never written.
+    final = run(InlineProcess(CompositeAlgorithm(LateSensor, GuardedReader, (1, 1), Local(reading = undef)); repeats = 4))
+    @test final[GuardedReader].acc == 0.0
+
+    # The first value fixes the type; later values are converted to it.
+    struct IntThenFloat <: ProcessAlgorithm end
+    StatefulAlgorithms.init(::IntThenFloat, context) = (; n = 0)
+    StatefulAlgorithms.step!(::IntThenFloat, context) = (; n = context.n + 1, reading = context.n == 0 ? 1 : 2.0)
+    final = run(InlineProcess(CompositeAlgorithm(IntThenFloat, (1,), Local(reading = undef)); repeats = 3))
+    @test StatefulAlgorithms.getlocals(final).reading === 2
+    struct IntThenFraction <: ProcessAlgorithm end
+    StatefulAlgorithms.init(::IntThenFraction, context) = (; n = 0)
+    StatefulAlgorithms.step!(::IntThenFraction, context) = (; n = context.n + 1, reading = context.n == 0 ? 1 : 2.5)
+    @test_throws InexactError run(InlineProcess(CompositeAlgorithm(IntThenFraction, (1,), Local(reading = undef)); repeats = 3))
 end
