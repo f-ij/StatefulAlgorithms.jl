@@ -5,80 +5,32 @@ struct ValueRef{index, T} end
 to_expr(::ValueRef{index, T}, varname) where {index, T} = :((getindex(getproperty($varname, :values), $index))::$T)
 @inline _valueref_index(::ValueRef{index, T}) where {index, T} = index
 
-const _funcwrapper_default_aliases = VarAliases()
-
 """
-Wrap a plain function so it behaves like a `ProcessAlgorithm`.
+The DSL's description of a plain function call, used while a plan is built: the function,
+which context names become its positional and keyword arguments (`InputSymbols`, `Kwargs`,
+literal values in `values`), and which names its return is written to (`OutputSymbols`).
+`display` keeps the source form for printing.
 
-`InputSymbols` are routed positionally, `OutputSymbols` are written back by name,
-and `Kwargs` can point either to context symbols or inline literal values.
+The plan constructor turns it into an [`Executable`](@ref). It is mutable only so that routes
+the DSL attaches to one call (`LocalPlanOption`) can be matched to that call by identity first.
 """
-mutable struct FuncWrapper{F, InputSymbols, OutputSymbols, Kwargs, T, Id, Aliases, AlgoName, Key} <:
-    AbstractIdentifiableAlgo{FuncWrapper, Id, Aliases, AlgoName, Key}
-    func::F
-    values::T
-    display::Any
-end
-
-@inline Base.getkey(fw::FuncWrapper) = getkey(typeof(fw))
-@inline Base.getkey(::Type{<:FuncWrapper{F, InputSymbols, OutputSymbols, Kwargs, T, Id, Aliases, AlgoName, Key}}) where {F, InputSymbols, OutputSymbols, Kwargs, T, Id, Aliases, AlgoName, Key} = Key
-@inline id(fw::FuncWrapper) = id(typeof(fw))
-@inline id(::Type{<:FuncWrapper{F, InputSymbols, OutputSymbols, Kwargs, T, Id}}) where {F, InputSymbols, OutputSymbols, Kwargs, T, Id} = Id
-@inline algoname(fw::FuncWrapper) = algoname(typeof(fw))
-@inline algoname(::Type{<:FuncWrapper{F, InputSymbols, OutputSymbols, Kwargs, T, Id, Aliases, AlgoName}}) where {F, InputSymbols, OutputSymbols, Kwargs, T, Id, Aliases, AlgoName} =
-    AlgoName == Symbol() ? nothing : AlgoName
-@inline varaliases(fw::FuncWrapper) = varaliases(typeof(fw))
-@inline varaliases(::Type{<:FuncWrapper{F, InputSymbols, OutputSymbols, Kwargs, T, Id, Aliases}}) where {F, InputSymbols, OutputSymbols, Kwargs, T, Id, Aliases} = Aliases
-@inline getvaraliases(fw::FuncWrapper) = varaliases(fw)
-@inline getalgo(fw::FuncWrapper) = fw
-@inline getalgos(fw::FuncWrapper) = (fw,)
-@inline match_by(fw::FuncWrapper) = id(fw)
-@inline match_by(::Type{FW}) where {FW<:FuncWrapper} = id(FW)
-@inline registry_entrytype(::Type{<:FuncWrapper}) = FuncWrapper
-
-function setcontextkey(fw::FuncWrapper{F, InputSymbols, OutputSymbols, Kwargs, T, Id, Aliases, AlgoName}, newkey::Symbol) where {F, InputSymbols, OutputSymbols, Kwargs, T, Id, Aliases, AlgoName}
-    return FuncWrapper{F, InputSymbols, OutputSymbols, Kwargs, T, Id, Aliases, AlgoName, newkey}(fw.func, fw.values, fw.display)
-end
-
-function setid(fw::FuncWrapper{F, InputSymbols, OutputSymbols, Kwargs, T, Id, Aliases, AlgoName, Key}, newid) where {F, InputSymbols, OutputSymbols, Kwargs, T, Id, Aliases, AlgoName, Key}
-    resolved_id = newid isa UUID ? SimpleId(newid) : newid
-    return FuncWrapper{F, InputSymbols, OutputSymbols, Kwargs, T, resolved_id, Aliases, AlgoName, Key}(fw.func, fw.values, fw.display)
-end
-
-function setvaraliases(fw::FuncWrapper{F, InputSymbols, OutputSymbols, Kwargs, T, Id, Aliases, AlgoName, Key}, newaliases) where {F, InputSymbols, OutputSymbols, Kwargs, T, Id, Aliases, AlgoName, Key}
-    return FuncWrapper{F, InputSymbols, OutputSymbols, Kwargs, T, Id, typeof(newaliases), AlgoName, Key}(fw.func, fw.values, fw.display)
-end
-
-function replacecontextkeys(fw::FuncWrapper, key_replacement::Pair)
-    getkey(fw) == key_replacement.first || return fw
-    return setcontextkey(fw, key_replacement.second)
-end
-
-function _step!(fw::FW, context::C, runtimecontext::RC, wiring::W, process::P, lifetime::LT) where {FW<:FuncWrapper, C<:AbstractContext, RC<:ProcessContext, W<:PlanWiringView, P<:AbstractProcess, LT<:Lifetime}
-    contextview = @inline view(
-        context,
-        runtimecontext,
-        fw;
-        sharedcontexts = (@inline shares(wiring)),
-        sharedvars = (@inline routes(wiring)),
-    )
-
-    retval = @inline step!(fw, contextview)
-    return @inline merge_funcwrapper_return(contextview, context, runtimecontext, retval, return_demand(wiring, Namespace{:_runtime}()))
+mutable struct FuncWrapper{F, InputSymbols, OutputSymbols, Kwargs, T} <: ProcessAlgorithm
+    const func::F
+    const values::T
+    const display::Any
 end
 
 """
-Step a resolved `FuncWrapper` child using its explicit plan namespace.
-
-Resolved plans keep the namespace outside the wrapper value, so generated and
-non-generated child stepping must view the context through `Namespace{Name}`.
+Endpoint of a route that belongs to one plan child (a `WithWiring` wire, or a route the DSL
+attached to a call): matched to its child when the plan is built, and pointed at that child's
+namespace at resolve.
 """
-function _step!(fw::FW, context::C, runtimecontext::RC, wiring::W, namespace::Namespace{Name}, process::P, lifetime::LT) where {FW<:FuncWrapper, C<:AbstractContext, RC<:ProcessContext, W<:PlanWiringView, Name, P<:AbstractProcess, LT<:Lifetime}
-    contextview = @inline _leaf_view(fw, context, runtimecontext, wiring, namespace)
-
-    retval = @inline step!(fw, contextview)
-    return @inline merge_funcwrapper_return(contextview, context, runtimecontext, retval, return_demand(wiring, Namespace{:_runtime}()))
-end
+struct OwnerMatcher <: AbstractMatcher{nothing} end
+@inline match_by(::FuncWrapper) = OwnerMatcher()
+@inline match_by(::Type{<:FuncWrapper}) = OwnerMatcher
+match(child::FuncWrapper, owner::FuncWrapper) = child === owner
+match(child, owner::FuncWrapper) = false
+match(child::FuncWrapper, owner) = false
 
 """
     _funcwrapper_return_names(SCV, R, DemandNames)
@@ -274,17 +226,7 @@ end
 function _funcwrapper_construct(f::F, inputs, outputsyms::NTuple{M, Symbol}, kwargs::NamedTuple, display_inputs::Tuple, display_kwargs::NamedTuple) where {F, M}
     newinputs, values = _funcwrapper_encode_inputs(inputs)
     display = _funcwrapper_display_bundle(display_inputs, display_kwargs)
-    FuncWrapper{
-        F,
-        newinputs,
-        outputsyms,
-        kwargs,
-        typeof(values),
-        SimpleId(),
-        typeof(_funcwrapper_default_aliases),
-        Symbol(),
-        Symbol(),
-    }(f, values, display)
+    FuncWrapper{F, newinputs, outputsyms, kwargs, typeof(values)}(f, values, display)
 end
 
 function FuncWrapper(f::F, inputs, outputsyms::NTuple{M, Symbol}) where {F, M}

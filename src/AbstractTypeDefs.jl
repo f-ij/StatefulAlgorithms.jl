@@ -179,19 +179,23 @@ child position and contains the exact wiring value passed to that child:
 `Wiring` for concrete executable children and `PlanWiring` for nested loop
 plans.
 """
-struct PlanWiring{GlobalWiring, ChildWiring, Locals<:NamedTuple, Visible} <: AbstractWiring
+struct PlanWiring{GlobalWiring, ChildWiring, Locals<:NamedTuple, Visible, Reads} <: AbstractWiring
     global_wiring::GlobalWiring
     child_wiring::ChildWiring
     locals::Locals   # `Local` declarations of this plan node: name => initial value
 end
+# `Reads` (set by resolve) is every name this node's `Executable` children read.
 # `Visible` (set by resolve) is every local this node's children can see, as
 # `(; name = storage_name, ...)`: its own and its ancestors', nearest declaration first.
 
-PlanWiring(global_wiring::GlobalWiring, child_wiring::ChildWiring, locals::Locals = (;), ::Val{Visible} = Val((;))) where {GlobalWiring, ChildWiring<:Tuple, Locals<:NamedTuple, Visible} =
-    PlanWiring{GlobalWiring, ChildWiring, Locals, Visible}(global_wiring, child_wiring, locals)
+PlanWiring(global_wiring::GlobalWiring, child_wiring::ChildWiring, locals::Locals = (;), ::Val{Visible} = Val((;)), ::Val{Reads} = Val(())) where {GlobalWiring, ChildWiring<:Tuple, Locals<:NamedTuple, Visible, Reads} =
+    PlanWiring{GlobalWiring, ChildWiring, Locals, Visible, Reads}(global_wiring, child_wiring, locals)
 
 """Locals visible to the children of a plan node, `(; name = storage_name, ...)`."""
 visible_locals(::Type{<:PlanWiring{G, C, L, Visible}}) where {G, C, L, Visible} = Visible
+
+"""Names the `Executable` children of a plan node read by name (they count as demand for the `_runtime` bucket)."""
+executable_reads(::Type{<:PlanWiring{G, C, L, V, Reads}}) where {G, C, L, V, Reads} = Reads
 PlanWiring() = PlanWiring(Wiring(), ())
 
 """

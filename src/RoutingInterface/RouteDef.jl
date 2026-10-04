@@ -91,6 +91,7 @@ function _assert_route_endpoint(endpoint, role::String)
     endpoint isa ProcessEntity && return nothing
     endpoint isa Type && endpoint <: ProcessEntity && return nothing
     endpoint isa AbstractIdentifiableAlgo && return nothing
+    endpoint isa ThisChild && return nothing   # a `From` wire: the child it is attached to
     construction_error(role, " of a Route must be a Symbol, ProcessAlgorithm, AlgoState, or identifiable wrapper. Got: ", endpoint)
 end
 

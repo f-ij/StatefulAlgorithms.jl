@@ -93,6 +93,17 @@ function _append_route_demand_names(names::Tuple, route_varnames::Tuple)
     return merged
 end
 
+"""Every name read by an `Executable` anywhere in a plan-wiring tree."""
+_executable_reads_in_tree(::Type) = ()
+function _executable_reads_in_tree(::Type{W}) where {W<:PlanWiring}
+    names = executable_reads(W)
+    children = fieldtype(W, :child_wiring)
+    for i in 1:fieldcount(children)
+        names = _append_route_demand_names(names, _executable_reads_in_tree(fieldtype(children, i)))
+    end
+    return names
+end
+
 """Compute demanded owner-runtime return names from the full plan wiring type."""
 function _return_demand_names(::Type{W}, owner::Symbol) where {W<:PlanWiring}
     names = ()
@@ -102,6 +113,8 @@ function _return_demand_names(::Type{W}, owner::Symbol) where {W<:PlanWiring}
             names = _append_route_demand_names(names, route_name)
         end
     end
+    # Executables read names from the shared `_runtime` bucket without routes.
+    owner === :_runtime && (names = _append_route_demand_names(names, _executable_reads_in_tree(W)))
     return names
 end
 
@@ -206,6 +219,8 @@ end
 end
 @inline function _resolve_wiring_endpoint(reg::NameSpaceRegistry, ::Type{EM}, endpoint, role::String) where {EM}
     endpoint_match = EM
+    # Function calls read and write the shared `_runtime` bucket.
+    (endpoint isa FuncWrapper || endpoint isa Executable) && return :_runtime
 
     # Prefer direct endpoint refs while raw wiring still has them. This keeps
     # object-id matches precise and only falls back to the type-level endpoint
