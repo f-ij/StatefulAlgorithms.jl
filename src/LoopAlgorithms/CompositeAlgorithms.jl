@@ -86,7 +86,7 @@ interval(::Type{<:CompositeAlgorithm{T,I}}, idx) where {T,I} = I[idx]
 get_this_interval(args) = interval(getalgo(args.process), algoidx(args))
 
 function setintervals(ca::C, new_intervals) where {C<:CompositeAlgorithm}
-    @assert length(new_intervals) == length(getalgos(ca)) "Length of new intervals must match number of functions in the composite algorithm, but got $(length(new_intervals)) intervals for $(length(getalgos(ca))) functions"
+    length(new_intervals) == length(getalgos(ca)) || construction_assert_error("Length of new intervals must match number of functions in the composite algorithm, but got ", length(new_intervals), " intervals for ", length(getalgos(ca)), " functions")
     setparameter(ca, 2, new_intervals)
 end
 

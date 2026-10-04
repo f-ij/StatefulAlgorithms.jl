@@ -250,24 +250,26 @@ function _composite_dsl_map_state_entry(func::F, entry::E) where {F, E}
     return _composite_dsl_rebuild_state_entry(entry, next_state), true
 end
 
-@inline _composite_dsl_map_state_entries(::F, entries::Tuple{}) where {F} = entries, false
-
 """Apply `func` to a tuple of state entries without rebuilding no-op tuples."""
-function _composite_dsl_map_state_entries(func::F, entries::Entries) where {F, Entries<:Tuple}
-    head, head_changed = _composite_dsl_map_state_entry(func, first(entries))
-    tail, tail_changed = _composite_dsl_map_state_entries(func, Base.tail(entries))
-    (head_changed || tail_changed) || return entries, false
-    return (head, tail...), true
+Base.@nospecializeinfer function _composite_dsl_map_state_entries(func::F, @nospecialize(entries::Tuple)) where {F}
+    mapped = Vector{Any}(undef, length(entries))
+    changed = false
+    for i in eachindex(mapped)
+        mapped[i], entry_changed = _composite_dsl_map_state_entry(func, entries[i])
+        changed |= entry_changed
+    end
+    return changed ? Tuple(mapped) : entries, changed
 end
 
-@inline _composite_dsl_map_state_children(::F, children::Tuple{}) where {F} = children, false
-
 """Apply a state transform through child algorithms without rebuilding no-op branches."""
-function _composite_dsl_map_state_children(func::F, children::Children) where {F, Children<:Tuple}
-    head, head_changed = _composite_dsl_map_states_changed(func, first(children))
-    tail, tail_changed = _composite_dsl_map_state_children(func, Base.tail(children))
-    (head_changed || tail_changed) || return children, false
-    return (head, tail...), true
+Base.@nospecializeinfer function _composite_dsl_map_state_children(func::F, @nospecialize(children::Tuple)) where {F}
+    mapped = Vector{Any}(undef, length(children))
+    changed = false
+    for i in eachindex(mapped)
+        mapped[i], child_changed = _composite_dsl_map_states_changed(func, children[i])
+        changed |= child_changed
+    end
+    return changed ? Tuple(mapped) : children, changed
 end
 
 """Apply `func` to every process state contained by a loop-algorithm tree.
@@ -276,39 +278,40 @@ The DSL needs to update state metadata before the parent constructor flattens
 nested algorithms into one registry. This tree walk preserves the executable
 plan shape and only replaces branches that contain a changed state. Non-loop
 algorithm leaves pass through unchanged.
+
+The walk runs on untyped values (`@nospecialize`, `getfield`) so it is compiled once, not once per plan type: it
+runs for every `@context` entry, and usually changes nothing. Only a branch that changed is rebuilt with the typed
+constructors.
 """
-function _composite_dsl_map_states_changed(func::F, entity::LA) where {F, LA<:LoopAlgorithm}
-    plan, plan_changed = _composite_dsl_map_states_changed(func, getplan(entity))
-    states, states_changed = _composite_dsl_map_state_entries(func, getstates(entity))
-    (plan_changed || states_changed) || return entity, false
-    return LoopAlgorithm(
-        plan;
-        states,
-        options = getoptions(entity),
-        registry = getregistry(entity),
-        context = getstoredcontext(entity),
-        inits = getstoredinits(entity),
-        overrides = getstoredoverrides(entity),
-        id = getid(entity),
-    ), true
+Base.@nospecializeinfer function _composite_dsl_map_states_changed(func::F, @nospecialize(entity)) where {F}
+    if entity isa LoopAlgorithm
+        plan, plan_changed = _composite_dsl_map_states_changed(func, getfield(entity, :plan))
+        states, states_changed = _composite_dsl_map_state_entries(func, getfield(entity, :states))
+        (plan_changed || states_changed) || return entity, false
+        return LoopAlgorithm(
+            plan;
+            states,
+            options = getoptions(entity),
+            registry = getregistry(entity),
+            context = getstoredcontext(entity),
+            inits = getstoredinits(entity),
+            overrides = getstoredoverrides(entity),
+            id = getid(entity),
+        ), true
+    elseif entity isa Union{CompositeAlgorithm, Routine}
+        funcs, funcs_changed = _composite_dsl_map_state_children(func, getfield(entity, :funcs))
+        funcs_changed || return entity, false
+        return rebuild_loopalgorithm_funcs(entity, funcs), true
+    elseif entity isa IdentifiableAlgo && getfield(entity, :func) isa LoopSpec
+        inner, inner_changed = _composite_dsl_map_states_changed(func, getfield(entity, :func))
+        inner_changed || return entity, false
+        return setfield(entity, :func, inner), true
+    end
+    return entity, false
 end
-
-function _composite_dsl_map_states_changed(func::F, entity::LA) where {F, LA<:Union{CompositeAlgorithm, Routine}}
-    funcs, funcs_changed = _composite_dsl_map_state_children(func, getalgos(entity))
-    funcs_changed || return entity, false
-    return rebuild_loopalgorithm_funcs(entity, funcs), true
-end
-
-function _composite_dsl_map_states_changed(func::F, entity::IA) where {F, Inner<:LoopSpec, IA<:AbstractIdentifiableAlgo{Inner}}
-    inner, inner_changed = _composite_dsl_map_states_changed(func, getalgo(entity))
-    inner_changed || return entity, false
-    return setfield(entity, :func, inner), true
-end
-
-_composite_dsl_map_states_changed(::F, entity::E) where {F, E} = entity, false
 
 """Return an entity with `func` applied to contained states."""
-function _composite_dsl_map_states(func::F, entity::E) where {F, E}
+Base.@nospecializeinfer function _composite_dsl_map_states(func::F, @nospecialize(entity)) where {F}
     mapped, _ = _composite_dsl_map_states_changed(func, entity)
     return mapped
 end
@@ -320,7 +323,7 @@ name where the fields came from. When a parent writes `@context f = child()`,
 this changes diagnostic paths from `buffers` to `f.buffers` while leaving the
 runtime field name as `:buffers`.
 """
-function _composite_dsl_prefix_state_diagnostic_paths(entity::E, context_alias::Symbol) where {E}
+Base.@nospecializeinfer function _composite_dsl_prefix_state_diagnostic_paths(@nospecialize(entity), context_alias::Symbol)
     return _composite_dsl_map_states(entity) do state
         state isa GeneralState || return state
         return prefix_general_state_diagnostic_paths(state, context_alias)
@@ -334,7 +337,7 @@ end
 without emitting the accidental-overlap warning. The field name is still the
 actual state variable name, not the display path.
 """
-function _composite_dsl_mark_shared_state_field(entity::E, field::Symbol) where {E}
+Base.@nospecializeinfer function _composite_dsl_mark_shared_state_field(@nospecialize(entity), field::Symbol)
     return _composite_dsl_map_states(entity) do state
         state isa GeneralState || return state
         field in general_state_fields(state) || return state

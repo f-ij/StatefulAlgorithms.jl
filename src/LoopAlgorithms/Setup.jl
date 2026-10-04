@@ -15,7 +15,7 @@ function isa_processentity_input(arg)
     elseif _is_loop_child_input(arg)
         return true
     elseif arg isa Pair
-        @assert arg.first isa Symbol "If passing algorithms as pairs, the first element must be a Symbol representing the name of the algorithm, but got: $(arg.first)"
+        arg.first isa Symbol || construction_assert_error("If passing algorithms as pairs, the first element must be a Symbol representing the name of the algorithm, but got: ", arg.first)
         if arg.second isa ParserOption
             return true
         elseif _is_loop_child_input(arg.second)
@@ -23,7 +23,7 @@ function isa_processentity_input(arg)
         elseif arg.second isa ProcessState || arg.second isa Type{<:ProcessState}
             return false
         else
-            error("If passing algorithms as pairs, the second element must be a SteppableAlgorithm, AbstractPlan, matching Type, or ParserOption, but got: $(arg.second)")
+            construction_error("If passing algorithms as pairs, the second element must be a SteppableAlgorithm, AbstractPlan, matching Type, or ParserOption, but got: ", arg.second)
         end
     else
         return false
@@ -45,7 +45,7 @@ end
 
 function _normalize_loopalgorithm_entity_input(el)
     if el isa Pair
-        @assert !(el.second isa LoopAlgorithmTypes) "Loop plans cannot currently be passed as pairs (aliased), but got: $(el.second) in pair $(el)"
+        !(el.second isa LoopAlgorithmTypes) || construction_assert_error("Loop plans cannot currently be passed as pairs (aliased), but got: ", el.second, " in pair ", el)
         return IdentifiableAlgo(el.second, el.first)
     elseif el isa Union{ProcessEntity, Type{<:ProcessEntity}}
         return IdentifiableAlgo(el)
@@ -55,7 +55,7 @@ function _normalize_loopalgorithm_entity_input(el)
 end
 
 function _filter_loopalgorithm_specification(specification, kept_algos::Tuple)
-    length(specification) == length(kept_algos) || error("If passing intervals/repeats as a tuple, there must be one entry per algorithm input before parser options are filtered, but got $(specification) for $(length(kept_algos)) algorithm inputs.")
+    length(specification) == length(kept_algos) || construction_error("If passing intervals/repeats as a tuple, there must be one entry per algorithm input before parser options are filtered, but got ", specification, " for ", length(kept_algos), " algorithm inputs.")
     return tuple((specification[i] for i in eachindex(kept_algos) if kept_algos[i])...)
 end
 
@@ -101,7 +101,7 @@ function parse_la_input(laType::Type{LA}, args...) where {LA<:AbstractPlan}
             end
         end
     end
-    @assert !isempty(processalgos) "At least one ProcessAlgorithm must be provided, but got: $(args)"
+    !isempty(processalgos) || construction_assert_error("At least one ProcessAlgorithm must be provided, but got: ", args)
 
     # Nested plans keep their local route/share metadata. Resolved wrappers may
     # still carry already-materialized options, so preserve those when composed.
@@ -132,7 +132,7 @@ function parse_la_input(laType::Type{LA}, args...) where {LA<:AbstractPlan}
     elseif iscomposite(laType)
         intervals_or_repeats = ntuple(_ -> Interval(1), length(processalgos))
     else
-        error("For routines, please pass the number of repeats after all ProcessAlgorithms as a tuple, even if it's just one repeat, e.g. (10,). Got: $firstargs")
+        construction_error("For routines, please pass the number of repeats after all ProcessAlgorithms as a tuple, even if it's just one repeat, e.g. (10,). Got: ", firstargs)
     end
 
     ### FLATTEN ###
@@ -178,7 +178,7 @@ function parse_la_input(laType::Type{LA}, args...) where {LA<:AbstractPlan}
     options = tuple()
     if !isempty(args)
         options = tuple(args[1:end]...)
-        @assert all(x -> x isa Union{AbstractOption, AbstractWiring} || x isa Type{<:Union{AbstractOption, AbstractWiring}}, options) "All arguments after the ProcessStates must be options or wiring, but got: $(options)"
+        all(x -> x isa Union{AbstractOption, AbstractWiring} || x isa Type{<:Union{AbstractOption, AbstractWiring}}, options) || construction_assert_error("All arguments after the ProcessStates must be options or wiring, but got: ", options)
     end
     options = tuple(collected_options..., options...)
     return LoopAlgorithm(laType, processalgos, pstates, options, intervals_or_repeats)

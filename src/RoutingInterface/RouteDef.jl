@@ -62,7 +62,7 @@ function Route(
     varnames = first.(completed_pairs)
     aliases = last.(completed_pairs)
 
-    @assert (!isnothing(transform) || !isnothing(reverse_transform)) ? (length(originalname_or_aliaspairs) == 1) : true "Transform-based routes must have exactly one variable mapping, but got $(originalname_or_aliaspairs)"
+    ((!isnothing(transform) || !isnothing(reverse_transform)) ? (length(originalname_or_aliaspairs) == 1) : true) || construction_assert_error("Transform-based routes must have exactly one variable mapping, but got ", originalname_or_aliaspairs)
 
     from_ref = _wiring_endpoint_ref(from)
     to_ref = _wiring_endpoint_ref(to)
@@ -91,13 +91,13 @@ function _assert_route_endpoint(endpoint, role::String)
     endpoint isa ProcessEntity && return nothing
     endpoint isa Type && endpoint <: ProcessEntity && return nothing
     endpoint isa AbstractIdentifiableAlgo && return nothing
-    error("$role of a Route must be a Symbol, ProcessAlgorithm, ProcessState, or identifiable wrapper. Got: $endpoint")
+    construction_error(role, " of a Route must be a Symbol, ProcessAlgorithm, ProcessState, or identifiable wrapper. Got: ", endpoint)
 end
 
 """Require resolved wiring endpoints to be context-name symbols."""
 function _assert_resolved_endpoint(endpoint, role::String)
     endpoint isa Symbol && return nothing
-    error("$role endpoint must be resolved to a Symbol, got $endpoint.")
+    construction_error(role, " endpoint must be resolved to a Symbol, got ", endpoint, ".")
 end
 
 """

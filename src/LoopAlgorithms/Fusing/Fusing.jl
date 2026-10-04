@@ -2,19 +2,36 @@ export fuse, isfused
 
 include("ContextExt.jl")
 
-function flatten_comp_funcs(funcs, _intervals, stop_at_options = true)
-    flat_funcs, flat_intervals = flat_tree_property_recursion(funcs, _intervals) do el, trait
-        if !iscomposite(el) || (stop_at_options && !isempty(getoptions(el)))
-            return nothing, nothing
-        end
-        newels = getalgos(el)
-        newtraits = intervals(el)
-        multiplied_newtraits = map(x -> x*trait, newtraits)
-        return newels, multiplied_newtraits
-        # return newels, trait.*newtraits
+"""
+Replace every nested `CompositeAlgorithm` in `funcs` by its children, in place and recursively, multiplying the
+children's intervals by the parent's interval. With `stop_at_options`, a composite that carries route/share options
+is kept whole.
 
+Runs on untyped values in a loop: the input is only known at run time, and a typed tuple recursion here compiled
+again for every plan type (and made Julia's compiler crash with "irinterp is unable to handle heavy recursion").
+"""
+Base.@nospecializeinfer function flatten_comp_funcs(@nospecialize(funcs::Tuple), @nospecialize(_intervals::Tuple), stop_at_options::Bool = true)
+    flat_funcs = Any[]
+    flat_intervals = Any[]
+    _flatten_comp_funcs!(flat_funcs, flat_intervals, funcs, _intervals, stop_at_options)
+    return Tuple(flat_funcs), Tuple(flat_intervals)
+end
+
+Base.@nospecializeinfer function _flatten_comp_funcs!(flat_funcs::Vector{Any}, flat_intervals::Vector{Any}, @nospecialize(funcs::Tuple), @nospecialize(_intervals::Tuple), stop_at_options::Bool)
+    for i in eachindex(funcs)
+        el = funcs[i]
+        trait = _intervals[i]
+        # `el isa LoopSpec` first: `iscomposite(el)` on any other value would compile once per value type.
+        if el isa LoopSpec && iscomposite(el) && !(stop_at_options && !isempty(getoptions(el)))
+            child_intervals = intervals(el)
+            multiplied = Any[child_intervals[j] * trait for j in eachindex(child_intervals)]
+            _flatten_comp_funcs!(flat_funcs, flat_intervals, getalgos(el), Tuple(multiplied), stop_at_options)
+        else
+            push!(flat_funcs, el)
+            push!(flat_intervals, trait)
+        end
     end
-    return flat_funcs, flat_intervals
+    return nothing
 end
 
 """

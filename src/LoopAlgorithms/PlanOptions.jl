@@ -159,13 +159,13 @@ end
 
 """Return nested plan wiring for loop-plan children."""
 @inline function _child_wiring_for_child(child::LA, bucket::Wiring) where {LA<:LoopSpec}
-    isempty(bucket) || error("Child-scoped wiring $(bucket) was assigned to nested plan child $(child). Attach the route/share to a concrete child inside the nested plan.")
+    isempty(bucket) || construction_error("Child-scoped wiring ", bucket, " was assigned to nested plan child ", child, ". Attach the route/share to a concrete child inside the nested plan.")
     return getwiring(child)
 end
 
 """Return nested plan wiring for identifiable loop-plan children."""
 @inline function _child_wiring_for_child(child::IA, bucket::Wiring) where {F<:LoopSpec, IA<:AbstractIdentifiableAlgo{F}}
-    isempty(bucket) || error("Child-scoped wiring $(bucket) was assigned to nested plan child $(child). Attach the route/share to a concrete child inside the nested plan.")
+    isempty(bucket) || construction_error("Child-scoped wiring ", bucket, " was assigned to nested plan child ", child, ". Attach the route/share to a concrete child inside the nested plan.")
     return getwiring(getalgo(child))
 end
 
@@ -207,7 +207,7 @@ function _plan_child_wiring_runtime(funcs::Funcs, options::Options) where {Funcs
             end
             assigned = true
         end
-        assigned || error("Child-scoped wiring $(option) could not be assigned to any child in plan funcs $(funcs).")
+        assigned || construction_error("Child-scoped wiring ", option, " could not be assigned to any child in plan funcs ", funcs, ".")
     end
 
     raw_buckets = ntuple(i -> Wiring(Tuple(route_buckets[i]), Tuple(share_buckets[i])), length(funcs))
