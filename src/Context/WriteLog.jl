@@ -26,6 +26,14 @@ end
 _unlogged(::Type{ProcessContext{D,WriteLog{R,W}}}) where {D,R,W} = ProcessContext{D,R}
 _unlogged(T::Type) = T
 
+"""`pc` with an empty write log around its registry: same subcontexts and layout, only the type differs."""
+@inline with_empty_log(pc::ProcessContext{D,R}) where {D,R} =
+    ProcessContext{D,WriteLog{R,()}}(get_subcontexts(pc), WriteLog{R,()}(registryref(pc)))
+
+"""`pc` without its write log (`pc` itself for an ordinary context)."""
+@inline without_log(pc::ProcessContext{D,WriteLog{R,W}}) where {D,R,W} = ProcessContext{D,R}(get_subcontexts(pc), registryref(pc))
+@inline without_log(pc::ProcessContext) = pc
+
 """`W` and `new` as one sorted tuple of `(subcontext, field)` pairs without repeats."""
 _union_written(W::Tuple, new::Tuple) = Tuple(sort!(unique!(Any[W..., new...]); by = string))
 
@@ -57,7 +65,8 @@ end
 
 `Val(W)` with `W` the persistent fields, as `(subcontext, field)` pairs, that one step of `step_plan` can write, or
 `nothing` when that cannot be determined. A compile-time constant: `Core.Compiler.return_type` is evaluated by
-inference while the caller is compiled, and the rest folds.
+inference while the caller is compiled, and the rest folds. The delta loop (`_run_steps`) runs its steps on exactly
+these logged types, so this is the inference of the step that is compiled anyway, not a second one.
 """
 @inline function _written_fields(step_plan::SP, step_cursor::SC, context::ProcessContext{D,R}, runtimecontext::RC,
                                  step_wiring::W, process::P, lifetime::LT) where {SP,SC,D,R,RC,W,P,LT}

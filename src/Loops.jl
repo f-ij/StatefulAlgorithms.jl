@@ -203,12 +203,13 @@ end
                             step_wiring::W, process::P, lifetime::LT) where {Written,I,SP,SC,C,RC,W,P,LT}
     delta = @inline _written_values(base, written)
     for _ in iterations
-        context = @inline merge_into_subcontexts(base, delta)
+        # The step runs on a logged context, the same types `_written_fields` inferred: one inference, not two.
+        context = @inline with_empty_log(@inline merge_into_subcontexts(base, delta))
         context, runtimecontext = @inline _step!(step_plan, step_cursor, context, runtimecontext, step_wiring, Namespace{nothing}(), process, lifetime)
         delta = @inline _written_values(context, written)
         @inline tick!(process)
         @inline inc!(process)
-        if @inline breakcondition(lifetime, process, context)
+        if @inline breakcondition(lifetime, process, @inline without_log(context))
             break
         end
     end
