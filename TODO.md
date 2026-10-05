@@ -134,7 +134,7 @@ Restored 2026-10-09 from `fix/type-stability` (`e1dcbbf`, now tag `archive/type-
 - [ ] DSL: lower `name = <literal | nothing | undef | captured outer name>` in a composite block to `Local(name = ...)` (no `@let`); calls and macros stay runtime steps; `x = y` with `y` a block name is an error. The DSL should only produce backend constructors (`CompositeAlgorithm(..., Local(...))`), with no DSL-specific code in the core.
 - [ ] DSL: printed plans show a call's wired arguments by context key (`plus_capture.captured`, `_state.b`), not by the DSL alias the author wrote (`c1.plus_capture.captured`, `b`); the alias only exists in the DSL.
 - [ ] Plan edits (rename/insert) re-attach child-local wiring by matching the child object; two equal children (same unkeyed algorithm type, or identical `Callable`s) with different wires would both get both. Re-attach by position (re-wrap in `WithWiring`) instead.
-- [ ] Remove the deprecated `FuncWrapper` constructor, and `LocalPlanOption` once the DSL no longer uses it for algorithm statements.
+- [ ] Remove `LocalPlanOption` once the DSL no longer uses it for algorithm statements.
 
 ## Later: algorithms written by signature (from the step!-call experiment, 2026-10-02)
 - [ ] Multi-method algorithms in the signature form: one algorithm type with several `step!` methods taking different arguments (different names, or the same names with different types). The plan unpacks values before the user's code, so it has to choose which method's names to read, at compile time. Needs a rule, e.g. Julia's own dispatch on the types of the values the view can see, or the most specific method whose names are all visible, plus a clear error when none or several match.

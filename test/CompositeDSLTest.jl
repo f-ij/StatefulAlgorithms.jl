@@ -78,27 +78,27 @@ end
 
 @testset "Composite DSL" begin
     @info "Composite DSL"
-    @testset "FuncWrapper steps directly and does not eagerly init" begin
-        @info "Composite DSL: FuncWrapper steps directly and does not eagerly init"
-        wrapped = FuncWrapper(x -> 2x, (:x,), (:y,))
+    @testset "Callable steps directly and does not eagerly init" begin
+        @info "Composite DSL: Callable steps directly and does not eagerly init"
+        wrapped = Callable(x -> 2x, (:x,), :y)
         @test StatefulAlgorithms.step!(wrapped, (; x = 4)) == (; y = 8)
         @test StatefulAlgorithms.init(wrapped, (; x = 4)) == (;)
         @test occursin("y = ", sprint(summary, wrapped)) && occursin("(x))", sprint(summary, wrapped))
 
-        kw_wrapped = FuncWrapper((x; scale = 1) -> scale * x, (:external,), (:y,), (; scale = 3))
+        kw_wrapped = Callable((x; scale = 1) -> scale * x, (:external,), (; scale = 3), :y)
         @test StatefulAlgorithms.step!(kw_wrapped, (; external = 4)) == (; y = 12)
         @test StatefulAlgorithms.init(kw_wrapped, (; external = 4)) == (;)
         @test occursin("(external; scale = 3))", sprint(summary, kw_wrapped))
 
-        kw_from_context = FuncWrapper((x; scale = 1) -> scale * x, (:external,), (:y,), (; scale = :factor))
+        kw_from_context = Callable((x; scale = 1) -> scale * x, (:external,), (; scale = :factor), :y)
         @test StatefulAlgorithms.step!(kw_from_context, (; external = 4, factor = 5)) == (; y = 20)
         @test StatefulAlgorithms.init(kw_from_context, (; external = 4, factor = 5)) == (;)
 
-        kw_same_name = FuncWrapper((x; scale = 1) -> scale * x, (:external,), (:y,), (:scale,))
+        kw_same_name = Callable((x; scale = 1) -> scale * x, (:external,), (; scale = :scale), :y)
         @test StatefulAlgorithms.step!(kw_same_name, (; external = 4, scale = 6)) == (; y = 24)
         @test StatefulAlgorithms.init(kw_same_name, (; external = 4, scale = 6)) == (;)
 
-        literal_wrapped = FuncWrapper(println, ("Num: ", :value), ())
+        literal_wrapped = Callable(println, ("Num: ", :value), ())
         literal_show = sprint(show, literal_wrapped)
         literal_plain = sprint(io -> show(io, MIME("text/plain"), literal_wrapped))
         @test occursin("Callable(println(\"Num: \", value))", literal_show)
@@ -683,8 +683,8 @@ end
         @test_throws ErrorException states(b1)
     end
 
-    @testset "FuncWrapper positional args accept @context property routes" begin
-        @info "Composite DSL: FuncWrapper positional args accept @context property routes"
+    @testset "Function call positional args accept @context property routes" begin
+        @info "Composite DSL: Function call positional args accept @context property routes"
         nested_identity(x) = x
         plus = @Routine begin
             @alias plus_capture = DSLNestedSourceAlgo
@@ -712,8 +712,8 @@ end
         @test !haskey(StatefulAlgorithms.getglobals(context(p)), :result)
     end
 
-    @testset "FuncWrapper positional args accept explicit @transform routes" begin
-        @info "Composite DSL: FuncWrapper positional args accept explicit @transform routes"
+    @testset "Function call positional args accept explicit @transform routes" begin
+        @info "Composite DSL: Function call positional args accept explicit @transform routes"
         nested_identity(x) = x
         plus = @Routine begin
             @alias plus_capture = DSLNestedSourceAlgo
@@ -737,8 +737,8 @@ end
         @test !haskey(StatefulAlgorithms.getglobals(ctx), :result)
     end
 
-    @testset "FuncWrapper positional @transform routes can source @state fields" begin
-        @info "Composite DSL: FuncWrapper positional @transform routes can source @state fields"
+    @testset "Function call positional @transform routes can source @state fields" begin
+        @info "Composite DSL: Function call positional @transform routes can source @state fields"
         nested_identity(x) = x
 
         algo = @Routine begin
@@ -897,8 +897,8 @@ end
         @test !haskey(StatefulAlgorithms.getglobals(ctx), :result)
     end
 
-    @testset "FuncWrapper keyword args preserve routed display expressions" begin
-        @info "Composite DSL: FuncWrapper keyword args preserve routed display expressions"
+    @testset "Function call keyword args preserve routed display expressions" begin
+        @info "Composite DSL: Function call keyword args preserve routed display expressions"
         plus = @Routine begin
             @alias plus_capture = DSLNestedSourceAlgo
             plus_capture()
@@ -919,8 +919,8 @@ end
         @test !haskey(StatefulAlgorithms.getglobals(ctx), :result)
     end
 
-    @testset "FuncWrapper keyword args accept semicolon same-name syntax" begin
-        @info "Composite DSL: FuncWrapper keyword args accept semicolon same-name syntax"
+    @testset "Function call keyword args accept semicolon same-name syntax" begin
+        @info "Composite DSL: Function call keyword args accept semicolon same-name syntax"
         algo = @CompositeAlgorithm begin
             @state b = 1
             @state x = 2
@@ -1221,8 +1221,8 @@ end
         end)
     end
 
-    @testset "FuncWrapper outputs are runtime-only and visible to finalstep" begin
-        @info "Composite DSL: FuncWrapper outputs are runtime-only and visible to finalstep"
+    @testset "Function call outputs are runtime-only and visible to finalstep" begin
+        @info "Composite DSL: Function call outputs are runtime-only and visible to finalstep"
         algo = @CompositeAlgorithm begin
             @state seed = 4
             result = keyword_value_identity_dsl_test(value = seed)
@@ -1232,7 +1232,7 @@ end
         p = Process(resolve(algo), repeat = 1)
         run(p)
         @test fetch(p) == (; result = 4)
-        @test !haskey(StatefulAlgorithms.get_subcontexts(context(p)), :FuncWrapper_1)   # function calls have no persistent state
+        @test !haskey(StatefulAlgorithms.get_subcontexts(context(p)), :Callable_1)   # function calls have no persistent state
         @test !haskey(StatefulAlgorithms.getglobals(context(p)), :result)
 
         close(p)
@@ -1240,8 +1240,23 @@ end
         @test !haskey(StatefulAlgorithms.getglobals(context(p)), :result)
     end
 
-    @testset "FuncWrapper runtime output shape does not persist" begin
-        @info "Composite DSL: FuncWrapper runtime output shape does not persist"
+    @testset "Function call literals: a quoted symbol and a captured Symbol value are values, not plan names" begin
+        @info "Composite DSL: Function call literals are values, not plan names"
+        marker = :done
+        algo = @CompositeAlgorithm begin
+            @state seed = 4
+            result = literal_join_dsl_test(:start, seed, marker)
+            @finally dsl_runtime_final_summary
+        end
+
+        p = Process(resolve(algo), repeat = 1)
+        run(p)
+        @test fetch(p) == (; result = "start4done")
+        close(p)
+    end
+
+    @testset "Function call runtime output shape does not persist" begin
+        @info "Composite DSL: Function call runtime output shape does not persist"
         count = Ref(0)
         widening_runtime_value = () -> begin
             count[] += 1
@@ -1259,7 +1274,7 @@ end
         @test fetched isa StatefulAlgorithms.ProcessContext
         @test !haskey(StatefulAlgorithms.getglobals(fetched), :result)
         @test count[] == 2
-        @test !haskey(StatefulAlgorithms.get_subcontexts(context(p)), :FuncWrapper_1)   # function calls have no persistent state
+        @test !haskey(StatefulAlgorithms.get_subcontexts(context(p)), :Callable_1)   # function calls have no persistent state
         @test !haskey(StatefulAlgorithms.getglobals(context(p)), :result)
         close(p)
     end

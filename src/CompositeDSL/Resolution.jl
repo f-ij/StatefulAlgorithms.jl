@@ -12,6 +12,9 @@ end
 @inline _dsl_with_customname(algo, ::Val{Symbol()}) = algo
 @inline _dsl_with_customname(algo, ::Val{Name}) where {Name} = algo
 
+"""A statement's outputs as `Callable` returns: `x = f()` returns `:x`, `a, b = f()` returns `(:a, :b)`."""
+_dsl_call_returns(outputs::Tuple{Vararg{Symbol}}) = length(outputs) == 1 ? only(outputs) : outputs
+
 """Resolve direct-call DSL syntax for a `ProcessAlgorithm` using its declared positional names."""
 function _resolve_composite_dsl_algorithm_call(
     spec,
@@ -72,7 +75,7 @@ function _resolve_composite_dsl_entity(spec, inputs::Tuple, output_symbols::Tupl
         # Bare functions are wrapped so the rest of the system can treat them like
         # normal algorithms with routed inputs/outputs.
         isempty(inputs) || error("Plain functions should use regular call syntax in the DSL, e.g. `f(x)` or `f(x; scale = 2)`.")
-        wrapped = _callable_from_call(spec, (), output_symbols)
+        wrapped = Callable(spec, (), _dsl_call_returns(output_symbols))
         resolved = _dsl_with_customname(wrapped, Val(Name))
         return _CompositeDSLResolved{:algo, typeof(resolved), typeof(inputs)}(resolved, inputs)
     else
@@ -133,7 +136,7 @@ function _resolve_composite_dsl_call(
 
     # The `Callable` holds the call's signature; values that come from algorithm state or
     # transforms are wired to it by the statement (`_composite_dsl_call_wires`).
-    wrapped = _callable_from_call(spec, positional_values, output_symbols, keyword_args)
+    wrapped = Callable(spec, positional_values, keyword_args, _dsl_call_returns(output_symbols))
     resolved = _dsl_with_customname(wrapped, Val(Name))
 
     inputs = Any[routed_positional_inputs...]
@@ -152,7 +155,7 @@ function _resolve_composite_dsl_keyword_call(
     ::Val{Name},
 ) where {Name}
     if spec isa Function
-        wrapped = _callable_from_call(spec, (), output_symbols, keyword_args)
+        wrapped = Callable(spec, (), keyword_args, _dsl_call_returns(output_symbols))
         resolved = _dsl_with_customname(wrapped, Val(Name))
         return _CompositeDSLResolved{:algo, typeof(resolved), typeof(routed_inputs)}(resolved, routed_inputs)
     end

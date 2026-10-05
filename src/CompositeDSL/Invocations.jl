@@ -227,35 +227,35 @@ function _dsl_parse_function_call(alias_map, context_map, ex, known_outputs::Set
     )
 end
 
-"""Emit the positional tuple passed to `FuncWrapper`, preserving routed names and literals."""
+"""Emit a call's positional arguments for `Callable`: a routed name as a `Symbol`, anything else as a `Literal`."""
 function _dsl_function_positional_args_expr(positional_specs)
     positional_exprs = map(positional_specs) do spec
         if spec.kind == :routed
             QuoteNode(spec.value)
         elseif spec.kind == :literal_symbol
-            :(Core.QuoteNode($(QuoteNode(spec.value))))
+            :($Literal($(QuoteNode(spec.value))))
         else
-            esc(spec.value)
+            :($Literal($(esc(spec.value))))
         end
     end
     return Expr(:tuple, positional_exprs...)
 end
 
-"""Emit the user-facing positional tuple kept for `FuncWrapper` display."""
+"""Emit the user-facing positional tuple kept for display."""
 function _dsl_function_positional_display_expr(positional_specs)
     return Expr(:tuple, QuoteNode.(getproperty.(positional_specs, :display))...)
 end
 
-"""Emit a plain `NamedTuple` constructor for function-call keyword forwarding."""
+"""Emit a call's keyword arguments as a `NamedTuple`: a routed name as a `Symbol`, anything else as a `Literal`."""
 function _dsl_function_keyword_args_expr(keyword_specs)
     kw_exprs = map(keyword_specs) do spec
-        value_expr = spec.routed ? QuoteNode(spec.value) : esc(spec.value)
+        value_expr = spec.routed ? QuoteNode(spec.value) : :($Literal($(esc(spec.value))))
         Expr(:kw, spec.name, value_expr)
     end
     return Expr(:tuple, Expr(:parameters, kw_exprs...))
 end
 
-"""Emit the user-facing keyword values kept for `FuncWrapper` display."""
+"""Emit the user-facing keyword values kept for display."""
 function _dsl_function_keyword_display_expr(keyword_specs)
     kw_exprs = map(keyword_specs) do spec
         Expr(:kw, spec.name, QuoteNode(spec.display))
@@ -460,7 +460,7 @@ function _dsl_parse_invocation(alias_map, context_map, ex, known_outputs::Set{Sy
             has_positional = any(arg -> !(arg isa Expr && arg.head == :kw) && !(arg isa Expr && arg.head == :macrocall && arg.args[1] == Symbol("@all")), args)
             if has_parameters || (has_positional && !has_share)
                 # Mixed positional/semicolon syntax is reserved for bare Julia
-                # functions that should be wrapped in `FuncWrapper`.
+                # functions, which become `Callable`s.
                 _dsl_parse_function_call(alias_map, context_map, inner, known_outputs)
             else
                 # Pure keyword calls are resolved at runtime: plain functions are

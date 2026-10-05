@@ -27,7 +27,7 @@ end
 load = @cputime @eval using StatefulAlgorithms
 include(joinpath(@__DIR__, "cases.jl"))
 
-# Plain functions for the DSL case; the DSL wraps them as FuncWrapper children.
+# Plain functions for the DSL case; the DSL turns their calls into Callable children.
 dsl_f1(x) = x * 0.999 + 1.0
 dsl_f2(x) = x * 0.998 + 2.0
 dsl_f3(x) = x * 0.997 + 3.0
