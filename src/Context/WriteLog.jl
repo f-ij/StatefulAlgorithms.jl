@@ -77,14 +77,28 @@ function _written_fields(step_plan, step_cursor, context::ProcessContext{D,R}, r
     end
 end
 
-"""`Val(W)` from the inferred return type of a logged step, or `nothing` unless it is `(same context with a log W, runtime context)`."""
+"""
+`Val(W)` from the inferred return type of a logged step: `W` is every field written on any branch. `nothing` unless
+the return type is `(context, runtime context)` where each possible context type is the same context with a log
+(branches that write different fields give a `Union` of such types).
+"""
 function _written_from_return_type(@nospecialize(rt), @nospecialize(D), @nospecialize(R))
+    rt isa Union && return _written_union(Base.uniontypes(rt), D, R)
     (rt isa DataType && rt <: Tuple && length(rt.parameters) == 2) || return nothing
-    C = rt.parameters[1]
-    (C isa DataType && C <: ProcessContext && C.parameters[1] === D) || return nothing
-    L = C.parameters[2]
-    (L isa DataType && L <: WriteLog && L.parameters[1] === R) || return nothing
-    return Val(L.parameters[2])
+    return _written_union(Base.uniontypes(rt.parameters[1]), D, R)
+end
+
+"""`Val(W)` with `W` the union of the logs of the context types `Cs` (or the first elements of tuple types), or `nothing`."""
+function _written_union(Cs::Vector, @nospecialize(D), @nospecialize(R))
+    W = ()
+    for C in Cs
+        C isa DataType && C <: Tuple && length(C.parameters) == 2 && (C = C.parameters[1])
+        (C isa DataType && C <: ProcessContext && C.parameters[1] === D) || return nothing
+        L = C.parameters[2]
+        (L isa DataType && L <: WriteLog && L.parameters[1] === R) || return nothing
+        W = _union_written(W, L.parameters[2])
+    end
+    return Val(W)
 end
 
 """
