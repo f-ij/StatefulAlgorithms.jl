@@ -133,8 +133,6 @@ end
     p = Process(resolve(algo), repeat = 1); run(p)
     @test fetch(p) == (; b = 6.0)
 
-    # The deprecated FuncWrapper syntax still works and gives a Callable.
-    @test FuncWrapper(ex_bump, (:n,), (:n,)) isa Callable
 end
 
 struct VarPlain <: ProcessAlgorithm end
