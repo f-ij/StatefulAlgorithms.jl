@@ -9,8 +9,10 @@
 """
 
 function get_local_locations(sct::Type{SCT}) where {SCT<:SubContextView{CType, SubKey}} where {CType, SubKey}
-    # Function calls view the context from the shared `_runtime` namespace: no state of their own.
-    SubKey in fieldnames(fieldtype(CType, :subcontexts)) || return (;)
+    # A call's view has namespace `_runtime`: no variables of its own. `_runtime` is in the runtime context, not in
+    # `CType`, and it is shared by every call, so its values are read last (the fallback in `getproperty(view, Val(name))`),
+    # after routes, shares and declared locals. As own variables they would take precedence over those.
+    SubKey === :_runtime && return (;)
     _subcontext_type = subcontext_type(SCT)
     _data_type = getdatatype(_subcontext_type)
     local_varnames = keys(_subcontext_type)
