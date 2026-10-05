@@ -122,14 +122,8 @@ Run a single function in a loop indefinitely.
         @inline inc!(process)
     end
 
-    while true
-        context, runtimecontext = @inline _step!(step_plan, step_cursor, context, runtimecontext, step_wiring, Namespace{nothing}(), process, lifetime)
-        @inline tick!(process)
-        @inline inc!(process)
-        if @inline breakcondition(lifetime, process, context)
-            break
-        end
-    end
+    written = _written_fields(step_plan, step_cursor, context, runtimecontext, step_wiring, process, lifetime)
+    context, runtimecontext = _run_steps(written, Iterators.countfrom(1), step_plan, step_cursor, context, runtimecontext, step_wiring, process, lifetime)::Tuple{typeof(context),typeof(runtimecontext)}
 
     if @inline _loop_ispaused(process)
         @inline _keep_loop_cursor!(process, step_cursor)
@@ -167,14 +161,9 @@ Base.@constprop :aggressive @inline function loop(process::P, algo::F, stored_co
         @inline inc!(process)
     end
 
-    for _ in (@inline loopidx(process)):(@inline repeats(lifetime))
-        context, runtimecontext = @inline _step!(step_plan, step_cursor, context, runtimecontext, step_wiring, Namespace{nothing}(), process, lifetime)
-        @inline tick!(process)
-        @inline inc!(process)
-        if @inline breakcondition(lifetime, process, context)
-            break
-        end
-    end
+    written = _written_fields(step_plan, step_cursor, context, runtimecontext, step_wiring, process, lifetime)
+    iterations = (@inline loopidx(process)):(@inline repeats(lifetime))
+    context, runtimecontext = _run_steps(written, iterations, step_plan, step_cursor, context, runtimecontext, step_wiring, process, lifetime)::Tuple{typeof(context),typeof(runtimecontext)}
 
     if @inline _loop_ispaused(process)
         @inline _keep_loop_cursor!(process, step_cursor)
@@ -184,4 +173,42 @@ Base.@constprop :aggressive @inline function loop(process::P, algo::F, stored_co
     final_runtimecontext = runtimecontext
     context, returnvalue = @inline finalizer!(algo, context, runtimecontext, process, lifetime)
     return @inline after_while(process, algo, context, final_runtimecontext, returnvalue, stored_context)
+end
+
+"""
+    _run_steps(written, iterations, step_plan, step_cursor, context, runtimecontext, step_wiring, process, lifetime)
+
+Step `step_plan` once per element of `iterations`, until the lifetime's break condition, and return the context and
+runtime context after the last step. `written` comes from `_written_fields`.
+
+With `written === nothing` the whole context is carried from step to step. With `Val(W)` (EXPERIMENTAL) only the
+fields `W` that a step can write are carried, as `delta`: each step starts from the context the loop started with,
+plus `delta`. A field no step writes is then never a loop variable, so it cannot become one whose new value is its
+old value, which Julia keeps in a stack slot and copies every step.
+"""
+@noinline function _run_steps(::Nothing, iterations, step_plan, step_cursor, context, runtimecontext, step_wiring, process, lifetime)
+    for _ in iterations
+        context, runtimecontext = @inline _step!(step_plan, step_cursor, context, runtimecontext, step_wiring, Namespace{nothing}(), process, lifetime)
+        @inline tick!(process)
+        @inline inc!(process)
+        if @inline breakcondition(lifetime, process, context)
+            break
+        end
+    end
+    return context, runtimecontext
+end
+
+@noinline function _run_steps(written::Val, iterations, step_plan, step_cursor, base, runtimecontext, step_wiring, process, lifetime)
+    delta = @inline _written_values(base, written)
+    for _ in iterations
+        context = @inline merge_into_subcontexts(base, delta)
+        context, runtimecontext = @inline _step!(step_plan, step_cursor, context, runtimecontext, step_wiring, Namespace{nothing}(), process, lifetime)
+        delta = @inline _written_values(context, written)
+        @inline tick!(process)
+        @inline inc!(process)
+        if @inline breakcondition(lifetime, process, context)
+            break
+        end
+    end
+    return (@inline merge_into_subcontexts(base, delta)), runtimecontext
 end
