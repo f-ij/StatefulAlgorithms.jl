@@ -122,8 +122,8 @@ Run a single function in a loop indefinitely.
         @inline inc!(process)
     end
 
-    written = _written_fields(step_plan, step_cursor, context, runtimecontext, step_wiring, process, lifetime)
-    context, runtimecontext = _run_steps(written, Iterators.countfrom(1), step_plan, step_cursor, context, runtimecontext, step_wiring, process, lifetime)::Tuple{typeof(context),typeof(runtimecontext)}
+    written = @inline _written_fields(step_plan, step_cursor, context, runtimecontext, step_wiring, process, lifetime)
+    context, runtimecontext = @inline _run_steps(written, Iterators.countfrom(1), step_plan, step_cursor, context, runtimecontext, step_wiring, process, lifetime)
 
     if @inline _loop_ispaused(process)
         @inline _keep_loop_cursor!(process, step_cursor)
@@ -161,9 +161,9 @@ Base.@constprop :aggressive @inline function loop(process::P, algo::F, stored_co
         @inline inc!(process)
     end
 
-    written = _written_fields(step_plan, step_cursor, context, runtimecontext, step_wiring, process, lifetime)
+    written = @inline _written_fields(step_plan, step_cursor, context, runtimecontext, step_wiring, process, lifetime)
     iterations = (@inline loopidx(process)):(@inline repeats(lifetime))
-    context, runtimecontext = _run_steps(written, iterations, step_plan, step_cursor, context, runtimecontext, step_wiring, process, lifetime)::Tuple{typeof(context),typeof(runtimecontext)}
+    context, runtimecontext = @inline _run_steps(written, iterations, step_plan, step_cursor, context, runtimecontext, step_wiring, process, lifetime)
 
     if @inline _loop_ispaused(process)
         @inline _keep_loop_cursor!(process, step_cursor)
@@ -186,7 +186,8 @@ fields `W` that a step can write are carried, as `delta`: each step starts from 
 plus `delta`. A field no step writes is then never a loop variable, so it cannot become one whose new value is its
 old value, which Julia keeps in a stack slot and copies every step.
 """
-@noinline function _run_steps(::Nothing, iterations, step_plan, step_cursor, context, runtimecontext, step_wiring, process, lifetime)
+@inline function _run_steps(::Nothing, iterations::I, step_plan::SP, step_cursor::SC, context::C, runtimecontext::RC,
+                            step_wiring::W, process::P, lifetime::LT) where {I,SP,SC,C,RC,W,P,LT}
     for _ in iterations
         context, runtimecontext = @inline _step!(step_plan, step_cursor, context, runtimecontext, step_wiring, Namespace{nothing}(), process, lifetime)
         @inline tick!(process)
@@ -198,7 +199,8 @@ old value, which Julia keeps in a stack slot and copies every step.
     return context, runtimecontext
 end
 
-@noinline function _run_steps(written::Val, iterations, step_plan, step_cursor, base, runtimecontext, step_wiring, process, lifetime)
+@inline function _run_steps(written::Val{Written}, iterations::I, step_plan::SP, step_cursor::SC, base::C, runtimecontext::RC,
+                            step_wiring::W, process::P, lifetime::LT) where {Written,I,SP,SC,C,RC,W,P,LT}
     delta = @inline _written_values(base, written)
     for _ in iterations
         context = @inline merge_into_subcontexts(base, delta)

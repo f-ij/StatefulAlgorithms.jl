@@ -5,8 +5,8 @@ The loop carries only the fields a step can write (see `_run_steps` in Loops.jl)
 infers `_step!` once with a context whose registry slot is a `WriteLog`. Every persistent write ends in
 `merge_into_subcontext_rebuild` or `withsubcontexts`; for a logged context those add the written
 `(subcontext, field)` pairs to the log's type. The inferred return type then lists every field any branch of the
-step can write: children on intervals, routines and the interactive `ContextExchange` included. Nothing runs; a
-logged context only exists during inference.
+step can write: children on intervals, routines and the interactive `ContextExchange` included. Nothing runs, and
+it happens while the loop is compiled: a logged context only exists during inference.
 =#
 
 """
@@ -52,54 +52,41 @@ end
     return :(@inline _log_writes(pc, subcontexts, Val($New)))
 end
 
-const _WRITTEN_FIELDS = Dict{Any,Any}()
-const _WRITTEN_FIELDS_LOCK = ReentrantLock()
-
 """
     _written_fields(step_plan, step_cursor, context, runtimecontext, step_wiring, process, lifetime)
 
-`Val(W)` with `W` the persistent fields, as `(subcontext, field)` pairs, that one step of `step_plan` can write;
-`nothing` when that cannot be determined. Found by inferring `_step!` with a logged context (see the top of this
-file) and cached per argument types.
+`Val(W)` with `W` the persistent fields, as `(subcontext, field)` pairs, that one step of `step_plan` can write, or
+`nothing` when that cannot be determined. A compile-time constant: `Core.Compiler.return_type` is evaluated by
+inference while the caller is compiled, and the rest folds.
 """
-function _written_fields(step_plan, step_cursor, context::ProcessContext{D,R}, runtimecontext, step_wiring, process, lifetime) where {D,R}
-    argtypes = Tuple{typeof(step_plan), typeof(step_cursor), ProcessContext{D,WriteLog{R,()}}, typeof(runtimecontext),
-                     typeof(step_wiring), Namespace{nothing}, typeof(process), typeof(lifetime)}
-    lock(_WRITTEN_FIELDS_LOCK) do
-        get!(_WRITTEN_FIELDS, argtypes) do
-            rt = try
-                Base.infer_return_type(_step!, argtypes)
-            catch
-                Any
-            end
-            _written_from_return_type(rt, D, R)
+@inline function _written_fields(step_plan::SP, step_cursor::SC, context::ProcessContext{D,R}, runtimecontext::RC,
+                                 step_wiring::W, process::P, lifetime::LT) where {SP,SC,D,R,RC,W,P,LT}
+    logged_step = Tuple{SP, SC, ProcessContext{D,WriteLog{R,()}}, RC, W, Namespace{nothing}, P, LT}
+    return _written_from_return_type(Core.Compiler.return_type(_step!, logged_step), D, R)
+end
+
+"""
+`Val(W)` from the inferred return type of a logged step: `W` holds every field logged on any branch (branches that
+write different fields give a `Union`). `nothing` unless every possible return is `(context, runtime context)` with
+the context being the step's own context type with a log.
+"""
+Base.@assume_effects :foldable function _written_from_return_type(@nospecialize(rt), @nospecialize(D), @nospecialize(R))
+    rt === Union{} && return nothing                 # the step always throws: nothing can be concluded
+    written = ()
+    for T in Base.uniontypes(rt)
+        (T isa DataType && T <: Tuple && length(T.parameters) == 2) || return nothing
+        for C in Base.uniontypes(T.parameters[1])
+            logged = _logged_writes(C, D, R)
+            isnothing(logged) && return nothing
+            written = _union_written(written, logged)
         end
     end
+    return Val(written)
 end
 
-"""
-`Val(W)` from the inferred return type of a logged step: `W` is every field written on any branch. `nothing` unless
-the return type is `(context, runtime context)` where each possible context type is the same context with a log
-(branches that write different fields give a `Union` of such types).
-"""
-function _written_from_return_type(@nospecialize(rt), @nospecialize(D), @nospecialize(R))
-    rt isa Union && return _written_union(Base.uniontypes(rt), D, R)
-    (rt isa DataType && rt <: Tuple && length(rt.parameters) == 2) || return nothing
-    return _written_union(Base.uniontypes(rt.parameters[1]), D, R)
-end
-
-"""`Val(W)` with `W` the union of the logs of the context types `Cs` (or the first elements of tuple types), or `nothing`."""
-function _written_union(Cs::Vector, @nospecialize(D), @nospecialize(R))
-    W = ()
-    for C in Cs
-        C isa DataType && C <: Tuple && length(C.parameters) == 2 && (C = C.parameters[1])
-        (C isa DataType && C <: ProcessContext && C.parameters[1] === D) || return nothing
-        L = C.parameters[2]
-        (L isa DataType && L <: WriteLog && L.parameters[1] === R) || return nothing
-        W = _union_written(W, L.parameters[2])
-    end
-    return Val(W)
-end
+"""The writes logged in the context type `C`, or `nothing` unless `C` has subcontexts `D` and a log around registry `R`."""
+_logged_writes(::Type{ProcessContext{D,WriteLog{R,W}}}, ::Type{D}, ::Type{R}) where {D,R,W} = W
+_logged_writes(@nospecialize(C), @nospecialize(D), @nospecialize(R)) = nothing
 
 """
     _written_values(context, Val(W))
