@@ -11,7 +11,7 @@ What a view sees, by name, and where each name is stored (a `VarLocation`). The 
 - wires: routes and shares written for this child (`Route`, `Share`, `WithWiring`, the DSL);
 - declared locals visible to it: resolve gives every child a route from `_declared_locals` per visible local, with
   target `LocalScope()`;
-- outputs: declared outputs for a call, its own subcontext outputs for an algorithm (`get_output_locations`);
+- outputs: captured returns for a call, its own subcontext returns for an algorithm (`get_output_locations`);
 - injected values.
 
 State and wires are explicit. A route wins over a state field of the same name (it is written for this child); a share
@@ -23,8 +23,8 @@ name; among the implicit ones a declared local hides an output. Injected values 
 """The view's namespace's state (its subcontext in the stored context), by name."""
 get_state_locations(::Type{SCT}) where {SCT<:SubContextView{B, SubKey}} where {B<:ContextBundle, SubKey} = _state_locations(context_part(Val(SubKey)), SCT)
 
-"""A call has no state: its namespace is the declared outputs (see `get_output_locations`)."""
-_state_locations(::DeclaredOutputs, ::Type) = (;)
+"""A call has no state: its namespace is the captured returns (see `get_output_locations`)."""
+_state_locations(::CapturedReturns, ::Type) = (;)
 
 function _state_locations(::Stored, ::Type{SCT}) where {SCT<:SubContextView{B, SubKey}} where {B<:ContextBundle, SubKey}
     _subcontext_type = subcontext_type(SCT)
@@ -90,7 +90,7 @@ end
 
 """
 The outputs the view sees by name, from the slots typed before the run (Outputs.jl): for a call (namespace
-`_declared_outputs`) every declared output, for an algorithm its own subcontext outputs. Implicit: a name the view has
+`_captured_returns`) every captured return, for an algorithm its own subcontext returns. Implicit: a name the view has
 from anything else wins (see `_compute_all_locations`).
 """
 function get_output_locations(::Type{SCT}) where {SCT<:SubContextView{B, SubKey}} where {B<:ContextBundle, SubKey}
@@ -104,10 +104,10 @@ function _part_data_type(::Type{RC}, part::ContextPart) where {RC<:ProcessContex
     return part_name(part) in fieldnames(D) ? getdatatype(fieldtype(D, part_name(part))) : NamedTuple{(), Tuple{}}
 end
 
-"""The names of the outputs a view sees: a call every declared output, an algorithm its own subcontext outputs."""
-_output_names(part::DeclaredOutputs, ::Type{RC}, owner::Symbol) where {RC} = fieldnames(_part_data_type(RC, part))
+"""The names of the outputs a view sees: a call every captured return, an algorithm its own subcontext returns."""
+_output_names(part::CapturedReturns, ::Type{RC}, owner::Symbol) where {RC} = fieldnames(_part_data_type(RC, part))
 function _output_names(::Stored, ::Type{RC}, owner::Symbol) where {RC}
-    outputs = _part_data_type(RC, SubcontextOutputs())
+    outputs = _part_data_type(RC, SubcontextReturns())
     return owner in fieldnames(outputs) ? fieldnames(fieldtype(outputs, owner)) : ()
 end
 
@@ -175,11 +175,11 @@ end
 @inline Base.haskey(scv::SCV, name::Symbol) where SCV <: SubContextView = @inline haskey(get_all_locations(scv), name)
 @inline getregistry(scv::SCV) where SCV <: SubContextView = getregistry(getcontext(scv))
 
-"""The runtime values under `subcontextname`: a runtime part (`_declared_outputs`, `_inputs`, ...), or a namespace's outputs."""
+"""The runtime values under `subcontextname`: a runtime part (`_captured_returns`, `_inputs`, ...), or a namespace's outputs."""
 @inline function _runtime_subcontext_data(runtimecontext::ProcessContext, ::Val{subcontextname}) where {subcontextname}
     subcontexts = @inline get_subcontexts(runtimecontext)
     haskey(subcontexts, subcontextname) && return getdata(getproperty(subcontexts, subcontextname))
-    outputs = @inline get_subcontext_outputs(runtimecontext)
+    outputs = @inline get_subcontext_returns(runtimecontext)
     return haskey(outputs, subcontextname) ? getproperty(outputs, subcontextname) : (;)
 end
 

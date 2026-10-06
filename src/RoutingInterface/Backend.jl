@@ -119,9 +119,9 @@ function _return_demand_names(::Type{W}, owner::Symbol) where {W<:PlanWiring}
     return _append_route_demand_names(names, _unrouted_reads(context_part(Val(owner)), W))
 end
 
-"""Names read from a part without routes: calls read the declared outputs by name."""
+"""Names read from a part without routes: calls read the captured returns by name."""
 _unrouted_reads(::ContextPart, ::Type) = ()
-_unrouted_reads(::DeclaredOutputs, ::Type{W}) where {W<:PlanWiring} = _callable_reads_in_tree(W)
+_unrouted_reads(::CapturedReturns, ::Type{W}) where {W<:PlanWiring} = _callable_reads_in_tree(W)
 
 """Compute demanded owner-runtime return names from the full plan-wiring view."""
 @inline @generated function return_demand(::PlanWiringView{Root,W,DemandAll}, ::Namespace{Name}) where {Root<:PlanWiring,W,DemandAll,Name}

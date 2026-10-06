@@ -53,7 +53,7 @@ run_locals(plan; repeats = 3) = StatefulAlgorithms.get_declared_locals(run(Inlin
     @test run_locals(CompositeAlgorithm(Callable(ex_bump, (:n,), :n => Int), (1,), Local(n = 0))).n == 3
     @test_throws TypeError run(InlineProcess(CompositeAlgorithm(Callable(ex_bump, (:n,), :n => Float64), (1,), Local(n = 0)); repeats = 1))
 
-    # The output of one call is readable by a later one without a declaration (shared `_declared_outputs` bucket).
+    # The output of one call is readable by a later one without a declaration (shared `_captured_returns` bucket).
     plan = CompositeAlgorithm(Callable(ex_bump, (:n,), :m), Callable(ex_bump, (:m,), :n), (1, 1), Local(n = 0))
     @test run_locals(plan).n == 6
 end
@@ -62,7 +62,7 @@ end
     @test typeof(Callable(ex_bump, (:n,), :n)) === typeof(Callable(ex_bump, (:n,), :n))
     plan = CompositeAlgorithm(ExSensor, Callable(ex_bump, (:n,), :n), (1, 1), Local(n = 0))
     resolved = resolve(plan)
-    @test StatefulAlgorithms.plan_child_namespace(resolved, 2) === :_declared_outputs
+    @test StatefulAlgorithms.plan_child_namespace(resolved, 2) === :_captured_returns
     @test keys(StatefulAlgorithms.get_subcontexts(StatefulAlgorithms.ProcessContext(resolved))) == (:ExSensor_1,)
 
     # Zero allocations per step.

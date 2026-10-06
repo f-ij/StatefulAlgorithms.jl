@@ -112,8 +112,8 @@ Besides the stored (persistent) state, a run has values that are not stored with
 |---|---|---|
 | inputs (`@input`) | the run, read-only | kept |
 | declared locals (`local x`, `x = nothing`; `Local`) | the run | kept |
-| declared outputs (`y = f(x)`) | one step | dropped |
-| subcontext outputs (what an algorithm returns that is not its state) | one step | dropped |
+| captured returns (`y = f(x)`) | one step | dropped |
+| subcontext returns (what an algorithm returns that is not its state) | one step | dropped |
 
 A step reads them by name like its own variables. The process and the lifetime are not visible to steps; `init`
 gets the lifetime for sizing (`processsizehint!`). For selector syntax, see [Vars (`Var` Selectors)](@ref vars_user).

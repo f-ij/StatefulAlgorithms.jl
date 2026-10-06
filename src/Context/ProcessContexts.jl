@@ -32,7 +32,7 @@ end
     if haskey(subcontexts, name)
         return @inline getproperty(subcontexts, name)
     end
-    outputs = @inline get_declared_outputs(pc)
+    outputs = @inline get_captured_returns(pc)
     if haskey(outputs, name)
         return @inline getproperty(outputs, name)
     end
@@ -49,9 +49,9 @@ end
     return @inline _getindex_part(context_part(Val(name)), pc, name)
 end
 
-# `pc[:_declared_outputs]` and `pc[:_inputs]` give that part's values; any other name its subcontext.
+# `pc[:_captured_returns]` and `pc[:_inputs]` give that part's values; any other name its subcontext.
 @inline _getindex_part(::ContextPart, pc::ProcessContext, name::Symbol) = @inline getproperty(pc, name)
-@inline _getindex_part(part::Union{DeclaredOutputs, Inputs}, pc::ProcessContext, name::Symbol) = @inline get_part_data(pc, part)
+@inline _getindex_part(part::Union{CapturedReturns, Inputs}, pc::ProcessContext, name::Symbol) = @inline get_part_data(pc, part)
 
 @inline function Base.getindex(pc::ProcessContext, obj)
     reg = getregistry(pc)
@@ -80,10 +80,10 @@ end
     return haskey(subcontexts, part_name(part)) ? getdata(getproperty(subcontexts, part_name(part))) : (;)
 end
 
-"""The declared outputs in a runtime context: what statements (`y = f(x)`, calls) returned this step."""
-@inline get_declared_outputs(pc::ProcessContext) = @inline get_part_data(pc, DeclaredOutputs())
+"""The captured returns in a runtime context: what statements (`y = f(x)`, calls) returned this step."""
+@inline get_captured_returns(pc::ProcessContext) = @inline get_part_data(pc, CapturedReturns())
 
-@inline get_declared_outputs(pc::ProcessContext, name::Symbol) = getproperty(get_declared_outputs(pc), name)
+@inline get_captured_returns(pc::ProcessContext, name::Symbol) = getproperty(get_captured_returns(pc), name)
 
 """Return the runtime-input bucket stored in a runtime context."""
 @inline get_inputs(pc::ProcessContext) = @inline get_part_data(pc, Inputs())
@@ -91,10 +91,10 @@ end
 @inline get_inputs(pc::ProcessContext, name::Symbol) = getproperty(get_inputs(pc), name)
 
 """
-The subcontext outputs in a runtime context: per namespace, what its algorithm returned this step that is not its
+The subcontext returns in a runtime context: per namespace, what its algorithm returned this step that is not its
 state, as `(; Sensor_1 = (; extra = ...), ...)`.
 """
-@inline get_subcontext_outputs(pc::ProcessContext) = @inline get_part_data(pc, SubcontextOutputs())
+@inline get_subcontext_returns(pc::ProcessContext) = @inline get_part_data(pc, SubcontextReturns())
 
 """Return the declared loop-local variables (`Local`) held in a runtime or paused context."""
 @inline get_declared_locals(pc::ProcessContext) = @inline get_part_data(pc, DeclaredLocals())
@@ -115,16 +115,16 @@ Return an immutable `ProcessContext` rebuild with updated subcontexts.
     return ProcessContext(subcontexts, registryref(pc))
 end
 
-"""A runtime part as `(name, data expression)` pairs for the final projection: subcontext outputs per namespace."""
+"""A runtime part as `(name, data expression)` pairs for the final projection: subcontext returns per namespace."""
 _final_parts(::ContextPart, name::Symbol, ::Type) = [(name, :(getdata(getproperty(runtime_subcontexts, $(QuoteNode(name))))))]
-_final_parts(part::SubcontextOutputs, name::Symbol, ::Type{T}) where {T} =
+_final_parts(part::SubcontextReturns, name::Symbol, ::Type{T}) where {T} =
     [(owner, :(getproperty(getdata(getproperty(runtime_subcontexts, $(QuoteNode(name)))), $(QuoteNode(owner))))) for owner in fieldnames(T)]
 
 """
     visible_context(lc::LoopContext)   (ContextBundles.jl)
 
 Everything a loop holds at its end, as one `ProcessContext` to read from: the stored subcontexts with each namespace's
-outputs merged in, and the runtime parts (declared outputs, inputs, declared locals) as subcontexts. What `finalstep`
+outputs merged in, and the runtime parts (captured returns, inputs, declared locals) as subcontexts. What `finalstep`
 gets. Only a projection: the stored context stays what the loop stores.
 """
 @inline @generated function _visible_context(context::C, runtimecontext::RC) where {C<:ProcessContext,RC<:ProcessContext}
@@ -213,11 +213,11 @@ end
 end
 
 """
-Merge values into the declared outputs of a runtime context.
+Merge values into the captured returns of a runtime context.
 """
-@inline function _merge_into_declared_outputs(pc::ProcessContext, args::NamedTuple)
-    runtime = @inline _merge_slots(get_declared_outputs(pc), args)
-    return @inline with_subcontext(pc, Val(:_declared_outputs), SubContext{:_declared_outputs}(runtime))
+@inline function _merge_into_captured_returns(pc::ProcessContext, args::NamedTuple)
+    runtime = @inline _merge_slots(get_captured_returns(pc), args)
+    return @inline with_subcontext(pc, Val(:_captured_returns), SubContext{:_captured_returns}(runtime))
 end
 
 """
@@ -240,7 +240,7 @@ end
 
 @inline merge_runtime_return(context::C, ::Nothing) where {C<:ProcessContext} = context
 @inline merge_runtime_return(context::C, retval::R) where {C<:ProcessContext,R<:NamedTuple} =
-    @inline _merge_into_declared_outputs(context, retval)
+    @inline _merge_into_captured_returns(context, retval)
 
 function merge_runtime_return(context::C, retval::R) where {C<:ProcessContext,R}
     error("Runtime-owned step returns must be named tuples or `nothing`, got $(typeof(retval)).")
@@ -251,17 +251,17 @@ end
     return runtimecontext
 end
 
-"""A namespace's outputs (`owner` is its key): stored under it in `_subcontext_outputs`."""
+"""A namespace's outputs (`owner` is its key): stored under it in `_subcontext_returns`."""
 @inline function merge_owner_runtime_return(runtimecontext::C, ::Val{owner}, args::A) where {C<:ProcessContext,owner,A<:NamedTuple}
-    outputs = @inline get_subcontext_outputs(runtimecontext)
+    outputs = @inline get_subcontext_returns(runtimecontext)
     old_data = haskey(outputs, owner) ? getproperty(outputs, owner) : (;)
     new_outputs = @inline merge(outputs, NamedTuple{(owner,)}(((@inline _merge_slots(old_data, args)),)))
-    return @inline with_subcontext(runtimecontext, Val(:_subcontext_outputs), SubContext{:_subcontext_outputs}(new_outputs))
+    return @inline with_subcontext(runtimecontext, Val(:_subcontext_returns), SubContext{:_subcontext_returns}(new_outputs))
 end
 
-"""Declared outputs (what statements and calls return)."""
-@inline merge_owner_runtime_return(runtimecontext::C, ::Val{:_declared_outputs}, args::A) where {C<:ProcessContext,A<:NamedTuple} =
-    @inline _merge_into_declared_outputs(runtimecontext, args)
+"""Captured returns (what statements and calls return)."""
+@inline merge_owner_runtime_return(runtimecontext::C, ::Val{:_captured_returns}, args::A) where {C<:ProcessContext,A<:NamedTuple} =
+    @inline _merge_into_captured_returns(runtimecontext, args)
 
 """Declared locals keep their declared field types when written."""
 @inline function merge_owner_runtime_return(runtimecontext::C, ::Val{:_declared_locals}, args::A) where {C<:ProcessContext,A<:NamedTuple}

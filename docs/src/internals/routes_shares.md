@@ -89,7 +89,7 @@ When creating `SubContextView` locations (`src/Context/View/Locations.jl`):
 
 Shared fields and routes from persistent entity subcontexts become
 `VarLocation{:subcontext}` entries. Routes whose source is `:_inputs` or
-`:_declared_outputs` become `VarLocation{:runtime}` entries and read from the separate
+`:_captured_returns` become `VarLocation{:runtime}` entries and read from the separate
 loop-local runtime context. Replacement-backed locals retain the location kind
 of their stored backing location.
 
