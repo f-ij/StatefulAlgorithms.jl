@@ -26,4 +26,5 @@ using StatefulAlgorithms
     include("ContextAnalyzerTest.jl")
     include("InspectionTest.jl")
     include("SavingTest.jl")
+    include("ContextDeltaTest.jl")
 end
