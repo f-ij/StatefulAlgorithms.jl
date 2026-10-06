@@ -71,6 +71,7 @@ Each was reproduced in the September 2026 code review unless marked *(unverified
 ## Tools and persistence
 - [ ] `src/Tools.jl:184`: `est_remaining` throws when `progress == 0.0` (inline TODO).
 - [ ] `src/Tools.jl:176`: `progress()` reports 0.0 once a completed process is closed *(unverified)*.
+- [ ] `src/Tools.jl`: `closeprocess(c)` was meant to close the process from inside a step through `_runtime.process`; it never worked (`getglobals` on a process), and steps no longer see the process at all (see `_initial_runtime_context`). Remove it, or give steps a stop request instead.
 
 ## Packaging and threaded composites
 - [ ] `src/Packaging/StructDef.jl:19`: `Package` keeps a mutable schedule counter in the algorithm value, shared by every process using it.

@@ -252,7 +252,6 @@ end
 
 @inline _has_typed_runtime_context(p::P) where {P<:Process} = isnothing(p.runtime_context)
 @inline _typed_runtime_context(p::P) where {P<:Process} = getstoredcontext(getalgo(p))
-@inline _context_lifetime(context) = get(getglobals(context), :lifetime, Indefinite())
 
 function getcontext(p::Process)
     return context(p)
