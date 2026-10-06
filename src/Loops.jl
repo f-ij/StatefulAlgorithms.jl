@@ -17,15 +17,22 @@ Run cleanup and the final result projection while the loop-local runtime context
 is still visible. The runtime context is intentionally not returned.
 """
 @inline function finalizer!(func::F, context::C, runtimecontext::RC, process::P, lifetime::LT) where {F,C<:ProcessContext,RC<:ProcessContext,P<:AbstractProcess,LT<:Lifetime}
-    runtimecontext = @inline _merge_into_globals(runtimecontext, (; process, lifetime))
     cleaned_context, cleaned_runtimecontext = @inline cleanup(func, context, runtimecontext)
     final_context = @inline final_visible_context(cleaned_context, cleaned_runtimecontext)
     return cleaned_context, (@inline _loop_final_result(func, final_context, cleaned_runtimecontext))
 end
 
-"""Build the loop-local runtime context for one execution: globals, runtime inputs and declared locals."""
-@inline function _initial_runtime_context(inputs::NamedTuple, process::P, lifetime::LT, locals::NamedTuple = (;)) where {P<:AbstractProcess,LT<:Lifetime}
-    runtime = @inline _merge_into_globals(_empty_context(), (; process, lifetime))
+"""
+Build the runtime context for one run: its inputs (`_input`) and declared locals (`_local`). Step values (`_runtime`)
+are added by the steps.
+
+The process and the lifetime are not in it: no step read them (they were in `_runtime` until 2026-10). Init still gets
+the lifetime, for sizing (`_init_runtime_context`, `processsizehint!`). To give steps loop information again (step
+index, total steps, elapsed time, a stop request), add narrow read-only values here rather than the `Process` object,
+which would tie step code to the process type; most of those uses belong in the plan (schedules, lifetimes) instead.
+"""
+@inline function _initial_runtime_context(inputs::NamedTuple, locals::NamedTuple = (;))
+    runtime = @inline _empty_context()
     runtime = isempty(inputs) ? runtime : @inline with_subcontext(runtime, Val(:_input), SubContext{:_input}(inputs))
     return isempty(locals) ? runtime : @inline with_subcontext(runtime, Val(:_local), SubContext{:_local}(locals))
 end
@@ -52,12 +59,12 @@ end
 @inline _loop_state_context(stored_context::C, ::Resuming{true}) where {C<:ProcessContext} = @inline _paused_state_context(stored_context)
 
 @inline function _loop_runtime_context(algo::F, inputs::NamedTuple, process::P, lifetime::LT, stored_context::C, ::Resuming{false}) where {F,P<:AbstractProcess,LT<:Lifetime,C<:ProcessContext}
-    return @inline _initial_runtime_context(inputs, process, lifetime, declared_locals(algo))
+    return @inline _initial_runtime_context(inputs, declared_locals(algo))
 end
 
 @inline function _loop_runtime_context(algo::F, inputs::NamedTuple, process::P, lifetime::LT, stored_context::C, ::Resuming{true}) where {F,P<:AbstractProcess,LT<:Lifetime,C<:ProcessContext}
     runtime_inputs = @inline getruntimeinput(stored_context)
-    return @inline _initial_runtime_context(runtime_inputs, process, lifetime, getlocals(stored_context))
+    return @inline _initial_runtime_context(runtime_inputs, getlocals(stored_context))
 end
 
 """Return whether this loop exit is a pause rather than a final completion."""

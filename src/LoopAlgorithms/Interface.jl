@@ -156,7 +156,7 @@ then enters the same `_step!` chain used by `run`.
     process = LoopRunProcess(lifetime)
     plan = @inline getplan(la)
     cursor = @inline loop_cursor(plan, Val(false))
-    runtimecontext = @inline _merge_into_globals(_empty_context(), (; lifetime))
+    runtimecontext = @inline _empty_context()
     newcontext, _ = @inline _step!(plan, cursor, context, runtimecontext, PlanWiringView(getwiring(plan)), Namespace{nothing}(), process, lifetime)
     return newcontext
 end

@@ -8,11 +8,8 @@ view_sharedvars(scv::Union{SubContextView{CType, SubKey, RuntimeCType, T, NT, Al
 
 @inline this_instance(scv::SubContextView) = getfield(scv, :instance)
 
-"""Return the lifetime carried by the active view runtime frame."""
+"""The lifetime in the view's runtime context: only during init (see `_init_runtime_context`), for sizing."""
 @inline view_lifetime(scv::SubContextView) = getproperty(getglobals(getruntimecontext(scv)), :lifetime)
-
-"""Return the process carried by the active view runtime frame."""
-@inline view_process(scv::SubContextView) = getproperty(getglobals(getruntimecontext(scv)), :process)
 
 """Return the scheduled call multiplier for this view's owner."""
 @inline view_multiplier(scv::SubContextView) = getmultiplier(scv, this_instance(scv))
