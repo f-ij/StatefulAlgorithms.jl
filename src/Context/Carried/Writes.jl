@@ -60,16 +60,20 @@ The runtime context type after `_step!(node, ...)` given the type `RC` before it
 may not run (a child on an interval). `Any` when inference cannot tell.
 """
 @inline function _runtime_after(node::A, cursor::S, context::C, ::Type{RC}, wiring::W, namespace::N, process::P, lifetime::LT) where {A,S,C,RC,W,N,P,LT}
-    return Union{RC, _returned_runtime(Core.Compiler.return_type(_step!, Tuple{A,S,C,RC,W,N,P,LT}))}
+    RC <: ProcessContext || return Any
+    return Union{RC, _returned_runtime(Core.Compiler.return_type(_step!, Tuple{A,S,_loop_context_type(C, RC),W,N,P,LT}))}
 end
 
-"""The runtime context type in the `(context, runtimecontext)` types `rt`; `Any` for anything else."""
+"""The `LoopContext` types for stored type `C` and runtime type(s) `RC` (one per type of a `Union`)."""
+Base.@assume_effects :foldable _loop_context_type(@nospecialize(C), @nospecialize(RC)) = Union{(LoopContext{C, R} for R in Base.uniontypes(RC))...}
+
+"""The runtime context type in the `LoopContext` types `rt` a step returns; `Any` for anything else."""
 Base.@assume_effects :foldable function _returned_runtime(@nospecialize(rt))
     rt === Union{} && return Union{}
     runtime = Union{}
     for T in Base.uniontypes(rt)
-        (T isa DataType && T <: Tuple && length(T.parameters) == 2) || return Any
-        runtime = Union{runtime, T.parameters[2]}
+        (T isa DataType && T <: LoopContext) || return Any
+        runtime = Union{runtime, runtime_type(T)}
     end
     return runtime
 end

@@ -86,7 +86,7 @@ end
 
 """The runtime context type after one plan step from `R` (see `_next_runtime_type`)."""
 @inline _widen_runtime(::Type{R}, plan::PL, cursor::CU, context::C, wiring::W, process::P, lifetime::LT) where {R, PL, CU, C, W, P, LT} =
-    _next_runtime_type(R, Core.Compiler.return_type(_probe_step, Tuple{PL, CU, C, R, W, P, LT}))
+    _next_runtime_type(R, Core.Compiler.return_type(_probe_step, Tuple{PL, CU, LoopContext{C, R}, W, P, LT}))
 
 """Whether the declared locals of two runtime context types have the same types."""
 _same_locals(::Type{A}, ::Type{B}) where {A, B} = _local_data_type(A) === _local_data_type(B)

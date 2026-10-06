@@ -2,59 +2,53 @@
 Set up an empty ProcessContext for a LoopAlgorithm with given shared specifications
 Inputargs are given as a NamedTuple of (;algo_name => (; inputname1 = value1, ...), ...)
 """
-@inline function init(sa::IA, inputcontext::C, runtimecontext::RC) where {IA<:IdentifiableAlgo,C<:ProcessContext,RC<:ProcessContext}
+@inline function init(sa::IA, ic::I) where {IA<:IdentifiableAlgo,I<:InitContext}
     name = getkey(sa)
-    inputcontext = merge_into_subcontexts(inputcontext, (;name => (;_instance = sa)))
-    inputview = @inline view(inputcontext, runtimecontext, sa)
+    inputcontext = merge_into_subcontexts(getcontext(ic), (;name => (;_instance = sa)))
+    inputview = @inline view(withstored(ic, inputcontext), sa)
     prepared = @inline init(getalgo(sa), inputview)
     return @inline replace(inputcontext, (;name => prepared))
 end
 
-@inline function cleanup(sa::IA, context::C, runtimecontext::RC) where {IA<:IdentifiableAlgo,C<:ProcessContext,RC<:ProcessContext}
-    contextview = view(context, runtimecontext, sa)
+@inline function cleanup(sa::IA, lc::L) where {IA<:IdentifiableAlgo,L<:LoopContext}
+    contextview = view(lc, sa)
     cleanup_args = @inline cleanup(getalgo(sa), contextview)
     return @inline merge(contextview, cleanup_args)
 end
 
-@inline function init(algo::A, context::C, runtimecontext::RC) where {A<:ProcessAlgorithm,C<:ProcessContext,RC<:ProcessContext}
-    return @inline init(algo, context)
+@inline function init(algo::A, ic::I) where {A<:ProcessAlgorithm,I<:InitContext}
+    return @inline init(algo, getcontext(ic))
 end
 
-@inline function cleanup(algo::A, context::C, runtimecontext::RC) where {A<:ProcessAlgorithm,C<:ProcessContext,RC<:ProcessContext}
-    cleaned = @inline cleanup(algo, context)
-    return cleaned, runtimecontext
+@inline function cleanup(algo::A, lc::L) where {A<:ProcessAlgorithm,L<:LoopContext}
+    cleaned = @inline cleanup(algo, getcontext(lc))
+    return @inline withstored(lc, cleaned)
 end
 
 function init(algos::LA, inputcontext::C) where {LA<:LoopSpec,C<:AbstractContext}
-    runtimecontext = @inline _empty_context()
-    return @inline init(algos, inputcontext, runtimecontext)
+    return @inline init(algos, InitContext(inputcontext, algos, Indefinite()))
 end
 
-function init(algos::LA, inputcontext::C, runtimecontext::RC) where {LA<:LoopSpec,C<:ProcessContext,RC<:ProcessContext}
-    registry = @inline getregistry(inputcontext)
-    named_algos = @inline all_algos(registry)
-
-    context = @inline unrollreplace_withargs(inputcontext, named_algos; args = (runtimecontext,)) do context, named_algo, runtimecontext
-        @inline init(named_algo, context, runtimecontext)
+"""The stored context that init of every registered algorithm and state builds from `ic`'s stored context."""
+function init(algos::LA, ic::I) where {LA<:LoopSpec,I<:InitContext}
+    named_algos = @inline all_algos(getregistry(ic))
+    initialized = @inline unrollreplace(ic, named_algos) do ic, named_algo
+        @inline withstored(ic, init(named_algo, ic))
     end
-
-    return context
+    return @inline getcontext(initialized)
 end
 
 function cleanup(algos::LA, context) where {LA<:LoopSpec}
-    runtimecontext = @inline _empty_context()
-    context, _ = @inline cleanup(algos, context, runtimecontext)
-    return context
+    return @inline getcontext(cleanup(algos, LoopContext(context, _empty_context())))
 end
 
-function cleanup(algos::LA, context::C, runtimecontext::RC) where {LA<:LoopSpec,C<:ProcessContext,RC<:ProcessContext}
-    registry = getregistry(context)
-    named_algos = all_algos(registry)
+function cleanup(algos::LA, lc::L) where {LA<:LoopSpec,L<:LoopContext}
+    named_algos = all_algos(getregistry(lc))
 
     # Keep cleanup on the same statically unrolled path as init. A runtime loop
-    # over heterogeneous registered algorithms boxes the returned context tuple.
-    return @inline unrollreplace((context, runtimecontext), named_algos) do state, named_algo
-        @inline cleanup(named_algo, getfield(state, 1), getfield(state, 2))
+    # over heterogeneous registered algorithms boxes the returned context.
+    return @inline unrollreplace(lc, named_algos) do lc, named_algo
+        @inline cleanup(named_algo, lc)
     end
 end
 

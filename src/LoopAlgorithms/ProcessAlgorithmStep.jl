@@ -15,33 +15,31 @@ through that view.
 @inline function _step!(
     algo::A,
     ::NoLoopCursor,
-    context::C,
-    runtimecontext::RC,
+    lc::L,
     wiring::W,
     namespace::Namespace{Name},
     process::P,
     lifetime::LT,
-) where {A<:ProcessAlgorithm,C<:AbstractContext,RC<:AbstractContext,W<:PlanWiringView,Name,P<:AbstractProcess,LT<:Lifetime}
-    return @inline _step!(algo, context, runtimecontext, wiring, namespace, process, lifetime)
+) where {A<:ProcessAlgorithm,L<:LoopContext,W<:PlanWiringView,Name,P<:AbstractProcess,LT<:Lifetime}
+    return @inline _step!(algo, lc, wiring, namespace, process, lifetime)
 end
 
 @inline function _step!(
     algo::A,
-    context::C,
-    runtimecontext::RC,
+    lc::L,
     wiring::W,
     namespace::Namespace{Name},
     process::P,
     lifetime::LT,
-) where {A<:ProcessAlgorithm,C<:AbstractContext,RC<:AbstractContext,W<:PlanWiringView,Name,P<:AbstractProcess,LT<:Lifetime}
-    contextview = @inline _leaf_view(algo, context, runtimecontext, wiring, namespace)
+) where {A<:ProcessAlgorithm,L<:LoopContext,W<:PlanWiringView,Name,P<:AbstractProcess,LT<:Lifetime}
+    contextview = @inline _leaf_view(algo, lc, wiring, namespace)
     retval = @inline step!(algo, contextview)
     return @inline _merge_step_return(contextview, retval, wiring, namespace)
 end
 
 """The view a leaf step gets at its position in the plan: its namespace, and the shares and routes of its wiring."""
-@inline _leaf_view(algo::A, context::C, runtimecontext::RC, wiring::W, namespace::N) where {A,C,RC,W<:PlanWiringView,N<:Namespace} =
-    @inline view(context, runtimecontext, algo, namespace; sharedcontexts = (@inline shares(wiring)), sharedvars = (@inline routes(wiring)))
+@inline _leaf_view(algo::A, lc::L, wiring::W, namespace::N) where {A,L<:LoopContext,W<:PlanWiringView,N<:Namespace} =
+    @inline view(lc, algo, namespace; sharedcontexts = (@inline shares(wiring)), sharedvars = (@inline routes(wiring)))
 
 # The persistent fields a leaf writes (see src/Context/Carried/Writes.jl).
 @inline _writes(algo::A, ::NoLoopCursor, context::C, ::Type{RC}, wiring::W, namespace::N, process::P, lifetime::LT) where {A<:ProcessAlgorithm,C<:ProcessContext,RC,W,N,P,LT} =
@@ -49,14 +47,14 @@ end
 
 """The persistent fields one step of a leaf can write: those of the payload its merge writes, read off its type."""
 @inline _leaf_writes(algo::A, context::C, ::Type{RC}, wiring::W, namespace::N) where {A,C<:ProcessContext,RC,W,N} =
-    _payload_writes(Core.Compiler.return_type(_leaf_payload, Tuple{A,C,RC,W,N}), C)
+    RC <: ProcessContext ? _payload_writes(Core.Compiler.return_type(_leaf_payload, Tuple{A,_loop_context_type(C, RC),W,N}), C) : _every_field(C)
 
 """
 What one step of a leaf writes into the persistent context (see `_merge_payload`), built from the same pieces as its
 `_step!`. Only its type is used.
 """
-@inline function _leaf_payload(algo::A, context::C, runtimecontext::RC, wiring::W, namespace::N) where {A,C,RC,W,N}
-    contextview = @inline _leaf_view(algo, context, runtimecontext, wiring, namespace)
+@inline function _leaf_payload(algo::A, lc::L, wiring::W, namespace::N) where {A,L,W,N}
+    contextview = @inline _leaf_view(algo, lc, wiring, namespace)
     return @inline _step_payload(contextview, (@inline step!(algo, contextview)), wiring, namespace)
 end
 
@@ -74,18 +72,18 @@ the current plan wiring.
 """
 @inline function _step!(
     algo::A,
-    context::C,
-    runtimecontext::RC,
+    lc::L,
     wiring::W,
     process::P,
     lifetime::LT,
-) where {A<:ProcessAlgorithm,C<:AbstractContext,RC<:AbstractContext,W<:PlanWiringView,P<:AbstractProcess,LT<:Lifetime}
+) where {A<:ProcessAlgorithm,L<:LoopContext,W<:PlanWiringView,P<:AbstractProcess,LT<:Lifetime}
+    context = @inline getcontext(lc)
     retval = @inline step!(algo, context)
     runtimecontext = @inline merge_owner_runtime_return(
-        runtimecontext,
+        (@inline getruntimecontext(lc)),
         Val(:_declared_outputs),
         retval,
         return_demand(wiring, Namespace{:_declared_outputs}()),
     )
-    return context, runtimecontext
+    return LoopContext(context, runtimecontext)
 end

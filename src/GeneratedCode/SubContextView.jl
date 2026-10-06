@@ -3,9 +3,8 @@
 _writable_runtime(::DeclaredLocals, target::Symbol, own::Symbol) = true
 _writable_runtime(::ContextPart, target::Symbol, own::Symbol) = target === own
 
-@inline function Base.merge(scv::SubContextView{CType, SubKey}, ::Nothing) where {CType<:ProcessContext, SubKey}
-    return (@inline getcontext(scv)), (@inline getruntimecontext(scv))
-end
+"""A step that returns `nothing` changes nothing: the view's bundle as it was."""
+@inline Base.merge(scv::SubContextView, ::Nothing) = @inline getbundle(scv)
 
 function _subcontext_view_mergetuple_expr(SCV::Type, Args::Type)
     @nospecialize SCV Args
@@ -147,7 +146,7 @@ function _subcontext_view_writeback_field_expr(target_subcontext::Symbol, target
 end
 
 """Merge with every non-state return field demanded."""
-@inline function Base.merge(scv::SubContextView{CType, SubKey}, args::NamedTuple) where {CType<:ProcessContext, SubKey}
+@inline function Base.merge(scv::SubContextView{B, SubKey}, args::NamedTuple) where {B<:ContextBundle, SubKey}
     return @inline merge(scv, args, ReturnDemand{fieldnames(typeof(args))}())
 end
 
@@ -156,15 +155,16 @@ end
 
 What `merge(scv, args, demand)` writes into the persistent context, as `(; subcontext = (; field = value, ...), ...)`.
 """
-@inline @generated function _merge_payload(scv::SubContextView{CType, SubKey}, args::NamedTuple, demand::ReturnDemand{Names}) where {CType<:ProcessContext, SubKey, Names}
+@inline @generated function _merge_payload(scv::SubContextView{B, SubKey}, args::NamedTuple, demand::ReturnDemand{Names}) where {B<:ContextBundle, SubKey, Names}
     mergetuple_expr, _ = _subcontext_view_merge_exprs(scv, args, Names)
     return mergetuple_expr
 end
 
 """
-Merge a step/init/cleanup return into persistent state and loop-local runtime state.
+Merge a step/init/cleanup return into the view's bundle: state into the stored context, runtime values (declared locals,
+outputs) into the runtime context. Returns the new bundle.
 """
-@inline @generated function Base.merge(scv::SubContextView{CType, SubKey}, args::NamedTuple, demand::ReturnDemand{Names}) where {CType<:ProcessContext, SubKey, Names}
+@inline @generated function Base.merge(scv::SubContextView{B, SubKey}, args::NamedTuple, demand::ReturnDemand{Names}) where {B<:ContextBundle, SubKey, Names}
     _, runtimetuple_expr = _subcontext_view_merge_exprs(scv, args, Names)
 
     # Return the expression that does the merge
@@ -174,8 +174,7 @@ Merge a step/init/cleanup return into persistent state and loop-local runtime st
         newcontext = merge_into_subcontexts(getcontext(scv), mergetuple)
         @assert typeof(newcontext) == typeof(getcontext(scv)) "A variable type in a subcontext was changed. This is prohibited for performance reasons.\nIf type mutation is needed, set the variable up as a Ref\n$(sprint(show, ContextTypeDiff(getcontext(scv), newcontext)))"
         runtimetuple = $runtimetuple_expr
-        newruntimecontext = @inline merge_runtime_subcontexts(getruntimecontext(scv), runtimetuple)
-        return newcontext, newruntimecontext
+        return @inline _rebundle(getbundle(scv), newcontext, runtimetuple)
     end
 end
 
@@ -185,7 +184,7 @@ Returns new context
 
 This is to be used during the init phase, where entire subcontexts are replaced
 """
-@inline @generated function Base.replace(scv::SubContextView{CType, SubKey}, args::NamedTuple) where {CType<:ProcessContext, SubKey}
+@inline @generated function Base.replace(scv::SubContextView{B, SubKey}, args::NamedTuple) where {B<:ContextBundle, SubKey}
     names = fieldnames(args)
     if any( n -> n != SubKey, names) # Static check that only the correct subcontext is being replaced
         error("Trying to replace subcontext $(n) from SubContextView $(SubKey), only $(SubKey) can be replaced")

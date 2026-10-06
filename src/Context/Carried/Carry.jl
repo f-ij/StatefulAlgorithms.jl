@@ -11,7 +11,8 @@ the next:
 
     carried = create_carried(...the _step! arguments...)
     for ...
-        stepped, runtimecontext = _step!(..., carried_context(context, carried), ...)
+        stepped_lc = _step!(..., LoopContext(carried_context(context, carried), runtimecontext), ...)
+        stepped, runtimecontext = getcontext(stepped_lc), getruntimecontext(stepped_lc)
         carried = next_carried(carried, stepped)
     end
     context = carried_context(context, carried)
@@ -21,13 +22,14 @@ those fields are found is hidden in `create_carried` (Writes.jl).
 =#
 
 """
-    create_carried(algo, cursor, context, runtimecontext, wiring, namespace, process, lifetime)
+    create_carried(algo, cursor, loopcontext, wiring, namespace, process, lifetime)
 
 What a loop that runs `_step!` with these arguments carries before its first step: the values in `context` of the
 fields the step can write, as `(; subcontext = (; field = value, ...), ...)` (all fields when those are not known).
 """
-@inline function create_carried(algo::A, cursor::S, context::C, runtimecontext::RC, wiring::W, namespace::N,
+@inline function create_carried(algo::A, cursor::S, lc::LoopContext{C, RC}, wiring::W, namespace::N,
                                 process::P, lifetime::LT) where {A,S,C<:ProcessContext,RC,W,N,P,LT}
+    context = @inline getcontext(lc)
     settled = @inline _runtime_fixed_point(algo, cursor, context, RC, wiring, namespace, process, lifetime)
     return @inline _written_values(context, (@inline _writes(algo, cursor, context, settled, wiring, namespace, process, lifetime)))
 end

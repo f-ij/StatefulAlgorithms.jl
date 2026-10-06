@@ -9,7 +9,7 @@ Step each scheduled child of a composite plan with explicit loop runtime.
 The `process` and `lifetime` values are forwarded so nested loop algorithms can
 run without storing those transient values in the context.
 """
-Base.@constprop :aggressive @inline @generated function _step!(ca::CA, cursor::S, context::C, runtimecontext::RC, wiring::W, namespace::N, process::P, lifetime::LT) where {CA <: CompositeAlgorithm, S<:Union{CompositeLoopCursor,FirstTickCursor}, C <: AbstractContext, RC <: ProcessContext, W <: PlanWiringView, N <: Namespace, P <: AbstractProcess, LT <: Lifetime}
+Base.@constprop :aggressive @inline @generated function _step!(ca::CA, cursor::S, lc::L, wiring::W, namespace::N, process::P, lifetime::LT) where {CA <: CompositeAlgorithm, S<:Union{CompositeLoopCursor,FirstTickCursor}, L <: LoopContext, W <: PlanWiringView, N <: Namespace, P <: AbstractProcess, LT <: Lifetime}
     algo_count = numalgos(CA)
     schedule_values = CA.parameters[2]
     child_namespace_tuple_type = CA.parameters[3]
@@ -26,18 +26,18 @@ Base.@constprop :aggressive @inline @generated function _step!(ca::CA, cursor::S
         schedule_value = schedule_values[i]
         child_namespace_type = fieldtype(child_namespace_tuple_type, i)
         push!(exprs, quote
-            if @inline should_run_schedule($schedule_value, this_inc, context)
+            if @inline should_run_schedule($schedule_value, this_inc, (@inline getcontext(lc)))
                 local algo = @inline getfield(algos, $i)
                 local child_cursor = @inline child_loop_cursor(cursor, Val($i))
                 local child_step_wiring = @inline child_wiring_view(wiring, Val($i))
                 local child_namespace = $child_namespace_type()
-                context, runtimecontext = @inline _step!(algo, child_cursor, context, runtimecontext, child_step_wiring, child_namespace, process, lifetime)
+                lc = @inline _step!(algo, child_cursor, lc, child_step_wiring, child_namespace, process, lifetime)
             end
         end)
     end
 
     push!(exprs, :(@inline inc!(cursor, ca)))
-    push!(exprs, :(return context, runtimecontext))
+    push!(exprs, :(return lc))
     return Expr(:block, exprs...)
 end
 
@@ -79,8 +79,7 @@ end
 
 """Step one lifetime-scheduled child inside a `Routine`."""
 @inline function _subroutine_step!(
-    context::C,
-    runtimecontext::RC,
+    lc::L,
     func::F,
     func_cursor::FS,
     r::R,
@@ -91,14 +90,17 @@ end
     subroutine_lifetime::SL,
     child_step_wiring::W,
     namespace::N,
-) where {C,RC<:ProcessContext,F,FS<:AbstractLoopCursor,R<:Routine,RS<:Union{DirectRoutineCursor,PausableRoutineCursor},P<:AbstractProcess,LT<:Lifetime,SL<:Lifetime,W,N<:Namespace}
+) where {L<:LoopContext,F,FS<:AbstractLoopCursor,R<:Routine,RS<:Union{DirectRoutineCursor,PausableRoutineCursor},P<:AbstractProcess,LT<:Lifetime,SL<:Lifetime,W,N<:Namespace}
     resume_point = @inline get_resume_point(routine_cursor, idx)
     this_repeat_count = @inline routine_repeat_count(subroutine_lifetime)
+    context = @inline getcontext(lc)
+    runtimecontext = @inline getruntimecontext(lc)
     if resume_point <= this_repeat_count
         # The repeats carry only the fields the child writes, as the loops do (see src/Context/Carried/Carry.jl); `context`
         # stays the routine's starting context.
-        carried = @inline create_carried(func, func_cursor, context, runtimecontext, child_step_wiring, namespace, process, lifetime)
-        stepped, runtimecontext = @inline _step!(func, func_cursor, (@inline carried_context(context, carried)), runtimecontext, child_step_wiring, namespace, process, lifetime)
+        carried = @inline create_carried(func, func_cursor, lc, child_step_wiring, namespace, process, lifetime)
+        stepped_lc = @inline _step!(func, func_cursor, LoopContext((@inline carried_context(context, carried)), runtimecontext), child_step_wiring, namespace, process, lifetime)
+        stepped, runtimecontext = (@inline getcontext(stepped_lc)), (@inline getruntimecontext(stepped_lc))
         carried = @inline next_carried(carried, stepped)
         @inline tick!(process)
 
@@ -107,7 +109,7 @@ end
             if !(@inline _routine_local_breakcondition(subroutine_lifetime, process, stepped, resume_point))
                 @inline set_resume_point!(routine_cursor, idx, next_idx)
             end
-            return (@inline carried_context(context, carried)), runtimecontext
+            return LoopContext((@inline carried_context(context, carried)), runtimecontext)
         end
 
         for lidx in next_idx:this_repeat_count
@@ -117,15 +119,16 @@ end
                 if !(@inline _routine_local_breakcondition(subroutine_lifetime, process, current, lidx))
                     @inline set_resume_point!(routine_cursor, idx, lidx)
                 end
-                return current, runtimecontext
+                return LoopContext(current, runtimecontext)
             end
-            stepped, runtimecontext = @inline _step!(func, func_cursor, (@inline carried_context(context, carried)), runtimecontext, child_step_wiring, namespace, process, lifetime)
+            stepped_lc = @inline _step!(func, func_cursor, LoopContext((@inline carried_context(context, carried)), runtimecontext), child_step_wiring, namespace, process, lifetime)
+            stepped, runtimecontext = (@inline getcontext(stepped_lc)), (@inline getruntimecontext(stepped_lc))
             carried = @inline next_carried(carried, stepped)
             @inline tick!(process)
         end
-        return (@inline carried_context(context, carried)), runtimecontext
+        return LoopContext((@inline carried_context(context, carried)), runtimecontext)
     end
-    return context, runtimecontext
+    return lc
 end
 
 """
@@ -133,8 +136,7 @@ Step a routine child that repeats once: the first repeat of `_subroutine_step!` 
 the loop, so the child's `_step!` is emitted once instead of twice.
 """
 @inline function _subroutine_step_once!(
-    context::C,
-    runtimecontext::RC,
+    lc::L,
     func::F,
     func_cursor::FS,
     r::R,
@@ -145,18 +147,19 @@ the loop, so the child's `_step!` is emitted once instead of twice.
     subroutine_lifetime::SL,
     child_step_wiring::W,
     namespace::N,
-) where {C,RC<:ProcessContext,F,FS<:AbstractLoopCursor,R<:Routine,RS<:Union{DirectRoutineCursor,PausableRoutineCursor},P<:AbstractProcess,LT<:Lifetime,SL<:Lifetime,W,N<:Namespace}
+) where {L<:LoopContext,F,FS<:AbstractLoopCursor,R<:Routine,RS<:Union{DirectRoutineCursor,PausableRoutineCursor},P<:AbstractProcess,LT<:Lifetime,SL<:Lifetime,W,N<:Namespace}
     resume_point = @inline get_resume_point(routine_cursor, idx)
     if resume_point <= 1
-        context, runtimecontext = @inline _step!(func, func_cursor, context, runtimecontext, child_step_wiring, namespace, process, lifetime)
+        lc = @inline _step!(func, func_cursor, lc, child_step_wiring, namespace, process, lifetime)
         @inline tick!(process)
+        context = @inline getcontext(lc)
         if @inline routine_breakcondition(subroutine_lifetime, lifetime, process, context, resume_point)
             if !(@inline _routine_local_breakcondition(subroutine_lifetime, process, context, resume_point))
                 @inline set_resume_point!(routine_cursor, idx, resume_point + 1)
             end
         end
     end
-    return context, runtimecontext
+    return lc
 end
 
 """
@@ -165,7 +168,7 @@ Step each child routine in sequence with explicit loop runtime.
 Each child is run once at its resume point, then repeated until its declared
 repeat count is reached or the lifetime stops.
 """
-Base.@constprop :aggressive @inline @generated function _step!(r::R, cursor::S, context::C, runtimecontext::RC, wiring::W, namespace::N, process::P, lifetime::LT) where {R <: Routine, S<:Union{DirectRoutineCursor,PausableRoutineCursor}, C <: AbstractContext, RC <: ProcessContext, W <: PlanWiringView, N <: Namespace, P <: AbstractProcess, LT <: Lifetime}
+Base.@constprop :aggressive @inline @generated function _step!(r::R, cursor::S, lc::L, wiring::W, namespace::N, process::P, lifetime::LT) where {R <: Routine, S<:Union{DirectRoutineCursor,PausableRoutineCursor}, L <: LoopContext, W <: PlanWiringView, N <: Namespace, P <: AbstractProcess, LT <: Lifetime}
     algo_count = numalgos(R)
     repeat_values = R.parameters[2]
     child_namespace_tuple_type = R.parameters[3]
@@ -184,10 +187,10 @@ Base.@constprop :aggressive @inline @generated function _step!(r::R, cursor::S, 
             local func_cursor = @inline child_loop_cursor(cursor, Val($i))
             local child_step_wiring = @inline child_wiring_view(wiring, Val($i))
             local child_namespace = $child_namespace_type()
-            context, runtimecontext = @inline $substep(context, runtimecontext, func, func_cursor, r, cursor, process, lifetime, $i, $repeat_value, child_step_wiring, child_namespace)
+            lc = @inline $substep(lc, func, func_cursor, r, cursor, process, lifetime, $i, $repeat_value, child_step_wiring, child_namespace)
         end)
     end
 
-    push!(exprs, :(return context, runtimecontext))
+    push!(exprs, :(return lc))
     return Expr(:block, exprs...)
 end

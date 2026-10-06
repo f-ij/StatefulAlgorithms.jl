@@ -49,23 +49,16 @@ Outputs whose names already resolve in the wrapper view are routed/shared/local
 writebacks and should be merged through `SubContextView`. New output names are
 DSL temporaries and remain in `ProcessContext._declared_outputs` for later statements.
 """
-@inline @generated function merge_call_return(
-    contextview::SCV,
-    context::C,
-    runtimecontext::RC,
-    retval::R,
-    ) where {SCV<:SubContextView, C<:ProcessContext, RC<:ProcessContext, R<:NamedTuple}
+@inline @generated function merge_call_return(contextview::SCV, retval::R) where {SCV<:SubContextView, R<:NamedTuple}
     demand_type = ReturnDemand{fieldnames(R)}
-    return :(merge_call_return(contextview, context, runtimecontext, retval, $demand_type()))
+    return :(merge_call_return(contextview, retval, $demand_type()))
 end
 
 @inline @generated function merge_call_return(
     contextview::SCV,
-    context::C,
-    runtimecontext::RC,
     retval::R,
     demand::ReturnDemand{DemandNames},
-) where {SCV<:SubContextView, C<:ProcessContext, RC<:ProcessContext, R<:NamedTuple, DemandNames}
+) where {SCV<:SubContextView, R<:NamedTuple, DemandNames}
     view_names, runtime_names = _call_return_names(SCV, R, DemandNames)
 
     view_expr = Expr(:tuple, Expr(:parameters, (
@@ -77,21 +70,13 @@ end
         for name in runtime_names
     )...))
 
-    view_merge_expr = if isempty(view_names)
-        :((context, runtimecontext))
-    else
-        :(@inline merge(contextview, $view_expr))
-    end
-
-    runtime_merge_expr = if isempty(runtime_names)
-        :(merged_context, merged_runtimecontext)
-    else
-        :(merged_context, (@inline merge_runtime_return(merged_runtimecontext, $runtime_expr)))
-    end
+    view_merge_expr = isempty(view_names) ? :(@inline getbundle(contextview)) : :(@inline merge(contextview, $view_expr))
+    runtime_merge_expr = isempty(runtime_names) ? :merged :
+        :(LoopContext((@inline getcontext(merged)), (@inline merge_runtime_return(getruntimecontext(merged), $runtime_expr))))
 
     return quote
         $(LineNumberNode(@__LINE__, @__FILE__))
-        merged_context, merged_runtimecontext = $view_merge_expr
+        merged = $view_merge_expr
         return $runtime_merge_expr
     end
 end
@@ -99,8 +84,8 @@ end
 """
 Treat a call with no return value as a pure side-effecting step.
 """
-@inline merge_call_return(contextview::SCV, context::C, runtimecontext::RC, ::Nothing) where {SCV<:SubContextView, C<:ProcessContext, RC<:ProcessContext} = context, runtimecontext
-@inline merge_call_return(contextview::SCV, context::C, runtimecontext::RC, ::Nothing, demand::ReturnDemand) where {SCV<:SubContextView, C<:ProcessContext, RC<:ProcessContext} = context, runtimecontext
+@inline merge_call_return(contextview::SCV, ::Nothing) where {SCV<:SubContextView} = @inline getbundle(contextview)
+@inline merge_call_return(contextview::SCV, ::Nothing, demand::ReturnDemand) where {SCV<:SubContextView} = @inline getbundle(contextview)
 
 """
     Literal(x)
@@ -260,17 +245,17 @@ callable_reads(funcs::Tuple) = Tuple(unique(Symbol[n for f in funcs for n in cal
 @inline cleanup(::Callable, context) = (;)
 
 """Step a `Callable` child: view the context from the shared `_declared_outputs` namespace, call, merge the returns."""
-@inline function _step!(ex::EX, context::C, runtimecontext::RC, wiring::W, namespace::Namespace, process::P, lifetime::LT) where {EX<:Callable, C<:AbstractContext, RC<:ProcessContext, W<:PlanWiringView, P<:AbstractProcess, LT<:Lifetime}
-    contextview = @inline _leaf_view(ex, context, runtimecontext, wiring, Namespace{:_declared_outputs}())
+@inline function _step!(ex::EX, lc::L, wiring::W, namespace::Namespace, process::P, lifetime::LT) where {EX<:Callable, L<:LoopContext, W<:PlanWiringView, P<:AbstractProcess, LT<:Lifetime}
+    contextview = @inline _leaf_view(ex, lc, wiring, Namespace{:_declared_outputs}())
     retval = @inline step!(ex, contextview)
-    return @inline merge_call_return(contextview, context, runtimecontext, retval, return_demand(wiring, Namespace{:_declared_outputs}()))
+    return @inline merge_call_return(contextview, retval, return_demand(wiring, Namespace{:_declared_outputs}()))
 end
-@inline _step!(ex::EX, context::C, runtimecontext::RC, wiring::W, process::P, lifetime::LT) where {EX<:Callable, C<:AbstractContext, RC<:ProcessContext, W<:PlanWiringView, P<:AbstractProcess, LT<:Lifetime} =
-    @inline _step!(ex, context, runtimecontext, wiring, Namespace{:_declared_outputs}(), process, lifetime)
+@inline _step!(ex::EX, lc::L, wiring::W, process::P, lifetime::LT) where {EX<:Callable, L<:LoopContext, W<:PlanWiringView, P<:AbstractProcess, LT<:Lifetime} =
+    @inline _step!(ex, lc, wiring, Namespace{:_declared_outputs}(), process, lifetime)
 
 # The persistent fields a `Callable` writes (see src/Context/Carried/Writes.jl): its view-visible returns.
-@inline function _leaf_payload(ex::EX, context::C, runtimecontext::RC, wiring::W, namespace::N) where {EX<:Callable,C,RC,W,N}
-    contextview = @inline _leaf_view(ex, context, runtimecontext, wiring, Namespace{:_declared_outputs}())
+@inline function _leaf_payload(ex::EX, lc::L, wiring::W, namespace::N) where {EX<:Callable,L,W,N}
+    contextview = @inline _leaf_view(ex, lc, wiring, Namespace{:_declared_outputs}())
     return @inline _call_payload(contextview, (@inline step!(ex, contextview)))
 end
 

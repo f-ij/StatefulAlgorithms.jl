@@ -221,15 +221,13 @@ end
 """
 Build the persistent context for an initialized loop algorithm.
 
-Lifecycle init runs with a separate runtime frame carrying `algo` and
-`lifetime`. Only the persistent state side is stored on the initialized
-algorithm.
+Init runs on an `InitContext`, which also carries `algo` and `lifetime`.
+Only the persistent state is stored on the initialized algorithm.
 """
 @inline function _init_context_for(la::LA, inits::I, overrides::O, lifetime::LT) where {LA<:AbstractLoopAlgorithm, I<:Tuple, O<:Tuple, LT}
     empty_context = _build_process_context(getregistry(la))
     input_context = isempty(inits) ? empty_context : merge_into_subcontexts(empty_context, construct_context_merge_tuples(inits))
-    runtime_context = @inline _init_runtime_context(la, lifetime)
-    prepared = init(la, input_context, runtime_context)
+    prepared = init(la, InitContext(input_context, la, lifetime))
     prepared_context = @inline _init_state_context(prepared, input_context)
     return isempty(overrides) ? prepared_context : merge_into_subcontexts(prepared_context, construct_context_merge_tuples(overrides))
 end

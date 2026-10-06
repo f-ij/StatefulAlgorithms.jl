@@ -17,9 +17,8 @@ Run cleanup and the final result projection while the loop-local runtime context
 is still visible. The runtime context is intentionally not returned.
 """
 @inline function finalizer!(func::F, context::C, runtimecontext::RC, process::P, lifetime::LT) where {F,C<:ProcessContext,RC<:ProcessContext,P<:AbstractProcess,LT<:Lifetime}
-    cleaned_context, cleaned_runtimecontext = @inline cleanup(func, context, runtimecontext)
-    final_context = @inline final_visible_context(cleaned_context, cleaned_runtimecontext)
-    return cleaned_context, (@inline _loop_final_result(func, final_context, cleaned_runtimecontext))
+    cleaned = @inline cleanup(func, LoopContext(context, runtimecontext))
+    return (@inline getcontext(cleaned)), (@inline _loop_final_result(func, (@inline visible_context(cleaned)), getruntimecontext(cleaned)))
 end
 
 """
@@ -27,7 +26,7 @@ Build the runtime context for one run: its inputs (`_inputs`) and declared local
 are added by the steps.
 
 The process and the lifetime are not in it: no step read them (they were in `_declared_outputs` until 2026-10). Init still gets
-the lifetime, for sizing (`_init_runtime_context`, `processsizehint!`). To give steps loop information again (step
+the lifetime, for sizing (`InitContext`, `processsizehint!`). To give steps loop information again (step
 index, total steps, elapsed time, a stop request), add narrow read-only values here rather than the `Process` object,
 which would tie step code to the process type; most of those uses belong in the plan (schedules, lifetimes) instead.
 """
@@ -133,16 +132,19 @@ Run a single function in a loop indefinitely.
     if isresuming
         @atomic process.paused = false
     else
-        context, runtimecontext = @inline _step!(step_plan, first_tick(step_cursor), context, runtimecontext, step_wiring, Namespace{nothing}(), process, lifetime)
+        first_lc = @inline _step!(step_plan, first_tick(step_cursor), LoopContext(context, runtimecontext), step_wiring, Namespace{nothing}(), process, lifetime)
+        context, runtimecontext = (@inline getcontext(first_lc)), (@inline getruntimecontext(first_lc))
         @inline tick!(process)
         @inline inc!(process)
     end
 
     # Carry only the fields the steps write, not the whole context: fields left unchanged would otherwise be copied every
     # step (see src/Context/Carried/Carry.jl).
-    carried = @inline create_carried(step_plan, step_cursor, context, runtimecontext, step_wiring, Namespace{nothing}(), process, lifetime)
+    carried = @inline create_carried(step_plan, step_cursor, LoopContext(context, runtimecontext), step_wiring, Namespace{nothing}(), process, lifetime)
     while true
-        stepped, runtimecontext = @inline _step!(step_plan, step_cursor, (@inline carried_context(context, carried)), runtimecontext, step_wiring, Namespace{nothing}(), process, lifetime)
+        # The step's `LoopContext` is built from the pieces the loop carries, and taken apart again after it.
+        stepped_lc = @inline _step!(step_plan, step_cursor, LoopContext((@inline carried_context(context, carried)), runtimecontext), step_wiring, Namespace{nothing}(), process, lifetime)
+        stepped, runtimecontext = (@inline getcontext(stepped_lc)), (@inline getruntimecontext(stepped_lc))
         carried = @inline next_carried(carried, stepped)
         @inline tick!(process)
         @inline inc!(process)
@@ -184,16 +186,19 @@ Base.@constprop :aggressive @inline function loop(process::P, algo::F, stored_co
     if isresuming
         @atomic process.paused = false
     else
-        context, runtimecontext = @inline _step!(step_plan, first_tick(step_cursor), context, runtimecontext, step_wiring, Namespace{nothing}(), process, lifetime)
+        first_lc = @inline _step!(step_plan, first_tick(step_cursor), LoopContext(context, runtimecontext), step_wiring, Namespace{nothing}(), process, lifetime)
+        context, runtimecontext = (@inline getcontext(first_lc)), (@inline getruntimecontext(first_lc))
         @inline tick!(process)
         @inline inc!(process)
     end
 
     # Carry only the fields the steps write, not the whole context: fields left unchanged would otherwise be copied every
     # step (see src/Context/Carried/Carry.jl).
-    carried = @inline create_carried(step_plan, step_cursor, context, runtimecontext, step_wiring, Namespace{nothing}(), process, lifetime)
+    carried = @inline create_carried(step_plan, step_cursor, LoopContext(context, runtimecontext), step_wiring, Namespace{nothing}(), process, lifetime)
     for _ in (@inline loopidx(process)):(@inline repeats(lifetime))
-        stepped, runtimecontext = @inline _step!(step_plan, step_cursor, (@inline carried_context(context, carried)), runtimecontext, step_wiring, Namespace{nothing}(), process, lifetime)
+        # The step's `LoopContext` is built from the pieces the loop carries, and taken apart again after it.
+        stepped_lc = @inline _step!(step_plan, step_cursor, LoopContext((@inline carried_context(context, carried)), runtimecontext), step_wiring, Namespace{nothing}(), process, lifetime)
+        stepped, runtimecontext = (@inline getcontext(stepped_lc)), (@inline getruntimecontext(stepped_lc))
         carried = @inline next_carried(carried, stepped)
         @inline tick!(process)
         @inline inc!(process)

@@ -32,7 +32,7 @@ Base.@constprop :aggressive function _threaded_run_child(base_context::C, tca::T
     sa = @inline getalgo(tca, idx)
     contextview = @inline view(base_context, sa)
     retval = @inline step!(getalgo(sa), contextview)
-    merged_context = @inline merge(contextview, retval)
+    merged_context = @inline getcontext(merge(contextview, retval))
     local_payload = @inline getdata(getproperty(merged_context, getkey(sa)))
     child_name = getkey(getalgotype(TCA, idx))
     return NamedTuple{(child_name,), Tuple{getdatatype(subcontext_type(C, child_name))}}((local_payload,))
@@ -52,7 +52,7 @@ Base.@constprop :aggressive function _threaded_merge_child_payload(merged::Named
     end
     sa, contextview, task = future
     retval = @inline fetch(task)
-    merged_context = @inline merge(contextview, retval)
+    merged_context = @inline getcontext(merge(contextview, retval))
     local_payload = @inline getdata(getproperty(merged_context, getkey(sa)))
     child_name = getkey(getalgotype(TCA, idx_val))
     payload = NamedTuple{(child_name,), Tuple{getdatatype(subcontext_type(C, child_name))}}((local_payload,))
@@ -98,7 +98,7 @@ Base.@constprop :aggressive function step!(tca::ThreadedCompositeAlgorithm, cont
     return current
 end
 
-Base.@constprop :aggressive @inline @generated function _step!(tca::TCA, cursor::S, context::C, runtimecontext::RC, wiring::W, namespace::N, process::P, lifetime::LT) where {TCA <: ThreadedCompositeAlgorithm, S<:CompositeLoopCursor, C <: AbstractContext, RC <: ProcessContext, W <: PlanWiringView, N <: Namespace, P <: AbstractProcess, LT <: Lifetime}
+Base.@constprop :aggressive @inline @generated function _step!(tca::TCA, cursor::S, lc::L, wiring::W, namespace::N, process::P, lifetime::LT) where {TCA <: ThreadedCompositeAlgorithm, S<:CompositeLoopCursor, L <: LoopContext, W <: PlanWiringView, N <: Namespace, P <: AbstractProcess, LT <: Lifetime}
     algo_count = numalgos(TCA)
     schedule_values = TCA.parameters[2]
     child_namespace_tuple_type = TCA.parameters[3]
@@ -112,18 +112,18 @@ Base.@constprop :aggressive @inline @generated function _step!(tca::TCA, cursor:
         schedule_value = schedule_values[i]
         child_namespace_type = fieldtype(child_namespace_tuple_type, i)
         push!(exprs, quote
-            if @inline should_run_schedule($schedule_value, this_inc, context)
+            if @inline should_run_schedule($schedule_value, this_inc, (@inline getcontext(lc)))
                 local algo = @inline getfield(algos, $i)
                 local child_cursor = @inline child_loop_cursor(cursor, Val($i))
                 local child_step_wiring = @inline child_wiring_view(wiring, Val($i))
                 local child_namespace = $child_namespace_type()
-                context, runtimecontext = @inline _step!(algo, child_cursor, context, runtimecontext, child_step_wiring, child_namespace, process, lifetime)
+                lc = @inline _step!(algo, child_cursor, lc, child_step_wiring, child_namespace, process, lifetime)
             end
         end)
     end
 
     push!(exprs, :(@inline inc!(cursor, tca)))
-    push!(exprs, :(return context, runtimecontext))
+    push!(exprs, :(return lc))
     return Expr(:block, exprs...)
 end
 

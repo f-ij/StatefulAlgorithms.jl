@@ -157,8 +157,8 @@ then enters the same `_step!` chain used by `run`.
     plan = @inline getplan(la)
     cursor = @inline loop_cursor(plan, Val(false))
     runtimecontext = @inline _empty_context()
-    newcontext, _ = @inline _step!(plan, cursor, context, runtimecontext, PlanWiringView(getwiring(plan)), Namespace{nothing}(), process, lifetime)
-    return newcontext
+    stepped = @inline _step!(plan, cursor, LoopContext(context, runtimecontext), PlanWiringView(getwiring(plan)), Namespace{nothing}(), process, lifetime)
+    return @inline getcontext(stepped)
 end
 
 """
