@@ -29,6 +29,11 @@ struct DeltaWriter <: ProcessAlgorithm end
 StatefulAlgorithms.init(::DeltaWriter, context) = (; sp = DeltaSparse(10, 0, collect(1:11), ones(Float32, 10)))
 StatefulAlgorithms.step!(::DeltaWriter, context) = (sp = context.sp; (; sp = DeltaSparse(sp.m, sp.n + 1, sp.colptr, sp.nzval)))
 
+# Plain functions in DSL blocks: their returns write `@state` fields too.
+delta_plus_one(x) = x + 1.0
+delta_double(x) = 2x
+const DELTA_OFFSET = 5.0
+
 """The write set the loop of `plan` gets: `_written_fields` asked the way `loop` asks it."""
 function written_fields_of(plan)
     p = Process(plan; repeats = 10)
@@ -64,6 +69,35 @@ end
     @test written_fields_of(CompositeAlgorithm(DeltaReader, DeltaWriter, (1, 10))) === Val(((:DeltaWriter_1, :sp),))
     # A routine's repeats write the counter.
     @test written_fields_of(Routine(DeltaCounter, DeltaReader, (3, 2))) === Val(((:DeltaCounter_1, :count),))
+end
+
+@testset "Context delta: DSL function statements" begin
+    writes_state = resolve(@CompositeAlgorithm begin
+        @state x = 0.0
+        x = delta_plus_one(x)
+    end)
+    output_only = resolve(@CompositeAlgorithm begin
+        @state seed = 4.0
+        result = delta_double(seed)
+    end)
+    assigns_state = resolve(@CompositeAlgorithm begin
+        @state y = 1.0
+        y = DELTA_OFFSET
+    end)
+    repeats_write_state = resolve(@Routine begin
+        @state x = 0.0
+        x = @repeat 3 delta_plus_one(x)
+    end)
+
+    @test written_fields_of(writes_state) === Val(((:_state, :x),))
+    @test written_fields_of(output_only) === Val(())          # a function output that is not state is runtime-only
+    @test written_fields_of(assigns_state) === Val(((:_state, :y),))
+    @test written_fields_of(repeats_write_state) === Val(((:_state, :x),))
+
+    @test run_steps(writes_state, 100)[:_state].x == 100.0
+    @test run_steps(output_only, 100)[:_state].seed == 4.0
+    @test run_steps(assigns_state, 100)[:_state].y == DELTA_OFFSET
+    @test run_steps(repeats_write_state, 100)[:_state].x == 300.0
 end
 
 @testset "Context delta: results" begin
