@@ -54,6 +54,8 @@ literal_join_dsl_test(prefix, value, marker) = string(prefix, value, marker)
 constant_value_dsl_test() = 0.25
 square_dsl_test(x) = x^2
 plus100_dsl_test(v) = v + 100.0
+keep_value_dsl_test(v) = v
+push_seen_dsl_test(seen, v) = (push!(seen, v); seen)
 @StepAlgorithm function DSLManagedCounter(@managed(x = 0.0))
     return (; x = x + 1.0)
 end
@@ -1254,6 +1256,36 @@ end
         run(p)
         @test fetch(p) == (; result = "start4done")
         close(p)
+    end
+
+    @testset "Declared outputs read on another schedule: warning and declared-local fallback" begin
+        @info "Composite DSL: Declared outputs read on another schedule"
+        produced = Ref(0)
+        produce_dsl_test() = (produced[] += 1; Float64(produced[]))
+        build() = @CompositeAlgorithm begin
+            @state seen = Any[]
+            y = @every 3 produce_dsl_test()
+            v = keep_value_dsl_test(y)
+            seen = push_seen_dsl_test(seen, v)
+        end
+        algo = @test_logs (:warn, r"`y` is assigned on a schedule") match_mode = :any build()
+        p = Process(resolve(algo), repeat = 7); run(p)
+        @test fetch(p)[:_state].seen == [nothing, nothing, 1.0, 1.0, 1.0, 2.0, 2.0]
+        close(p)
+    end
+
+    @testset "Assigning an @input is an error when the block is built" begin
+        @info "Composite DSL: Assigning an @input is an error"
+        err = try
+            @eval @CompositeAlgorithm begin
+                @input x::Float64
+                x = keep_value_dsl_test(1.0)
+            end
+            nothing
+        catch e
+            e
+        end
+        @test err isa LoadError && occursin("which is an `@input` of this block", sprint(showerror, err.error))
     end
 
     @testset "Function call runtime output shape does not persist" begin

@@ -360,6 +360,19 @@ function _dsl_build_owned_write_statement(lhs, rhs, alias_map, context_map, know
     end
 end
 
+"""Inputs are read-only: an assignment to one (`x = f(...)` with `@input x`) is an error when the block is built."""
+function _dsl_reject_input_assignment(stmt, input_fields, line)
+    (stmt isa Expr && stmt.head == :(=)) || return nothing
+    outputs = _dsl_try_parse_output_symbols(stmt.args[1])
+    isnothing(outputs) && return nothing
+    for field in input_fields
+        field.name in outputs || continue
+        at = isnothing(line) ? "" : " ($(line.file):$(line.line))"
+        error("`$(stmt)` assigns `$(field.name)`, which is an `@input` of this block$at. Inputs are read-only; assign to another name.")
+    end
+    return nothing
+end
+
 """
 Build `owner.field = f(args...)`: the call runs every step (like `x = f(args...)`) and its return is written into
 `owner.field`. The call's output gets a generated name, and a route from `owner.field` to that name is added to the
@@ -764,6 +777,7 @@ function _dsl_collect_block(
             continue
         end
 
+        _dsl_reject_input_assignment(stmt, input_fields, current_line)
         step_expr = _dsl_build_statement(stmt, alias_map, context_map, known_outputs, state_outputs, expected_schedule, owner_name)
         if !isnothing(step_expr)
             step_expr = Base.remove_linenums!(step_expr)
