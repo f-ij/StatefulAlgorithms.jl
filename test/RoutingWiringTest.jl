@@ -108,3 +108,17 @@ end
     @test c[RoutePrecedenceTarget].level == 100
     @test c[RoutePrecedenceSource].level == 8
 end
+
+@testset "A view's names: explicit hides implicit" begin
+    struct ClashSource <: ProcessAlgorithm end
+    struct ClashTarget <: ProcessAlgorithm end
+    StatefulAlgorithms.init(::ClashSource, context) = (; total = 5.0)
+    StatefulAlgorithms.step!(::ClashSource, context) = (; total = context.total + 1.0)
+    StatefulAlgorithms.init(::ClashTarget, context) = (; factor = 1.0, seen = 0.0)
+    StatefulAlgorithms.step!(::ClashTarget, context) = (; seen = context.factor)
+
+    # A declared local of the same name as the target's state is hidden by the state (it is only visible implicitly).
+    hidden = CompositeAlgorithm(ClashSource, ClashTarget, (1, 1), Local(factor = 100.0))
+    p = Process(hidden; repeats = 1); run(p); wait(p)
+    @test context(p)[ClashTarget].seen == 1.0
+end

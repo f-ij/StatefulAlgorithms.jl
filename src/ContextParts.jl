@@ -37,3 +37,9 @@ part_name(::Inputs) = :_inputs
 """Where a value of this part is read from: the runtime context (`:runtime`), or the stored context (`:subcontext`)."""
 location_kind(::ContextPart) = :runtime
 location_kind(::Stored) = :subcontext
+
+"""
+The target of the routes that make declared locals visible to a view: the view itself, since such a binding has no
+target algorithm (see `routes(::PlanWiringView)`). A view tells these routes from its own wires by this target.
+"""
+struct LocalScope <: AbstractScope end

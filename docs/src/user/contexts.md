@@ -14,9 +14,9 @@ values supplied by the package.
 
 That view exposes:
 
-- local subcontext variables,
-- routed/shared variables,
-- globals via `get_declared_outputs(context)`.
+- its own state (its subcontext),
+- routed and shared variables,
+- declared locals of the enclosing blocks, and outputs (what statements and calls returned this step).
 
 ## Reading Variables
 
@@ -104,17 +104,19 @@ This updates only the targeted subcontext.
 - `inputs` are merged into that subcontext before `init(...)` runs.
 - `overrides` are merged into that subcontext after `init(...)` returns.
 
-## Runtime Globals
+## Values That Live For A Run
 
-Persistent `ProcessContext` values do not have a dedicated `globals` field.
-During lifecycle execution, the package passes a separate runtime context whose
-`:_declared_outputs` subcontext contains process-level values such as `lifetime`, `algo`,
-or `process`, depending on the phase. Entity views expose that transient bucket
-through `get_declared_outputs(context)`.
+Besides the stored (persistent) state, a run has values that are not stored with the process:
 
-Runtime globals are not owned by an algorithm and are not retained in the
-finished process's persistent context. For selector syntax, see
-[Vars (`Var` Selectors)](@ref vars_user).
+| Kind | Lifetime | On pause |
+|---|---|---|
+| inputs (`@input`) | the run, read-only | kept |
+| declared locals (`local x`, `x = nothing`; `Local`) | the run | kept |
+| declared outputs (`y = f(x)`) | one step | dropped |
+| subcontext outputs (what an algorithm returns that is not its state) | one step | dropped |
+
+A step reads them by name like its own variables. The process and the lifetime are not visible to steps; `init`
+gets the lifetime for sizing (`processsizehint!`). For selector syntax, see [Vars (`Var` Selectors)](@ref vars_user).
 
 For immediate `InteractiveVar` storage and buffered external writes through
 `ContextExchange`, see [Interactive Contexts](@ref interactive_user).

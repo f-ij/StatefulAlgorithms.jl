@@ -7,7 +7,7 @@ Terms:
   namespace's values at run time. Plans introduce no namespace: their children have theirs.
   (`Namespace{nothing}` only stands in for one, so plans and algorithms are stepped alike.)
 - SCKey: the name of a subcontext in the context: a registry key (`:Sensor_1`), or one of the
-  shared subcontexts `:_declared_outputs` (step values) and `:_declared_locals` (declared locals).
+  shared subcontexts `:_declared_outputs` (declared outputs) and `:_declared_locals` (declared locals).
 - SCRef: whatever a user writes to say which subcontext they mean: an SCKey, an algorithm or
   state instance, its type, a matcher, or a call. Resolving an SCRef gives its SCKey.
 - endpoint: the role of a subcontext in a route or share (its from side or its to side). Each

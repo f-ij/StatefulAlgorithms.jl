@@ -130,12 +130,6 @@ Base.convert(::Type{M}, m::M) where {M<:Maybe} = m
 # 3. Reading and writing during a run
 ############################################################################################
 
-"""
-The target of the routes that bind a view's visible locals: the view itself, since a local
-binding has no target algorithm (see `routes(::PlanWiringView)`).
-"""
-struct LocalScope <: AbstractScope end
-
 # Reads: a `Maybe` reads as its value, or as `nothing` / an error while unset.
 _throw_undef() = throw(UndefRefError())
 @inline subcontext_view_value(m::Maybe{T, F, Nothing}, view::V) where {T, F, V<:SubContextView} =

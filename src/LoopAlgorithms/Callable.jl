@@ -127,7 +127,7 @@ plan names. Each step reads the input names from the plan, calls `f`, and writes
 Where the names come from is the plan's concern: a declared `Local`, the output of an earlier
 call (the shared `_declared_outputs` bucket), a runtime input, or whatever [`WithWiring`](@ref) wires to
 that name. A return name that is a visible local, or wired, is written there; any other return
-is a step value in the shared `_declared_outputs` bucket. Callables have no state, no identity and no
+is a declared output (`_declared_outputs`, shared by every call). Callables have no state, no identity and no
 registry entry; the signature is type data, so one function with one signature compiles once.
 """
 struct Callable{F, Args, Kwargs, Returns, V} <: ProcessAlgorithm
@@ -323,7 +323,7 @@ struct ThisChild end
     From(Var(subcontext_ref, :name; transform) => :alias)
 
 A wire for [`WithWiring`](@ref): the wrapped child reads the variable `name` of the referenced
-subcontext (an algorithm, its type or key, `:_declared_outputs` for a step value, or `:_declared_locals` for a
+subcontext (an algorithm, its type or key, `:_declared_outputs` for a declared output, or `:_declared_locals` for a
 declared local), optionally transformed, as `alias`.
 """
 From(wire::Pair{<:Var, Symbol}) = _var_route(first(wire), last(wire))
