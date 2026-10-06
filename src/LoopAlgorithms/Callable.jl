@@ -1,4 +1,8 @@
-export Callable, Literal, Splat, WithWiring, From
+#=
+Function calls as plan children. The DSL turns a call statement (`y = f(x; k = 2)`) into a `Callable`; it is internal,
+not something to build by hand. `WithWiring` and `From` wire any plan child, so they are exported.
+=#
+export WithWiring, From
 
 """Slot of a literal argument value in a `Callable`'s `values`."""
 struct ValueRef{index, T} end
