@@ -46,10 +46,12 @@ end
 @inline Base.propertynames(pc::ProcessContext, private::Bool = false) = propertynames(@inline get_subcontexts(pc))
 
 @inline Base.@constprop :aggressive function Base.getindex(pc::ProcessContext, name::Symbol)
-    name === :_declared_outputs && return get_declared_outputs(pc)
-    name === :_inputs && return get_inputs(pc)
-    return @inline getproperty(pc, name)
+    return @inline _getindex_part(context_part(Val(name)), pc, name)
 end
+
+# `pc[:_declared_outputs]` and `pc[:_inputs]` give that part's values; any other name its subcontext.
+@inline _getindex_part(::ContextPart, pc::ProcessContext, name::Symbol) = @inline getproperty(pc, name)
+@inline _getindex_part(part::Union{DeclaredOutputs, Inputs}, pc::ProcessContext, name::Symbol) = @inline get_part_data(pc, part)
 
 @inline function Base.getindex(pc::ProcessContext, obj)
     reg = getregistry(pc)
@@ -72,19 +74,19 @@ end
 @inline getregistrytype(::Type{<:ProcessContext{D,Nothing}}) where {D} = Nothing
 @inline getregistrytype(pc::ProcessContext) = getregistrytype(typeof(pc))
 
-"""The declared outputs in a runtime context: what statements (`y = f(x)`, calls) returned this step."""
-@inline function get_declared_outputs(pc::ProcessContext)
+"""The values of a runtime part in a runtime context, as a named tuple; empty when the context has no such part."""
+@inline function get_part_data(pc::ProcessContext, part::ContextPart)
     subcontexts = @inline get_subcontexts(pc)
-    return haskey(subcontexts, :_declared_outputs) ? getdata(getproperty(subcontexts, :_declared_outputs)) : (;)
+    return haskey(subcontexts, part_name(part)) ? getdata(getproperty(subcontexts, part_name(part))) : (;)
 end
+
+"""The declared outputs in a runtime context: what statements (`y = f(x)`, calls) returned this step."""
+@inline get_declared_outputs(pc::ProcessContext) = @inline get_part_data(pc, DeclaredOutputs())
 
 @inline get_declared_outputs(pc::ProcessContext, name::Symbol) = getproperty(get_declared_outputs(pc), name)
 
 """Return the runtime-input bucket stored in a runtime context."""
-@inline function get_inputs(pc::ProcessContext)
-    subcontexts = @inline get_subcontexts(pc)
-    return haskey(subcontexts, :_inputs) ? getdata(getproperty(subcontexts, :_inputs)) : (;)
-end
+@inline get_inputs(pc::ProcessContext) = @inline get_part_data(pc, Inputs())
 
 @inline get_inputs(pc::ProcessContext, name::Symbol) = getproperty(get_inputs(pc), name)
 
@@ -92,16 +94,10 @@ end
 The subcontext outputs in a runtime context: per namespace, what its algorithm returned this step that is not its
 state, as `(; Sensor_1 = (; extra = ...), ...)`.
 """
-@inline function get_subcontext_outputs(pc::ProcessContext)
-    subcontexts = @inline get_subcontexts(pc)
-    return haskey(subcontexts, :_subcontext_outputs) ? getdata(getproperty(subcontexts, :_subcontext_outputs)) : (;)
-end
+@inline get_subcontext_outputs(pc::ProcessContext) = @inline get_part_data(pc, SubcontextOutputs())
 
 """Return the declared loop-local variables (`Local`) held in a runtime or paused context."""
-@inline function get_declared_locals(pc::ProcessContext)
-    subcontexts = @inline get_subcontexts(pc)
-    return haskey(subcontexts, :_declared_locals) ? getdata(getproperty(subcontexts, :_declared_locals)) : (;)
-end
+@inline get_declared_locals(pc::ProcessContext) = @inline get_part_data(pc, DeclaredLocals())
 
 @inline getwidened(::ProcessContext) = (;)
 @inline has_widened_var(::ProcessContext, ::Val, ::Val) = false
@@ -118,6 +114,11 @@ Return an immutable `ProcessContext` rebuild with updated subcontexts.
 @inline function withsubcontexts(pc::PC, subcontexts::D) where {PC<:ProcessContext,D<:NamedTuple}
     return ProcessContext(subcontexts, registryref(pc))
 end
+
+"""A runtime part as `(name, data expression)` pairs for the final projection: subcontext outputs per namespace."""
+_final_parts(::ContextPart, name::Symbol, ::Type) = [(name, :(getdata(getproperty(runtime_subcontexts, $(QuoteNode(name))))))]
+_final_parts(part::SubcontextOutputs, name::Symbol, ::Type{T}) where {T} =
+    [(owner, :(getproperty(getdata(getproperty(runtime_subcontexts, $(QuoteNode(name)))), $(QuoteNode(owner))))) for owner in fieldnames(T)]
 
 """
     final_visible_context(context, runtimecontext)
@@ -139,14 +140,7 @@ projection only; the returned process state remains `context`.
     # Each runtime part as (name, data): a namespace's outputs are shown in that namespace.
     parts = Any[]
     for name in runtime_names
-        if name === :_subcontext_outputs
-            outputs_type = getdatatype(fieldtype(RC.parameters[1], name))
-            for owner in fieldnames(outputs_type)
-                push!(parts, (owner, :(getproperty(getdata(getproperty(runtime_subcontexts, :_subcontext_outputs)), $(QuoteNode(owner))))))
-            end
-        else
-            push!(parts, (name, :(getdata(getproperty(runtime_subcontexts, $(QuoteNode(name)))))))
-        end
+        append!(parts, _final_parts(context_part(Val(name)), name, getdatatype(fieldtype(RC.parameters[1], name))))
     end
 
     for (name, data_expr) in parts

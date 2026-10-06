@@ -116,10 +116,12 @@ function _return_demand_names(::Type{W}, owner::Symbol) where {W<:PlanWiring}
             names = _append_route_demand_names(names, route_name)
         end
     end
-    # Callables read names from the shared `_declared_outputs` bucket without routes.
-    owner === :_declared_outputs && (names = _append_route_demand_names(names, _callable_reads_in_tree(W)))
-    return names
+    return _append_route_demand_names(names, _unrouted_reads(context_part(Val(owner)), W))
 end
+
+"""Names read from a part without routes: calls read the declared outputs by name."""
+_unrouted_reads(::ContextPart, ::Type) = ()
+_unrouted_reads(::DeclaredOutputs, ::Type{W}) where {W<:PlanWiring} = _callable_reads_in_tree(W)
 
 """Compute demanded owner-runtime return names from the full plan-wiring view."""
 @inline @generated function return_demand(::PlanWiringView{Root,W,DemandAll}, ::Namespace{Name}) where {Root<:PlanWiring,W,DemandAll,Name}
