@@ -166,7 +166,7 @@ end
 end
 
 @testset "Outputs have one type in every step" begin
-    # `y` is written every 3 steps, so it is `nothing` until step 3. A call passes it on as the declared output `v`,
+    # `y` is written every 3 steps, so it is `nothing` until step 3. A call passes it on as the captured return `v`,
     # which is then `nothing` in some steps and a Float64 in others; its slot is typed before the run as
     # Union{Nothing, Float64}, so the runtime context keeps one type.
     produced = Ref(0)
@@ -176,7 +176,7 @@ end
     StatefulAlgorithms.init(::OutputCollector, context) = (; seen = Any[])
     StatefulAlgorithms.step!(::OutputCollector, context) = (push!(context.seen, context.v); (; seen = context.seen))
     plan = CompositeAlgorithm(StatefulAlgorithms.Callable(produce, (), :y), StatefulAlgorithms.Callable(pass_on, (:y,), :v), OutputCollector,
-        (3, 1, 1), Local(y = nothing), Route(:_declared_outputs => OutputCollector, :v => :v))
+        (3, 1, 1), Local(y = nothing), Route(:_captured_returns => OutputCollector, :v => :v))
     p = Process(plan; repeats = 7); run(p); wait(p)
     @test context(p)[OutputCollector].seen == [nothing, nothing, 1.0, 1.0, 1.0, 2.0, 2.0]
 end

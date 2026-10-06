@@ -47,7 +47,7 @@ Merge a `Callable` return into the correct runtime target.
 
 Outputs whose names already resolve in the wrapper view are routed/shared/local
 writebacks and should be merged through `SubContextView`. New output names are
-DSL temporaries and remain in `ProcessContext._declared_outputs` for later statements.
+DSL temporaries and remain in `ProcessContext._captured_returns` for later statements.
 """
 @inline @generated function merge_call_return(contextview::SCV, retval::R) where {SCV<:SubContextView, R<:NamedTuple}
     demand_type = ReturnDemand{fieldnames(R)}
@@ -125,9 +125,9 @@ plan names. Each step reads the input names from the plan, calls `f`, and writes
   Any return name can be `name => T`: the value must already be a `T`, otherwise a `TypeError`.
 
 Where the names come from is the plan's concern: a declared `Local`, the output of an earlier
-call (the shared `_declared_outputs` bucket), a runtime input, or whatever [`WithWiring`](@ref) wires to
+call (the shared `_captured_returns` bucket), a runtime input, or whatever [`WithWiring`](@ref) wires to
 that name. A return name that is a visible local, or wired, is written there; any other return
-is a declared output (`_declared_outputs`, shared by every call). Callables have no state, no identity and no
+is a captured return (`_captured_returns`, shared by every call). Callables have no state, no identity and no
 registry entry; the signature is type data, so one function with one signature compiles once.
 """
 struct Callable{F, Args, Kwargs, Returns, V} <: ProcessAlgorithm
@@ -244,25 +244,25 @@ callable_reads(funcs::Tuple) = Tuple(unique(Symbol[n for f in funcs for n in cal
 @inline init(::Callable, context) = (;)
 @inline cleanup(::Callable, context) = (;)
 
-"""Step a `Callable` child: view the context from the shared `_declared_outputs` namespace, call, merge the returns."""
+"""Step a `Callable` child: view the context from the shared `_captured_returns` namespace, call, merge the returns."""
 @inline function _step!(ex::EX, lc::L, wiring::W, namespace::Namespace, process::P, lifetime::LT) where {EX<:Callable, L<:LoopContext, W<:PlanWiringView, P<:AbstractProcess, LT<:Lifetime}
-    contextview = @inline _leaf_view(ex, lc, wiring, Namespace{:_declared_outputs}())
+    contextview = @inline _leaf_view(ex, lc, wiring, Namespace{:_captured_returns}())
     retval = @inline step!(ex, contextview)
-    return @inline merge_call_return(contextview, retval, return_demand(wiring, Namespace{:_declared_outputs}()))
+    return @inline merge_call_return(contextview, retval, return_demand(wiring, Namespace{:_captured_returns}()))
 end
 @inline _step!(ex::EX, lc::L, wiring::W, process::P, lifetime::LT) where {EX<:Callable, L<:LoopContext, W<:PlanWiringView, P<:AbstractProcess, LT<:Lifetime} =
-    @inline _step!(ex, lc, wiring, Namespace{:_declared_outputs}(), process, lifetime)
+    @inline _step!(ex, lc, wiring, Namespace{:_captured_returns}(), process, lifetime)
 
 # The persistent fields a `Callable` writes (see src/Context/Carried/Writes.jl): its view-visible returns.
 @inline function _leaf_payload(ex::EX, lc::L, wiring::W, namespace::N) where {EX<:Callable,L,W,N}
-    contextview = @inline _leaf_view(ex, lc, wiring, Namespace{:_declared_outputs}())
+    contextview = @inline _leaf_view(ex, lc, wiring, Namespace{:_captured_returns}())
     return @inline _call_payload(contextview, (@inline step!(ex, contextview)))
 end
 
-# Calls have no identity: they are not registered and all share the `_declared_outputs` namespace. Routes
+# Calls have no identity: they are not registered and all share the `_captured_returns` namespace. Routes
 # into a call are attached to that call (by `WithWiring`, or by the DSL); a route that names a
-# call as an endpoint resolves to `_declared_outputs`.
-@inline fixed_namespace(::Callable) = :_declared_outputs
+# call as an endpoint resolves to `_captured_returns`.
+@inline fixed_namespace(::Callable) = :_captured_returns
 @inline match_by(::Callable) = OwnerMatcher()
 @inline match_by(::Type{<:Callable}) = OwnerMatcher
 match(child::Callable, owner::Callable) = child === owner
@@ -323,7 +323,7 @@ struct ThisChild end
     From(Var(subcontext_ref, :name; transform) => :alias)
 
 A wire for [`WithWiring`](@ref): the wrapped child reads the variable `name` of the referenced
-subcontext (an algorithm, its type or key, `:_declared_outputs` for a declared output, or `:_declared_locals` for a
+subcontext (an algorithm, its type or key, `:_captured_returns` for a captured return, or `:_declared_locals` for a
 declared local), optionally transformed, as `alias`.
 """
 From(wire::Pair{<:Var, Symbol}) = _var_route(first(wire), last(wire))

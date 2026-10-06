@@ -5,7 +5,7 @@ Resolving a plan: everything that can only be decided once the whole composition
 
 1. Registry: every algorithm and state in the tree gets a key (`Sensor_1`, `Sensor_2`, ...).
    Children are replaced by their raw algorithm and the key goes into the plan's `namespaces`.
-   Calls (`Callable`) have no identity: they are not registered and share `:_declared_outputs`.
+   Calls (`Callable`) have no identity: they are not registered and share `:_captured_returns`.
 2. The registry is attached to the root wrapper and to nested `LoopAlgorithm` wrappers.
 3. Wiring: route/share endpoints become context keys, plan-wide wiring is copied into each
    child's slot, and each plan node records (in its `PlanWiring` type) the locals visible to
@@ -229,7 +229,7 @@ function _resolve_plan_wiring_tree(la::LA, registry::NameSpaceRegistry, inherite
 
     # Stored in the `PlanWiring` type, so stepping reads them at compile time: the locals this
     # node's children can see, and the names its calls read (they count as demand for the
-    # `_declared_outputs` bucket, see `return_demand`).
+    # `_captured_returns` bucket, see `return_demand`).
     visible = isempty(visible_locals) ? Val((;)) : Val(visible_locals)
     reads = callable_reads(funcs)
     return setfield(rebuilt, :wiring, PlanWiring(combined_global, resolved_children, own_locals, visible, isempty(reads) ? Val(()) : Val(reads)))

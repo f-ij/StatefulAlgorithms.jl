@@ -22,10 +22,10 @@ there. Returns the stored context and the result; the runtime values end with th
 end
 
 """
-Build the runtime context for one run: its inputs (`_inputs`) and declared locals (`_declared_locals`). Step values (`_declared_outputs`)
+Build the runtime context for one run: its inputs (`_inputs`) and declared locals (`_declared_locals`). Step values (`_captured_returns`)
 are added by the steps.
 
-The process and the lifetime are not in it: no step read them (they were in `_declared_outputs` until 2026-10). Init still gets
+The process and the lifetime are not in it: no step read them (they were in `_captured_returns` until 2026-10). Init still gets
 the lifetime, for sizing (`InitContext`, `processsizehint!`). To give steps loop information again (step
 index, total steps, elapsed time, a stop request), add narrow read-only values here rather than the `Process` object,
 which would tie step code to the process type; most of those uses belong in the plan (schedules, lifetimes) instead.

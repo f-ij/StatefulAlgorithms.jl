@@ -1,4 +1,4 @@
-export get_declared_outputs, withaliases
+export get_captured_returns, withaliases
 #################################
 ########## Properties ###########
 #################################
@@ -14,8 +14,8 @@ view_sharedvars(scv::Union{SubContextView{B, SubKey, T, NT, Aliases, SharedConte
 """Return the scheduled call multiplier for this view's owner."""
 @inline view_multiplier(scv::SubContextView) = getmultiplier(scv, this_instance(scv))
 
-@inline get_declared_outputs(scv::SubContextView) = @inline get_part_data(getbundle(scv), DeclaredOutputs())
-@inline get_declared_outputs(scv::SubContextView, name::Symbol) = getproperty(get_declared_outputs(scv), name)
+@inline get_captured_returns(scv::SubContextView) = @inline get_part_data(getbundle(scv), CapturedReturns())
+@inline get_captured_returns(scv::SubContextView, name::Symbol) = getproperty(get_captured_returns(scv), name)
 
 @inline getbundle(scv::SubContextView) = @inline getfield(scv, :bundle)
 @inline getcontext(scv::SubContextView) = @inline getcontext(getbundle(scv))

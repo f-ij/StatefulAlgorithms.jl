@@ -86,7 +86,7 @@ end
 """
 Wires for one DSL call, attached to it with `WithWiring`: reads from algorithm state (an
 algorithm statement's output, `owner.field`) and transforms. A plain name produced by an
-earlier call needs no wire: the call reads it by name from the shared `_declared_outputs` bucket.
+earlier call needs no wire: the call reads it by name from the shared `_captured_returns` bucket.
 """
 _composite_dsl_call_wires(entity, producers::Dict{Symbol, Any}, inputs::Tuple) = ()
 function _composite_dsl_call_wires(entity::Callable, producers::Dict{Symbol, Any}, inputs::Tuple)
@@ -101,7 +101,7 @@ function _composite_dsl_call_wires(entity::Callable, producers::Dict{Symbol, Any
             input.owner
         end
         # Same name from the shared bucket, untransformed: read by name, no wire.
-        source_owner === :_declared_outputs && input.source === input.destination && isnothing(transform) && continue
+        source_owner === :_captured_returns && input.source === input.destination && isnothing(transform) && continue
         push!(wires, Route(source_owner => ThisChild(), input.source => input.destination; transform))
     end
     return Tuple(wires)
@@ -130,7 +130,7 @@ _composite_dsl_with_wires(entity, wires::Tuple) = isempty(wires) ? entity : With
 """Register outputs as the current producer for later routed lookups."""
 function _composite_dsl_register_outputs!(producers::Dict{Symbol, Any}, owner, outputs::Tuple{Vararg{Symbol}})
     @nospecialize owner outputs
-    # A call's outputs belong to its fixed namespace (`_declared_outputs`), not to the call.
+    # A call's outputs belong to its fixed namespace (`_captured_returns`), not to the call.
     owner = something(fixed_namespace(owner), owner)
     for output in outputs
         # Later statements resolve symbols by asking this table who currently
@@ -832,9 +832,9 @@ function _dsl_reject_include_if_declarations(stmt)
 end
 
 #=
-Declared outputs read on another schedule (temporary fallback, to be removed).
+Captured returns read on another schedule (temporary fallback, to be removed).
 
-A declared output (`y = f(...)`, a call's return) lives for one step. A statement may read it only if, in every step
+A captured return (`y = f(...)`, a call's return) lives for one step. A statement may read it only if, in every step
 where it runs, the call that assigns it ran earlier in that step. In a composite block that holds when the call runs
 every step, or when the reader's interval is a multiple of the call's. Otherwise the reader would see the value from an
 earlier step, which only worked by accident: outputs used to stay in the runtime context until overwritten.
@@ -864,17 +864,17 @@ function _dsl_route_from_local(r::Route)
     target = isnothing(getto(r)) ? to_match_by(r) : getto(r)
     return Route(:_declared_locals => target, map(Pair, getvarnames(r), getaliases(r))...; transform = gettransform(r), reverse_transform = getreverse_transform(r))
 end
-_dsl_reads_declared_output(r, name::Symbol) = r isa Route && from_match_by(r) === :_declared_outputs && name in getvarnames(r)
+_dsl_reads_captured_return(r, name::Symbol) = r isa Route && from_match_by(r) === :_captured_returns && name in getvarnames(r)
 
-"""Whether plan child `child` (a call, or an algorithm through its routes in `options`) reads the declared output `name`."""
+"""Whether plan child `child` (a call, or an algorithm through its routes in `options`) reads the captured return `name`."""
 function _dsl_reads_output(child, options::Vector{Any}, name::Symbol)
     name in callable_input_names(typeof(_dsl_unwrap_call(child))) && return true
-    child isa WithWiring && any(w -> _dsl_reads_declared_output(w, name), getfield(child, :wires)) && return true
-    return any(o -> o isa LocalPlanOption && _dsl_same_child(getfield(o, :owner), child) && _dsl_reads_declared_output(getfield(o, :option), name), options)
+    child isa WithWiring && any(w -> _dsl_reads_captured_return(w, name), getfield(child, :wires)) && return true
+    return any(o -> o isa LocalPlanOption && _dsl_same_child(getfield(o, :owner), child) && _dsl_reads_captured_return(getfield(o, :option), name), options)
 end
 
 """
-The block's children and options with a `Local(name = nothing)` for every declared output read on a schedule it is not
+The block's children and options with a `Local(name = nothing)` for every captured return read on a schedule it is not
 assigned on, and the reads of those values pointed at the local (see the note above). `schedule` holds the children's
 schedule entries, in order.
 """
@@ -892,7 +892,7 @@ function _dsl_declare_scheduled_step_values(children::Vector{Any}, schedule::Vec
         end
     end
     isempty(declared) && return children, options
-    reads_declared(r) = any(n -> _dsl_reads_declared_output(r, n), declared)
+    reads_declared(r) = any(n -> _dsl_reads_captured_return(r, n), declared)
     new_children = Any[child isa WithWiring ? WithWiring(getfield(child, :child), map(w -> reads_declared(w) ? _dsl_route_from_local(w) : w, getfield(child, :wires))) : child for child in children]
     new_options = Any[o isa LocalPlanOption && reads_declared(getfield(o, :option)) ? LocalPlanOption(getfield(o, :owner), _dsl_route_from_local(getfield(o, :option))) : o for o in options]
     push!(new_options, Local(; (name => nothing for name in declared)...))

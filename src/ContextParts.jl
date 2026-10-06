@@ -13,9 +13,9 @@ abstract type ContextPart end
 """A namespace of the stored context: an algorithm's or state's state. Persistent."""
 struct Stored <: ContextPart end
 """What statements (`y = f(x)`) and calls return. One step. Calls share it as their namespace."""
-struct DeclaredOutputs <: ContextPart end
+struct CapturedReturns <: ContextPart end
 """Per namespace, what its algorithm returns that is not its state. One step."""
-struct SubcontextOutputs <: ContextPart end
+struct SubcontextReturns <: ContextPart end
 """Declared locals (`local x`, `x = nothing`; backend `Local`). The run; kept on a pause."""
 struct DeclaredLocals <: ContextPart end
 """The inputs a run starts with. The run; read-only; kept on a pause."""
@@ -23,14 +23,14 @@ struct Inputs <: ContextPart end
 
 """The part of a run's context that the subcontext name `name` refers to: a namespace of the stored context unless it is one of the runtime parts."""
 context_part(::Val) = Stored()
-context_part(::Val{:_declared_outputs}) = DeclaredOutputs()
-context_part(::Val{:_subcontext_outputs}) = SubcontextOutputs()
+context_part(::Val{:_captured_returns}) = CapturedReturns()
+context_part(::Val{:_subcontext_returns}) = SubcontextReturns()
 context_part(::Val{:_declared_locals}) = DeclaredLocals()
 context_part(::Val{:_inputs}) = Inputs()
 
 """The subcontext name a runtime part is stored under."""
-part_name(::DeclaredOutputs) = :_declared_outputs
-part_name(::SubcontextOutputs) = :_subcontext_outputs
+part_name(::CapturedReturns) = :_captured_returns
+part_name(::SubcontextReturns) = :_subcontext_returns
 part_name(::DeclaredLocals) = :_declared_locals
 part_name(::Inputs) = :_inputs
 

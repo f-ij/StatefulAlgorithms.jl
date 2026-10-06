@@ -2,7 +2,7 @@
 Typing the run's values before the first step.
 
 A run holds, next to the stored state: inputs (read-only), declared locals (the run) and outputs (one step: declared
-outputs, what statements and calls return, and subcontext outputs, what an algorithm returns that is not its state).
+outputs, what statements and calls return, and subcontext returns, what an algorithm returns that is not its state).
 Like Julia does for the variables of a function, their types are decided before the loop, from the types the steps
 write, so the runtime context has one type in every step:
 
@@ -14,7 +14,7 @@ Without these slots an output would only appear in the runtime context when firs
 `nothing` in some steps and a `Float64` in others would change the runtime context's type from step to step.
 =#
 
-"""The names and types of a runtime part (`_declared_outputs`) in context type `RC`, as `name => type` pairs."""
+"""The names and types of a runtime part (`_captured_returns`) in context type `RC`, as `name => type` pairs."""
 function _part_slots(::Type{RC}, part::Symbol) where {RC<:ProcessContext}
     D = fieldtype(RC, :subcontexts)
     part in fieldnames(D) || return Pair{Symbol, Any}[]
@@ -39,23 +39,23 @@ end
 _slots_type(slots) = NamedTuple{Tuple(first.(slots)), Tuple{last.(slots)...}}
 
 """
-`RC` with output slots for everything the `returned` runtime context types hold in `_declared_outputs` and
-`_subcontext_outputs`, joined with the slots `RC` already has.
+`RC` with output slots for everything the `returned` runtime context types hold in `_captured_returns` and
+`_subcontext_returns`, joined with the slots `RC` already has.
 """
 function _with_output_slots(::Type{RC}, returned) where {RC<:ProcessContext}
-    declared = _part_slots(RC, :_declared_outputs)
-    owners = Dict{Symbol, Vector{Pair{Symbol, Any}}}(name => _slots_of(T) for (name, T) in _part_slots(RC, :_subcontext_outputs))
-    owner_order = Symbol[first(p) for p in _part_slots(RC, :_subcontext_outputs)]
+    declared = _part_slots(RC, :_captured_returns)
+    owners = Dict{Symbol, Vector{Pair{Symbol, Any}}}(name => _slots_of(T) for (name, T) in _part_slots(RC, :_subcontext_returns))
+    owner_order = Symbol[first(p) for p in _part_slots(RC, :_subcontext_returns)]
     for R in returned
-        declared = _join_slots(declared, _part_slots(R, :_declared_outputs))
-        for (owner, T) in _part_slots(R, :_subcontext_outputs)
+        declared = _join_slots(declared, _part_slots(R, :_captured_returns))
+        for (owner, T) in _part_slots(R, :_subcontext_returns)
             owner in owner_order || push!(owner_order, owner)
             owners[owner] = _join_slots(get(owners, owner, Pair{Symbol, Any}[]), _slots_of(T))
         end
     end
     parts = Pair{Symbol, Any}[]
-    isempty(declared) || push!(parts, :_declared_outputs => SubContext{:_declared_outputs, _slots_type(declared)})
-    isempty(owner_order) || push!(parts, :_subcontext_outputs => SubContext{:_subcontext_outputs, _slots_type([o => _slots_type(owners[o]) for o in owner_order])})
+    isempty(declared) || push!(parts, :_captured_returns => SubContext{:_captured_returns, _slots_type(declared)})
+    isempty(owner_order) || push!(parts, :_subcontext_returns => SubContext{:_subcontext_returns, _slots_type([o => _slots_type(owners[o]) for o in owner_order])})
     return _with_parts(RC, parts)
 end
 
@@ -124,7 +124,7 @@ the run is compiled; nothing of it runs per step.
     return @inline _settled_runtime(runtimecontext, settled)
 end
 
-_without_outputs(::Type{R}) where {R<:ProcessContext} = _drop_parts(R, (:_declared_outputs, :_subcontext_outputs))
+_without_outputs(::Type{R}) where {R<:ProcessContext} = _drop_parts(R, (:_captured_returns, :_subcontext_returns))
 function _drop_parts(::Type{RC}, drop) where {RC<:ProcessContext}
     D = fieldtype(RC, :subcontexts)
     keep = [i for (i, n) in enumerate(fieldnames(D)) if !(n in drop)]
@@ -142,7 +142,7 @@ _empty_slots_expr(::Type{T}) where {T<:NamedTuple} =
         push!(exprs, :(rc = @inline with_subcontext(rc, Val(:_declared_locals), SubContext{:_declared_locals}(_settled_locals(get_declared_locals(rc), $R)))))
     end
     D = fieldtype(R, :subcontexts)
-    for part in (:_declared_outputs, :_subcontext_outputs)
+    for part in (:_captured_returns, :_subcontext_returns)
         part in fieldnames(D) || continue
         push!(exprs, :(rc = @inline with_subcontext(rc, Val($(QuoteNode(part))), $(fieldtype(D, part))($(_empty_slots_expr(getdatatype(fieldtype(D, part))))))))
     end

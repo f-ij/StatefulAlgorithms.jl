@@ -112,10 +112,10 @@ runtime_input_bucket(ctx) = getproperty(StatefulAlgorithms.get_subcontexts(ctx),
     runtime_result = run(initialized_runtime; temp = 1.5, scale = 2)
     runtime_context = StatefulAlgorithms.context(runtime_result)
     @test !haskey(StatefulAlgorithms.get_subcontexts(runtime_context), :Callable_1)   # function calls have no persistent state
-    @test !haskey(StatefulAlgorithms.get_declared_outputs(runtime_context), :value)
+    @test !haskey(StatefulAlgorithms.get_captured_returns(runtime_context), :value)
     @test isempty(StatefulAlgorithms.get_inputs(runtime_context))
     @test isempty(runtime_input_bucket(runtime_context))
-    @test !haskey(StatefulAlgorithms.get_declared_outputs(runtime_context), :process)
+    @test !haskey(StatefulAlgorithms.get_captured_returns(runtime_context), :process)
 
     for entry in (runtime_algo, resolve(runtime_algo), initialized_runtime)
         process = Process(entry; repeats = 1)
@@ -124,12 +124,12 @@ runtime_input_bucket(ctx) = getproperty(StatefulAlgorithms.get_subcontexts(ctx),
         @test StatefulAlgorithms._has_typed_runtime_context(process)
         @test isnothing(process.runtime_context)
         fetched_context = fetch(process)
-        @test !haskey(StatefulAlgorithms.get_declared_outputs(fetched_context), :value)
+        @test !haskey(StatefulAlgorithms.get_captured_returns(fetched_context), :value)
         @test !haskey(StatefulAlgorithms.get_subcontexts(StatefulAlgorithms.context(process)), :Callable_1)   # function calls have no persistent state
-        @test !haskey(StatefulAlgorithms.get_declared_outputs(StatefulAlgorithms.context(process)), :value)
+        @test !haskey(StatefulAlgorithms.get_captured_returns(StatefulAlgorithms.context(process)), :value)
         @test isempty(StatefulAlgorithms.get_inputs(StatefulAlgorithms.context(process)))
         @test isempty(runtime_input_bucket(StatefulAlgorithms.context(process)))
-        @test !haskey(StatefulAlgorithms.get_declared_outputs(StatefulAlgorithms.context(process)), :process)
+        @test !haskey(StatefulAlgorithms.get_captured_returns(StatefulAlgorithms.context(process)), :process)
         close(process)
     end
 
@@ -137,25 +137,25 @@ runtime_input_bucket(ctx) = getproperty(StatefulAlgorithms.get_subcontexts(ctx),
     StatefulAlgorithms.runprocessinline!(inline_worker; temp = 2.0, scale = 3)
     @test StatefulAlgorithms._has_typed_runtime_context(inline_worker)
     @test isnothing(inline_worker.runtime_context)
-    @test !haskey(StatefulAlgorithms.get_declared_outputs(fetch(inline_worker)), :value)
+    @test !haskey(StatefulAlgorithms.get_captured_returns(fetch(inline_worker)), :value)
     @test !haskey(StatefulAlgorithms.get_subcontexts(StatefulAlgorithms.context(inline_worker)), :Callable_1)   # function calls have no persistent state
-    @test !haskey(StatefulAlgorithms.get_declared_outputs(StatefulAlgorithms.context(inline_worker)), :value)
+    @test !haskey(StatefulAlgorithms.get_captured_returns(StatefulAlgorithms.context(inline_worker)), :value)
     @test isempty(StatefulAlgorithms.get_inputs(StatefulAlgorithms.context(inline_worker)))
     @test isempty(runtime_input_bucket(StatefulAlgorithms.context(inline_worker)))
-    @test !haskey(StatefulAlgorithms.get_declared_outputs(StatefulAlgorithms.context(inline_worker)), :process)
+    @test !haskey(StatefulAlgorithms.get_captured_returns(StatefulAlgorithms.context(inline_worker)), :process)
     close(inline_worker)
 
     per_run_repeats_process = Process(runtime_algo)
     run(per_run_repeats_process; repeats = 1, temp = 2.0, scale = 3)
     wait(per_run_repeats_process)
-    @test !haskey(StatefulAlgorithms.get_declared_outputs(fetch(per_run_repeats_process)), :value)
+    @test !haskey(StatefulAlgorithms.get_captured_returns(fetch(per_run_repeats_process)), :value)
     @test StatefulAlgorithms.lifetime(per_run_repeats_process) == Repeat(1)
     close(per_run_repeats_process)
 
     per_run_lifetime_process = Process(runtime_algo)
     run(per_run_lifetime_process; lifetime = Repeat(1), temp = 1.5, scale = 2)
     wait(per_run_lifetime_process)
-    @test !haskey(StatefulAlgorithms.get_declared_outputs(fetch(per_run_lifetime_process)), :value)
+    @test !haskey(StatefulAlgorithms.get_captured_returns(fetch(per_run_lifetime_process)), :value)
     close(per_run_lifetime_process)
 
     positional_specs_process = Process(runtime_algo; repeats = 1)
@@ -163,14 +163,14 @@ runtime_input_bucket(ctx) = getproperty(StatefulAlgorithms.get_subcontexts(ctx),
 
     inline_process = InlineProcess(runtime_algo; repeats = 1)
     inline_result = run(inline_process; temp = 2.0, scale = 3)
-    @test !haskey(StatefulAlgorithms.get_declared_outputs(inline_result), :value)
+    @test !haskey(StatefulAlgorithms.get_captured_returns(inline_result), :value)
     @test !haskey(StatefulAlgorithms.get_subcontexts(StatefulAlgorithms.context(inline_process)), :Callable_1)   # function calls have no persistent state
-    @test !haskey(StatefulAlgorithms.get_declared_outputs(StatefulAlgorithms.context(inline_process)), :value)
+    @test !haskey(StatefulAlgorithms.get_captured_returns(StatefulAlgorithms.context(inline_process)), :value)
     @test isempty(StatefulAlgorithms.get_inputs(StatefulAlgorithms.context(inline_process)))
     @test isempty(getproperty(StatefulAlgorithms.get_subcontexts(StatefulAlgorithms.context(inline_process)), :_inputs))
 
     inline_nogen_result = StatefulAlgorithms.run_nogen(inline_process; temp = 1.5, scale = 2)
-    @test !haskey(StatefulAlgorithms.get_declared_outputs(inline_nogen_result), :value)
+    @test !haskey(StatefulAlgorithms.get_captured_returns(inline_nogen_result), :value)
     @test isempty(StatefulAlgorithms.get_inputs(StatefulAlgorithms.context(inline_process)))
     @test isempty(getproperty(StatefulAlgorithms.get_subcontexts(StatefulAlgorithms.context(inline_process)), :_inputs))
     @test_throws ErrorException run(inline_process)

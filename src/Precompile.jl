@@ -253,7 +253,7 @@ _process_precompile_scale(x; scale = 1.0) = x * scale
 
         until_process = Process(
             _ProcessPrecompileCounter();
-            lifetime = RepeatOrUntil(_ -> true, 2, :_declared_outputs),
+            lifetime = RepeatOrUntil(_ -> true, 2, :_captured_returns),
         )
         run(until_process)
         wait(until_process)
