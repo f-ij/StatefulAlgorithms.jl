@@ -1,19 +1,20 @@
 #=
 EXPERIMENTAL: finding which persistent fields a step can write, by type inference.
 
-The loop carries only the fields a step can write (see `_run_steps` in Loops.jl). To know them, `_written_fields`
-infers `_step!` once with a context whose registry slot is a `WriteLog`. Every persistent write ends in
+A loop carries only the fields its steps can write (Carry.jl). To know them, `_written_fields` asks inference what
+`_step!` returns for a context whose registry slot is a `WriteLog`. Every persistent write ends in
 `merge_into_subcontext_rebuild` or `withsubcontexts`; for a logged context those add the written
 `(subcontext, field)` pairs to the log's type. The inferred return type then lists every field any branch of the
-step can write: children on intervals, routines and the interactive `ContextExchange` included. Nothing runs, and
-it happens while the loop is compiled: a logged context only exists during inference.
+step can write: children on intervals, routines and the interactive `ContextExchange` included. Nothing runs: the
+question is answered while the loop is compiled.
 =#
 
 """
     WriteLog{R,W}
 
-Registry slot of a context that exists only during inference: the registry `reg`, plus in `W` the persistent
-fields written so far, as a sorted tuple of `(subcontext, field)` pairs.
+Registry slot of a logged context: the registry `reg`, plus in `W` the persistent fields written so far, as a sorted
+tuple of `(subcontext, field)` pairs. Only the context's type changes; its layout and values are those of the
+ordinary context.
 """
 struct WriteLog{R,W}
     reg::R
@@ -26,13 +27,35 @@ end
 _unlogged(::Type{ProcessContext{D,WriteLog{R,W}}}) where {D,R,W} = ProcessContext{D,R}
 _unlogged(T::Type) = T
 
-"""`pc` with an empty write log around its registry: same subcontexts and layout, only the type differs."""
-@inline with_empty_log(pc::ProcessContext{D,R}) where {D,R} =
-    ProcessContext{D,WriteLog{R,()}}(get_subcontexts(pc), WriteLog{R,()}(registryref(pc)))
+"""The context type with an empty write log, for an ordinary or a logged context type."""
+_empty_logged(::Type{ProcessContext{D,WriteLog{R,W}}}) where {D,R,W} = ProcessContext{D,WriteLog{R,()}}
+_empty_logged(::Type{ProcessContext{D,R}}) where {D,R} = ProcessContext{D,WriteLog{R,()}}
+
+"""`pc` with an empty write log around its registry."""
+@inline function with_empty_log(pc::ProcessContext)
+    L = _empty_logged(typeof(pc))
+    return L(get_subcontexts(pc), fieldtype(L, :reg)(registryref(pc)))
+end
 
 """`pc` without its write log (`pc` itself for an ordinary context)."""
 @inline without_log(pc::ProcessContext{D,WriteLog{R,W}}) where {D,R,W} = ProcessContext{D,R}(get_subcontexts(pc), registryref(pc))
 @inline without_log(pc::ProcessContext) = pc
+
+"""
+The context a plan hands a child: a logged context with its log emptied (any other context unchanged). Together
+with `with_child_log` this gives every child, at every level of a nested plan, the same context type, as without
+logs. A type that grows from parent to child (the log of the siblings before it) makes inference stop inlining
+nested plans at its recursion limit.
+"""
+@inline child_context(pc::ProcessContext{D,<:WriteLog}) where {D} = @inline with_empty_log(pc)
+@inline child_context(context::C) where {C} = context
+
+"""The child's result `stepped` with the log of `parent` added (`stepped` itself when `parent` has no log)."""
+@inline @generated function with_child_log(parent::ProcessContext{D,WriteLog{R,W}}, stepped::ProcessContext{D2,WriteLog{R,W2}}) where {D,R,W,D2,W2}
+    W3 = _union_written(W, W2)
+    return :(ProcessContext{D2,WriteLog{R,$W3}}(get_subcontexts(stepped), WriteLog{R,$W3}(registryref(stepped))))
+end
+@inline with_child_log(parent::P, stepped::S) where {P,S} = stepped
 
 """`W` and `new` as one sorted tuple of `(subcontext, field)` pairs without repeats."""
 _union_written(W::Tuple, new::Tuple) = Tuple(sort!(unique!(Any[W..., new...]); by = string))
@@ -61,31 +84,34 @@ end
 end
 
 """
-    _written_fields(step_plan, step_cursor, context, runtimecontext, step_wiring, process, lifetime)
+    _written_fields(algo, cursor, context, runtimecontext, wiring, namespace, process, lifetime)
 
-`Val(W)` with `W` the persistent fields, as `(subcontext, field)` pairs, that one step of `step_plan` can write, or
-`nothing` when that cannot be determined. A compile-time constant: `Core.Compiler.return_type` is evaluated by
-inference while the caller is compiled, and the rest folds. The delta loop (`_run_steps`) runs its steps on exactly
-these logged types, so this is the inference of the step that is compiled anyway, not a second one.
+`Val(W)` with `W` the persistent fields, as `(subcontext, field)` pairs, that `_step!` with these arguments can
+write, or `nothing` when that cannot be determined. The arguments are those of the `_step!` call; only the context's
+type matters, and it may be ordinary or logged.
+
+A compile-time constant: `Core.Compiler.return_type` is evaluated by inference while the caller is compiled, and the
+rest folds. The question is asked for the context with an empty log, which is the type a carrying loop steps with
+(`step_context`, Carry.jl), so it reuses the inference of the step that is compiled anyway.
 """
-@inline function _written_fields(step_plan::SP, step_cursor::SC, context::ProcessContext{D,R}, runtimecontext::RC,
-                                 step_wiring::W, process::P, lifetime::LT) where {SP,SC,D,R,RC,W,P,LT}
-    logged_step = Tuple{SP, SC, ProcessContext{D,WriteLog{R,()}}, RC, W, Namespace{nothing}, P, LT}
-    return _written_from_return_type(Core.Compiler.return_type(_step!, logged_step), D, R)
+@inline function _written_fields(algo::A, cursor::S, context::C, runtimecontext::RC, wiring::W, namespace::N,
+                                 process::P, lifetime::LT) where {A,S,C<:ProcessContext,RC,W,N,P,LT}
+    L = _empty_logged(C)
+    return _written_from_return_type(Core.Compiler.return_type(_step!, Tuple{A,S,L,RC,W,N,P,LT}), L)
 end
 
 """
-`Val(W)` from the inferred return type of a logged step: `W` holds every field logged on any branch (branches that
-write different fields give a `Union`). `nothing` unless every possible return is `(context, runtime context)` with
-the context being the step's own context type with a log.
+`Val(W)` from the inferred return type `rt` of a step given the empty-logged context type `L`: `W` holds every field
+logged on any branch (branches that write different fields give a `Union`). `nothing` unless every possible return
+is `(context, runtime context)` with the context being `L` with some log.
 """
-Base.@assume_effects :foldable function _written_from_return_type(@nospecialize(rt), @nospecialize(D), @nospecialize(R))
+Base.@assume_effects :foldable function _written_from_return_type(@nospecialize(rt), @nospecialize(L))
     rt === Union{} && return nothing                 # the step always throws: nothing can be concluded
     written = ()
     for T in Base.uniontypes(rt)
         (T isa DataType && T <: Tuple && length(T.parameters) == 2) || return nothing
         for C in Base.uniontypes(T.parameters[1])
-            logged = _logged_writes(C, D, R)
+            logged = _logged_writes(C, L)
             isnothing(logged) && return nothing
             written = _union_written(written, logged)
         end
@@ -93,25 +119,6 @@ Base.@assume_effects :foldable function _written_from_return_type(@nospecialize(
     return Val(written)
 end
 
-"""The writes logged in the context type `C`, or `nothing` unless `C` has subcontexts `D` and a log around registry `R`."""
-_logged_writes(::Type{ProcessContext{D,WriteLog{R,W}}}, ::Type{D}, ::Type{R}) where {D,R,W} = W
-_logged_writes(@nospecialize(C), @nospecialize(D), @nospecialize(R)) = nothing
-
-"""
-    _written_values(context, Val(W))
-
-The values of the fields `W` in `context`, as `(; subcontext = (; field = value, ...), ...)`: the shape
-`merge_into_subcontexts` takes.
-"""
-@inline @generated function _written_values(context::ProcessContext, ::Val{W}) where {W}
-    subs = Tuple(unique(first.(W)))
-    entries = map(subs) do s
-        fields = Tuple(f for (s2, f) in W if s2 === s)
-        values = [:(getfield(getdata(getfield(subcontexts, $(QuoteNode(s)))), $(QuoteNode(f)))) for f in fields]
-        :(NamedTuple{$fields}(($(values...),)))
-    end
-    return quote
-        subcontexts = @inline get_subcontexts(context)
-        return NamedTuple{$subs}(($(entries...),))
-    end
-end
+"""The writes logged in the context type `C`, or `nothing` unless `C` is the empty-logged type `L` with some log."""
+_logged_writes(::Type{ProcessContext{D,WriteLog{R,W}}}, ::Type{ProcessContext{D,WriteLog{R,()}}}) where {D,R,W} = W
+_logged_writes(@nospecialize(C), @nospecialize(L)) = nothing

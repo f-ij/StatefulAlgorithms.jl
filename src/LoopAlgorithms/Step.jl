@@ -31,7 +31,8 @@ Base.@constprop :aggressive @inline @generated function _step!(ca::CA, cursor::S
                 local child_cursor = @inline child_loop_cursor(cursor, Val($i))
                 local child_step_wiring = @inline child_wiring_view(wiring, Val($i))
                 local child_namespace = $child_namespace_type()
-                context, runtimecontext = @inline _step!(algo, child_cursor, context, runtimecontext, child_step_wiring, child_namespace, process, lifetime)
+                stepped, runtimecontext = @inline _step!(algo, child_cursor, (@inline child_context(context)), runtimecontext, child_step_wiring, child_namespace, process, lifetime)
+                context = @inline with_child_log(context, stepped)
             end
         end)
     end
@@ -59,27 +60,34 @@ end
     resume_point = @inline get_resume_point(routine_cursor, idx)
     this_repeat_count = @inline routine_repeat_count(subroutine_lifetime)
     if resume_point <= this_repeat_count
-        context, runtimecontext = @inline _step!(func, func_cursor, context, runtimecontext, child_step_wiring, namespace, process, lifetime)
+        # The repeats carry only the fields the child writes (Carry.jl); `context` stays the routine's starting context.
+        written = @inline _written_fields(func, func_cursor, context, runtimecontext, child_step_wiring, namespace, process, lifetime)
+        carried = @inline loop_carry(context, written)
+        stepped, runtimecontext = @inline _step!(func, func_cursor, (@inline step_context(context, carried, written)), runtimecontext, child_step_wiring, namespace, process, lifetime)
+        carried = @inline next_carry(stepped, written)
         @inline tick!(process)
 
         next_idx = resume_point + 1
-        if @inline routine_breakcondition(subroutine_lifetime, lifetime, process, context, resume_point)
-            if !(@inline _routine_local_breakcondition(subroutine_lifetime, process, context, resume_point))
+        if @inline routine_breakcondition(subroutine_lifetime, lifetime, process, stepped, resume_point)
+            if !(@inline _routine_local_breakcondition(subroutine_lifetime, process, stepped, resume_point))
                 @inline set_resume_point!(routine_cursor, idx, next_idx)
             end
-            return context, runtimecontext
+            return (@inline carried_context(context, carried, written)), runtimecontext
         end
 
         for lidx in next_idx:this_repeat_count
-            if @inline routine_breakcondition(subroutine_lifetime, lifetime, process, context, lidx)
-                if !(@inline _routine_local_breakcondition(subroutine_lifetime, process, context, lidx))
+            current = @inline carried_context(context, carried, written)
+            if @inline routine_breakcondition(subroutine_lifetime, lifetime, process, current, lidx)
+                if !(@inline _routine_local_breakcondition(subroutine_lifetime, process, current, lidx))
                     @inline set_resume_point!(routine_cursor, idx, lidx)
                 end
-                return context, runtimecontext
+                return current, runtimecontext
             end
-            context, runtimecontext = @inline _step!(func, func_cursor, context, runtimecontext, child_step_wiring, namespace, process, lifetime)
+            stepped, runtimecontext = @inline _step!(func, func_cursor, (@inline step_context(context, carried, written)), runtimecontext, child_step_wiring, namespace, process, lifetime)
+            carried = @inline next_carry(stepped, written)
             @inline tick!(process)
         end
+        return (@inline carried_context(context, carried, written)), runtimecontext
     end
     return context, runtimecontext
 end
@@ -140,7 +148,8 @@ Base.@constprop :aggressive @inline @generated function _step!(r::R, cursor::S, 
             local func_cursor = @inline child_loop_cursor(cursor, Val($i))
             local child_step_wiring = @inline child_wiring_view(wiring, Val($i))
             local child_namespace = $child_namespace_type()
-            context, runtimecontext = @inline $substep(context, runtimecontext, func, func_cursor, r, cursor, process, lifetime, $i, $repeat_value, child_step_wiring, child_namespace)
+            stepped, runtimecontext = @inline $substep((@inline child_context(context)), runtimecontext, func, func_cursor, r, cursor, process, lifetime, $i, $repeat_value, child_step_wiring, child_namespace)
+            context = @inline with_child_log(context, stepped)
         end)
     end
 
