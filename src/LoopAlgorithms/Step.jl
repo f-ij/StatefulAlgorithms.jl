@@ -95,7 +95,8 @@ end
     resume_point = @inline get_resume_point(routine_cursor, idx)
     this_repeat_count = @inline routine_repeat_count(subroutine_lifetime)
     if resume_point <= this_repeat_count
-        # The repeats carry only the fields the child writes (src/Context/Carried); `context` stays the routine's starting context.
+        # The repeats carry only the fields the child writes, as the loops do (see src/Context/Carried/Carry.jl); `context`
+        # stays the routine's starting context.
         carried = @inline create_carried(func, func_cursor, context, runtimecontext, child_step_wiring, namespace, process, lifetime)
         stepped, runtimecontext = @inline _step!(func, func_cursor, (@inline carried_context(context, carried)), runtimecontext, child_step_wiring, namespace, process, lifetime)
         carried = @inline next_carried(carried, stepped)

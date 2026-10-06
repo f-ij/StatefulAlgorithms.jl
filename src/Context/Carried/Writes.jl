@@ -1,5 +1,5 @@
 #=
-EXPERIMENTAL: which persistent fields one step of a plan can write, worked out from the plan's types.
+Which persistent fields one step of a plan can write, worked out from the plan's types.
 
 `_writes(node, cursor, context, RC, wiring, namespace, process, lifetime)` gives the `(subcontext, field)` pairs one
 `_step!` of `node` can write, as `Val(W)`. Its arguments are those of the `_step!` call, except that the runtime

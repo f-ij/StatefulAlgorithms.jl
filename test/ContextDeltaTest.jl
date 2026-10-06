@@ -1,6 +1,6 @@
 using Random
 
-# EXPERIMENTAL context-delta loop: the loop carries only the persistent fields its steps can write, worked out from the
+# Carrying loops: a loop carries only the persistent fields its steps can write, worked out from the
 # plan's types (src/Context/Carried). These tests check that the write set is what the plan writes, that the
 # results are right, and that the loop really takes the carrying path (it falls back silently otherwise).
 

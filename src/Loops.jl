@@ -122,6 +122,8 @@ Run a single function in a loop indefinitely.
         @inline inc!(process)
     end
 
+    # Carry only the fields the steps write, not the whole context: fields left unchanged would otherwise be copied every
+    # step (see src/Context/Carried/Carry.jl).
     carried = @inline create_carried(step_plan, step_cursor, context, runtimecontext, step_wiring, Namespace{nothing}(), process, lifetime)
     while true
         stepped, runtimecontext = @inline _step!(step_plan, step_cursor, (@inline carried_context(context, carried)), runtimecontext, step_wiring, Namespace{nothing}(), process, lifetime)
@@ -170,6 +172,8 @@ Base.@constprop :aggressive @inline function loop(process::P, algo::F, stored_co
         @inline inc!(process)
     end
 
+    # Carry only the fields the steps write, not the whole context: fields left unchanged would otherwise be copied every
+    # step (see src/Context/Carried/Carry.jl).
     carried = @inline create_carried(step_plan, step_cursor, context, runtimecontext, step_wiring, Namespace{nothing}(), process, lifetime)
     for _ in (@inline loopidx(process)):(@inline repeats(lifetime))
         stepped, runtimecontext = @inline _step!(step_plan, step_cursor, (@inline carried_context(context, carried)), runtimecontext, step_wiring, Namespace{nothing}(), process, lifetime)

@@ -1,9 +1,13 @@
 #=
-EXPERIMENTAL: carrying a context through a loop as only the fields its steps write.
+Carrying a context through a loop as only the fields its steps write.
 
-A loop that reassigns its whole context every step makes every field a loop variable. A field no step writes is
-then a loop variable whose new value is its old one, which Julia keeps in a stack slot and copies every step. A
-carrying loop never reassigns the context it started with and carries only the fields its steps can write:
+Why: a loop that reassigns its whole context every step makes every field a loop variable. A field no step writes
+is then a loop variable whose new value is its old one. For a context that holds both pointers and plain values,
+Julia keeps such a variable in a stack slot and copies it every step, and the compiler cannot keep the context in
+registers (the InteractiveIsing 3D graph example copied 600 + 624 bytes per step and ran at 206 updates/s/spin;
+carrying only the written fields: 509). A carrying loop never reassigns the context it started with: the fields no
+step writes are read from where they already are, and only the fields its steps can write cross from one step to
+the next:
 
     carried = create_carried(...the _step! arguments...)
     for ...
