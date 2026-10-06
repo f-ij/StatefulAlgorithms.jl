@@ -9,10 +9,12 @@
 """
 
 """The view's namespace's state (its subcontext in the stored context), by name."""
-function get_local_locations(sct::Type{SCT}) where {SCT<:SubContextView{CType, SubKey}} where {CType, SubKey}
-    # A call has no state: its namespace is `_declared_outputs`, the runtime part that holds what calls return
-    # (see `get_output_locations`).
-    SubKey === :_declared_outputs && return (;)
+get_local_locations(::Type{SCT}) where {SCT<:SubContextView{CType, SubKey}} where {CType, SubKey} = _state_locations(context_part(Val(SubKey)), SCT)
+
+"""A call has no state: its namespace is the declared outputs (see `get_output_locations`)."""
+_state_locations(::DeclaredOutputs, ::Type) = (;)
+
+function _state_locations(::Stored, ::Type{SCT}) where {SCT<:SubContextView{CType, SubKey}} where {CType, SubKey}
     _subcontext_type = subcontext_type(SCT)
     _data_type = getdatatype(_subcontext_type)
     local_varnames = keys(_subcontext_type)
@@ -61,19 +63,21 @@ function get_routed_locations(sct::Type{SCT}) where {SCT<:SubContextView{CType, 
     sharedvars = _view_shared_types(view_sharedvars(SCT))
 
     routedvars = named_flat_collect_broadcast(sharedvars) do sv
-        fromname = get_fromname(sv)
-        fromname === :_declared_locals && return (;)   # declared locals: see `get_declared_locations`
-        _localnames = localnames(sv)
-        _subvarcontextnames = subvarcontextnames(sv)
-        _transform = gettransform(sv)
-        _reverse_transform = getreverse_transform(sv)
-        location_type = (fromname == :_declared_outputs || fromname == :_inputs) ? :runtime : :subcontext
-        pairs = (_localnames[i] => VarLocation{location_type}(fromname, _subvarcontextnames[i], _transform, _reverse_transform) for i in 1:length(_localnames))
-        return NamedTuple(pairs)
+        return _routed_locations(context_part(Val(get_fromname(sv))), sv)
     end
 
     return routedvars
 end
+
+"""The locations a route gives the view, read from where its source lives (`location_kind`)."""
+function _routed_locations(part::ContextPart, sv)
+    fromname = get_fromname(sv)
+    _localnames = localnames(sv)
+    _subvarcontextnames = subvarcontextnames(sv)
+    pairs = (_localnames[i] => VarLocation{location_kind(part)}(fromname, _subvarcontextnames[i], gettransform(sv), getreverse_transform(sv)) for i in 1:length(_localnames))
+    return NamedTuple(pairs)
+end
+_routed_locations(::DeclaredLocals, sv) = (;)   # see `get_declared_locations`
 
 """
 Declared loop-local variables (`Local`) visible to this view => runtime locations in `_declared_locals`.
@@ -83,10 +87,13 @@ own fields, routes and shares take precedence.
 function get_declared_locations(::Type{SCT}) where {SCT<:SubContextView}
     sharedvars = _view_shared_types(view_sharedvars(SCT))
     return named_flat_collect_broadcast(sharedvars) do sv
-        get_fromname(sv) === :_declared_locals || return (;)
-        return NamedTuple{(only(localnames(sv)),)}((VarLocation{:runtime}(:_declared_locals, only(subvarcontextnames(sv))),))
+        return _declared_location(context_part(Val(get_fromname(sv))), sv)
     end
 end
+
+_declared_location(::ContextPart, sv) = (;)
+_declared_location(part::DeclaredLocals, sv) =
+    NamedTuple{(only(localnames(sv)),)}((VarLocation{:runtime}(part_name(part), only(subvarcontextnames(sv))),))
 
 """
 The outputs the view sees by name, from the slots typed before the run (Outputs.jl): for a call (namespace
@@ -95,14 +102,21 @@ kind, so a wire or a declared local of the same name wins.
 """
 function get_output_locations(::Type{SCT}) where {SCT<:SubContextView{CType, SubKey, RuntimeCType}} where {CType, SubKey, RuntimeCType}
     RuntimeCType <: ProcessContext || return (;)
-    D = fieldtype(RuntimeCType, :subcontexts)
-    names = if SubKey === :_declared_outputs
-        :_declared_outputs in fieldnames(D) ? fieldnames(getdatatype(fieldtype(D, :_declared_outputs))) : ()
-    else
-        outputs = :_subcontext_outputs in fieldnames(D) ? getdatatype(fieldtype(D, :_subcontext_outputs)) : NamedTuple{(), Tuple{}}
-        SubKey in fieldnames(outputs) ? fieldnames(fieldtype(outputs, SubKey)) : ()
-    end
+    names = _output_names(context_part(Val(SubKey)), RuntimeCType, SubKey)
     return NamedTuple{names}(map(name -> VarLocation{:runtime}(SubKey, name), names))
+end
+
+"""The data type of a runtime part in runtime context type `RC`; empty when `RC` has no such part."""
+function _part_data_type(::Type{RC}, part::ContextPart) where {RC<:ProcessContext}
+    D = fieldtype(RC, :subcontexts)
+    return part_name(part) in fieldnames(D) ? getdatatype(fieldtype(D, part_name(part))) : NamedTuple{(), Tuple{}}
+end
+
+"""The names of the outputs a view sees: a call every declared output, an algorithm its own subcontext outputs."""
+_output_names(part::DeclaredOutputs, ::Type{RC}, owner::Symbol) where {RC} = fieldnames(_part_data_type(RC, part))
+function _output_names(::Stored, ::Type{RC}, owner::Symbol) where {RC}
+    outputs = _part_data_type(RC, SubcontextOutputs())
+    return owner in fieldnames(outputs) ? fieldnames(fieldtype(outputs, owner)) : ()
 end
 
 function get_injected_locations(sct::Type{SCT}) where {SCT<:SubContextView{CType, SubKey}} where {CType, SubKey}
@@ -241,10 +255,16 @@ preserving their context representation, for example mutable reference wrappers.
     ::Val{subcontextname},
     ::Val{varname},
 ) where {SCV<:SubContextView, subcontextname, varname}
+    return @inline _read_part(context_part(Val(subcontextname)), scv, Val(subcontextname), Val(varname))
+end
+
+"""A runtime part's value is in the runtime context."""
+@inline _read_part(::ContextPart, scv::SCV, ::Val{subcontextname}, ::Val{varname}) where {SCV<:SubContextView, subcontextname, varname} =
+    @inline subcontext_view_value(_runtime_get_var(getruntimecontext(scv), Val(subcontextname), Val(varname)), scv)
+
+"""A namespace's value: its state, or else one of its outputs."""
+@inline function _read_part(::Stored, scv::SCV, ::Val{subcontextname}, ::Val{varname}) where {SCV<:SubContextView, subcontextname, varname}
     runtimecontext = @inline getruntimecontext(scv)
-    if subcontextname === :_inputs || subcontextname === :_declared_outputs
-        return @inline subcontext_view_value(_runtime_get_var(runtimecontext, Val(subcontextname), Val(varname)), scv)
-    end
     context = @inline getcontext(scv)
     subcontexts = @inline get_subcontexts(context)
     if haskey(subcontexts, subcontextname)
