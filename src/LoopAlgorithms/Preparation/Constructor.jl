@@ -222,7 +222,7 @@ function _resolve_plan_wiring_tree(la::LA, registry::NameSpaceRegistry, inherite
         # Concrete children receive a single resolved `Wiring`: inherited global
         # wiring for their namespace, occluded by child-scoped routes.
         target_global = get(combined_global, target, Wiring())
-        target_child = _resolve_child_wiring_bucket(registry, bucket, target)
+        target_child = _local_routes_to_storage(_resolve_child_wiring_bucket(registry, bucket, target), visible_locals)
         resolved = merge_wiring(target_global, target_child)
         return resolved
     end
@@ -233,6 +233,21 @@ function _resolve_plan_wiring_tree(la::LA, registry::NameSpaceRegistry, inherite
     visible = isempty(visible_locals) ? Val((;)) : Val(visible_locals)
     reads = callable_reads(funcs)
     return setfield(rebuilt, :wiring, PlanWiring(combined_global, resolved_children, own_locals, visible, isempty(reads) ? Val(()) : Val(reads)))
+end
+
+"""
+The wiring with every route that reads a declared local (`Route(:_local => ..., :y => :x)`) pointed at that local's
+storage name in `_local` (`y`, or `y@1.2` for a local declared in a nested plan; see `local_storage_name`).
+"""
+_local_routes_to_storage(wiring::Wiring, visible_locals::NamedTuple) =
+    Wiring(map(r -> _local_route_to_storage(r, visible_locals), routes(wiring)), shares(wiring))
+_local_route_to_storage(r::Route, visible_locals::NamedTuple) = r
+function _local_route_to_storage(r::Route{:_local, To, T, RT, V, A}, visible_locals::NamedTuple) where {To, T, RT, V, A}
+    storage = map(V) do name
+        haskey(visible_locals, name) || construction_error("A route reads the local `", name, "`, which is not declared in this plan or an enclosing one.")
+        return getproperty(visible_locals, name)
+    end
+    return Route{:_local, To, T, RT, storage, A, Nothing, Nothing}()
 end
 
 # A finalized algorithm: resolve the loop inside, keep the final step.
