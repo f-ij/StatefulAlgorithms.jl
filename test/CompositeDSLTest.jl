@@ -52,6 +52,10 @@ keyword_semicolon_dsl_test(; a, x, y) = a + 10x + 100y
 literal_join_dsl_test(prefix, value, marker) = string(prefix, value, marker)
 constant_value_dsl_test() = 0.25
 square_dsl_test(x) = x^2
+plus100_dsl_test(v) = v + 100.0
+@StepAlgorithm function DSLManagedCounter(@managed(x = 0.0))
+    return (; x = x + 1.0)
+end
 keyword_value_identity_dsl_test(; value) = value
 dsl_final_summary(context) = (; result = context[DSLValueAlgo].result)
 dsl_runtime_final_summary(context) = (; result = context.result)
@@ -707,6 +711,34 @@ end
         ctx = fetch(p)
         @test ctx[:_state].targetbuffer == [2, 2, 4]
         @test !haskey(StatefulAlgorithms.getglobals(ctx), :result)
+    end
+
+    @testset "Owned state fields can be assigned from a call, every step" begin
+        @info "Composite DSL: Owned state fields can be assigned from a call, every step"
+        run_steps(algo, n) = (p = Process(resolve(algo), repeat = n); run(p); ctx = fetch(p); close(p); ctx)
+
+        # Each step: the counter adds 1 to its managed `x`, then the call writes x + 100 back into it.
+        ctx = run_steps(@CompositeAlgorithm(begin
+            @alias c = DSLManagedCounter
+            c()
+            c.x = plus100_dsl_test(c.x)
+        end), 3)
+        @test ctx[:c].x == 303.0
+
+        ctx = run_steps(@CompositeAlgorithm(begin
+            @alias c = DSLManagedCounter
+            c()
+            c.x = c.x * 2.0
+        end), 3)
+        @test ctx[:c].x == 14.0
+
+        # On a schedule: the call runs on steps 2 and 4 only.
+        ctx = run_steps(@CompositeAlgorithm(begin
+            @alias c = DSLManagedCounter
+            c()
+            c.x = @every 2 plus100_dsl_test(c.x)
+        end), 4)
+        @test ctx[:c].x == 204.0
     end
 
     @testset "Owned state fields can be assigned from ref values" begin

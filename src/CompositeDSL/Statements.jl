@@ -345,6 +345,9 @@ function _dsl_build_owned_write_statement(lhs, rhs, alias_map, context_map, know
     isnothing(owned_route) && return nothing
 
     schedule_kind, schedule_value, inner = _dsl_parse_schedule(rhs)
+    if inner isa Expr && inner.head == :call
+        return _dsl_build_owned_call_write_statement(owned_route, rhs, alias_map, context_map, known_outputs, expected_schedule, owner_name; include_condition)
+    end
     schedule_expr = _dsl_schedule_expr(schedule_kind, schedule_value, expected_schedule, owner_name)
 
     value_spec, value_input = _dsl_parse_function_positional_arg(alias_map, context_map, inner, known_outputs, 1)
@@ -369,6 +372,23 @@ function _dsl_build_owned_write_statement(lhs, rhs, alias_map, context_map, know
         push!(_dsl_specification, $schedule_expr)
         $(_dsl_maybe_guard_metadata_expr(quote
             StatefulAlgorithms._composite_dsl_add_routes!(_dsl_options, _dsl_producers, _dsl_external_inputs, _dsl_owner, _dsl_resolved.inputs)
+        end, include_condition))
+    end
+end
+
+"""
+Build `owner.field = f(args...)`: the call runs every step (like `x = f(args...)`) and its return is written into
+`owner.field`. The call's output gets a generated name, and a route from `owner.field` to that name is added to the
+call: a return under a name its view can see is written back through the route.
+"""
+function _dsl_build_owned_call_write_statement(owned_route, rhs, alias_map, context_map, known_outputs::Set{Symbol}, expected_schedule::Symbol, owner_name::Symbol; include_condition = nothing)
+    output = gensym(Symbol(:dsl_write_, owned_route.source))
+    call_statement = _dsl_build_statement(:($output = $rhs), alias_map, context_map, known_outputs, Set{Symbol}(), expected_schedule, owner_name; include_condition)
+    write_route = _dsl_inputs_expr(((; kind = :context_simple, owner = owned_route.owner, source = owned_route.source, destination = output),))
+    return quote
+        $call_statement
+        $(_dsl_maybe_guard_metadata_expr(quote
+            StatefulAlgorithms._composite_dsl_add_routes!(_dsl_options, _dsl_producers, _dsl_external_inputs, _dsl_owner, $write_route)
         end, include_condition))
     end
 end
