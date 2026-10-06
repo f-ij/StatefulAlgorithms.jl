@@ -830,3 +830,71 @@ function _dsl_reject_include_if_declarations(stmt)
     end
     return nothing
 end
+
+#=
+Declared outputs read on another schedule (temporary fallback, to be removed).
+
+A declared output (`y = f(...)`, a call's return) lives for one step. A statement may read it only if, in every step
+where it runs, the call that assigns it ran earlier in that step. In a composite block that holds when the call runs
+every step, or when the reader's interval is a multiple of the call's. Otherwise the reader would see the value from an
+earlier step, which only worked by accident: outputs used to stay in the runtime context until overwritten.
+
+Until blocks can declare locals, such a value is declared for the user as `Local(y = nothing)` on the block (with a
+warning), and its readers read that declared local. It then keeps its last value across steps, and across a pause and
+resume, which is why this goes away.
+=#
+
+"""The interval a composite schedule entry runs on (`nothing` when a condition decides)."""
+_dsl_entry_interval(entry::Integer) = Int(entry)
+_dsl_entry_interval(entry::Interval) = getinterval(entry)
+_dsl_entry_interval(entry) = nothing
+
+"""Whether a statement on `reader` interval always runs in a step where one on `producer` interval ran."""
+_dsl_runs_with(producer, reader) = producer == 1 || (!isnothing(producer) && !isnothing(reader) && reader % producer == 0)
+
+_dsl_unwrap_call(child) = child
+_dsl_unwrap_call(child::WithWiring) = getfield(child, :child)
+
+"""Whether `owner` (a route's target in a `LocalPlanOption`) is the plan child `child`."""
+_dsl_same_child(owner, child) = owner === child || isequal(owner, child) ||
+    (owner isa AbstractIdentifiableAlgo && child isa AbstractIdentifiableAlgo && getkey(owner) != Symbol() && getkey(owner) == getkey(child))
+
+"""A route that read `name` from `_runtime`, reading it from the declared local instead."""
+function _dsl_route_from_local(r::Route)
+    target = isnothing(getto(r)) ? to_match_by(r) : getto(r)
+    return Route(:_declared_locals => target, map(Pair, getvarnames(r), getaliases(r))...; transform = gettransform(r), reverse_transform = getreverse_transform(r))
+end
+_dsl_reads_declared_output(r, name::Symbol) = r isa Route && from_match_by(r) === :_declared_outputs && name in getvarnames(r)
+
+"""Whether plan child `child` (a call, or an algorithm through its routes in `options`) reads the declared output `name`."""
+function _dsl_reads_output(child, options::Vector{Any}, name::Symbol)
+    name in callable_input_names(typeof(_dsl_unwrap_call(child))) && return true
+    child isa WithWiring && any(w -> _dsl_reads_declared_output(w, name), getfield(child, :wires)) && return true
+    return any(o -> o isa LocalPlanOption && _dsl_same_child(getfield(o, :owner), child) && _dsl_reads_declared_output(getfield(o, :option), name), options)
+end
+
+"""
+The block's children and options with a `Local(name = nothing)` for every declared output read on a schedule it is not
+assigned on, and the reads of those values pointed at the local (see the note above). `schedule` holds the children's
+schedule entries, in order.
+"""
+function _dsl_declare_scheduled_step_values(children::Vector{Any}, schedule::Vector{Any}, options::Vector{Any})
+    declared = Symbol[]
+    for (i, child) in enumerate(children)
+        producer = _dsl_entry_interval(schedule[i])
+        for name in callable_return_names(typeof(_dsl_unwrap_call(child)))
+            name in declared && continue
+            j = findfirst(j -> j > i && !_dsl_runs_with(producer, _dsl_entry_interval(schedule[j])) && _dsl_reads_output(children[j], options, name), eachindex(children))
+            isnothing(j) && continue
+            reader = _dsl_entry_interval(schedule[j])
+            @warn "`$name` is assigned on a schedule (every $(something(producer, "conditional")) steps) and read by a statement that also runs in other steps (every $(something(reader, "conditional")) steps). For now it is declared for you as `$name = nothing` at the top of this block: steps before its first assignment read `nothing`, later steps read its last value, also after a pause and resume. This fallback will be removed; assign and read `$name` on the same schedule." maxlog = 1 _id = (:dsl_scheduled_output, name)
+            push!(declared, name)
+        end
+    end
+    isempty(declared) && return children, options
+    reads_declared(r) = any(n -> _dsl_reads_declared_output(r, n), declared)
+    new_children = Any[child isa WithWiring ? WithWiring(getfield(child, :child), map(w -> reads_declared(w) ? _dsl_route_from_local(w) : w, getfield(child, :wires))) : child for child in children]
+    new_options = Any[o isa LocalPlanOption && reads_declared(getfield(o, :option)) ? LocalPlanOption(getfield(o, :owner), _dsl_route_from_local(getfield(o, :option))) : o for o in options]
+    push!(new_options, Local(; (name => nothing for name in declared)...))
+    return new_children, new_options
+end

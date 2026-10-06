@@ -46,6 +46,9 @@ function _dsl_build_loopalgorithm(::Val{Name}, algos, specification, states, opt
         push!(kept_specification, specification[idx])
     end
     isempty(processalgos) && error("`@$Name` requires at least one algorithm entry.")
+    if iscomposite(laType)
+        processalgos, options = _dsl_declare_scheduled_step_values(processalgos, kept_specification, Any[options...])
+    end
 
     processalgos_tuple = Tuple(processalgos)
     schedule_tuple = Tuple(kept_specification)
