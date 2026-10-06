@@ -170,9 +170,12 @@ end
 @inline Base.haskey(scv::SCV, name::Symbol) where SCV <: SubContextView = @inline haskey(get_all_locations(scv), name)
 @inline getregistry(scv::SCV) where SCV <: SubContextView = getregistry(getcontext(scv))
 
+"""The runtime values under `subcontextname`: a runtime part (`_declared_outputs`, `_inputs`, ...), or a namespace's outputs."""
 @inline function _runtime_subcontext_data(runtimecontext::ProcessContext, ::Val{subcontextname}) where {subcontextname}
     subcontexts = @inline get_subcontexts(runtimecontext)
-    return haskey(subcontexts, subcontextname) ? getdata(getproperty(subcontexts, subcontextname)) : (;)
+    haskey(subcontexts, subcontextname) && return getdata(getproperty(subcontexts, subcontextname))
+    outputs = @inline get_subcontext_outputs(runtimecontext)
+    return haskey(outputs, subcontextname) ? getproperty(outputs, subcontextname) : (;)
 end
 
 @inline function _runtime_has_var(runtimecontext::ProcessContext, ::Val{subcontextname}, ::Val{varname}) where {subcontextname,varname}
