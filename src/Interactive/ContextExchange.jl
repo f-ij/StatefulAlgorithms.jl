@@ -1,3 +1,26 @@
+#=
+UNUSED AT THE MOMENT: no plan in StatefulAlgorithms or InteractiveIsing adds a `ContextExchange`. InteractiveIsing
+changes values in a running process through `InteractiveVar` (`Interactive(...)`, src/InputInterface/Interactive.jl)
+and only calls `interact!` for a process that has an exchange.
+
+What it is: a child step that works as a mailbox between code outside a running loop (a UI, another task) and the
+loop. `interact!(process, :name => value)` or `view(context, :name)[] = value` queue a write in the exchange's own
+mutable buffers. When the exchange step is due (every step, or every `period` seconds), it applies all queued writes
+to the context and publishes copies of the variables someone subscribed to. So the context is only changed by the loop
+itself, between steps.
+
+Why keep it: `InteractiveVar` changes a value the moment it is written, from whichever task writes it. The exchange
+- applies several values changed together in the same step, so a step never sees half of an update;
+- writes values larger than one machine word (structs, tuples, a replacement parameter set) on the loop's own thread,
+  instead of racing a step that reads them;
+- gives a value that steps also write a defined order: the outside write lands between steps;
+- with `period`, limits how often outside changes are applied.
+
+Known cost: with `period > 0`, `_context_exchange_due!` reads the clock (`time()`, about 10 ns) on every step: a
+counter-only plan goes from 0.43 to 11.8 ns per step (0.64 ns with period 0). Reading the clock less often needs a step
+budget adapted to how long a step takes.
+=#
+
 export ContextExchange, interact!, isinteractive
 
 struct ResolvedExchangeVar{Name, Subcontext, Varname, T}
