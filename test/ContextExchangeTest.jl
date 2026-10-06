@@ -12,11 +12,11 @@ so a child on interval 2 never runs.)
 """
 function exchange_stepper(algo, context)
     SA = StatefulAlgorithms
-    lifetime = get(SA.getglobals(context), :lifetime, SA.Indefinite())
+    lifetime = get(SA.get_declared_outputs(context), :lifetime, SA.Indefinite())
     process = SA.LoopRunProcess(lifetime)
     plan = SA.getplan(algo)
     cursor = SA.loop_cursor(plan, Val(false))
-    runtimecontext = SA._merge_into_globals(SA._empty_context(), (; lifetime))
+    runtimecontext = SA._merge_into_declared_outputs(SA._empty_context(), (; lifetime))
     wiring = SA.PlanWiringView(SA.getwiring(plan))
     return ctx -> first(SA._step!(plan, cursor, ctx, runtimecontext, wiring, SA.Namespace{nothing}(), process, lifetime))
 end

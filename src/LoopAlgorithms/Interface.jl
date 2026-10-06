@@ -152,7 +152,7 @@ This builds the minimal process handle needed by routines and interval logic,
 then enters the same `_step!` chain used by `run`.
 """
 @inline function _step!(la::LA, context::C) where {LA<:LoopSpec, C<:AbstractContext}
-    lifetime = get(getglobals(context), :lifetime, Indefinite())
+    lifetime = Indefinite()
     process = LoopRunProcess(lifetime)
     plan = @inline getplan(la)
     cursor = @inline loop_cursor(plan, Val(false))

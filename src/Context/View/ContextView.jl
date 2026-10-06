@@ -1,4 +1,4 @@
-export getglobals, withaliases
+export get_declared_outputs, withaliases
 #################################
 ########## Properties ###########
 #################################
@@ -9,13 +9,13 @@ view_sharedvars(scv::Union{SubContextView{CType, SubKey, RuntimeCType, T, NT, Al
 @inline this_instance(scv::SubContextView) = getfield(scv, :instance)
 
 """The lifetime in the view's runtime context: only during init (see `_init_runtime_context`), for sizing."""
-@inline view_lifetime(scv::SubContextView) = getproperty(getglobals(getruntimecontext(scv)), :lifetime)
+@inline view_lifetime(scv::SubContextView) = getproperty(getdata(getproperty(get_subcontexts(getruntimecontext(scv)), :_init)), :lifetime)
 
 """Return the scheduled call multiplier for this view's owner."""
 @inline view_multiplier(scv::SubContextView) = getmultiplier(scv, this_instance(scv))
 
-@inline getglobals(scv::SubContextView) = getglobals(getruntimecontext(scv))
-@inline getglobals(scv::SubContextView, name::Symbol) = getglobals(getruntimecontext(scv), name)
+@inline get_declared_outputs(scv::SubContextView) = get_declared_outputs(getruntimecontext(scv))
+@inline get_declared_outputs(scv::SubContextView, name::Symbol) = get_declared_outputs(getruntimecontext(scv), name)
 
 @inline getcontext(scv::SubContextView) = @inline getfield(scv, :context)
 @inline getruntimecontext(scv::SubContextView) = @inline getfield(scv, :runtimecontext)

@@ -25,9 +25,9 @@ function _subcontext_view_merge_exprs(SCV::Type, Args::Type, demanded_runtime_na
         if target_location isa VarLocation{:runtime}  # a runtime location: only declared locals are writable
             target_subcontext = get_subcontextname(target_location)
             targetname = get_originalname(target_location)
-            target_subcontext === :_local || error("Algorithm returned `$(algo_varname)`, which is routed from runtime `$(target_subcontext)` and cannot be written. Declare it with `Local` to share it.")
-            exprs = get!(runtime_expressions_by_subcontext, :_local, Expr[])
-            # Converted to the declared field type by `merge_owner_runtime_return(…, Val(:_local), …)`.
+            target_subcontext === :_declared_locals || error("Algorithm returned `$(algo_varname)`, which is routed from runtime `$(target_subcontext)` and cannot be written. Declare it with `Local` to share it.")
+            exprs = get!(runtime_expressions_by_subcontext, :_declared_locals, Expr[])
+            # Converted to the declared field type by `merge_owner_runtime_return(…, Val(:_declared_locals), …)`.
             push!(exprs, Expr(:(=), targetname, :(getproperty(args, $(QuoteNode(algo_varname))))))
         elseif !isnothing(target_location) # If the local variable exists
             target_subcontext = get_subcontextname(target_location)

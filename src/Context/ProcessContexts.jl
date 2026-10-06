@@ -32,11 +32,11 @@ end
     if haskey(subcontexts, name)
         return @inline getproperty(subcontexts, name)
     end
-    globals = @inline getglobals(pc)
-    if haskey(globals, name)
-        return @inline getproperty(globals, name)
+    outputs = @inline get_declared_outputs(pc)
+    if haskey(outputs, name)
+        return @inline getproperty(outputs, name)
     end
-    input = @inline getruntimeinput(pc)
+    input = @inline get_inputs(pc)
     if haskey(input, name)
         return @inline getproperty(input, name)
     end
@@ -46,9 +46,8 @@ end
 @inline Base.propertynames(pc::ProcessContext, private::Bool = false) = propertynames(@inline get_subcontexts(pc))
 
 @inline Base.@constprop :aggressive function Base.getindex(pc::ProcessContext, name::Symbol)
-    name === :globals && return getglobals(pc)
-    name === :_runtime && return getglobals(pc)
-    name === :_input && return getruntimeinput(pc)
+    name === :_declared_outputs && return get_declared_outputs(pc)
+    name === :_inputs && return get_inputs(pc)
     return @inline getproperty(pc, name)
 end
 
@@ -73,26 +72,26 @@ end
 @inline getregistrytype(::Type{<:ProcessContext{D,Nothing}}) where {D} = Nothing
 @inline getregistrytype(pc::ProcessContext) = getregistrytype(typeof(pc))
 
-"""Return the flat runtime-global bucket stored in a runtime context."""
-@inline function getglobals(pc::ProcessContext)
+"""The declared outputs in a runtime context: what statements (`y = f(x)`, calls) returned this step."""
+@inline function get_declared_outputs(pc::ProcessContext)
     subcontexts = @inline get_subcontexts(pc)
-    return haskey(subcontexts, :_runtime) ? getdata(getproperty(subcontexts, :_runtime)) : (;)
+    return haskey(subcontexts, :_declared_outputs) ? getdata(getproperty(subcontexts, :_declared_outputs)) : (;)
 end
 
-@inline getglobals(pc::ProcessContext, name::Symbol) = getproperty(getglobals(pc), name)
+@inline get_declared_outputs(pc::ProcessContext, name::Symbol) = getproperty(get_declared_outputs(pc), name)
 
 """Return the runtime-input bucket stored in a runtime context."""
-@inline function getruntimeinput(pc::ProcessContext)
+@inline function get_inputs(pc::ProcessContext)
     subcontexts = @inline get_subcontexts(pc)
-    return haskey(subcontexts, :_input) ? getdata(getproperty(subcontexts, :_input)) : (;)
+    return haskey(subcontexts, :_inputs) ? getdata(getproperty(subcontexts, :_inputs)) : (;)
 end
 
-@inline getruntimeinput(pc::ProcessContext, name::Symbol) = getproperty(getruntimeinput(pc), name)
+@inline get_inputs(pc::ProcessContext, name::Symbol) = getproperty(get_inputs(pc), name)
 
 """Return the declared loop-local variables (`Local`) held in a runtime or paused context."""
-@inline function getlocals(pc::ProcessContext)
+@inline function get_declared_locals(pc::ProcessContext)
     subcontexts = @inline get_subcontexts(pc)
-    return haskey(subcontexts, :_local) ? getdata(getproperty(subcontexts, :_local)) : (;)
+    return haskey(subcontexts, :_declared_locals) ? getdata(getproperty(subcontexts, :_declared_locals)) : (;)
 end
 
 @inline getwidened(::ProcessContext) = (;)
@@ -115,7 +114,7 @@ end
     final_visible_context(context, runtimecontext)
 
 Build the one-argument finalstep projection context. Runtime owner subcontexts
-and runtime globals are materialized into a fresh context for final result
+and declared outputs are materialized into a fresh context for final result
 projection only; the returned process state remains `context`.
 """
 @inline @generated function final_visible_context(context::C, runtimecontext::RC) where {C<:ProcessContext,RC<:ProcessContext}
@@ -200,16 +199,16 @@ end
 end
 
 """
-Merge runtime globals into a runtime context.
+Merge values into the declared outputs of a runtime context.
 """
-@inline function _merge_into_globals(pc::ProcessContext, args::NamedTuple)
-    runtime = @inline merge(getglobals(pc), args)
-    return @inline with_subcontext(pc, Val(:_runtime), SubContext{:_runtime}(runtime))
+@inline function _merge_into_declared_outputs(pc::ProcessContext, args::NamedTuple)
+    runtime = @inline merge(get_declared_outputs(pc), args)
+    return @inline with_subcontext(pc, Val(:_declared_outputs), SubContext{:_declared_outputs}(runtime))
 end
 
 @inline merge_runtime_return(context::C, ::Nothing) where {C<:ProcessContext} = context
 @inline merge_runtime_return(context::C, retval::R) where {C<:ProcessContext,R<:NamedTuple} =
-    @inline _merge_into_globals(context, retval)
+    @inline _merge_into_declared_outputs(context, retval)
 
 function merge_runtime_return(context::C, retval::R) where {C<:ProcessContext,R}
     error("Runtime-owned step returns must be named tuples or `nothing`, got $(typeof(retval)).")
@@ -228,9 +227,9 @@ end
 end
 
 """Declared locals keep their declared field types when written."""
-@inline function merge_owner_runtime_return(runtimecontext::C, ::Val{:_local}, args::A) where {C<:ProcessContext,A<:NamedTuple}
-    locals = @inline _merge_declared(getlocals(runtimecontext), args)
-    return @inline with_subcontext(runtimecontext, Val(:_local), SubContext{:_local}(locals))
+@inline function merge_owner_runtime_return(runtimecontext::C, ::Val{:_declared_locals}, args::A) where {C<:ProcessContext,A<:NamedTuple}
+    locals = @inline _merge_declared(get_declared_locals(runtimecontext), args)
+    return @inline with_subcontext(runtimecontext, Val(:_declared_locals), SubContext{:_declared_locals}(locals))
 end
 
 @inline function merge_owner_runtime_return(runtimecontext::C, ::Val{owner}, args::A, demand::ReturnDemand{Names}) where {C<:ProcessContext,owner,A<:NamedTuple,Names}

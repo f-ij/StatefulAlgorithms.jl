@@ -23,33 +23,33 @@ is still visible. The runtime context is intentionally not returned.
 end
 
 """
-Build the runtime context for one run: its inputs (`_input`) and declared locals (`_local`). Step values (`_runtime`)
+Build the runtime context for one run: its inputs (`_inputs`) and declared locals (`_declared_locals`). Step values (`_declared_outputs`)
 are added by the steps.
 
-The process and the lifetime are not in it: no step read them (they were in `_runtime` until 2026-10). Init still gets
+The process and the lifetime are not in it: no step read them (they were in `_declared_outputs` until 2026-10). Init still gets
 the lifetime, for sizing (`_init_runtime_context`, `processsizehint!`). To give steps loop information again (step
 index, total steps, elapsed time, a stop request), add narrow read-only values here rather than the `Process` object,
 which would tie step code to the process type; most of those uses belong in the plan (schedules, lifetimes) instead.
 """
 @inline function _initial_runtime_context(inputs::NamedTuple, locals::NamedTuple = (;))
     runtime = @inline _empty_context()
-    runtime = isempty(inputs) ? runtime : @inline with_subcontext(runtime, Val(:_input), SubContext{:_input}(inputs))
-    return isempty(locals) ? runtime : @inline with_subcontext(runtime, Val(:_local), SubContext{:_local}(locals))
+    runtime = isempty(inputs) ? runtime : @inline with_subcontext(runtime, Val(:_inputs), SubContext{:_inputs}(inputs))
+    return isempty(locals) ? runtime : @inline with_subcontext(runtime, Val(:_declared_locals), SubContext{:_declared_locals}(locals))
 end
 
 """Build the visible paused context that keeps runtime inputs and declared locals for resuming."""
 @inline function _paused_visible_context(context::C, runtimecontext::RC) where {C<:ProcessContext,RC<:ProcessContext}
-    inputs = @inline getruntimeinput(runtimecontext)
-    context = isempty(inputs) ? context : @inline with_subcontext(context, Val(:_input), SubContext{:_input}(inputs))
-    locals = @inline getlocals(runtimecontext)
-    return isempty(locals) ? context : @inline with_subcontext(context, Val(:_local), SubContext{:_local}(locals))
+    inputs = @inline get_inputs(runtimecontext)
+    context = isempty(inputs) ? context : @inline with_subcontext(context, Val(:_inputs), SubContext{:_inputs}(inputs))
+    locals = @inline get_declared_locals(runtimecontext)
+    return isempty(locals) ? context : @inline with_subcontext(context, Val(:_declared_locals), SubContext{:_declared_locals}(locals))
 end
 
 """Clear pause-only runtime inputs and declared locals before re-entering the hot loop."""
 @inline function _paused_state_context(context::C) where {C<:ProcessContext}
     # Written out per field: reassigning `context` in a loop would change its type per iteration.
-    context = @inline _clear_paused_subcontext(context, Val(:_input))
-    return @inline _clear_paused_subcontext(context, Val(:_local))
+    context = @inline _clear_paused_subcontext(context, Val(:_inputs))
+    return @inline _clear_paused_subcontext(context, Val(:_declared_locals))
 end
 
 @inline _clear_paused_subcontext(context::C, ::Val{name}) where {C<:ProcessContext,name} =
@@ -63,8 +63,8 @@ end
 end
 
 @inline function _loop_runtime_context(algo::F, inputs::NamedTuple, process::P, lifetime::LT, stored_context::C, ::Resuming{true}) where {F,P<:AbstractProcess,LT<:Lifetime,C<:ProcessContext}
-    runtime_inputs = @inline getruntimeinput(stored_context)
-    return @inline _initial_runtime_context(runtime_inputs, getlocals(stored_context))
+    runtime_inputs = @inline get_inputs(stored_context)
+    return @inline _initial_runtime_context(runtime_inputs, get_declared_locals(stored_context))
 end
 
 """Return whether this loop exit is a pause rather than a final completion."""

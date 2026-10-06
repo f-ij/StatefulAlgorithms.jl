@@ -69,8 +69,8 @@ while/for loop:
 loop(process, algo, context, lifetime, inputs)
 ```
 
-The loop puts `process` and `lifetime` in the runtime context's `:_runtime`
-subcontext. A non-empty validated input tuple is stored in its `:_input`
+The loop puts `process` and `lifetime` in the runtime context's `:_declared_outputs`
+subcontext. A non-empty validated input tuple is stored in its `:_inputs`
 subcontext. Demanded transient child returns are stored in owner-named runtime
 subcontexts. None of these fields are added to the persistent context.
 

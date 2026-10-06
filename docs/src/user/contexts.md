@@ -16,7 +16,7 @@ That view exposes:
 
 - local subcontext variables,
 - routed/shared variables,
-- globals via `getglobals(context)`.
+- globals via `get_declared_outputs(context)`.
 
 ## Reading Variables
 
@@ -108,9 +108,9 @@ This updates only the targeted subcontext.
 
 Persistent `ProcessContext` values do not have a dedicated `globals` field.
 During lifecycle execution, the package passes a separate runtime context whose
-`:_runtime` subcontext contains process-level values such as `lifetime`, `algo`,
+`:_declared_outputs` subcontext contains process-level values such as `lifetime`, `algo`,
 or `process`, depending on the phase. Entity views expose that transient bucket
-through `getglobals(context)`.
+through `get_declared_outputs(context)`.
 
 Runtime globals are not owned by an algorithm and are not retained in the
 finished process's persistent context. For selector syntax, see

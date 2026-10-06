@@ -14,8 +14,8 @@ The runtime data stack has three layers:
 2. `reg::R`, the registry used for identity lookup.
 
 The initialized process owns a persistent `ProcessContext`. Loop execution also
-builds a separate runtime `ProcessContext`, normally with `:_runtime` and
-`:_input` subcontexts. Runtime inputs, the active process/lifetime handles, and
+builds a separate runtime `ProcessContext`, normally with `:_declared_outputs` and
+`:_inputs` subcontexts. Runtime inputs, the active process/lifetime handles, and
 demanded transient step returns live there instead of changing persistent state
 shape.
 
@@ -25,8 +25,8 @@ Persistent contexts support these lookup forms:
 2. `pc[obj]` resolves an algorithm or state reference through `reg` and selects
    its subcontext.
 
-`getglobals(runtime_context)` returns the data in `:_runtime`, while
-`getruntimeinput(runtime_context)` returns the data in `:_input`. If those
+`get_declared_outputs(runtime_context)` returns the data in `:_declared_outputs`, while
+`get_inputs(runtime_context)` returns the data in `:_inputs`. If those
 subcontexts are absent, the corresponding accessor returns an empty named tuple.
 
 ## 2. `SubContext`

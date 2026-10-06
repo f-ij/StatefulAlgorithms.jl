@@ -37,13 +37,13 @@ end
     plan = CompositeAlgorithm(UnionSensor, UnionReader, (10, 1), Local(declared))
     final = run(InlineProcess(plan; repeats = 25))
     @test final[UnionReader].acc == 10 * 1.0 + 6 * 2.0
-    @test fieldtype(typeof(StatefulAlgorithms.getlocals(final)), :reading) <: StatefulAlgorithms.Maybe{Float64}
+    @test fieldtype(typeof(StatefulAlgorithms.get_declared_locals(final)), :reading) <: StatefulAlgorithms.Maybe{Float64}
 
 
     # `reading = nothing` behaves the same: `nothing` until the first write, then a `Union{Nothing,Float64}`.
     final = run(InlineProcess(CompositeAlgorithm(UnionSensor, UnionReader, (10, 1), Local(reading = nothing)); repeats = 25))
     @test final[UnionReader].acc == 10 * 1.0 + 6 * 2.0
-    @test fieldtype(typeof(StatefulAlgorithms.getlocals(final)), :reading) <: StatefulAlgorithms.Maybe{Float64}
+    @test fieldtype(typeof(StatefulAlgorithms.get_declared_locals(final)), :reading) <: StatefulAlgorithms.Maybe{Float64}
 
     # Writing `nothing` again after a value is allowed, like in a Julia loop.
     struct Blinker <: ProcessAlgorithm end
@@ -67,7 +67,7 @@ end
     # Written in the first step.
     final = run(InlineProcess(CompositeAlgorithm(SlotSensor, SlotReader, (1, 1), Local(reading = undef)); repeats = 10))
     @test final[SlotReader].acc == 55.0
-    @test fieldtype(typeof(StatefulAlgorithms.getlocals(final)), :reading) <: StatefulAlgorithms.Maybe{Float64}
+    @test fieldtype(typeof(StatefulAlgorithms.get_declared_locals(final)), :reading) <: StatefulAlgorithms.Maybe{Float64}
     # First written at step 10 (scheduled later): the loop continues with the new type.
     final = run(InlineProcess(CompositeAlgorithm(SlotSensor, SlotReader, (10, 10), Local(reading = undef)); repeats = 30))
     @test final[SlotReader].acc == 1.0 + 2.0 + 3.0
@@ -88,7 +88,7 @@ end
     plan = CompositeAlgorithm(LateSensor, GuardedReader, (1, 1), Local(reading = undef))
     final = run(InlineProcess(plan; repeats = 8))
     @test final[GuardedReader].acc == 5.0 + 6.0 + 7.0 + 8.0
-    @test fieldtype(typeof(StatefulAlgorithms.getlocals(final)), :reading) <: StatefulAlgorithms.Maybe{Float64}
+    @test fieldtype(typeof(StatefulAlgorithms.get_declared_locals(final)), :reading) <: StatefulAlgorithms.Maybe{Float64}
 
     # Once written, the loop allocates nothing per step.
     small = InlineProcess(plan; repeats = 1_000); large = InlineProcess(plan; repeats = 101_000)
@@ -109,8 +109,8 @@ end
     StatefulAlgorithms.init(::FractionWriter, context) = (;)
     StatefulAlgorithms.step!(::FractionWriter, context) = (; reading = 2.5)
     final = run(InlineProcess(CompositeAlgorithm(IntWriter, FractionWriter, (1, 2), Local(reading = undef)); repeats = 3))
-    @test fieldtype(typeof(StatefulAlgorithms.getlocals(final)), :reading) <: StatefulAlgorithms.Maybe{Float64}
-    @test StatefulAlgorithms.getlocals(final).reading.value === 1.0
+    @test fieldtype(typeof(StatefulAlgorithms.get_declared_locals(final)), :reading) <: StatefulAlgorithms.Maybe{Float64}
+    @test StatefulAlgorithms.get_declared_locals(final).reading.value === 1.0
 end
 
 @testset "Locals are scoped to the plan that declares them" begin
@@ -133,7 +133,7 @@ end
 
     # Two instances of the same routine get one local each.
     final = run(InlineProcess(CompositeAlgorithm(inner(), inner(), (1, 1)); repeats = 2))
-    @test values(StatefulAlgorithms.getlocals(final)) == (6, 6)
+    @test values(StatefulAlgorithms.get_declared_locals(final)) == (6, 6)
 
     # The nearest declaration wins.
     shadowing = CompositeAlgorithm(Routine(ScopeInc, ScopePeek, (3, 1), Local(counter = 0)), ScopeOutside, (1, 1), Local(counter = 100))
@@ -149,7 +149,7 @@ end
     StatefulAlgorithms.step!(::KeepLowest, context) =
         (; n = context.n + 1, best = context.best === nothing ? Float64(context.n) : min(context.best, Float64(context.n)))
     final = run(InlineProcess(CompositeAlgorithm(KeepLowest, (1,), Local(best = nothing)); repeats = 5))
-    @test StatefulAlgorithms.getlocals(final).best isa StatefulAlgorithms.Maybe{Float64}
+    @test StatefulAlgorithms.get_declared_locals(final).best isa StatefulAlgorithms.Maybe{Float64}
 
     # Starts as a Float64, then written as a String: an error before the run, naming the local.
     struct ChangesType <: ProcessAlgorithm end
