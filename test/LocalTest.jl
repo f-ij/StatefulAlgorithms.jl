@@ -180,3 +180,41 @@ end
     p = Process(plan; repeats = 7); run(p); wait(p)
     @test context(p)[OutputCollector].seen == [nothing, nothing, 1.0, 1.0, 1.0, 2.0, 2.0]
 end
+
+const scope_seen = Any[]
+const scope_count = Ref(0)
+scope_produce() = (scope_count[] += 1; Float64(scope_count[]))
+scope_double(x) = 2x
+scope_record(x) = (push!(scope_seen, x); nothing)
+
+@testset "Every plan node is a scope" begin
+    C = StatefulAlgorithms.Callable
+    run_seen(plan, repeats) = (empty!(scope_seen); scope_count[] = 0; run(InlineProcess(plan; repeats)); copy(scope_seen))
+    # A `Local` keeps the inner composites whole (an option-less one is flattened into its parent, and its scope with it).
+    inner(children...) = CompositeAlgorithm(children..., ntuple(_ -> 1, length(children)), Local(q = 0))
+
+    # An inner node sees the outer return `y` and captures its own `z`, stored as `z@2`.
+    plan = CompositeAlgorithm(C(scope_produce, (), :y), inner(C(scope_double, (:y,), :z), C(scope_record, (:z,), ())), (1, 2))
+    wiring = typeof(StatefulAlgorithms.getwiring(StatefulAlgorithms.getalgo(StatefulAlgorithms.getplan(resolve(plan)), 2)))
+    @test StatefulAlgorithms.scope_returns(StatefulAlgorithms.node_scope(wiring)) == (y = :y, z = Symbol("z@2"))
+    @test StatefulAlgorithms.node_resets(wiring).returns == (Symbol("z@2"),)
+    @test run_seen(plan, 6) == [4.0, 8.0, 12.0]
+
+    # Assigning a visible name in an inner node writes the outer slot.
+    plan = CompositeAlgorithm(C(scope_produce, (), :y), inner(C(scope_double, (:y,), :y)), C(scope_record, (:y,), ()), (1, 2, 1))
+    @test run_seen(plan, 4) == [1.0, 4.0, 3.0, 8.0]
+
+    # A return is unset each time its node is entered: read in a step before it is assigned, it is an error.
+    plan = CompositeAlgorithm(C(scope_produce, (), :y), C(scope_record, (:y,), ()), (2, 1))
+    @test_throws UndefRefError run(InlineProcess(plan; repeats = 4))
+
+    # An inner node's returns are not visible outside it.
+    plan = CompositeAlgorithm(C(scope_produce, (), :y), inner(C(scope_double, (:y,), :z)), C(scope_record, (:z,), ()), (1, 2, 1))
+    @test_throws ErrorException run(InlineProcess(plan; repeats = 2))
+
+    # Two nested scopes passing returns down still compile to a loop without allocations.
+    plan = CompositeAlgorithm(C(scope_produce, (), :y), inner(C(scope_double, (:y,), :z), inner(C(scope_double, (:z,), :w), C(identity, (:w,), :v))), (1, 1))
+    small = InlineProcess(plan; repeats = 1_000); large = InlineProcess(plan; repeats = 101_000)
+    run(small); run(large)
+    @test (@allocated run(large)) == (@allocated run(small))
+end
