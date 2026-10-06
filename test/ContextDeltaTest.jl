@@ -1,7 +1,7 @@
 using Random
 
-# EXPERIMENTAL context-delta loop: the loop carries only the persistent fields its steps can write (src/Context/Carry.jl),
-# found by inference (src/Context/WriteTrace.jl). These tests check that the write set is what the plan writes, that the
+# EXPERIMENTAL context-delta loop: the loop carries only the persistent fields its steps can write, worked out from the
+# plan's types (src/Context/Carried). These tests check that the write set is what the plan writes, that the
 # results are right, and that the loop really takes the carrying path (it falls back silently otherwise).
 
 # Reads an array and an rng from its context and flips one entry; returns a value that is not state.
@@ -34,7 +34,7 @@ delta_plus_one(x) = x + 1.0
 delta_double(x) = 2x
 const DELTA_OFFSET = 5.0
 
-"""The write set the loop of `plan` gets: `_written_fields` asked the way `loop` asks it."""
+"""The write set the loop of `plan` carries: the fields of what `create_carried` returns, asked the way `loop` asks."""
 function written_fields_of(plan)
     p = Process(plan; repeats = 10)
     captured = Ref{Any}(nothing)
@@ -42,7 +42,7 @@ function written_fields_of(plan)
     wait(p.task)
     process, func, stored, lifetime, inputs, resume = captured[]
     step_plan = StatefulAlgorithms.getplan(func)
-    return StatefulAlgorithms._written_fields(
+    carried = StatefulAlgorithms.create_carried(
         step_plan,
         StatefulAlgorithms._loop_cursor(process, step_plan, resume),
         StatefulAlgorithms._loop_state_context(stored, resume),
@@ -52,6 +52,7 @@ function written_fields_of(plan)
         process,
         lifetime,
     )
+    return StatefulAlgorithms._carried_fields(typeof(carried))
 end
 
 """Run `plan` for `n` steps as a `Process` and return its final context."""
@@ -127,17 +128,5 @@ end
     code, _ = only(Base.code_typed(StatefulAlgorithms.loop, Tuple{map(typeof, captured[])...}; debuginfo = :none))
     typed = sprint(show, code)
     @test !occursin("return_type", typed)
-    @test !occursin("_written_from_return_type", typed)
-end
-
-@testset "Context delta: only WriteTrace.jl builds traced context types" begin
-    # A write is lost only if a step returns a context that keeps a `WriteTrace` type without recording the write.
-    # Any other construction drops the trace, which makes the plan carry its whole context.
-    src = joinpath(pkgdir(StatefulAlgorithms), "src")
-    for (root, _, files) in walkdir(src), file in files
-        endswith(file, ".jl") || continue
-        path = joinpath(root, file)
-        file == "WriteTrace.jl" && continue
-        @test !occursin("WriteTrace{", read(path, String))
-    end
+    @test !occursin("_payload_writes", typed)
 end

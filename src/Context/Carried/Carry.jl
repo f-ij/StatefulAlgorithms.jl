@@ -7,62 +7,40 @@ carrying loop never reassigns the context it started with and carries only the f
 
     carried = create_carried(...the _step! arguments...)
     for ...
-        stepped, runtimecontext = _step!(..., step_context(context, carried), ...)
+        stepped, runtimecontext = _step!(..., carried_context(context, carried), ...)
         carried = next_carried(carried, stepped)
     end
     context = carried_context(context, carried)
 
-How the written fields are found is hidden in `create_carried` (WriteTrace.jl). Every step gets the same type: the
-starting context with the carried values, with an empty write trace. So the step is compiled once, and a loop inside
-a step cannot see its context's type change between iterations.
+`carried` is a named tuple `(; subcontext = (; field = value, ...), ...)`; its type says which fields it holds. How
+those fields are found is hidden in `create_carried` (Writes.jl).
 =#
-
-"""
-    Carried{W}
-
-What a loop carries from step to step: the current values of the persistent fields `W`, a tuple of
-`(subcontext, field)` pairs, as `(; subcontext = (; field = value, ...), ...)`. `Carried{nothing}` holds the whole
-context, for a step whose written fields could not be determined.
-"""
-struct Carried{W,V}
-    values::V
-end
-
-@inline Carried{W}(values::V) where {W,V} = Carried{W,V}(values)
 
 """
     create_carried(algo, cursor, context, runtimecontext, wiring, namespace, process, lifetime)
 
 What a loop that runs `_step!` with these arguments carries before its first step: the values in `context` of the
-fields the step can write (`Carried{nothing}` with the whole context when those are not known).
+fields the step can write, as `(; subcontext = (; field = value, ...), ...)` (all fields when those are not known).
 """
 @inline function create_carried(algo::A, cursor::S, context::C, runtimecontext::RC, wiring::W, namespace::N,
                                 process::P, lifetime::LT) where {A,S,C<:ProcessContext,RC,W,N,P,LT}
-    return @inline _carried(context, _written_fields(algo, cursor, context, runtimecontext, wiring, namespace, process, lifetime))
+    settled = @inline _runtime_fixed_point(algo, cursor, context, RC, wiring, namespace, process, lifetime)
+    return @inline _written_values(context, (@inline _writes(algo, cursor, context, settled, wiring, namespace, process, lifetime)))
 end
 
-# Another kind of context (not a `ProcessContext`) is never traced: carry it whole.
-@inline create_carried(algo::A, cursor::S, context::C, args::Vararg{Any,5}) where {A,S,C} = Carried{nothing}(context)
+"""The context with the carried values: what a step gets, and the context after the last step."""
+@inline carried_context(context::C, carried::T) where {C<:ProcessContext,T<:NamedTuple} =
+    @inline merge_into_subcontexts(context, carried)
 
-@inline _carried(context::C, ::Nothing) where {C<:ProcessContext} = Carried{nothing}(context)
-@inline _carried(context::C, ::Val{W}) where {C<:ProcessContext,W} = Carried{W}(@inline _written_values(context, Val(W)))
+"""What a loop carries after a step that returned `stepped`: the new values of the fields `carried` holds."""
+@inline next_carried(carried::T, stepped::C) where {T<:NamedTuple,C<:ProcessContext} =
+    @inline _written_values(stepped, _carried_fields(T))
 
-"""The context a step gets: `context` with the carried values, with an empty write trace (or the carried context)."""
-@inline step_context(::C, carried::Carried{nothing}) where {C} = getfield(carried, :values)
-@inline step_context(context::C, carried::Carried) where {C} =
-    @inline with_empty_trace(@inline merge_into_subcontexts(without_trace(context), getfield(carried, :values)))
-
-"""What a loop carries after a step that returned `stepped`: the new values of the same fields."""
-@inline next_carried(::Carried{nothing}, stepped::C) where {C} = Carried{nothing}(stepped)
-@inline next_carried(::Carried{W}, stepped::C) where {W,C} = Carried{W}(@inline _written_values(stepped, Val(W)))
-
-"""
-The whole context: `context` with the carried values (or the carried context). A traced `context` traces the
-carried fields as written, so an enclosing step's write trace sees what this loop wrote.
-"""
-@inline carried_context(::C, carried::Carried{nothing}) where {C} = getfield(carried, :values)
-@inline carried_context(context::C, carried::Carried) where {C} =
-    @inline merge_into_subcontexts(context, getfield(carried, :values))
+"""The `(subcontext, field)` pairs a carried named tuple type holds, as `Val(W)`."""
+@generated function _carried_fields(::Type{T}) where {T<:NamedTuple}
+    W = Tuple((s, f) for (s, S) in zip(fieldnames(T), fieldtypes(T)) for f in fieldnames(S))
+    return :(Val($W))
+end
 
 """
     _written_values(context, Val(W))

@@ -247,6 +247,17 @@ end
     return (@inline _step_context_exchange_store(context, store)), runtimecontext
 end
 
+# The persistent fields an exchange writes (see src/Context/Carried/Writes.jl): the targets it resolved at init.
+@inline _leaf_writes(exchange::ContextExchange, context::C, ::Type{RC}, wiring::W, ::Namespace{Name}) where {C<:ProcessContext,RC,W,Name} =
+    _exchange_writes(C, Val(Name))
+
+@generated function _exchange_writes(::Type{C}, ::Val{Name}) where {C<:ProcessContext,Name}
+    data = getdatatype(fieldtype(C.parameters[1], Name))
+    specs = fieldtype(data, :store).parameters[1].parameters
+    W = Tuple((_exchange_subcontext(spec), _exchange_varname(spec)) for spec in specs)
+    return :(Val($(_union_written((), W))))
+end
+
 @inline function StatefulAlgorithms.step!(exchange::ContextExchange, context::C) where {C<:ProcessContext}
     store = _context_exchange_store(context, getkey(exchange))
     _context_exchange_due!(store) || return context

@@ -117,8 +117,7 @@ Base.@constprop :aggressive @inline @generated function _step!(tca::TCA, cursor:
                 local child_cursor = @inline child_loop_cursor(cursor, Val($i))
                 local child_step_wiring = @inline child_wiring_view(wiring, Val($i))
                 local child_namespace = $child_namespace_type()
-                stepped, runtimecontext = @inline _step!(algo, child_cursor, (@inline child_context(context)), runtimecontext, child_step_wiring, child_namespace, process, lifetime)
-                context = @inline with_child_trace(context, stepped)
+                context, runtimecontext = @inline _step!(algo, child_cursor, context, runtimecontext, child_step_wiring, child_namespace, process, lifetime)
             end
         end)
     end
@@ -127,3 +126,7 @@ Base.@constprop :aggressive @inline @generated function _step!(tca::TCA, cursor:
     push!(exprs, :(return context, runtimecontext))
     return Expr(:block, exprs...)
 end
+
+# The persistent fields a threaded composite writes (see src/Context/Carried/Writes.jl): as a composite's.
+@inline @generated _writes(plan::TCA, cursor::S, context::C, ::Type{RC}, wiring::W, namespace::N, process::P, lifetime::LT) where {TCA<:ThreadedCompositeAlgorithm,S,C<:ProcessContext,RC,W,N,P,LT} =
+    _children_writes_expr(TCA, nothing)

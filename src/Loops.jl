@@ -124,7 +124,7 @@ Run a single function in a loop indefinitely.
 
     carried = @inline create_carried(step_plan, step_cursor, context, runtimecontext, step_wiring, Namespace{nothing}(), process, lifetime)
     while true
-        stepped, runtimecontext = @inline _step!(step_plan, step_cursor, (@inline step_context(context, carried)), runtimecontext, step_wiring, Namespace{nothing}(), process, lifetime)
+        stepped, runtimecontext = @inline _step!(step_plan, step_cursor, (@inline carried_context(context, carried)), runtimecontext, step_wiring, Namespace{nothing}(), process, lifetime)
         carried = @inline next_carried(carried, stepped)
         @inline tick!(process)
         @inline inc!(process)
@@ -172,7 +172,7 @@ Base.@constprop :aggressive @inline function loop(process::P, algo::F, stored_co
 
     carried = @inline create_carried(step_plan, step_cursor, context, runtimecontext, step_wiring, Namespace{nothing}(), process, lifetime)
     for _ in (@inline loopidx(process)):(@inline repeats(lifetime))
-        stepped, runtimecontext = @inline _step!(step_plan, step_cursor, (@inline step_context(context, carried)), runtimecontext, step_wiring, Namespace{nothing}(), process, lifetime)
+        stepped, runtimecontext = @inline _step!(step_plan, step_cursor, (@inline carried_context(context, carried)), runtimecontext, step_wiring, Namespace{nothing}(), process, lifetime)
         carried = @inline next_carried(carried, stepped)
         @inline tick!(process)
         @inline inc!(process)
