@@ -222,18 +222,18 @@ function _probe_joined_type(::Type{RC}, returned) where {RC<:ProcessContext}
     end
 end
 
-"""The runtime context types a step can return (`RT` is `Tuple{context, runtimecontext}` or a union of those), or `nothing` if inference could not tell."""
+"""The runtime context types a step can return (`RT` is a `LoopContext` type or a union of those), or `nothing` if inference could not tell."""
 function _inferred_contexts(RT)
-    tuples = RT === Union{} ? () : Base.uniontypes(RT)
-    all(T -> T <: Tuple && fieldcount(T) == 2, tuples) || return nothing
-    returned = unique(Iterators.flatten(Base.uniontypes(fieldtype(T, 2)) for T in tuples))
+    loopcontexts = RT === Union{} ? () : Base.uniontypes(RT)
+    all(T -> T isa DataType && T <: LoopContext, loopcontexts) || return nothing
+    returned = unique(Iterators.flatten(Base.uniontypes(runtime_type(T)) for T in loopcontexts))
     all(C -> C isa DataType && C <: ProcessContext, returned) || return nothing
     return returned
 end
 
 
-@inline _probe_step(plan, cursor, context, runtimecontext, wiring, process, lifetime) =
-    _step!(plan, cursor, context, runtimecontext, wiring, Namespace{nothing}(), process, lifetime)
+@inline _probe_step(plan, cursor, lc, wiring, process, lifetime) =
+    _step!(plan, cursor, lc, wiring, Namespace{nothing}(), process, lifetime)
 
 
 """
@@ -263,7 +263,7 @@ function _find_local_type_culprits!(culprits, ::Type{R}, checking, plan::Abstrac
         end
         namespace = getfield(getfield(plan, :namespaces), i)
         # What the step itself returns (before it is merged into the context), with the locals as in `R`.
-        returned = Core.Compiler.return_type(_step_return, Tuple{typeof(child), typeof(context), R, typeof(child_wiring), typeof(namespace)})
+        returned = Core.Compiler.return_type(_step_return, Tuple{typeof(child), LoopContext{typeof(context), R}, typeof(child_wiring), typeof(namespace)})
         append!(culprits, _local_type_problems(_step_label(child, namespace), R, returned, typeof(child_wiring), checking))
     end
     return culprits
@@ -273,9 +273,9 @@ _step_label(child::Callable, ::Namespace) = _callable_string(child)
 _step_label(child, namespace::Namespace) = string("`", namesymbol(namespace), "` (", nameof(typeof(child)), ")")
 
 """What a plan child's own step returns, as the plan's step would call it (calls are viewed from `_declared_outputs`)."""
-@inline function _step_return(algo, context, runtimecontext, wiring, namespace::Namespace)
+@inline function _step_return(algo, lc, wiring, namespace::Namespace)
     viewed_as = algo isa Callable ? Namespace{:_declared_outputs}() : namespace
-    contextview = view(context, runtimecontext, algo, viewed_as; sharedcontexts = shares(wiring), sharedvars = routes(wiring))
+    contextview = view(lc, algo, viewed_as; sharedcontexts = shares(wiring), sharedvars = routes(wiring))
     return step!(algo, contextview)
 end
 

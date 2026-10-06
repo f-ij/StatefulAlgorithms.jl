@@ -4,6 +4,7 @@ export ProcessContext
 include("StructDefs.jl")
 include("SubContext.jl")
 include("ProcessContexts.jl")
+include("ContextBundles.jl")
 include("Carried/Carried.jl")   # loops carry only the fields their steps write
 include("Constructor.jl")
 include("View/View.jl")

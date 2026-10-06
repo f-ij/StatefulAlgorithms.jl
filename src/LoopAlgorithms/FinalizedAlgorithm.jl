@@ -86,6 +86,7 @@ end
 @inline Base.eachindex(fa::FinalizedAlgorithm) = eachindex(inneralgorithm(fa))
 @inline reset!(fa::FinalizedAlgorithm) = reset!(inneralgorithm(fa))
 @inline cleanup(fa::FinalizedAlgorithm, context) = cleanup(inneralgorithm(fa), context)
+@inline cleanup(fa::FinalizedAlgorithm, lc::LoopContext) = cleanup(inneralgorithm(fa), lc)
 
 @inline multipliers(fa::FinalizedAlgorithm) = multipliers(inneralgorithm(fa))
 @inline intervals(fa::FinalizedAlgorithm) = intervals(inneralgorithm(fa))

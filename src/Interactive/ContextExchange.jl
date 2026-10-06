@@ -235,16 +235,16 @@ end
 
 @inline function StatefulAlgorithms._step!(
     exchange::E,
-    context::C,
-    runtimecontext::RC,
+    lc::L,
     ::W,
     ::Namespace{Name},
     process::P,
     lifetime::LT,
-) where {E<:ContextExchange, C<:ProcessContext, RC<:ProcessContext, W<:PlanWiringView, Name, P<:AbstractProcess, LT<:Lifetime}
+) where {E<:ContextExchange, L<:LoopContext, W<:PlanWiringView, Name, P<:AbstractProcess, LT<:Lifetime}
+    context = @inline getcontext(lc)
     store = _context_exchange_store(context, Name)
-    _context_exchange_due!(store) || return context, runtimecontext
-    return (@inline _step_context_exchange_store(context, store)), runtimecontext
+    _context_exchange_due!(store) || return lc
+    return @inline withstored(lc, _step_context_exchange_store(context, store))
 end
 
 # The persistent fields an exchange writes (see src/Context/Carried/Writes.jl): the targets it resolved at init.

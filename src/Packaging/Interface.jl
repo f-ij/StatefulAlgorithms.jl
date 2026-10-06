@@ -36,7 +36,7 @@ end
     return :(getinc(pkg)[] = mod1(getinc(pkg)[] + 1, $_lcm))
 end
 
-@inline function getmultiplier(contextview::SubContextView{CType, SubKey}, instance::AbstractIdentifiableAlgo) where {CType<:ProcessContext, SubKey}
+@inline function getmultiplier(contextview::SubContextView{B, SubKey}, instance::AbstractIdentifiableAlgo) where {B<:ContextBundle, SubKey}
     registered = getregistry(contextview)[SubKey]
     algo = getalgo(registered)
     if algo isa Package
@@ -45,7 +45,7 @@ end
     return getmultiplier(getregistry(contextview), instance)
 end
 
-@inline function getmultiplier(contextview::SubContextView{CType, SubKey}, subpackage::SubPackage) where {CType<:ProcessContext, SubKey}
+@inline function getmultiplier(contextview::SubContextView{B, SubKey}, subpackage::SubPackage) where {B<:ContextBundle, SubKey}
     registry = getregistry(contextview)
     registered = registry[SubKey]
     package = getalgo(registered)

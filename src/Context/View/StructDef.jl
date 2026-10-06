@@ -52,17 +52,21 @@ end
         for i in 1:numvars], assign_symbols
 end
 
-struct SubContextView{CType, SubName, RuntimeCType, T, NT, VarAliases, SharedContexts, SharedVars} <: AbstractContext
-    context::CType
-    runtimecontext::RuntimeCType
+"""
+What one algorithm (`instance`, in namespace `SubName`) sees of a context bundle (`LoopContext` while stepping,
+`InitContext` while initializing): its state, the variables wired to it, and, from the bundle, declared locals, inputs
+and outputs. `injected` holds values given to it directly.
+"""
+struct SubContextView{B<:ContextBundle, SubName, T, NT, VarAliases, SharedContexts, SharedVars} <: AbstractContext
+    bundle::B
     instance::T # ScopedInstance for which the view is created
     injected::NT
 
-    function SubContextView{CType, SubName, RuntimeCType, T, NT}(context::CType, runtimecontext::RuntimeCType, instance::T; inject::NT = (;)) where {CType, SubName, RuntimeCType, T, NT}
-        new{CType, SubName, RuntimeCType, T, typeof(inject), varaliases(instance), (), ()}(context, runtimecontext, instance, inject)
+    function SubContextView{B, SubName, T, NT}(bundle::B, instance::T; inject::NT = (;)) where {B<:ContextBundle, SubName, T, NT}
+        new{B, SubName, T, typeof(inject), varaliases(instance), (), ()}(bundle, instance, inject)
     end
 
-    function SubContextView{CType, SubName, RuntimeCType, T, NT, VarAliases, SharedContexts, SharedVars}(context::CType, runtimecontext::RuntimeCType, instance::T, inject::NT = (;)) where {CType, SubName, RuntimeCType, T, NT, VarAliases, SharedContexts, SharedVars}
-        new{CType, SubName, RuntimeCType, T, typeof(inject), VarAliases, SharedContexts, SharedVars}(context, runtimecontext, instance, inject)
+    function SubContextView{B, SubName, T, NT, VarAliases, SharedContexts, SharedVars}(bundle::B, instance::T, inject::NT = (;)) where {B<:ContextBundle, SubName, T, NT, VarAliases, SharedContexts, SharedVars}
+        new{B, SubName, T, typeof(inject), VarAliases, SharedContexts, SharedVars}(bundle, instance, inject)
     end
 end

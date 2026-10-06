@@ -9,12 +9,12 @@
 """
 
 """The view's namespace's state (its subcontext in the stored context), by name."""
-get_local_locations(::Type{SCT}) where {SCT<:SubContextView{CType, SubKey}} where {CType, SubKey} = _state_locations(context_part(Val(SubKey)), SCT)
+get_local_locations(::Type{SCT}) where {SCT<:SubContextView{B, SubKey}} where {B<:ContextBundle, SubKey} = _state_locations(context_part(Val(SubKey)), SCT)
 
 """A call has no state: its namespace is the declared outputs (see `get_output_locations`)."""
 _state_locations(::DeclaredOutputs, ::Type) = (;)
 
-function _state_locations(::Stored, ::Type{SCT}) where {SCT<:SubContextView{CType, SubKey}} where {CType, SubKey}
+function _state_locations(::Stored, ::Type{SCT}) where {SCT<:SubContextView{B, SubKey}} where {B<:ContextBundle, SubKey}
     _subcontext_type = subcontext_type(SCT)
     _data_type = getdatatype(_subcontext_type)
     local_varnames = keys(_subcontext_type)
@@ -44,11 +44,11 @@ Shared subcontexts => VarLocations
 """
 @inline _view_shared_types(shared) = shared isa Tuple ? shared : (shared,)
 
-function get_shared_locations(sct::Type{SCT}) where {SCT<:SubContextView{CType, SubKey}} where {CType, SubKey}
+function get_shared_locations(sct::Type{SCT}) where {SCT<:SubContextView{B, SubKey}} where {B<:ContextBundle, SubKey}
     shared_context_names = contextname.(_view_shared_types(view_sharedcontexts(SCT)))
 
     sharedvars = named_flat_collect_broadcast(shared_context_names) do name
-        shared_subcontext_type = subcontext_type(CType, name)
+        shared_subcontext_type = subcontext_type(stored_type(B), name)
         shared_varnames = keys(shared_subcontext_type)
         pairs = (shared_varnames[i] => VarLocation{:subcontext}(name, shared_varnames[i]) for i in 1:length(shared_varnames))
         return NamedTuple(pairs)
@@ -59,7 +59,7 @@ end
 """
 Routes supplied to the view => VarLocations.
 """
-function get_routed_locations(sct::Type{SCT}) where {SCT<:SubContextView{CType, SubKey}} where {CType, SubKey}
+function get_routed_locations(sct::Type{SCT}) where {SCT<:SubContextView{B, SubKey}} where {B<:ContextBundle, SubKey}
     sharedvars = _view_shared_types(view_sharedvars(SCT))
 
     routedvars = named_flat_collect_broadcast(sharedvars) do sv
@@ -100,9 +100,8 @@ The outputs the view sees by name, from the slots typed before the run (Outputs.
 `_declared_outputs`) every declared output, for an algorithm its own subcontext outputs. They come after every other
 kind, so a wire or a declared local of the same name wins.
 """
-function get_output_locations(::Type{SCT}) where {SCT<:SubContextView{CType, SubKey, RuntimeCType}} where {CType, SubKey, RuntimeCType}
-    RuntimeCType <: ProcessContext || return (;)
-    names = _output_names(context_part(Val(SubKey)), RuntimeCType, SubKey)
+function get_output_locations(::Type{SCT}) where {SCT<:SubContextView{B, SubKey}} where {B<:ContextBundle, SubKey}
+    names = _output_names(context_part(Val(SubKey)), B, SubKey)
     return NamedTuple{names}(map(name -> VarLocation{:runtime}(SubKey, name), names))
 end
 
@@ -119,7 +118,7 @@ function _output_names(::Stored, ::Type{RC}, owner::Symbol) where {RC}
     return owner in fieldnames(outputs) ? fieldnames(fieldtype(outputs, owner)) : ()
 end
 
-function get_injected_locations(sct::Type{SCT}) where {SCT<:SubContextView{CType, SubKey}} where {CType, SubKey}
+function get_injected_locations(sct::Type{SCT}) where {SCT<:SubContextView{B, SubKey}} where {B<:ContextBundle, SubKey}
     injected_vars = injectedfieldnames(SCT)
     injst = ntuple(i ->VarLocation{:injected}(SubKey, injected_vars[i]), length(injected_vars))
     return NamedTuple{(injected_vars...,)}(injst)
@@ -129,7 +128,7 @@ end
 """
 Generate a namedtuple of localtuple => VarLocation
 """
-function _compute_varlocations(::Type{C}) where {C<:SubContextView{CType, SubKey}} where {CType, SubKey}
+function _compute_varlocations(::Type{C}) where {C<:SubContextView{B, SubKey}} where {B<:ContextBundle, SubKey}
     locals = get_local_locations(C)
     sharedvars = get_shared_locations(C)
     routedvars = get_routed_locations(C)
@@ -214,11 +213,11 @@ end
     return haskey(outputs, subcontextname) ? getproperty(outputs, subcontextname) : (;)
 end
 
-@inline function _runtime_has_var(runtimecontext::ProcessContext, ::Val{subcontextname}, ::Val{varname}) where {subcontextname,varname}
+@inline function _runtime_has_var(runtimecontext, ::Val{subcontextname}, ::Val{varname}) where {subcontextname,varname}
     return haskey(_runtime_subcontext_data(runtimecontext, Val(subcontextname)), varname)
 end
 
-@inline function _runtime_get_var(runtimecontext::ProcessContext, ::Val{subcontextname}, ::Val{varname}) where {subcontextname,varname}
+@inline function _runtime_get_var(runtimecontext, ::Val{subcontextname}, ::Val{varname}) where {subcontextname,varname}
     return getproperty(_runtime_subcontext_data(runtimecontext, Val(subcontextname)), varname)
 end
 
@@ -260,11 +259,11 @@ end
 
 """A runtime part's value is in the runtime context."""
 @inline _read_part(::ContextPart, scv::SCV, ::Val{subcontextname}, ::Val{varname}) where {SCV<:SubContextView, subcontextname, varname} =
-    @inline subcontext_view_value(_runtime_get_var(getruntimecontext(scv), Val(subcontextname), Val(varname)), scv)
+    @inline subcontext_view_value(_runtime_get_var(getbundle(scv), Val(subcontextname), Val(varname)), scv)
 
 """A namespace's value: its state, or else one of its outputs."""
 @inline function _read_part(::Stored, scv::SCV, ::Val{subcontextname}, ::Val{varname}) where {SCV<:SubContextView, subcontextname, varname}
-    runtimecontext = @inline getruntimecontext(scv)
+    bundle = @inline getbundle(scv)
     context = @inline getcontext(scv)
     subcontexts = @inline get_subcontexts(context)
     if haskey(subcontexts, subcontextname)
@@ -273,8 +272,8 @@ end
             return @inline subcontext_view_value(getproperty(subcontext, varname), scv)
         end
     end
-    if @inline _runtime_has_var(runtimecontext, Val(subcontextname), Val(varname))
-        return @inline subcontext_view_value(_runtime_get_var(runtimecontext, Val(subcontextname), Val(varname)), scv)
+    if @inline _runtime_has_var(bundle, Val(subcontextname), Val(varname))
+        return @inline subcontext_view_value(_runtime_get_var(bundle, Val(subcontextname), Val(varname)), scv)
     end
     if haskey(subcontexts, subcontextname)
         subcontext = @inline getproperty(subcontexts, subcontextname)
@@ -303,8 +302,8 @@ that are hidden from algorithm code during normal reads.
             return @inline getproperty(subcontext, varname)
         end
     end
-    if @inline _runtime_has_var(getruntimecontext(scv), Val(subcontextname), Val(varname))
-        return @inline _runtime_get_var(getruntimecontext(scv), Val(subcontextname), Val(varname))
+    if @inline _runtime_has_var(getbundle(scv), Val(subcontextname), Val(varname))
+        return @inline _runtime_get_var(getbundle(scv), Val(subcontextname), Val(varname))
     end
     error("Variable `$subcontextname.$varname` is not available in state or runtime context.")
 end
@@ -356,14 +355,14 @@ Read a routed runtime variable from the runtime context.
     target_variables = get_originalname(vl)
     if isnothing(getfunc(vl)) && target_variables isa Symbol
         return quote
-            return @inline subcontext_view_value(_runtime_get_var(getruntimecontext(sct), Val($(QuoteNode(target_subcontext))), Val($(QuoteNode(target_variables)))), sct)
+            return @inline subcontext_view_value(_runtime_get_var(getbundle(sct), Val($(QuoteNode(target_subcontext))), Val($(QuoteNode(target_variables)))), sct)
         end
     end
 
     varnames = target_variables isa Tuple ? target_variables : (target_variables,)
     varsymbols = ntuple(i -> gensym(:runtime_var), length(varnames))
     assign_exprs = [
-        :($(varsymbols[i]) = @inline subcontext_view_value(_runtime_get_var(getruntimecontext(sct), Val($(QuoteNode(target_subcontext))), Val($(QuoteNode(varnames[i])))), sct))
+        :($(varsymbols[i]) = @inline subcontext_view_value(_runtime_get_var(getbundle(sct), Val($(QuoteNode(target_subcontext))), Val($(QuoteNode(varnames[i])))), sct))
         for i in eachindex(varnames)
     ]
     fexpr = funcexpr(vl, varsymbols...)
@@ -388,7 +387,7 @@ end
     return :( $has_key )
 end
 
-@inline @generated function Base.getproperty(sct::SubContextView{CType, SubKey}, v::Val{key}) where {CType, SubKey, key}    
+@inline @generated function Base.getproperty(sct::SubContextView{B, SubKey}, v::Val{key}) where {B<:ContextBundle, SubKey, key}    
 
     target_location, subcontextname = _compute_location(sct, key)
     if !isnothing(target_location)
@@ -401,8 +400,8 @@ end
             available = keys(locations)
             return quote
                 # Outputs without slots (inference could not type them before the run, see Outputs.jl): look them up now.
-                if @inline _runtime_has_var(getruntimecontext(sct), Val($(QuoteNode(SubKey))), Val($(QuoteNode(key))))
-                    return @inline _runtime_get_var(getruntimecontext(sct), Val($(QuoteNode(SubKey))), Val($(QuoteNode(key))))
+                if @inline _runtime_has_var(getbundle(sct), Val($(QuoteNode(SubKey))), Val($(QuoteNode(key))))
+                    return @inline _runtime_get_var(getbundle(sct), Val($(QuoteNode(SubKey))), Val($(QuoteNode(key))))
                 end
                 if $(QuoteNode(subcontextname)) == $(QuoteNode(key))
                     $(LineNumberNode(@__LINE__, @__FILE__))

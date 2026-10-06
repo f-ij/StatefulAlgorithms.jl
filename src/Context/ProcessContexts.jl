@@ -121,13 +121,13 @@ _final_parts(part::SubcontextOutputs, name::Symbol, ::Type{T}) where {T} =
     [(owner, :(getproperty(getdata(getproperty(runtime_subcontexts, $(QuoteNode(name)))), $(QuoteNode(owner))))) for owner in fieldnames(T)]
 
 """
-    final_visible_context(context, runtimecontext)
+    visible_context(lc::LoopContext)   (ContextBundles.jl)
 
-Build the one-argument finalstep projection context. Subcontext outputs (merged
-into their namespaces) and the other runtime parts are materialized into a fresh context for final result
-projection only; the returned process state remains `context`.
+Everything a loop holds at its end, as one `ProcessContext` to read from: the stored subcontexts with each namespace's
+outputs merged in, and the runtime parts (declared outputs, inputs, declared locals) as subcontexts. What `finalstep`
+gets. Only a projection: the stored context stays what the loop stores.
 """
-@inline @generated function final_visible_context(context::C, runtimecontext::RC) where {C<:ProcessContext,RC<:ProcessContext}
+@inline @generated function _visible_context(context::C, runtimecontext::RC) where {C<:ProcessContext,RC<:ProcessContext}
     state_names = fieldnames(C.parameters[1])
     runtime_names = fieldnames(RC.parameters[1])
     isempty(runtime_names) && return :(context)
