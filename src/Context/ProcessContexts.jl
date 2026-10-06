@@ -32,9 +32,9 @@ end
     if haskey(subcontexts, name)
         return @inline getproperty(subcontexts, name)
     end
-    outputs = @inline get_captured_returns(pc)
-    if haskey(outputs, name)
-        return @inline getproperty(outputs, name)
+    returns = @inline get_captured_returns(pc)
+    if haskey(returns, name)
+        return @inline getproperty(returns, name)
     end
     input = @inline get_inputs(pc)
     if haskey(input, name)
@@ -117,14 +117,16 @@ end
 
 """A runtime part as `(name, data expression)` pairs for the final projection: subcontext returns per namespace."""
 _final_parts(::ContextPart, name::Symbol, ::Type) = [(name, :(getdata(getproperty(runtime_subcontexts, $(QuoteNode(name))))))]
+_final_parts(::CapturedReturns, name::Symbol, ::Type) = [(name, :(map(_final_value, getdata(getproperty(runtime_subcontexts, $(QuoteNode(name)))))))]
 _final_parts(part::SubcontextReturns, name::Symbol, ::Type{T}) where {T} =
-    [(owner, :(getproperty(getdata(getproperty(runtime_subcontexts, $(QuoteNode(name)))), $(QuoteNode(owner))))) for owner in fieldnames(T)]
+    [(owner, :(map(_final_value, getproperty(getdata(getproperty(runtime_subcontexts, $(QuoteNode(name)))), $(QuoteNode(owner)))))) for owner in fieldnames(T)]
 
 """
     visible_context(lc::LoopContext)   (ContextBundles.jl)
 
 Everything a loop holds at its end, as one `ProcessContext` to read from: the stored subcontexts with each namespace's
-outputs merged in, and the runtime parts (captured returns, inputs, declared locals) as subcontexts. What `finalstep`
+subcontext returns merged in, and the runtime parts (captured returns, inputs, declared locals) as subcontexts. A return
+shows the value of the last step that wrote it, or `nothing`. What `finalstep`
 gets. Only a projection: the stored context stays what the loop stores.
 """
 @inline @generated function _visible_context(context::C, runtimecontext::RC) where {C<:ProcessContext,RC<:ProcessContext}
@@ -137,7 +139,7 @@ gets. Only a projection: the stored context stays what the loop stores.
         :(runtime_subcontexts = @inline get_subcontexts(runtimecontext)),
     ]
 
-    # Each runtime part as (name, data): a namespace's outputs are shown in that namespace.
+    # Each runtime part as (name, data): a namespace's subcontext returns are shown in that namespace.
     parts = Any[]
     for name in runtime_names
         append!(parts, _final_parts(context_part(Val(name)), name, getdatatype(fieldtype(RC.parameters[1], name))))
@@ -220,43 +222,17 @@ Merge values into the captured returns of a runtime context.
     return @inline with_subcontext(pc, Val(:_captured_returns), SubContext{:_captured_returns}(runtime))
 end
 
-"""
-`merge(old, args)`, except that a field of `old` keeps its type when the new value fits it. The outputs get slots typed
-before the run (see `_settle_runtime`), e.g. `Union{Nothing, Float64}`; writing a `Float64` keeps that type, so the
-runtime context has the same type in every step. A value that does not fit (outputs that could not be typed before
-the run) replaces the field as `merge` does.
-"""
-@inline @generated function _merge_slots(old::NT, args::A) where {NT<:NamedTuple, A<:NamedTuple}
-    names = Symbol[fieldnames(NT)...]
-    append!(names, (n for n in fieldnames(A) if !(n in fieldnames(NT))))
-    types = map(names) do name
-        name in fieldnames(A) || return fieldtype(NT, name)
-        name in fieldnames(NT) && fieldtype(A, name) <: fieldtype(NT, name) && return fieldtype(NT, name)
-        return fieldtype(A, name)
-    end
-    values = [:(getfield($(n in fieldnames(A) ? :args : :old), $(QuoteNode(n)))) for n in names]
-    return :(NamedTuple{$(Tuple(names)), Tuple{$(types...)}}(($(values...),)))
-end
-
-@inline merge_runtime_return(context::C, ::Nothing) where {C<:ProcessContext} = context
-@inline merge_runtime_return(context::C, retval::R) where {C<:ProcessContext,R<:NamedTuple} =
-    @inline _merge_into_captured_returns(context, retval)
-
-function merge_runtime_return(context::C, retval::R) where {C<:ProcessContext,R}
-    error("Runtime-owned step returns must be named tuples or `nothing`, got $(typeof(retval)).")
-end
-
 """Merge owner-scoped runtime returns into `runtimecontext`."""
 @inline function merge_owner_runtime_return(runtimecontext::C, ::Val{owner}, ::Nothing) where {C<:ProcessContext,owner}
     return runtimecontext
 end
 
-"""A namespace's outputs (`owner` is its key): stored under it in `_subcontext_returns`."""
+"""A namespace's subcontext returns (`owner` is its key): stored under it in `_subcontext_returns`."""
 @inline function merge_owner_runtime_return(runtimecontext::C, ::Val{owner}, args::A) where {C<:ProcessContext,owner,A<:NamedTuple}
-    outputs = @inline get_subcontext_returns(runtimecontext)
-    old_data = haskey(outputs, owner) ? getproperty(outputs, owner) : (;)
-    new_outputs = @inline merge(outputs, NamedTuple{(owner,)}(((@inline _merge_slots(old_data, args)),)))
-    return @inline with_subcontext(runtimecontext, Val(:_subcontext_returns), SubContext{:_subcontext_returns}(new_outputs))
+    returns = @inline get_subcontext_returns(runtimecontext)
+    old_data = haskey(returns, owner) ? getproperty(returns, owner) : (;)
+    new_returns = @inline merge(returns, NamedTuple{(owner,)}(((@inline _merge_slots(old_data, args)),)))
+    return @inline with_subcontext(runtimecontext, Val(:_subcontext_returns), SubContext{:_subcontext_returns}(new_returns))
 end
 
 """Captured returns (what statements and calls return)."""

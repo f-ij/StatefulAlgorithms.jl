@@ -107,6 +107,8 @@ Base.@constprop :aggressive @inline @generated function _step!(tca::TCA, cursor:
     sizehint!(exprs, algo_count + 4)
     push!(exprs, :(local algos = @inline getalgos(tca)))
     push!(exprs, :(local this_inc = @inline inc(cursor, tca)))
+    push!(exprs, :(local outer = lc))
+    push!(exprs, :(lc = @inline enter_scope(lc, wiring)))
 
     for i in 1:algo_count
         schedule_value = schedule_values[i]
@@ -123,7 +125,7 @@ Base.@constprop :aggressive @inline @generated function _step!(tca::TCA, cursor:
     end
 
     push!(exprs, :(@inline inc!(cursor, tca)))
-    push!(exprs, :(return lc))
+    push!(exprs, :(return @inline leave_scope(lc, outer)))
     return Expr(:block, exprs...)
 end
 

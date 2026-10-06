@@ -17,26 +17,14 @@ shares(w::Wiring) = getfield(w, :shares)
 """Return the wiring bucket or nested plan wiring of the view's current node."""
 @inline current_wiring(pwv::PlanWiringView) = getfield(pwv, :wiring)
 
-"""Return a child view holding the child's wiring subtree (same root type)."""
+"""Return a child view holding the child's wiring subtree (same root type), running in the current node's scope."""
 @inline function child_wiring_view(pwv::PlanWiringView{Root,W,DemandAll}, ::Val{idx}) where {Root,W<:PlanWiring,DemandAll,idx}
     child = getfield(child_wiring(current_wiring(pwv)), idx)
-    return PlanWiringView{Root,typeof(child),DemandAll,visible_locals(W)}(child)
+    return PlanWiringView{Root,typeof(child),DemandAll,W}(child)
 end
 
-"""
-The routes at the current plan node: the child's own routes, plus one from `_declared_locals` for each
-declared local visible here, so a view built with them reads and writes those locals by name.
-Built from types, so they cost nothing at runtime.
-
-A local binding has no target algorithm: those routes target `LocalScope()`, the view they are
-in. (A view reads only a route's source and names; the target must still be a resolved
-endpoint, since views rebuild their routes from their types.)
-"""
-@inline @generated function routes(pwv::PlanWiringView{Root,W,DemandAll,Visible}) where {Root,W,DemandAll,Visible}
-    isempty(Visible) && return :(@inline routes(current_wiring(pwv)))
-    local_routes = (Route{:_declared_locals, LocalScope(), nothing, nothing, (Visible[i],), (keys(Visible)[i],), Nothing, Nothing}(nothing, nothing) for i in 1:length(Visible))
-    return :(($(local_routes...), (@inline routes(current_wiring(pwv)))...))
-end
+"""The routes at the current plan node."""
+@inline routes(pwv::PlanWiringView) = @inline routes(current_wiring(pwv))
 
 
 """Forward share access through the current plan-wiring view path."""
@@ -96,17 +84,6 @@ function _append_route_demand_names(names::Tuple, route_varnames::Tuple)
     return merged
 end
 
-"""Every name read by a `Callable` anywhere in a plan-wiring tree."""
-_callable_reads_in_tree(::Type) = ()
-function _callable_reads_in_tree(::Type{W}) where {W<:PlanWiring}
-    names = callable_reads(W)
-    children = fieldtype(W, :child_wiring)
-    for i in 1:fieldcount(children)
-        names = _append_route_demand_names(names, _callable_reads_in_tree(fieldtype(children, i)))
-    end
-    return names
-end
-
 """Compute demanded owner-runtime return names from the full plan wiring type."""
 function _return_demand_names(::Type{W}, owner::Symbol) where {W<:PlanWiring}
     names = ()
@@ -116,12 +93,8 @@ function _return_demand_names(::Type{W}, owner::Symbol) where {W<:PlanWiring}
             names = _append_route_demand_names(names, route_name)
         end
     end
-    return _append_route_demand_names(names, _unrouted_reads(context_part(Val(owner)), W))
+    return names
 end
-
-"""Names read from a part without routes: calls read the captured returns by name."""
-_unrouted_reads(::ContextPart, ::Type) = ()
-_unrouted_reads(::CapturedReturns, ::Type{W}) where {W<:PlanWiring} = _callable_reads_in_tree(W)
 
 """Compute demanded owner-runtime return names from the full plan-wiring view."""
 @inline @generated function return_demand(::PlanWiringView{Root,W,DemandAll}, ::Namespace{Name}) where {Root<:PlanWiring,W,DemandAll,Name}

@@ -16,7 +16,7 @@ Each node type's rule sits next to its `_step!`:
 - anything else (the method below), or a type that inference cannot pin down: every field of the context. That is
   always correct, and as slow as carrying the whole context.
 
-Within one step the runtime context changes from child to child (transient outputs), and a child's view depends on
+Within one step the runtime context changes from child to child (returns), and a child's view depends on
 it, so its type is threaded from child to child: the union of the type before a child and the type that child's
 `_step!` returns. Repeated steps (a loop, a routine's repeats) use the type it settles on. Both can only make a write
 set larger, never smaller.
@@ -61,11 +61,15 @@ may not run (a child on an interval). `Any` when inference cannot tell.
 """
 @inline function _runtime_after(node::A, cursor::S, context::C, ::Type{RC}, wiring::W, namespace::N, process::P, lifetime::LT) where {A,S,C,RC,W,N,P,LT}
     RC <: ProcessContext || return Any
-    return Union{RC, _returned_runtime(Core.Compiler.return_type(_step!, Tuple{A,S,_loop_context_type(C, RC),W,N,P,LT}))}
+    return Union{RC, _returned_runtime(Core.Compiler.return_type(_step!, Tuple{A,S,_loop_context_type(C, RC, W),W,N,P,LT}))}
 end
 
-"""The `LoopContext` types for stored type `C` and runtime type(s) `RC` (one per type of a `Union`)."""
-Base.@assume_effects :foldable _loop_context_type(@nospecialize(C), @nospecialize(RC)) = Union{(LoopContext{C, R} for R in Base.uniontypes(RC))...}
+"""
+The `LoopContext` types a node with wiring view type `W` is stepped with, for stored type `C` and runtime type(s) `RC`
+(one per type of a `Union`): in the scope `W` says the node runs in.
+"""
+Base.@assume_effects :foldable _loop_context_type(@nospecialize(C), @nospecialize(RC), @nospecialize(W)) =
+    Union{(LoopContext{C, R, wiring_parent(W)} for R in Base.uniontypes(RC))...}
 
 """The runtime context type in the `LoopContext` types `rt` a step returns; `Any` for anything else."""
 Base.@assume_effects :foldable function _returned_runtime(@nospecialize(rt))
@@ -77,6 +81,44 @@ Base.@assume_effects :foldable function _returned_runtime(@nospecialize(rt))
     end
     return runtime
 end
+
+"""Append to `exprs` the `_runtime_after` of every leaf under the plan (type `P`) at `plan`, `cursor` and `wiring`, in order."""
+function _leaf_runtime_exprs!(exprs, P::Type, plan, cursor, wiring)
+    funcs = fieldtype(P, :funcs)
+    namespaces = P.parameters[3]
+    for i in 1:fieldcount(funcs)
+        child, child_cursor, child_wiring = gensym(:child), gensym(:cursor), gensym(:wiring)
+        push!(exprs, :(local $child = getfield(getfield($plan, :funcs), $i)),
+                     :(local $child_cursor = @inline child_loop_cursor($cursor, Val($i))),
+                     :(local $child_wiring = @inline child_wiring_view($wiring, Val($i))))
+        if fieldtype(funcs, i) <: AbstractPlan
+            _leaf_runtime_exprs!(exprs, fieldtype(funcs, i), child, child_cursor, child_wiring)
+        else
+            push!(exprs, :(rc = @inline _runtime_after($child, $child_cursor, context, rc, $child_wiring, $(fieldtype(namespaces, i))(), process, lifetime)))
+        end
+    end
+    return exprs
+end
+
+"""
+    _runtime_by_leaves(plan, cursor, context, RC, wiring, process, lifetime)
+
+The runtime context type after one step of `plan`, given the type `RC` before it, found leaf by leaf: the type is
+threaded through every leaf of the plan tree in the order they run, and each leaf is inferred on its own
+(`_runtime_after`). `Any` when inference cannot tell.
+
+Unlike inferring the plan's `_step!` as a whole, nothing here infers a method inside a call of the same method:
+inference stops following a method that calls itself with an argument type that grows (here the runtime context,
+which gains a return with every call until the returns have slots), and then gives up on the whole step. So the tree
+is unrolled here, in one generated body, instead of recursing plan by plan.
+"""
+@inline @generated function _runtime_by_leaves(plan::P, cursor::S, context::C, ::Type{RC}, wiring::W, process::PR, lifetime::LT) where {P<:AbstractPlan,S,C,RC,W,PR,LT}
+    exprs = Any[:(rc = RC)]
+    _leaf_runtime_exprs!(exprs, P, :plan, :cursor, :wiring)
+    push!(exprs, :(return rc))
+    return Expr(:block, exprs...)
+end
+
 
 """
 The runtime context type a repeated `_step!(node, ...)` settles on, starting from `RC`: the union over the repeats.

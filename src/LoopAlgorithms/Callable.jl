@@ -15,77 +15,31 @@ child when the plan is built, and pointed at that child's namespace at resolve.
 struct OwnerMatcher <: AbstractMatcher{nothing} end
 
 """
-    _call_return_names(SCV, R, DemandNames)
-
-Split the return names of a `Callable` (the field names of `R`): names visible in its view (`SCV`) are real
-state/writeback targets; the others are temporary runtime outputs for later DSL statements, kept when demanded.
+The return names of a `Callable` (the field names of `R`) that its view (`SCV`) sees: a state field or local it is
+wired to, or its slot in the scope (a captured return that something in the scope reads, see `_resolve_scopes`).
+The others are read by nothing and dropped.
 """
-function _call_return_names(SCV::Type, R::Type, DemandNames)
-    view_names = Symbol[]
-    runtime_names = Symbol[]
-    for name in fieldnames(R)
-        location, _ = _compute_location(SCV, name)
-        if isnothing(location)
-            (DemandNames === :all || name in DemandNames) && push!(runtime_names, name)
-        else
-            push!(view_names, name)
-        end
-    end
-    return view_names, runtime_names
-end
+_call_return_names(SCV::Type, R::Type) = Tuple(name for name in fieldnames(R) if !isnothing(first(_compute_location(SCV, name))))
+
+"""The returned values `retval` keeps for the view, as a named tuple expression."""
+_kept_returns_expr(names) = Expr(:tuple, Expr(:parameters, (Expr(:kw, name, :(getproperty(retval, $(QuoteNode(name))))) for name in names)...))
 
 @inline _call_payload(contextview::SCV, ::Nothing) where {SCV<:SubContextView} = (;)
 @inline @generated function _call_payload(contextview::SCV, retval::R) where {SCV<:SubContextView, R<:NamedTuple}
-    view_names, _ = _call_return_names(SCV, R, ())
-    isempty(view_names) && return :((;))
-    view_expr = Expr(:tuple, Expr(:parameters, (Expr(:kw, name, :(getproperty(retval, $(QuoteNode(name))))) for name in view_names)...))
-    return :(@inline _merge_payload(contextview, $view_expr, ReturnDemand{$(Tuple(view_names))}()))
+    names = _call_return_names(SCV, R)
+    isempty(names) && return :((;))
+    return :(@inline _merge_payload(contextview, $(_kept_returns_expr(names)), ReturnDemand{$names}()))
 end
 
-"""
-Merge a `Callable` return into the correct runtime target.
-
-Outputs whose names already resolve in the wrapper view are routed/shared/local
-writebacks and should be merged through `SubContextView`. New output names are
-DSL temporaries and remain in `ProcessContext._captured_returns` for later statements.
-"""
+"""Merge a `Callable` return through its view: each name the view sees is written where it lives (see `_call_return_names`)."""
 @inline @generated function merge_call_return(contextview::SCV, retval::R) where {SCV<:SubContextView, R<:NamedTuple}
-    demand_type = ReturnDemand{fieldnames(R)}
-    return :(merge_call_return(contextview, retval, $demand_type()))
+    names = _call_return_names(SCV, R)
+    isempty(names) && return :(@inline getbundle(contextview))
+    return :(@inline merge(contextview, $(_kept_returns_expr(names))))
 end
 
-@inline @generated function merge_call_return(
-    contextview::SCV,
-    retval::R,
-    demand::ReturnDemand{DemandNames},
-) where {SCV<:SubContextView, R<:NamedTuple, DemandNames}
-    view_names, runtime_names = _call_return_names(SCV, R, DemandNames)
-
-    view_expr = Expr(:tuple, Expr(:parameters, (
-        Expr(:kw, name, :(getproperty(retval, $(QuoteNode(name)))))
-        for name in view_names
-    )...))
-    runtime_expr = Expr(:tuple, Expr(:parameters, (
-        Expr(:kw, name, :(getproperty(retval, $(QuoteNode(name)))))
-        for name in runtime_names
-    )...))
-
-    view_merge_expr = isempty(view_names) ? :(@inline getbundle(contextview)) : :(@inline merge(contextview, $view_expr))
-    runtime_merge_expr = isempty(runtime_names) ? :merged :
-        :(LoopContext((@inline getcontext(merged)), (@inline merge_runtime_return(getruntimecontext(merged), $runtime_expr))))
-
-    return quote
-        $(LineNumberNode(@__LINE__, @__FILE__))
-        merged = $view_merge_expr
-        return $runtime_merge_expr
-    end
-end
-
-"""
-Treat a call with no return value as a pure side-effecting step.
-"""
+"""A call with no return value is a pure side-effecting step."""
 @inline merge_call_return(contextview::SCV, ::Nothing) where {SCV<:SubContextView} = @inline getbundle(contextview)
-@inline merge_call_return(contextview::SCV, ::Nothing, demand::ReturnDemand) where {SCV<:SubContextView} = @inline getbundle(contextview)
 
 """
     Literal(x)
@@ -239,7 +193,6 @@ function callable_return_names(::Type{<:Callable{F, Args, Kwargs, Returns}}) whe
     return Tuple(kind === :properties ? map(last, names) : map(n -> n isa Splat ? splatname(n) : n, names))
 end
 callable_return_names(::Type) = ()
-callable_reads(funcs::Tuple) = Tuple(unique(Symbol[n for f in funcs for n in callable_input_names(typeof(f))]))
 
 @inline init(::Callable, context) = (;)
 @inline cleanup(::Callable, context) = (;)
@@ -248,7 +201,7 @@ callable_reads(funcs::Tuple) = Tuple(unique(Symbol[n for f in funcs for n in cal
 @inline function _step!(ex::EX, lc::L, wiring::W, namespace::Namespace, process::P, lifetime::LT) where {EX<:Callable, L<:LoopContext, W<:PlanWiringView, P<:AbstractProcess, LT<:Lifetime}
     contextview = @inline _leaf_view(ex, lc, wiring, Namespace{:_captured_returns}())
     retval = @inline step!(ex, contextview)
-    return @inline merge_call_return(contextview, retval, return_demand(wiring, Namespace{:_captured_returns}()))
+    return @inline merge_call_return(contextview, retval)
 end
 @inline _step!(ex::EX, lc::L, wiring::W, process::P, lifetime::LT) where {EX<:Callable, L<:LoopContext, W<:PlanWiringView, P<:AbstractProcess, LT<:Lifetime} =
     @inline _step!(ex, lc, wiring, Namespace{:_captured_returns}(), process, lifetime)

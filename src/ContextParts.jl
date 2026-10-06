@@ -12,9 +12,9 @@ abstract type ContextPart end
 
 """A namespace of the stored context: an algorithm's or state's state. Persistent."""
 struct Stored <: ContextPart end
-"""What statements (`y = f(x)`) and calls return. One step. Calls share it as their namespace."""
+"""What statements (`y = f(x)`) and calls return. One step of the plan node that captures it (see `Scope`). Calls share it as their namespace."""
 struct CapturedReturns <: ContextPart end
-"""Per namespace, what its algorithm returns that is not its state. One step."""
+"""Per namespace, what its algorithm returns that is not its state. One step of the plan node the algorithm is in."""
 struct SubcontextReturns <: ContextPart end
 """Declared locals (`local x`, `x = nothing`; backend `Local`). The run; kept on a pause."""
 struct DeclaredLocals <: ContextPart end
@@ -37,9 +37,3 @@ part_name(::Inputs) = :_inputs
 """Where a value of this part is read from: the runtime context (`:runtime`), or the stored context (`:subcontext`)."""
 location_kind(::ContextPart) = :runtime
 location_kind(::Stored) = :subcontext
-
-"""
-The target of the routes that make declared locals visible to a view: the view itself, since such a binding has no
-target algorithm (see `routes(::PlanWiringView)`). A view tells these routes from its own wires by this target.
-"""
-struct LocalScope <: AbstractScope end

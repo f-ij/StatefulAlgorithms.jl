@@ -9,21 +9,18 @@ What a view sees, by name, and where each name is stored (a `VarLocation`). The 
 
 - state: the view's namespace's own fields (stored context);
 - wires: routes and shares written for this child (`Route`, `Share`, `WithWiring`, the DSL);
-- declared locals visible to it: resolve gives every child a route from `_declared_locals` per visible local, with
-  target `LocalScope()`;
-- outputs: captured returns for a call, its own subcontext returns for an algorithm (`get_output_locations`);
+- the scope its bundle is in (`Scope`): the declared locals, and for a call the captured returns;
 - injected values.
 
 State and wires are explicit. A route wins over a state field of the same name (it is written for this child); a share
-with the same name as a state field or a route is an error. Declared locals and outputs are implicit,
-visible to every child of the block whether it uses them or not, so an explicit name hides an implicit one of the same
-name; among the implicit ones a declared local hides an output. Injected values hide everything.
+with the same name as a state field or a route is an error. The scope is implicit, visible to every child of the block
+whether it uses it or not, so an explicit name hides a name of the scope. Injected values hide everything.
 =#
 
 """The view's namespace's state (its subcontext in the stored context), by name."""
 get_state_locations(::Type{SCT}) where {SCT<:SubContextView{B, SubKey}} where {B<:ContextBundle, SubKey} = _state_locations(context_part(Val(SubKey)), SCT)
 
-"""A call has no state: its namespace is the captured returns (see `get_output_locations`)."""
+"""A call has no state: its namespace is the captured returns."""
 _state_locations(::CapturedReturns, ::Type) = (;)
 
 function _state_locations(::Stored, ::Type{SCT}) where {SCT<:SubContextView{B, SubKey}} where {B<:ContextBundle, SubKey}
@@ -67,14 +64,9 @@ function get_shared_locations(sct::Type{SCT}) where {SCT<:SubContextView{B, SubK
     return sharedvars
 end
 
-"""The routes given to the view: the explicit ones (wires for this child), and the declared locals visible to it."""
-_view_routes(::Type{SCT}) where {SCT<:SubContextView} = _view_shared_types(view_sharedvars(SCT))
-_is_visible_local(route) = to_match_by(route) isa LocalScope
-
-"""Routes supplied to the view => VarLocations: the explicit routes (`visible_locals = false`) or the visible declared locals."""
-function get_routed_locations(::Type{SCT}; visible_locals::Bool = false) where {SCT<:SubContextView}
-    return named_flat_collect_broadcast(_view_routes(SCT)) do route
-        _is_visible_local(route) == visible_locals || return (;)
+"""Routes supplied to the view => VarLocations."""
+function get_routed_locations(::Type{SCT}) where {SCT<:SubContextView}
+    return named_flat_collect_broadcast(_view_shared_types(view_sharedvars(SCT))) do route
         return _routed_locations(context_part(Val(get_fromname(route))), route)
     end
 end
@@ -88,28 +80,26 @@ function _routed_locations(part::ContextPart, sv)
     return NamedTuple(pairs)
 end
 
-"""
-The outputs the view sees by name, from the slots typed before the run (Outputs.jl): for a call (namespace
-`_captured_returns`) every captured return, for an algorithm its own subcontext returns. Implicit: a name the view has
-from anything else wins (see `_compute_all_locations`).
-"""
-function get_output_locations(::Type{SCT}) where {SCT<:SubContextView{B, SubKey}} where {B<:ContextBundle, SubKey}
-    names = _output_names(context_part(Val(SubKey)), B, SubKey)
-    return NamedTuple{names}(map(name -> VarLocation{:runtime}(SubKey, name), names))
-end
-
 """The data type of a runtime part in runtime context type `RC`; empty when `RC` has no such part."""
 function _part_data_type(::Type{RC}, part::ContextPart) where {RC<:ProcessContext}
     D = fieldtype(RC, :subcontexts)
     return part_name(part) in fieldnames(D) ? getdatatype(fieldtype(D, part_name(part))) : NamedTuple{(), Tuple{}}
 end
 
-"""The names of the outputs a view sees: a call every captured return, an algorithm its own subcontext returns."""
-_output_names(part::CapturedReturns, ::Type{RC}, owner::Symbol) where {RC} = fieldnames(_part_data_type(RC, part))
-function _output_names(::Stored, ::Type{RC}, owner::Symbol) where {RC}
-    outputs = _part_data_type(RC, SubcontextReturns())
-    return owner in fieldnames(outputs) ? fieldnames(fieldtype(outputs, owner)) : ()
-end
+"""
+The names the view sees from the scope its bundle is in (see `Scope`), by name: the declared locals, and for a call
+(namespace `_captured_returns`) the captured returns too. A declared local hides a captured return: one declared in an
+inner node over one captured in an outer node.
+"""
+get_scope_locations(::Type{SCT}) where {SCT<:SubContextView{B, SubKey}} where {B<:ContextBundle, SubKey} =
+    _scope_locations(context_part(Val(SubKey)), bundle_scope(B))
+
+_scope_locations(::ContextPart, ::Type{Sc}) where {Sc<:Scope} = _slot_locations(DeclaredLocals(), scope_locals(Sc))
+_scope_locations(::CapturedReturns, ::Type{Sc}) where {Sc<:Scope} =
+    (; _slot_locations(CapturedReturns(), scope_returns(Sc))..., _slot_locations(DeclaredLocals(), scope_locals(Sc))...)
+
+"""`slots` (`(; name = storage_name, ...)`) as the locations of those names in runtime part `part`."""
+_slot_locations(part::ContextPart, slots::NamedTuple) = map(storage -> VarLocation{:runtime}(part_name(part), storage), slots)
 
 function get_injected_locations(sct::Type{SCT}) where {SCT<:SubContextView{B, SubKey}} where {B<:ContextBundle, SubKey}
     injected_vars = injectedfieldnames(SCT)
@@ -141,9 +131,7 @@ function _compute_all_locations(::Type{SCT}) where {SCT<:SubContextView}
     # with either.
     _check_explicit_clashes(SCT, "state" => state, "shares" => shares)
     _check_explicit_clashes(SCT, "routes" => routes, "shares" => shares)
-    visible_locals = get_routed_locations(SCT; visible_locals = true)
-    outputs = get_output_locations(SCT)
-    return (; outputs..., visible_locals..., shares..., state..., routes..., get_injected_locations(SCT)...)
+    return (; get_scope_locations(SCT)..., shares..., state..., routes..., get_injected_locations(SCT)...)
 end
 
 @inline @generated function _generated_all_locations(::Type{SCT}) where {SCT<:SubContextView}
@@ -175,7 +163,7 @@ end
 @inline Base.haskey(scv::SCV, name::Symbol) where SCV <: SubContextView = @inline haskey(get_all_locations(scv), name)
 @inline getregistry(scv::SCV) where SCV <: SubContextView = getregistry(getcontext(scv))
 
-"""The runtime values under `subcontextname`: a runtime part (`_captured_returns`, `_inputs`, ...), or a namespace's outputs."""
+"""The runtime values under `subcontextname`: a runtime part (`_captured_returns`, `_inputs`, ...), or a namespace's subcontext returns."""
 @inline function _runtime_subcontext_data(runtimecontext::ProcessContext, ::Val{subcontextname}) where {subcontextname}
     subcontexts = @inline get_subcontexts(runtimecontext)
     haskey(subcontexts, subcontextname) && return getdata(getproperty(subcontexts, subcontextname))
@@ -231,7 +219,7 @@ end
 @inline _read_part(::ContextPart, scv::SCV, ::Val{subcontextname}, ::Val{varname}) where {SCV<:SubContextView, subcontextname, varname} =
     @inline subcontext_view_value(_runtime_get_var(getbundle(scv), Val(subcontextname), Val(varname)), scv)
 
-"""A namespace's value: its state, or else one of its outputs."""
+"""A namespace's value: its state, or else one of its subcontext returns."""
 @inline function _read_part(::Stored, scv::SCV, ::Val{subcontextname}, ::Val{varname}) where {SCV<:SubContextView, subcontextname, varname}
     bundle = @inline getbundle(scv)
     context = @inline getcontext(scv)
@@ -365,26 +353,13 @@ end
             $(LineNumberNode(@__LINE__, @__FILE__))
             @inline getproperty(sct, $target_location) 
         end
-        else
-            locations = get_all_locations(sct)
-            available = keys(locations)
-            return quote
-                # Outputs without slots (inference could not type them before the run, see Outputs.jl): look them up now.
-                if @inline _runtime_has_var(getbundle(sct), Val($(QuoteNode(SubKey))), Val($(QuoteNode(key))))
-                    return @inline _runtime_get_var(getbundle(sct), Val($(QuoteNode(SubKey))), Val($(QuoteNode(key))))
-                end
-                if $(QuoteNode(subcontextname)) == $(QuoteNode(key))
-                    $(LineNumberNode(@__LINE__, @__FILE__))
-                    a_name = $(QuoteNode(key))
-                context = getcontext(sct)
-                available_names = $available
-                sct_name = $(QuoteNode(subcontextname))
-                msg = "Variable $(a_name) requested from $(sct) in View: $(SubKey), but not supplied to context. Available names are: $(available_names) \n Context: $(context)"
-            else
-                msg = "Variable $(a_name) (mapped to $(sct_name)) requested from $(sct) in View: $(SubKey), but not supplied to context. Available names are: $(available_names) \n Context: $(context)"
-            end
-            error(msg)
-        end
+    end
+    available = keys(_compute_all_locations(sct))
+    mapped = subcontextname === key ? "" : " (mapped to $(subcontextname))"
+    return quote
+        $(LineNumberNode(@__LINE__, @__FILE__))
+        error("Variable ", $(QuoteNode(key)), $mapped, " requested from ", sct, " in View: ", $(QuoteNode(SubKey)),
+              ", but not supplied to context. Available names are: ", $available, " \n Context: ", getcontext(sct))
     end
 end
 

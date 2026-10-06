@@ -13,11 +13,20 @@ abstract type RootOption <: AbstractOption end
 abstract type AbstractWiring end
 
 """
-A scope a name can be bound in, used as the resolved target of routes that do not connect two
-algorithms but bind a name inside a view (e.g. `LocalScope()` for declared locals). Used as a
-value, like a context key, so it is never mistaken for an unresolved matcher type.
+    Scope{Locals, Returns}
+
+The names visible at one point of a plan, each with the slot it is stored in: the declared locals (`_declared_locals`)
+and the returns its calls capture (`_captured_returns`), both as `(; name = storage_name, ...)`. A storage name is the
+name qualified by the position of the plan that declares or captures it (`x`, or `x@1.2` in the plan at position 1.2).
+
+Every plan node is a scope. Its scope is the enclosing one with the node's own declared locals and captured returns
+added; an inner declaration hides an outer one of the same name. Only types: entering and leaving a scope moves no
+data (see `enter_scope`).
 """
-abstract type AbstractScope end
+struct Scope{Locals, Returns} end
+const NoScope = Scope{(;), (;)}
+scope_locals(::Type{Scope{Locals, Returns}}) where {Locals, Returns} = Locals
+scope_returns(::Type{Scope{Locals, Returns}}) where {Locals, Returns} = Returns
 """A state of a plan (`@state`, `@input`, a `AlgoState` passed to a constructor); kept in the plan's `states`."""
 abstract type AlgoState end
 abstract type ParserOption end
@@ -186,23 +195,24 @@ child position and contains the exact wiring value passed to that child:
 `Wiring` for concrete executable children and `PlanWiring` for nested loop
 plans.
 """
-struct PlanWiring{GlobalWiring, ChildWiring, Locals<:NamedTuple, Visible, Reads} <: AbstractWiring
+struct PlanWiring{GlobalWiring, ChildWiring, Locals<:NamedTuple, Sc<:Scope, Resets} <: AbstractWiring
     global_wiring::GlobalWiring
     child_wiring::ChildWiring
     locals::Locals   # `Local` declarations of this plan node: name => initial value
 end
-# `Reads` (set by resolve) is every name this node's `Callable` children read.
-# `Visible` (set by resolve) is every local this node's children can see, as
-# `(; name = storage_name, ...)`: its own and its ancestors', nearest declaration first.
+# Set by resolve: `Sc` is the scope of this node (what its children see by name), `Resets` the slots that entering it
+# makes unset, `(; returns = (storage_name, ...), owners = (namespace, ...))`: its own captured returns, and the
+# subcontext returns of the algorithms directly in it.
 
-PlanWiring(global_wiring::GlobalWiring, child_wiring::ChildWiring, locals::Locals = (;), ::Val{Visible} = Val((;)), ::Val{Reads} = Val(())) where {GlobalWiring, ChildWiring<:Tuple, Locals<:NamedTuple, Visible, Reads} =
-    PlanWiring{GlobalWiring, ChildWiring, Locals, Visible, Reads}(global_wiring, child_wiring, locals)
+PlanWiring(global_wiring::GlobalWiring, child_wiring::ChildWiring, locals::Locals = (;), ::Type{Sc} = NoScope, ::Val{Resets} = Val((; returns = (), owners = ()))) where {GlobalWiring, ChildWiring<:Tuple, Locals<:NamedTuple, Sc<:Scope, Resets} =
+    PlanWiring{GlobalWiring, ChildWiring, Locals, Sc, Resets}(global_wiring, child_wiring, locals)
 
-"""Locals visible to the children of a plan node, `(; name = storage_name, ...)`."""
-visible_locals(::Type{<:PlanWiring{G, C, L, Visible}}) where {G, C, L, Visible} = Visible
+"""The scope of a plan node: the names its children see (see `Scope`). Outside every node (`Nothing`): none."""
+node_scope(::Type{<:PlanWiring{G, C, L, Sc}}) where {G, C, L, Sc} = Sc
+node_scope(::Type{Nothing}) = NoScope
 
-"""Names the `Callable` children of a plan node read by name (they count as demand for the `_captured_returns` bucket)."""
-callable_reads(::Type{<:PlanWiring{G, C, L, V, Reads}}) where {G, C, L, V, Reads} = Reads
+"""The slots entering a plan node makes unset, `(; returns, owners)` (see `enter_scope`)."""
+node_resets(::Type{<:PlanWiring{G, C, L, Sc, Resets}}) where {G, C, L, Sc, Resets} = Resets
 PlanWiring() = PlanWiring(Wiring(), ())
 
 """
@@ -212,17 +222,23 @@ The view keeps the full root `PlanWiring` and a type-level child path. Incoming
 routes/shares are read at the current path, while return demand can be computed
 from the whole tree for the current namespace.
 """
-struct PlanWiringView{Root, W, DemandAll, Visible} <: AbstractWiring
+struct PlanWiringView{Root, W, DemandAll, Parent} <: AbstractWiring
     wiring::W   # wiring of the current plan node; child views hold the child's subtree
 end
-# `Visible` is the locals visible at the current node, taken from the parent plan's wiring
-# type (a concrete child's own `Wiring` does not carry them).
+# `Parent` is the `PlanWiring` type of the plan node the current node is in (`Nothing` for the root): the current node
+# runs in its scope (a concrete child's own `Wiring` does not carry it). The `LoopContext` a node is stepped with is in
+# the same scope; `_writes` reads it from here. A node is named by its type rather than its scope written out because
+# that type is part of the caller's wiring type: it never grows from a `_step!` to a nested one, so inference follows
+# nested plans (a scope written out grows with every level, and inference stops following recursion on a type that grows).
 
 # `Root` is the whole plan's wiring type (needed by `return_demand`); it is the same at
 # every level, while `W` shrinks. Keeping every type non-growing down the nested plan lets
 # inference follow nested `_step!` calls instead of cutting them as unbounded recursion.
 PlanWiringView(wiring::W, ::Val = Val(()), ::Val{DemandAll} = Val(false)) where {W<:PlanWiring,DemandAll} =
-    PlanWiringView{W,W,DemandAll,visible_locals(W)}(wiring)
+    PlanWiringView{W,W,DemandAll,Nothing}(wiring)
+
+"""The plan node a plan node runs in, as its `PlanWiring` type, or `Nothing` (see `PlanWiringView`)."""
+wiring_parent(::Type{<:PlanWiringView{Root, W, DemandAll, Parent}}) where {Root, W, DemandAll, Parent} = Parent
 
 Base.iterate(la::ALA) where {ALA<:LoopSpec} = iterate(getalgos(la))
 

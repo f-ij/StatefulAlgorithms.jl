@@ -47,7 +47,7 @@ end
 
 """The persistent fields one step of a leaf can write: those of the payload its merge writes, read off its type."""
 @inline _leaf_writes(algo::A, context::C, ::Type{RC}, wiring::W, namespace::N) where {A,C<:ProcessContext,RC,W,N} =
-    RC <: ProcessContext ? _payload_writes(Core.Compiler.return_type(_leaf_payload, Tuple{A,_loop_context_type(C, RC),W,N}), C) : _every_field(C)
+    RC <: ProcessContext ? _payload_writes(Core.Compiler.return_type(_leaf_payload, Tuple{A,_loop_context_type(C, RC, W),W,N}), C) : _every_field(C)
 
 """
 What one step of a leaf writes into the persistent context (see `_merge_payload`), built from the same pieces as its
@@ -85,5 +85,5 @@ the current plan wiring.
         retval,
         return_demand(wiring, Namespace{:_captured_returns}()),
     )
-    return LoopContext(context, runtimecontext)
+    return @inline withcontexts(lc, context, runtimecontext)
 end
