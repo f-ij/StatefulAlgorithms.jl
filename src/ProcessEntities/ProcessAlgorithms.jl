@@ -531,7 +531,7 @@ function _step_algorithm_macro(ex)
 
     fname = signature.fname
     impl_name = gensym(Symbol(fname, :_impl))
-    input_temps = Dict(field.name => gensym(Symbol(field.name, :_input)) for field in signature.input_fields)
+    input_temps = Dict(field.name => gensym(Symbol(field.name, :_inputs)) for field in signature.input_fields)
     direct_scope_names = Symbol[
         (getproperty.(signature.positional, :name))...,
         (getproperty.(signature.normal_kwargs, :name))...,

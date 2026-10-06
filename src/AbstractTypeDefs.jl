@@ -201,7 +201,7 @@ PlanWiring(global_wiring::GlobalWiring, child_wiring::ChildWiring, locals::Local
 """Locals visible to the children of a plan node, `(; name = storage_name, ...)`."""
 visible_locals(::Type{<:PlanWiring{G, C, L, Visible}}) where {G, C, L, Visible} = Visible
 
-"""Names the `Callable` children of a plan node read by name (they count as demand for the `_runtime` bucket)."""
+"""Names the `Callable` children of a plan node read by name (they count as demand for the `_declared_outputs` bucket)."""
 callable_reads(::Type{<:PlanWiring{G, C, L, V, Reads}}) where {G, C, L, V, Reads} = Reads
 PlanWiring() = PlanWiring(Wiring(), ())
 

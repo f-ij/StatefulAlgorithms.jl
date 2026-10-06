@@ -6,7 +6,7 @@ export Var
 
 Selects the variable `name` of a subcontext. `subcontext_ref` refers to it: an algorithm or
 state as it was put into the plan (its type, or the instance), or a context key (`:Sensor_1`,
-`:_runtime`, `:_local`). With
+`:_declared_outputs`, `:_declared_locals`). With
 `transform`, reading it gives `transform(value)`. Read with `context[var]`, used by lifetimes
 (`Until(cond, Var(counter, :count))`), and as the source of a wire in `WithWiring` (`From`).
 
@@ -17,7 +17,7 @@ the transform must be a plain function or a closure without captured values, as 
 struct Var{SubcontextRef, name, transform} end
 
 Var(subcontext_ref, name::Symbol; transform = nothing) = Var{_stored_subcontext_ref(subcontext_ref), name, transform}()
-Var(name::Symbol) = Var{:globals, name, nothing}()
+Var(name::Symbol) = Var{:_declared_outputs, name, nothing}()
 
 """A subcontext reference as `Var` stores it in its type: as given, or as its registry matcher."""
 _stored_subcontext_ref(ref::Symbol) = ref
@@ -62,13 +62,9 @@ end
     end
 end
 
-@inline function Base.getindex(c::ProcessContext, var::Var{:globals, name}) where {name}
-    _var_transform(var, getglobals(c)[name])
-end
-
 """
-Read a DSL runtime variable selector from `ProcessContext._runtime`.
+Read a DSL runtime variable selector from `ProcessContext._declared_outputs`.
 """
-@inline function Base.getindex(c::ProcessContext, var::Var{:_runtime, name}) where {name}
-    _var_transform(var, getglobals(c)[name])
+@inline function Base.getindex(c::ProcessContext, var::Var{:_declared_outputs, name}) where {name}
+    _var_transform(var, get_declared_outputs(c)[name])
 end

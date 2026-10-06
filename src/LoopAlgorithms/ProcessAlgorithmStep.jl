@@ -69,7 +69,7 @@ end
 Step an unscoped root `ProcessAlgorithm` inside the loop runtime.
 
 This is the terminal fallback for algorithms that are executed without a child
-namespace. Runtime-only returns are written to `_runtime` only when demanded by
+namespace. Runtime-only returns are written to `_declared_outputs` only when demanded by
 the current plan wiring.
 """
 @inline function _step!(
@@ -83,9 +83,9 @@ the current plan wiring.
     retval = @inline step!(algo, context)
     runtimecontext = @inline merge_owner_runtime_return(
         runtimecontext,
-        Val(:_runtime),
+        Val(:_declared_outputs),
         retval,
-        return_demand(wiring, Namespace{:_runtime}()),
+        return_demand(wiring, Namespace{:_declared_outputs}()),
     )
     return context, runtimecontext
 end

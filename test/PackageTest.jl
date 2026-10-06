@@ -197,9 +197,9 @@ end
     struct PackLogger{T} <: ProcessAlgorithm end
     PackLogger(name::Symbol) = PackLogger{name}()
 
-    function StatefulAlgorithms.init(::PackLogger{T}, _input) where {T}
+    function StatefulAlgorithms.init(::PackLogger{T}, _inputs) where {T}
         log = Vector{Any}()
-        processsizehint!(log, _input)
+        processsizehint!(log, _inputs)
         return (;log)
     end
     function StatefulAlgorithms.step!(::PackLogger{T}, context) where {T}

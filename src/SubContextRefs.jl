@@ -3,11 +3,11 @@ Subcontext references: how a user names a subcontext, and how that name becomes 
 
 Terms:
 - namespace: a part of the context, named by its SCKey. Each registered algorithm or state has
-  its own; all calls share `:_runtime`; declared locals live in `:_local`. A `SubContext` holds a
+  its own; all calls share `:_declared_outputs`; declared locals live in `:_declared_locals`. A `SubContext` holds a
   namespace's values at run time. Plans introduce no namespace: their children have theirs.
   (`Namespace{nothing}` only stands in for one, so plans and algorithms are stepped alike.)
 - SCKey: the name of a subcontext in the context: a registry key (`:Sensor_1`), or one of the
-  shared subcontexts `:_runtime` (step values) and `:_local` (declared locals).
+  shared subcontexts `:_declared_outputs` (step values) and `:_declared_locals` (declared locals).
 - SCRef: whatever a user writes to say which subcontext they mean: an SCKey, an algorithm or
   state instance, its type, a matcher, or a call. Resolving an SCRef gives its SCKey.
 - endpoint: the role of a subcontext in a route or share (its from side or its to side). Each
@@ -42,7 +42,7 @@ scref_object(ref) = ref isa Symbol ? nothing : ref
 
 """
 The namespace every instance of this kind lives in, given by its SCKey, or `nothing` when each
-instance gets its own namespace from the registry. Calls (`Callable`) all live in `:_runtime`.
+instance gets its own namespace from the registry. Calls (`Callable`) all live in `:_declared_outputs`.
 """
 @inline fixed_namespace(_) = nothing
 

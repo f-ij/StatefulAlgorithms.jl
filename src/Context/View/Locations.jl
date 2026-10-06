@@ -9,10 +9,10 @@
 """
 
 function get_local_locations(sct::Type{SCT}) where {SCT<:SubContextView{CType, SubKey}} where {CType, SubKey}
-    # A call's view has namespace `_runtime`: no variables of its own. `_runtime` is in the runtime context, not in
+    # A call's view has namespace `_declared_outputs`: no variables of its own. `_declared_outputs` is in the runtime context, not in
     # `CType`, and it is shared by every call, so its values are read last (the fallback in `getproperty(view, Val(name))`),
     # after routes, shares and declared locals. As own variables they would take precedence over those.
-    SubKey === :_runtime && return (;)
+    SubKey === :_declared_outputs && return (;)
     _subcontext_type = subcontext_type(SCT)
     _data_type = getdatatype(_subcontext_type)
     local_varnames = keys(_subcontext_type)
@@ -62,12 +62,12 @@ function get_routed_locations(sct::Type{SCT}) where {SCT<:SubContextView{CType, 
 
     routedvars = named_flat_collect_broadcast(sharedvars) do sv
         fromname = get_fromname(sv)
-        fromname === :_local && return (;)   # declared locals: see `get_declared_locations`
+        fromname === :_declared_locals && return (;)   # declared locals: see `get_declared_locations`
         _localnames = localnames(sv)
         _subvarcontextnames = subvarcontextnames(sv)
         _transform = gettransform(sv)
         _reverse_transform = getreverse_transform(sv)
-        location_type = (fromname == :_runtime || fromname == :_input) ? :runtime : :subcontext
+        location_type = (fromname == :_declared_outputs || fromname == :_inputs) ? :runtime : :subcontext
         pairs = (_localnames[i] => VarLocation{location_type}(fromname, _subvarcontextnames[i], _transform, _reverse_transform) for i in 1:length(_localnames))
         return NamedTuple(pairs)
     end
@@ -76,15 +76,15 @@ function get_routed_locations(sct::Type{SCT}) where {SCT<:SubContextView{CType, 
 end
 
 """
-Declared loop-local variables (`Local`) visible to this view => runtime locations in `_local`.
-Resolve gives each child one route from `_local` per local declared on an enclosing plan;
+Declared loop-local variables (`Local`) visible to this view => runtime locations in `_declared_locals`.
+Resolve gives each child one route from `_declared_locals` per local declared on an enclosing plan;
 own fields, routes and shares take precedence.
 """
 function get_declared_locations(::Type{SCT}) where {SCT<:SubContextView}
     sharedvars = _view_shared_types(view_sharedvars(SCT))
     return named_flat_collect_broadcast(sharedvars) do sv
-        get_fromname(sv) === :_local || return (;)
-        return NamedTuple{(only(localnames(sv)),)}((VarLocation{:runtime}(:_local, only(subvarcontextnames(sv))),))
+        get_fromname(sv) === :_declared_locals || return (;)
+        return NamedTuple{(only(localnames(sv)),)}((VarLocation{:runtime}(:_declared_locals, only(subvarcontextnames(sv))),))
     end
 end
 
@@ -217,7 +217,7 @@ preserving their context representation, for example mutable reference wrappers.
     ::Val{varname},
 ) where {SCV<:SubContextView, subcontextname, varname}
     runtimecontext = @inline getruntimecontext(scv)
-    if subcontextname === :_input || subcontextname === :_runtime
+    if subcontextname === :_inputs || subcontextname === :_declared_outputs
         return @inline subcontext_view_value(_runtime_get_var(runtimecontext, Val(subcontextname), Val(varname)), scv)
     end
     context = @inline getcontext(scv)

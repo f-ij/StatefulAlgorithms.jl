@@ -24,7 +24,7 @@ shares(w::Wiring) = getfield(w, :shares)
 end
 
 """
-The routes at the current plan node: the child's own routes, plus one from `_local` for each
+The routes at the current plan node: the child's own routes, plus one from `_declared_locals` for each
 declared local visible here, so a view built with them reads and writes those locals by name.
 Built from types, so they cost nothing at runtime.
 
@@ -34,7 +34,7 @@ endpoint, since views rebuild their routes from their types.)
 """
 @inline @generated function routes(pwv::PlanWiringView{Root,W,DemandAll,Visible}) where {Root,W,DemandAll,Visible}
     isempty(Visible) && return :(@inline routes(current_wiring(pwv)))
-    local_routes = (Route{:_local, LocalScope(), nothing, nothing, (Visible[i],), (keys(Visible)[i],), Nothing, Nothing}(nothing, nothing) for i in 1:length(Visible))
+    local_routes = (Route{:_declared_locals, LocalScope(), nothing, nothing, (Visible[i],), (keys(Visible)[i],), Nothing, Nothing}(nothing, nothing) for i in 1:length(Visible))
     return :(($(local_routes...), (@inline routes(current_wiring(pwv)))...))
 end
 
@@ -116,8 +116,8 @@ function _return_demand_names(::Type{W}, owner::Symbol) where {W<:PlanWiring}
             names = _append_route_demand_names(names, route_name)
         end
     end
-    # Callables read names from the shared `_runtime` bucket without routes.
-    owner === :_runtime && (names = _append_route_demand_names(names, _callable_reads_in_tree(W)))
+    # Callables read names from the shared `_declared_outputs` bucket without routes.
+    owner === :_declared_outputs && (names = _append_route_demand_names(names, _callable_reads_in_tree(W)))
     return names
 end
 

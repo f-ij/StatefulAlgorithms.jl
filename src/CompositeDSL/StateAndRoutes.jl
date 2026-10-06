@@ -86,7 +86,7 @@ end
 """
 Wires for one DSL call, attached to it with `WithWiring`: reads from algorithm state (an
 algorithm statement's output, `owner.field`) and transforms. A plain name produced by an
-earlier call needs no wire: the call reads it by name from the shared `_runtime` bucket.
+earlier call needs no wire: the call reads it by name from the shared `_declared_outputs` bucket.
 """
 _composite_dsl_call_wires(entity, producers::Dict{Symbol, Any}, inputs::Tuple) = ()
 function _composite_dsl_call_wires(entity::Callable, producers::Dict{Symbol, Any}, inputs::Tuple)
@@ -101,7 +101,7 @@ function _composite_dsl_call_wires(entity::Callable, producers::Dict{Symbol, Any
             input.owner
         end
         # Same name from the shared bucket, untransformed: read by name, no wire.
-        source_owner === :_runtime && input.source === input.destination && isnothing(transform) && continue
+        source_owner === :_declared_outputs && input.source === input.destination && isnothing(transform) && continue
         push!(wires, Route(source_owner => ThisChild(), input.source => input.destination; transform))
     end
     return Tuple(wires)
@@ -130,7 +130,7 @@ _composite_dsl_with_wires(entity, wires::Tuple) = isempty(wires) ? entity : With
 """Register outputs as the current producer for later routed lookups."""
 function _composite_dsl_register_outputs!(producers::Dict{Symbol, Any}, owner, outputs::Tuple{Vararg{Symbol}})
     @nospecialize owner outputs
-    # A call's outputs belong to its fixed namespace (`_runtime`), not to the call.
+    # A call's outputs belong to its fixed namespace (`_declared_outputs`), not to the call.
     owner = something(fixed_namespace(owner), owner)
     for output in outputs
         # Later statements resolve symbols by asking this table who currently
@@ -723,9 +723,9 @@ function _dsl_runtime_input_setup_expr(input_fields)
     return quote
         local _dsl_runtime_input_specs = ($(specs...),)
         local _dsl_input_state = StatefulAlgorithms.RuntimeInputState(_dsl_runtime_input_specs)
-        push!(_dsl_states, :_input => _dsl_input_state)
+        push!(_dsl_states, :_inputs => _dsl_input_state)
         push!(_dsl_options, StatefulAlgorithms.RuntimeInputs(_dsl_runtime_input_specs))
-        local _dsl_input_owner = StatefulAlgorithms._composite_dsl_owner(_dsl_input_state, :_input)
+        local _dsl_input_owner = StatefulAlgorithms._composite_dsl_owner(_dsl_input_state, :_inputs)
         StatefulAlgorithms._composite_dsl_register_outputs!(_dsl_producers, _dsl_input_owner, $outputs_expr)
     end
 end

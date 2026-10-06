@@ -4,7 +4,7 @@ export Local
 AI GENERATED
 Declared locals: variables a plan declares for its children to share, like `local x` before a
 Julia loop. A declaration lives on the plan that makes it (in its `PlanWiring`); the values live
-in the runtime context's `_local` subcontext, one slot per declaration.
+in the runtime context's `_declared_locals` subcontext, one slot per declaration.
 
 1. Declaring     `Local`, how declared values are stored, how declarations are collected and named
 2. Storage       `Maybe`, for locals that may not hold a value yet
@@ -64,7 +64,7 @@ _with_local_options(options::Tuple, wiring::PlanWiring) =
     isempty(getfield(wiring, :locals)) ? options : (options..., Local{typeof(getfield(wiring, :locals))}(getfield(wiring, :locals)))
 
 """
-Name of a local's slot in the runtime `_local` subcontext. A local declared on the root
+Name of a local's slot in the runtime `_declared_locals` subcontext. A local declared on the root
 plan keeps its name; one declared on a nested plan is suffixed with that plan's position.
 """
 # `path` is the plan's position, e.g. "1.2"; a `String` so the resolver's recursion keeps one type.
@@ -77,7 +77,7 @@ _visible_locals(inherited::NamedTuple, ::NamedTuple{names}, path::String) where 
 
 """
 Initial values of every local declared in a plan tree, keyed by storage name: the
-memory for all of them is allocated in `_local` when a run starts.
+memory for all of them is allocated in `_declared_locals` when a run starts.
 """
 @generated function _tree_locals(plan::P) where {P<:AbstractPlan}
     names = Symbol[]
@@ -221,15 +221,15 @@ function _inferred_contexts(RT)
     return returned
 end
 
-_local_data_type(::Type{RC}) where {RC<:ProcessContext} = fieldtype(fieldtype(fieldtype(RC, :subcontexts), :_local), :data)
+_local_data_type(::Type{RC}) where {RC<:ProcessContext} = fieldtype(fieldtype(fieldtype(RC, :subcontexts), :_declared_locals), :data)
 
-"""`RC` with each field type of its `_local` subcontext data replaced by `f(name, type)`."""
+"""`RC` with each field type of its `_declared_locals` subcontext data replaced by `f(name, type)`."""
 function _replace_local_types(f, ::Type{RC}) where {RC<:ProcessContext}
     D = fieldtype(RC, :subcontexts)
-    :_local in fieldnames(D) || return RC
+    :_declared_locals in fieldnames(D) || return RC
     L = _local_data_type(RC)
     newL = NamedTuple{fieldnames(L), Tuple{(f(n, fieldtype(L, n)) for n in fieldnames(L))...}}
-    newD = NamedTuple{fieldnames(D), Tuple{(n === :_local ? SubContext{:_local, newL} : fieldtype(D, n) for n in fieldnames(D))...}}
+    newD = NamedTuple{fieldnames(D), Tuple{(n === :_declared_locals ? SubContext{:_declared_locals, newL} : fieldtype(D, n) for n in fieldnames(D))...}}
     return ProcessContext{newD, fieldtype(RC, :reg)}
 end
 
@@ -260,8 +260,8 @@ step. All of this is resolved while the run is compiled; nothing of it runs per 
     typed === Nothing && _local_type_error(no_writes_seen, false, step...)
     checked = _widen_probes(typed, step...)          # the same, with each local read as that type
     checked === typed || _local_type_error(typed, true, step...)
-    settled = _settled_locals(getlocals(runtimecontext), typed)
-    return @inline with_subcontext(runtimecontext, Val(:_local), SubContext{:_local}(settled))
+    settled = _settled_locals(get_declared_locals(runtimecontext), typed)
+    return @inline with_subcontext(runtimecontext, Val(:_declared_locals), SubContext{:_declared_locals}(settled))
 end
 
 """
@@ -300,9 +300,9 @@ end
 _step_label(child::Callable, ::Namespace) = _callable_string(child)
 _step_label(child, namespace::Namespace) = string("`", namesymbol(namespace), "` (", nameof(typeof(child)), ")")
 
-"""What a plan child's own step returns, as the plan's step would call it (calls are viewed from `_runtime`)."""
+"""What a plan child's own step returns, as the plan's step would call it (calls are viewed from `_declared_outputs`)."""
 @inline function _step_return(algo, context, runtimecontext, wiring, namespace::Namespace)
-    viewed_as = algo isa Callable ? Namespace{:_runtime}() : namespace
+    viewed_as = algo isa Callable ? Namespace{:_declared_outputs}() : namespace
     contextview = view(context, runtimecontext, algo, viewed_as; sharedcontexts = shares(wiring), sharedvars = routes(wiring))
     return step!(algo, contextview)
 end
@@ -311,7 +311,7 @@ end
 The error paragraphs for one step (`label`): a step whose return cannot be inferred, or (while
 `checking`) a step that takes a local as input and emits it with a type that does not fit the
 local's first type. `returned` is the inferred type of what the step returns; `W` its wiring
-view, whose visible locals map the names the step uses to the locals' `_local` slots.
+view, whose visible locals map the names the step uses to the locals' `_declared_locals` slots.
 """
 function _local_type_problems(label, ::Type{R}, ::Type{Returned}, ::Type{W}, checking::Bool) where {R, Returned, W}
     returns = Returned === Union{} ? () : Base.uniontypes(Returned)
@@ -346,7 +346,7 @@ end
     _next_probe_type(R, Core.Compiler.return_type(_probe_step, Tuple{PL, CU, C, R, W, P, LT}))
 
 @generated function _has_untyped_locals(::Type{RC}) where {RC<:ProcessContext}
-    :_local in fieldnames(fieldtype(RC, :subcontexts)) || return false
+    :_declared_locals in fieldnames(fieldtype(RC, :subcontexts)) || return false
     return any(_is_untyped_local, fieldtypes(_local_data_type(RC)))
 end
 

@@ -5,7 +5,7 @@ Resolving a plan: everything that can only be decided once the whole composition
 
 1. Registry: every algorithm and state in the tree gets a key (`Sensor_1`, `Sensor_2`, ...).
    Children are replaced by their raw algorithm and the key goes into the plan's `namespaces`.
-   Calls (`Callable`) have no identity: they are not registered and share `:_runtime`.
+   Calls (`Callable`) have no identity: they are not registered and share `:_declared_outputs`.
 2. The registry is attached to the root wrapper and to nested `LoopAlgorithm` wrappers.
 3. Wiring: route/share endpoints become context keys, plan-wide wiring is copied into each
    child's slot, and each plan node records (in its `PlanWiring` type) the locals visible to
@@ -180,9 +180,9 @@ end
 """
 Resolve a plan tree and inlay inherited global wiring into concrete children.
 
-`visible_locals` maps each local name visible at this node to its `_local` storage name;
+`visible_locals` maps each local name visible at this node to its `_declared_locals` storage name;
 this node's own `Local` declarations shadow inherited ones of the same name. It is stored
-in the node's `PlanWiring` type; concrete children's views turn it into routes from `_local`.
+in the node's `PlanWiring` type; concrete children's views turn it into routes from `_declared_locals`.
 """
 function _resolve_plan_wiring_tree(la::LA, registry::NameSpaceRegistry, inherited_global::NamedTuple, inherited_locals::NamedTuple = (;), path::String = "") where {LA<:AbstractPlan}
     raw_wiring = getwiring(la)
@@ -197,7 +197,7 @@ function _resolve_plan_wiring_tree(la::LA, registry::NameSpaceRegistry, inherite
 
     # Resolve nested plans first. Their own `PlanWiring` then becomes the
     # child-indexed value passed to that child during parent stepping. A nested plan's
-    # position (`"2.1"`) names the `_local` slots of the locals it declares.
+    # position (`"2.1"`) names the `_declared_locals` slots of the locals it declares.
     funcs = ntuple(Val(length(getalgos(la)))) do i   # unrolled: every child keeps its concrete type
         child = getalgo(la, i)
         if child isa LoopSpec
@@ -229,25 +229,25 @@ function _resolve_plan_wiring_tree(la::LA, registry::NameSpaceRegistry, inherite
 
     # Stored in the `PlanWiring` type, so stepping reads them at compile time: the locals this
     # node's children can see, and the names its calls read (they count as demand for the
-    # `_runtime` bucket, see `return_demand`).
+    # `_declared_outputs` bucket, see `return_demand`).
     visible = isempty(visible_locals) ? Val((;)) : Val(visible_locals)
     reads = callable_reads(funcs)
     return setfield(rebuilt, :wiring, PlanWiring(combined_global, resolved_children, own_locals, visible, isempty(reads) ? Val(()) : Val(reads)))
 end
 
 """
-The wiring with every route that reads a declared local (`Route(:_local => ..., :y => :x)`) pointed at that local's
-storage name in `_local` (`y`, or `y@1.2` for a local declared in a nested plan; see `local_storage_name`).
+The wiring with every route that reads a declared local (`Route(:_declared_locals => ..., :y => :x)`) pointed at that local's
+storage name in `_declared_locals` (`y`, or `y@1.2` for a local declared in a nested plan; see `local_storage_name`).
 """
 _local_routes_to_storage(wiring::Wiring, visible_locals::NamedTuple) =
     Wiring(map(r -> _local_route_to_storage(r, visible_locals), routes(wiring)), shares(wiring))
 _local_route_to_storage(r::Route, visible_locals::NamedTuple) = r
-function _local_route_to_storage(r::Route{:_local, To, T, RT, V, A}, visible_locals::NamedTuple) where {To, T, RT, V, A}
+function _local_route_to_storage(r::Route{:_declared_locals, To, T, RT, V, A}, visible_locals::NamedTuple) where {To, T, RT, V, A}
     storage = map(V) do name
         haskey(visible_locals, name) || construction_error("A route reads the local `", name, "`, which is not declared in this plan or an enclosing one.")
         return getproperty(visible_locals, name)
     end
-    return Route{:_local, To, T, RT, storage, A, Nothing, Nothing}()
+    return Route{:_declared_locals, To, T, RT, storage, A, Nothing, Nothing}()
 end
 
 # A finalized algorithm: resolve the loop inside, keep the final step.

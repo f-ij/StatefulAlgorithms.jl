@@ -281,7 +281,7 @@ end
     run(la::LoopAlgorithm; kwargs...)
 
 Run an initialized loop algorithm with per-run runtime inputs. The inputs are
-validated, merged into the transient `ProcessContext._input` field for the loop
+validated, merged into the transient `ProcessContext._inputs` field for the loop
 call, and removed before the returned loop algorithm stores its next persistent
 context.
 """

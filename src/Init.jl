@@ -16,7 +16,7 @@ end
 
 """Build the runtime frame visible only while lifecycle init runs."""
 @inline function _init_runtime_context(algo::F, lifetime::LT) where {F<:AbstractLoopAlgorithm,LT}
-    return @inline _merge_into_globals(_empty_context(), (; algo, lifetime))
+    return @inline with_subcontext(_empty_context(), Val(:_init), SubContext{:_init}((; algo, lifetime)))
 end
 
 """Return the persistent state produced by lifecycle init."""

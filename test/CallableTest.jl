@@ -18,7 +18,7 @@ ex_sum(xs...; extra = 0) = sum(xs) + extra
 ex_pair(x) = (x, 2x, 3x)
 ex_named(x) = (; low = x - 1, high = x + 1)
 
-run_locals(plan; repeats = 3) = StatefulAlgorithms.getlocals(run(InlineProcess(plan; repeats)))
+run_locals(plan; repeats = 3) = StatefulAlgorithms.get_declared_locals(run(InlineProcess(plan; repeats)))
 
 @testset "Callable: calls with a signature in plan names" begin
     # Reads and writes a declared local.
@@ -53,7 +53,7 @@ run_locals(plan; repeats = 3) = StatefulAlgorithms.getlocals(run(InlineProcess(p
     @test run_locals(CompositeAlgorithm(Callable(ex_bump, (:n,), :n => Int), (1,), Local(n = 0))).n == 3
     @test_throws TypeError run(InlineProcess(CompositeAlgorithm(Callable(ex_bump, (:n,), :n => Float64), (1,), Local(n = 0)); repeats = 1))
 
-    # The output of one call is readable by a later one without a declaration (shared `_runtime` bucket).
+    # The output of one call is readable by a later one without a declaration (shared `_declared_outputs` bucket).
     plan = CompositeAlgorithm(Callable(ex_bump, (:n,), :m), Callable(ex_bump, (:m,), :n), (1, 1), Local(n = 0))
     @test run_locals(plan).n == 6
 end
@@ -62,7 +62,7 @@ end
     @test typeof(Callable(ex_bump, (:n,), :n)) === typeof(Callable(ex_bump, (:n,), :n))
     plan = CompositeAlgorithm(ExSensor, Callable(ex_bump, (:n,), :n), (1, 1), Local(n = 0))
     resolved = resolve(plan)
-    @test StatefulAlgorithms.plan_child_namespace(resolved, 2) === :_runtime
+    @test StatefulAlgorithms.plan_child_namespace(resolved, 2) === :_declared_outputs
     @test keys(StatefulAlgorithms.get_subcontexts(StatefulAlgorithms.ProcessContext(resolved))) == (:ExSensor_1,)
 
     # Zero allocations per step.
@@ -80,7 +80,7 @@ end
     # Two identical calls wired differently.
     plan = CompositeAlgorithm(ExSensor,
                               WithWiring(Callable(ex_bump, (:x,), :a), From(Var(ExSensor, :state) => :x)),
-                              WithWiring(Callable(ex_bump, (:x,), :b), From(Var(:_local, :a) => :x)),
+                              WithWiring(Callable(ex_bump, (:x,), :b), From(Var(:_declared_locals, :a) => :x)),
                               (1, 1, 1), Local(a = 0.0, b = 0.0))
     @test values(run_locals(plan)) == (4.0, 5.0)
 

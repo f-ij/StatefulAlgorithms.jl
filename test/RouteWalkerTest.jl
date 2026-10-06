@@ -40,7 +40,7 @@ using StatefulAlgorithms
         return (; targetnum)
     end
 
-    function StatefulAlgorithms.init(::InsertNoise, _input)
+    function StatefulAlgorithms.init(::InsertNoise, _inputs)
         rng = MersenneTwister(1234)
         return (; rng)
     end
@@ -81,7 +81,7 @@ using StatefulAlgorithms
     struct RouteLogger{T} <: ProcessAlgorithm end
     RouteLogger(name::Symbol) = RouteLogger{name}()
 
-    function StatefulAlgorithms.init(::RouteLogger{T}, _input) where {T}
+    function StatefulAlgorithms.init(::RouteLogger{T}, _inputs) where {T}
         log = Vector{Any}()
         return (;log)
     end

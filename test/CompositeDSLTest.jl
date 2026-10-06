@@ -305,7 +305,7 @@ end
         sharedcontexts, sharedvars = StatefulAlgorithms._resolve_options(resolved)
         @test !isempty(sharedvars)
         combine_routes = sharedvars[:DSLCombineAlgo_1]
-        @test any(route -> StatefulAlgorithms.get_fromname(route) == :_runtime && StatefulAlgorithms.localnames(route) == (:right,), combine_routes)
+        @test any(route -> StatefulAlgorithms.get_fromname(route) == :_declared_outputs && StatefulAlgorithms.localnames(route) == (:right,), combine_routes)
 
         init_ctx = StatefulAlgorithms.initcontext(resolved; lifetime = Repeat(10))
         @test init_ctx[:_state_1].seed == 3
@@ -323,8 +323,8 @@ end
 
         @test ctx[:_state_1].seed == 3
         @test ctx[:_state_1].doubled == 10
-        @test StatefulAlgorithms.getglobals(ctx).doubled == 8
-        @test !haskey(StatefulAlgorithms.getglobals(context(p)), :doubled)
+        @test StatefulAlgorithms.get_declared_outputs(ctx).doubled == 8
+        @test !haskey(StatefulAlgorithms.get_declared_outputs(context(p)), :doubled)
         @test ctx[:source].produced == 2
         @test ctx[:source].passthrough == 3
         @test ctx[:DSLCombineAlgo_1].combined == 11
@@ -708,9 +708,9 @@ end
         p = Process(resolved, repeat = 1)
         StatefulAlgorithms.run(p)
         ctx = fetch(p)
-        @test !haskey(StatefulAlgorithms.getglobals(ctx), :result)
+        @test !haskey(StatefulAlgorithms.get_declared_outputs(ctx), :result)
         @test isempty(context(p)[wrapper_key])
-        @test !haskey(StatefulAlgorithms.getglobals(context(p)), :result)
+        @test !haskey(StatefulAlgorithms.get_declared_outputs(context(p)), :result)
     end
 
     @testset "Function call positional args accept explicit @transform routes" begin
@@ -735,7 +735,7 @@ end
         p = Process(resolved, repeat = 1)
         StatefulAlgorithms.run(p)
         ctx = fetch(p)
-        @test !haskey(StatefulAlgorithms.getglobals(ctx), :result)
+        @test !haskey(StatefulAlgorithms.get_declared_outputs(ctx), :result)
     end
 
     @testset "Function call positional @transform routes can source @state fields" begin
@@ -760,7 +760,7 @@ end
         p = Process(resolved, repeat = 1)
         StatefulAlgorithms.run(p)
         ctx = fetch(p)
-        @test !haskey(StatefulAlgorithms.getglobals(ctx), :result)
+        @test !haskey(StatefulAlgorithms.get_declared_outputs(ctx), :result)
     end
 
     @testset "State fields can be assigned captured values directly" begin
@@ -787,7 +787,7 @@ end
         StatefulAlgorithms.run(p)
         ctx = fetch(p)
         @test ctx[:_state_1].clamping_beta === 3.0
-        @test !haskey(StatefulAlgorithms.getglobals(ctx), :result)
+        @test !haskey(StatefulAlgorithms.get_declared_outputs(ctx), :result)
     end
 
     @testset "State buffer indexes can be assigned directly" begin
@@ -805,7 +805,7 @@ end
         StatefulAlgorithms.run(p)
         ctx = fetch(p)
         @test ctx[:_state_1].somebuffer == [2, 4, 5]
-        @test !haskey(StatefulAlgorithms.getglobals(ctx), :result)
+        @test !haskey(StatefulAlgorithms.get_declared_outputs(ctx), :result)
     end
 
     @testset "State buffers support broadcast assignment syntax" begin
@@ -824,7 +824,7 @@ end
         StatefulAlgorithms.run(p)
         ctx = fetch(p)
         @test ctx[:_state_1].somebuffer == [1, 7, 8]
-        @test !haskey(StatefulAlgorithms.getglobals(ctx), :result)
+        @test !haskey(StatefulAlgorithms.get_declared_outputs(ctx), :result)
     end
 
     @testset "State buffers can broadcast from other state buffers" begin
@@ -843,7 +843,7 @@ end
         StatefulAlgorithms.run(p)
         ctx = fetch(p)
         @test ctx[:_state_1].targetbuffer == [2, 2, 4]
-        @test !haskey(StatefulAlgorithms.getglobals(ctx), :result)
+        @test !haskey(StatefulAlgorithms.get_declared_outputs(ctx), :result)
     end
 
     @testset "Owned state fields can be assigned from a call, every step" begin
@@ -895,7 +895,7 @@ end
         ctx = fetch(p)
         @test ctx[:_state_1].clamping_beta[] === 2.0
         @test ctx[:_state_2].nudged_beta === 2.0   # `nudged`'s own state
-        @test !haskey(StatefulAlgorithms.getglobals(ctx), :result)
+        @test !haskey(StatefulAlgorithms.get_declared_outputs(ctx), :result)
     end
 
     @testset "Function call keyword args preserve routed display expressions" begin
@@ -917,7 +917,7 @@ end
         p = Process(resolved, repeat = 1)
         StatefulAlgorithms.run(p)
         ctx = fetch(p)
-        @test !haskey(StatefulAlgorithms.getglobals(ctx), :result)
+        @test !haskey(StatefulAlgorithms.get_declared_outputs(ctx), :result)
     end
 
     @testset "Function call keyword args accept semicolon same-name syntax" begin
@@ -940,7 +940,7 @@ end
         p = Process(resolved, repeat = 1)
         run(p)
         @test fetch(p) == (; result = 321)
-        @test !haskey(StatefulAlgorithms.getglobals(context(p)), :result)
+        @test !haskey(StatefulAlgorithms.get_declared_outputs(context(p)), :result)
         close(p)
     end
 
@@ -981,7 +981,7 @@ end
         resolved = resolve(algo)
         sink_key = StatefulAlgorithms.plan_child_namespace(resolved, 4)
         # Each child gets only its own routes, in its own slot of the plan's wiring
-        # (function calls all share the `_runtime` namespace, so they are not grouped by name).
+        # (function calls all share the `_declared_outputs` namespace, so they are not grouped by name).
         child_routes(i) = StatefulAlgorithms.routes(StatefulAlgorithms.child_wiring(StatefulAlgorithms.getwiring(StatefulAlgorithms.getplan(resolved)))[i])
         @test length(child_routes(1)) == 1
         @test length(child_routes(2)) == 1
@@ -991,9 +991,9 @@ end
         p = Process(resolved, repeat = 1)
         StatefulAlgorithms.run(p)
         ctx = fetch(p)
-        @test !haskey(StatefulAlgorithms.getglobals(ctx), :result)
-        @test !haskey(StatefulAlgorithms.getglobals(ctx), :doubled)
-        @test !haskey(StatefulAlgorithms.getglobals(ctx), :transformed)
+        @test !haskey(StatefulAlgorithms.get_declared_outputs(ctx), :result)
+        @test !haskey(StatefulAlgorithms.get_declared_outputs(ctx), :doubled)
+        @test !haskey(StatefulAlgorithms.get_declared_outputs(ctx), :transformed)
         @test isempty(ctx[sink_key])
     end
 
@@ -1018,8 +1018,8 @@ end
         p = Process(resolved, repeat = 1)
         StatefulAlgorithms.run(p)
         ctx = fetch(p)
-        @test !haskey(StatefulAlgorithms.getglobals(ctx), :result)
-        @test !haskey(StatefulAlgorithms.getglobals(ctx), :doubled)
+        @test !haskey(StatefulAlgorithms.get_declared_outputs(ctx), :result)
+        @test !haskey(StatefulAlgorithms.get_declared_outputs(ctx), :doubled)
     end
 
     @testset "ProcessAlgorithm direct-call positional args accept alias field routes" begin
@@ -1153,7 +1153,7 @@ end
         StatefulAlgorithms.run(p)
         ctx = fetch(p)
         wrapper = StatefulAlgorithms.getalgo(resolved, 2)
-        @test !haskey(StatefulAlgorithms.getglobals(ctx), :result)
+        @test !haskey(StatefulAlgorithms.get_declared_outputs(ctx), :result)
     end
 
     @testset "@include_if rejects state and alias declarations" begin
@@ -1234,11 +1234,11 @@ end
         run(p)
         @test fetch(p) == (; result = 4)
         @test !haskey(StatefulAlgorithms.get_subcontexts(context(p)), :Callable_1)   # function calls have no persistent state
-        @test !haskey(StatefulAlgorithms.getglobals(context(p)), :result)
+        @test !haskey(StatefulAlgorithms.get_declared_outputs(context(p)), :result)
 
         close(p)
         @test fetch(p) == (; result = 4)
-        @test !haskey(StatefulAlgorithms.getglobals(context(p)), :result)
+        @test !haskey(StatefulAlgorithms.get_declared_outputs(context(p)), :result)
     end
 
     @testset "Function call literals: a quoted symbol and a captured Symbol value are values, not plan names" begin
@@ -1273,10 +1273,10 @@ end
         fetched = fetch(p)
 
         @test fetched isa StatefulAlgorithms.ProcessContext
-        @test !haskey(StatefulAlgorithms.getglobals(fetched), :result)
+        @test !haskey(StatefulAlgorithms.get_declared_outputs(fetched), :result)
         @test count[] == 2
         @test !haskey(StatefulAlgorithms.get_subcontexts(context(p)), :Callable_1)   # function calls have no persistent state
-        @test !haskey(StatefulAlgorithms.getglobals(context(p)), :result)
+        @test !haskey(StatefulAlgorithms.get_declared_outputs(context(p)), :result)
         close(p)
     end
 end
