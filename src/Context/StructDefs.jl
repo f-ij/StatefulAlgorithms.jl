@@ -47,9 +47,9 @@ export inject
 #######################
 
 """
-Go from a local variable to the location in the full context
-Type can be
-    - :local
-    - :shared
-    - :routed
+Where a variable a view sees is stored. The type parameter is the kind of location:
+    - :state       the view's namespace's own field (stored context)
+    - :subcontext  a field of another subcontext (a route or share from it)
+    - :runtime     a runtime value (declared local, input, output)
+    - :injected    a value given to the view directly
 """

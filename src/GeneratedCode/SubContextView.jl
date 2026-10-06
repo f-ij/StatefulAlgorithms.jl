@@ -42,7 +42,7 @@ function _subcontext_view_merge_exprs(SCV::Type, Args::Type, demanded_runtime_na
             append!(preambles, writeback_preambles)
             append!(exprs, writeback_exprs)
 
-        elseif demand_all || algo_varname in demanded_runtime_names # New demanded variable so add it to this subcontext's runtime bucket.
+        elseif demand_all || algo_varname in demanded_runtime_names # A demanded name the view does not see: one of this namespace's own outputs.
             exprs = get!(runtime_expressions_by_subcontext, SubKey, Expr[])
             push!(
                 exprs,

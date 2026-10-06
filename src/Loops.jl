@@ -13,8 +13,8 @@ end
 """
     finalizer!(func, context, runtimecontext, process, lifetime)
 
-Run cleanup and the final result projection while the loop-local runtime context
-is still visible. The runtime context is intentionally not returned.
+Run cleanup and build the final result (`finalstep` gets `visible_context`) while the run's runtime values are still
+there. Returns the stored context and the result; the runtime values end with the run.
 """
 @inline function finalizer!(func::F, context::C, runtimecontext::RC, process::P, lifetime::LT) where {F,C<:ProcessContext,RC<:ProcessContext,P<:AbstractProcess,LT<:Lifetime}
     cleaned = @inline cleanup(func, LoopContext(context, runtimecontext))

@@ -4,12 +4,24 @@
 
 # This is the basis for the viewsystem. Variables in and out get mapped to locations in the full context
 
-"""
- Local variables => VarLocations
-"""
+#=
+What a view sees, by name, and where each name is stored (a `VarLocation`). The kinds:
+
+- state: the view's namespace's own fields (stored context);
+- wires: routes and shares written for this child (`Route`, `Share`, `WithWiring`, the DSL);
+- declared locals visible to it: resolve gives every child a route from `_declared_locals` per visible local, with
+  target `LocalScope()`;
+- outputs: declared outputs for a call, its own subcontext outputs for an algorithm (`get_output_locations`);
+- injected values.
+
+State and wires are explicit. A route wins over a state field of the same name (it is written for this child); a share
+with the same name as a state field or a route is an error. Declared locals and outputs are implicit,
+visible to every child of the block whether it uses them or not, so an explicit name hides an implicit one of the same
+name; among the implicit ones a declared local hides an output. Injected values hide everything.
+=#
 
 """The view's namespace's state (its subcontext in the stored context), by name."""
-get_local_locations(::Type{SCT}) where {SCT<:SubContextView{B, SubKey}} where {B<:ContextBundle, SubKey} = _state_locations(context_part(Val(SubKey)), SCT)
+get_state_locations(::Type{SCT}) where {SCT<:SubContextView{B, SubKey}} where {B<:ContextBundle, SubKey} = _state_locations(context_part(Val(SubKey)), SCT)
 
 """A call has no state: its namespace is the declared outputs (see `get_output_locations`)."""
 _state_locations(::DeclaredOutputs, ::Type) = (;)
@@ -17,24 +29,23 @@ _state_locations(::DeclaredOutputs, ::Type) = (;)
 function _state_locations(::Stored, ::Type{SCT}) where {SCT<:SubContextView{B, SubKey}} where {B<:ContextBundle, SubKey}
     _subcontext_type = subcontext_type(SCT)
     _data_type = getdatatype(_subcontext_type)
-    local_varnames = keys(_subcontext_type)
-
-    localst = ntuple(i -> _redirected_varlocation(fieldtype(_data_type, local_varnames[i]), Val(SubKey), Val(local_varnames[i])), length(local_varnames))
-    return NamedTuple{(local_varnames...,)}(localst)
+    state_names = keys(_subcontext_type)
+    locations = ntuple(i -> _redirected_varlocation(fieldtype(_data_type, state_names[i]), Val(SubKey), Val(state_names[i])), length(state_names))
+    return NamedTuple{(state_names...,)}(locations)
 end
 
 """
     _redirected_varlocation(::Type{T}, Val(subcontext), Val(name))
 
-Overloadable storage-type hook for local fields in `SubContextView`.
+Overloadable storage-type hook for state fields in `SubContextView`.
 
-The default maps a physically local field to its local backing location. Storage
+The default maps a state field to its location in the stored context. Storage
 marker types can overload this to redirect reads and writeback to another
-`VarLocation`; `ReplacedVar` uses this to make a local marker behave as a source
+`VarLocation`; `ReplacedVar` uses this to make a state marker behave as a source
 field elsewhere in the persistent context.
 """
 @inline _redirected_varlocation(::Type{T}, ::Val{SubKey}, ::Val{name}) where {T, SubKey, name} =
-    VarLocation{:local}(SubKey, name)
+    VarLocation{:state}(SubKey, name)
 
 @inline _redirected_varlocation(::Type{T}, ::Val{SubKey}, ::Val{name}) where {VL<:VarLocation, T<:ReplacedVar{VL}, SubKey, name} =
     VL()
@@ -56,17 +67,16 @@ function get_shared_locations(sct::Type{SCT}) where {SCT<:SubContextView{B, SubK
     return sharedvars
 end
 
-"""
-Routes supplied to the view => VarLocations.
-"""
-function get_routed_locations(sct::Type{SCT}) where {SCT<:SubContextView{B, SubKey}} where {B<:ContextBundle, SubKey}
-    sharedvars = _view_shared_types(view_sharedvars(SCT))
+"""The routes given to the view: the explicit ones (wires for this child), and the declared locals visible to it."""
+_view_routes(::Type{SCT}) where {SCT<:SubContextView} = _view_shared_types(view_sharedvars(SCT))
+_is_visible_local(route) = to_match_by(route) isa LocalScope
 
-    routedvars = named_flat_collect_broadcast(sharedvars) do sv
-        return _routed_locations(context_part(Val(get_fromname(sv))), sv)
+"""Routes supplied to the view => VarLocations: the explicit routes (`visible_locals = false`) or the visible declared locals."""
+function get_routed_locations(::Type{SCT}; visible_locals::Bool = false) where {SCT<:SubContextView}
+    return named_flat_collect_broadcast(_view_routes(SCT)) do route
+        _is_visible_local(route) == visible_locals || return (;)
+        return _routed_locations(context_part(Val(get_fromname(route))), route)
     end
-
-    return routedvars
 end
 
 """The locations a route gives the view, read from where its source lives (`location_kind`)."""
@@ -77,28 +87,11 @@ function _routed_locations(part::ContextPart, sv)
     pairs = (_localnames[i] => VarLocation{location_kind(part)}(fromname, _subvarcontextnames[i], gettransform(sv), getreverse_transform(sv)) for i in 1:length(_localnames))
     return NamedTuple(pairs)
 end
-_routed_locations(::DeclaredLocals, sv) = (;)   # see `get_declared_locations`
-
-"""
-Declared loop-local variables (`Local`) visible to this view => runtime locations in `_declared_locals`.
-Resolve gives each child one route from `_declared_locals` per local declared on an enclosing plan;
-own fields, routes and shares take precedence.
-"""
-function get_declared_locations(::Type{SCT}) where {SCT<:SubContextView}
-    sharedvars = _view_shared_types(view_sharedvars(SCT))
-    return named_flat_collect_broadcast(sharedvars) do sv
-        return _declared_location(context_part(Val(get_fromname(sv))), sv)
-    end
-end
-
-_declared_location(::ContextPart, sv) = (;)
-_declared_location(part::DeclaredLocals, sv) =
-    NamedTuple{(only(localnames(sv)),)}((VarLocation{:runtime}(part_name(part), only(subvarcontextnames(sv))),))
 
 """
 The outputs the view sees by name, from the slots typed before the run (Outputs.jl): for a call (namespace
-`_declared_outputs`) every declared output, for an algorithm its own subcontext outputs. They come after every other
-kind, so a wire or a declared local of the same name wins.
+`_declared_outputs`) every declared output, for an algorithm its own subcontext outputs. Implicit: a name the view has
+from anything else wins (see `_compute_all_locations`).
 """
 function get_output_locations(::Type{SCT}) where {SCT<:SubContextView{B, SubKey}} where {B<:ContextBundle, SubKey}
     names = _output_names(context_part(Val(SubKey)), B, SubKey)
@@ -124,41 +117,33 @@ function get_injected_locations(sct::Type{SCT}) where {SCT<:SubContextView{B, Su
     return NamedTuple{(injected_vars...,)}(injst)
 end
 
-
-"""
-Generate a namedtuple of localtuple => VarLocation
-"""
-function _compute_varlocations(::Type{C}) where {C<:SubContextView{B, SubKey}} where {B<:ContextBundle, SubKey}
-    locals = get_local_locations(C)
-    sharedvars = get_shared_locations(C)
-    routedvars = get_routed_locations(C)
-    injectedvars = get_injected_locations(C)
-    declaredvars = get_declared_locations(C)
-    outputvars = get_output_locations(C)
-    # On a name clash: injected over routes, routes over the namespace's own state, own state over shares, shares over
-    # declared loop locals, declared loop locals over outputs
-    return (;outputvars..., declaredvars..., sharedvars..., locals..., routedvars..., injectedvars...)
+"""An error for two explicit kinds that give the view the same name."""
+function _check_explicit_clashes(::Type{SCT}, kinds::Pair...) where {SCT<:SubContextView{B, SubKey}} where {B<:ContextBundle, SubKey}
+    for i in eachindex(kinds), j in (i + 1):length(kinds)
+        (name_i, locations_i), (name_j, locations_j) = kinds[i], kinds[j]
+        for name in intersect(keys(locations_i), keys(locations_j))
+            error("`$(SubKey)` ($(this_instance_type(SCT))) gets `$(name)` both from its $(name_i) and from its $(name_j). Give one of them another name.")
+        end
+    end
+    return nothing
 end
 
+this_instance_type(::Type{<:SubContextView{B, SubKey, T}}) where {B, SubKey, T} = T
+
 """
-Get a flat named tuple with (;name_of_runtime_var => VarLocation)
-A varlocation is an actual location of the variable in the full context
+Everything the view sees, as `(; name => VarLocation)`: see the note above for the kinds and which name wins.
 """
 function _compute_all_locations(::Type{SCT}) where {SCT<:SubContextView}
-    locals = get_local_locations(SCT)
-    sharedvars = get_shared_locations(SCT)
-    routedvars = get_routed_locations(SCT)
-    injectedvars = get_injected_locations(SCT)
-    declaredvars = get_declared_locations(SCT)
-    outputvars = get_output_locations(SCT)
-    # On a name clash: injected over routes, routes over the namespace's own state, own state over shares, shares over
-    # declared loop locals, declared loop locals over outputs
-    return (;outputvars..., declaredvars..., sharedvars..., locals..., routedvars..., injectedvars...)
-end
-
-@inline @generated function _generated_varlocations(::Type{C}) where {C<:SubContextView}
-    locations = _compute_varlocations(C)
-    return :( $locations )
+    state = get_state_locations(SCT)
+    routes = get_routed_locations(SCT)
+    shares = get_shared_locations(SCT)
+    # A route wins over a state field of the same name (the route is written for this child); shares may not clash
+    # with either.
+    _check_explicit_clashes(SCT, "state" => state, "shares" => shares)
+    _check_explicit_clashes(SCT, "routes" => routes, "shares" => shares)
+    visible_locals = get_routed_locations(SCT; visible_locals = true)
+    outputs = get_output_locations(SCT)
+    return (; outputs..., visible_locals..., shares..., state..., routes..., get_injected_locations(SCT)...)
 end
 
 @inline @generated function _generated_all_locations(::Type{SCT}) where {SCT<:SubContextView}
@@ -166,33 +151,18 @@ end
     return :( $locations )
 end
 
-get_varlocations(scv::SubContextView) = @inline get_varlocations(typeof(scv))
-@inline get_varlocations(scv::Type{C}) where {C<:SubContextView} = _generated_varlocations(C)
-
 @inline get_all_locations(scv::SubContextView) = @inline get_all_locations(typeof(scv))
 @inline get_all_locations(sctv::Type{SCT}) where {SCT<:SubContextView} = _generated_all_locations(SCT)
 
+"""
+Where the name `name` (as the algorithm uses it) is stored, and the name it has there: the location and the name, or
+`nothing` and the name when the view does not see it. An alias of the view maps the algorithm's name to its own first.
+"""
 function _compute_location(::Type{SCT}, name::Symbol) where {SCT<:SubContextView}
     subcontext_name = algo_to_subcontext_names(SCT, name)
-
-    injected = get_injected_locations(SCT)
-    hasproperty(injected, subcontext_name) && return getproperty(injected, subcontext_name), subcontext_name
-
-    routed = get_routed_locations(SCT)
-    hasproperty(routed, subcontext_name) && return getproperty(routed, subcontext_name), subcontext_name
-
-    local_locations = get_local_locations(SCT)
-    hasproperty(local_locations, subcontext_name) && return getproperty(local_locations, subcontext_name), subcontext_name
-
-    shared = get_shared_locations(SCT)
-    hasproperty(shared, subcontext_name) && return getproperty(shared, subcontext_name), subcontext_name
-
-    declared = get_declared_locations(SCT)
-    hasproperty(declared, name) && return getproperty(declared, name), name
-
-    outputs = get_output_locations(SCT)
-    hasproperty(outputs, name) && return getproperty(outputs, name), name
-
+    locations = _compute_all_locations(SCT)
+    hasproperty(locations, subcontext_name) && return getproperty(locations, subcontext_name), subcontext_name
+    hasproperty(locations, name) && return getproperty(locations, name), name
     return nothing, subcontext_name
 end
 
@@ -329,7 +299,7 @@ end
 #     return @inline getproperty(sct, varlocation)
 # end
 
-@inline @generated function Base.getproperty(sct::SCV, vl::Union{VarLocation{:subcontext}, VarLocation{:local}}) where SCV <: SubContextView
+@inline @generated function Base.getproperty(sct::SCV, vl::Union{VarLocation{:subcontext}, VarLocation{:state}}) where SCV <: SubContextView
     target_subcontext = get_subcontextname(vl)
     target_variable = get_originalname(vl)
     if isnothing(getfunc(vl)) && target_variable isa Symbol

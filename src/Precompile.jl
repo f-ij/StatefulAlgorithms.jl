@@ -33,7 +33,7 @@ function init(::_ProcessPrecompileScaler, context)
 end
 
 function step!(::_ProcessPrecompileScaler, context)
-    return (; scaled = context.scaled + context.factor)
+    return (; scaled = context.scaled + context.factor + get(context, :offset, 0))   # `offset` when routed in
 end
 
 function init(::_ProcessPrecompileSink, context)
@@ -316,7 +316,7 @@ _process_precompile_scale(x; scale = 1.0) = x * scale
             :counter => _ProcessPrecompileCounter,
             :scaler => _ProcessPrecompileScaler,
             (1, 2),
-            Route(_ProcessPrecompileCounter => _ProcessPrecompileScaler, :total => :factor),
+            Route(_ProcessPrecompileCounter => _ProcessPrecompileScaler, :total => :offset),
         )
         resolved_composite = resolve(composite)
         keys(resolved_composite)
