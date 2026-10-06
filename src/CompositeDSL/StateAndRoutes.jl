@@ -86,7 +86,7 @@ end
 """
 Wires for one DSL call, attached to it with `WithWiring`: reads from algorithm state (an
 algorithm statement's output, `owner.field`) and transforms. A plain name produced by an
-earlier call needs no wire: the call reads it by name from the shared `_captured_returns` bucket.
+earlier call, or a declared local, needs no wire: the call reads it by name from its scope.
 """
 _composite_dsl_call_wires(entity, producers::Dict{Symbol, Any}, inputs::Tuple) = ()
 function _composite_dsl_call_wires(entity::Callable, producers::Dict{Symbol, Any}, inputs::Tuple)
@@ -100,8 +100,8 @@ function _composite_dsl_call_wires(entity::Callable, producers::Dict{Symbol, Any
         else
             input.owner
         end
-        # Same name from the shared bucket, untransformed: read by name, no wire.
-        source_owner === :_captured_returns && input.source === input.destination && isnothing(transform) && continue
+        # Same name from the scope, untransformed: read by name, no wire.
+        _dsl_read_by_name(source_owner) && input.source === input.destination && isnothing(transform) && continue
         push!(wires, Route(source_owner => ThisChild(), input.source => input.destination; transform))
     end
     return Tuple(wires)
@@ -133,6 +133,8 @@ function _composite_dsl_register_outputs!(producers::Dict{Symbol, Any}, owner, o
     # A call's outputs belong to its fixed namespace (`_captured_returns`), not to the call.
     owner = something(fixed_namespace(owner), owner)
     for output in outputs
+        # A declared local stays one: the call writes it.
+        _dsl_is_declared(get(producers, output, nothing)) && continue
         # Later statements resolve symbols by asking this table who currently
         # owns a given output name.
         producers[output] = owner
@@ -163,6 +165,7 @@ function _composite_dsl_bind_outputs!(options::Vector{Any}, producers::Dict{Symb
     end
 
     for output in outputs
+        _dsl_is_declared(get(producers, output, nothing)) && continue   # a declared local stays one: the algorithm writes it
         if haskey(state_owners, output)
             _composite_dsl_push_local_option!(options, target, Route(state_owners[output] => target, output => output))
             producers[output] = state_owners[output]
@@ -832,16 +835,12 @@ function _dsl_reject_include_if_declarations(stmt)
 end
 
 #=
-Captured returns read on another schedule (temporary fallback, to be removed).
+Captured returns read on another schedule.
 
-A captured return (`y = f(...)`, a call's return) lives for one step. A statement may read it only if, in every step
-where it runs, the call that assigns it ran earlier in that step. In a composite block that holds when the call runs
-every step, or when the reader's interval is a multiple of the call's. Otherwise the reader would see the value from an
-earlier step, which only worked by accident: outputs used to stay in the runtime context until overwritten.
-
-Until blocks can declare locals, such a value is declared for the user as `Local(y = nothing)` on the block (with a
-warning), and its readers read that declared local. It then keeps its last value across steps, and across a pause and
-resume, which is why this goes away.
+A captured return (`y = f(...)`, a call's return) lives for one step of its block. A statement may read it only if, in
+every step where it runs, the call that assigns it ran earlier in that step. In a composite block that holds when the
+call runs every step, or when the reader's interval is a multiple of the call's. Otherwise the block is an error when
+it is built, which suggests declaring the value (`local y`) to keep it between steps.
 =#
 
 """The interval a composite schedule entry runs on (`nothing` when a condition decides)."""
@@ -859,11 +858,6 @@ _dsl_unwrap_call(child::WithWiring) = getfield(child, :child)
 _dsl_same_child(owner, child) = owner === child || isequal(owner, child) ||
     (owner isa AbstractIdentifiableAlgo && child isa AbstractIdentifiableAlgo && getkey(owner) != Symbol() && getkey(owner) == getkey(child))
 
-"""A route that read `name` from `_runtime`, reading it from the declared local instead."""
-function _dsl_route_from_local(r::Route)
-    target = isnothing(getto(r)) ? to_match_by(r) : getto(r)
-    return Route(:_declared_locals => target, map(Pair, getvarnames(r), getaliases(r))...; transform = gettransform(r), reverse_transform = getreverse_transform(r))
-end
 _dsl_reads_captured_return(r, name::Symbol) = r isa Route && from_match_by(r) === :_captured_returns && name in getvarnames(r)
 
 """Whether plan child `child` (a call, or an algorithm through its routes in `options`) reads the captured return `name`."""
@@ -874,12 +868,12 @@ function _dsl_reads_output(child, options::Vector{Any}, name::Symbol)
 end
 
 """
-The block's children and options with a `Local(name = nothing)` for every captured return read on a schedule it is not
-assigned on, and the reads of those values pointed at the local (see the note above). `schedule` holds the children's
-schedule entries, in order.
+Check that every captured return in a composite block is read only in steps where it was assigned (see the note
+above); an error names the first one that is not. `schedule` holds the children's schedule entries, in order. Names
+declared as locals (`local y`) keep their value between steps and may be read on any schedule.
 """
-function _dsl_declare_scheduled_step_values(children::Vector{Any}, schedule::Vector{Any}, options::Vector{Any})
-    declared = Symbol[]
+function _dsl_check_scheduled_reads(children::Vector{Any}, schedule::Vector{Any}, options::Vector{Any})
+    declared = keys(declared_locals(Tuple(options)))
     for (i, child) in enumerate(children)
         producer = _dsl_entry_interval(schedule[i])
         for name in callable_return_names(typeof(_dsl_unwrap_call(child)))
@@ -887,14 +881,8 @@ function _dsl_declare_scheduled_step_values(children::Vector{Any}, schedule::Vec
             j = findfirst(j -> j > i && !_dsl_runs_with(producer, _dsl_entry_interval(schedule[j])) && _dsl_reads_output(children[j], options, name), eachindex(children))
             isnothing(j) && continue
             reader = _dsl_entry_interval(schedule[j])
-            @warn "`$name` is assigned on a schedule (every $(something(producer, "conditional")) steps) and read by a statement that also runs in other steps (every $(something(reader, "conditional")) steps). For now it is declared for you as `$name = nothing` at the top of this block: steps before its first assignment read `nothing`, later steps read its last value, also after a pause and resume. This fallback will be removed; assign and read `$name` on the same schedule." maxlog = 1 _id = (:dsl_scheduled_output, name)
-            push!(declared, name)
+            error("`$name` is assigned on a schedule (every $(something(producer, "conditional")) steps) and read by a statement that also runs in other steps (every $(something(reader, "conditional")) steps). A value assigned in a step lives for that step only. To keep it between steps, declare it at the top of the block: `local $name` (reading it before its first assignment is an error) or `$name = nothing`.")
         end
     end
-    isempty(declared) && return children, options
-    reads_declared(r) = any(n -> _dsl_reads_captured_return(r, n), declared)
-    new_children = Any[child isa WithWiring ? WithWiring(getfield(child, :child), map(w -> reads_declared(w) ? _dsl_route_from_local(w) : w, getfield(child, :wires))) : child for child in children]
-    new_options = Any[o isa LocalPlanOption && reads_declared(getfield(o, :option)) ? LocalPlanOption(getfield(o, :owner), _dsl_route_from_local(getfield(o, :option))) : o for o in options]
-    push!(new_options, Local(; (name => nothing for name in declared)...))
-    return new_children, new_options
+    return nothing
 end

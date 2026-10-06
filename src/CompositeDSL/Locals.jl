@@ -1,0 +1,94 @@
+#=
+Declared locals in a DSL block, written as in Julia:
+
+    local x            # no value yet; its type is the type of what is written to it
+    local x::Float64   # a type, no value yet
+    local x = x0       # a value (any expression, evaluated where the block is built)
+    x = 0.0            # a literal value: a number, string, `nothing`, a vector or tuple literal
+    x::Float32 = 1     # a type and a value
+
+Each lowers to a `Local` on the block (a declared local of its scope, see `Scope`): it lives for the run and is kept on
+a pause. Statements read it by name and write it by assigning it (`x = f(x)`). A right-hand side that is a call or a
+macro (`x = f()`, `x = @every 3 f()`) is a step, not a declaration; a bare name (`x = Algo`) is an algorithm entry.
+Reading a local declared without a value before anything is written to it is an error.
+=#
+
+"""Whether `rhs` is a value that declares a local when assigned in a block (`x = 0.0`), rather than a step."""
+_dsl_is_local_value(rhs) = rhs isa Number || rhs isa AbstractString || rhs isa Char || rhs isa QuoteNode || rhs === :nothing ||
+    (rhs isa Expr && rhs.head in (:vect, :tuple, :vcat, :hcat, :string) && !_dsl_has_call_args(rhs))
+_dsl_has_call_args(ex::Expr) = any(a -> a isa Expr && a.head in (:call, :macrocall, :.), ex.args) || any(a -> a isa Expr && _dsl_has_call_args(a), ex.args)
+
+"""
+The locals a block statement declares, as `(name, type expression or nothing, value expression or nothing)` tuples, or
+`nothing` when `stmt` is not a declaration (see the note above). `taken` are the names the block already has.
+"""
+function _dsl_parse_local_declaration(stmt, taken::Set{Symbol})
+    if stmt isa Expr && stmt.head == :local
+        targets = length(stmt.args) == 1 && stmt.args[1] isa Expr && stmt.args[1].head == :tuple ? stmt.args[1].args : stmt.args
+        return [_dsl_local_target(target, taken) for target in targets]
+    end
+    stmt isa Expr && stmt.head == :(=) && _dsl_is_local_value(stmt.args[2]) || return nothing
+    lhs = stmt.args[1]
+    (lhs isa Symbol || (lhs isa Expr && lhs.head == :(::) && length(lhs.args) == 2 && lhs.args[1] isa Symbol)) || return nothing
+    lhs isa Symbol && lhs in taken && return nothing   # assigning a name the block has: not a declaration
+    return [_dsl_local_target(stmt, taken)]
+end
+
+"""One declared local of a `local` statement: `x`, `x::T`, `x = v` or `x::T = v`."""
+function _dsl_local_target(target, taken::Set{Symbol})
+    value = nothing
+    if target isa Expr && target.head == :(=)
+        target, value = target.args[1], target.args[2]
+    end
+    type = nothing
+    if target isa Expr && target.head == :(::) && length(target.args) == 2
+        target, type = target.args[1], target.args[2]
+    end
+    target isa Symbol || error("Cannot declare `$(target)` as a local in a DSL block; declare a name: `local x`, `local x::T`, `local x = value`.")
+    target in taken && error("`$target` is declared as a local, but the block already has a `$target` (a state field, an input or an earlier statement's result). Declare it once, before it is used.")
+    return (target, type, value)
+end
+
+"""The code a declaration adds to the block: a `Local` for each declared name (see `_composite_dsl_declare_local!`)."""
+function _dsl_local_declaration_expr(declarations)
+    exprs = map(declarations) do (name, type, value)
+        value_expr = isnothing(value) ? :undef : esc(value)
+        type_expr = isnothing(type) ? :nothing : esc(type)
+        :(StatefulAlgorithms._composite_dsl_declare_local!(_dsl_options, _dsl_producers, $(QuoteNode(name)), $value_expr, $type_expr))
+    end
+    return Expr(:block, exprs...)
+end
+
+"""
+Declare the local `name` on the block being built: a `Local` in its options, and `name` recorded as read from the
+declared locals by the statements after it. `value` is `undef` for none; `type` is `nothing` for none.
+"""
+function _composite_dsl_declare_local!(options::Vector{Any}, producers::Dict{Symbol, Any}, name::Symbol, value, type)
+    @nospecialize value type
+    push!(options, Local(NamedTuple{(name,), Tuple{_dsl_local_storage_type(value, type)}}((_dsl_local_initial(value, type),))))
+    producers[name] = :_declared_locals
+    return options
+end
+
+_dsl_local_storage_type(value, ::Nothing) = typeof(value)
+_dsl_local_storage_type(::UndefInitializer, ::Type{T}) where {T} = maybe_type(T, UndefInitializer)
+_dsl_local_storage_type(value, ::Type{T}) where {T} = T
+_dsl_local_initial(value, ::Nothing) = value
+_dsl_local_initial(::UndefInitializer, ::Type{T}) where {T} = maybe_type(T, UndefInitializer)()
+_dsl_local_initial(value, ::Type{T}) where {T} = convert(T, value)
+
+"""Record the locals of enclosing blocks (`names`) as read from the declared locals in a nested block."""
+function _composite_dsl_inherit_locals!(producers::Dict{Symbol, Any}, names::Tuple)
+    foreach(name -> producers[name] = :_declared_locals, names)
+    return producers
+end
+
+"""Whether a DSL producer reads by name from the scope (a declared local or a captured return): those need no wire into a call."""
+_dsl_read_by_name(owner) = false
+_dsl_read_by_name(owner::Symbol) = _is_scope_part(context_part(Val(owner)))
+_is_scope_part(::Union{CapturedReturns, DeclaredLocals}) = true
+_is_scope_part(::ContextPart) = false
+
+"""Whether a DSL producer is the declared locals (a name declared with `local`)."""
+_dsl_is_declared(owner) = false
+_dsl_is_declared(owner::Symbol) = context_part(Val(owner)) isa DeclaredLocals

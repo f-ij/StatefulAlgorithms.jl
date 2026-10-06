@@ -47,7 +47,7 @@ function _dsl_build_loopalgorithm(::Val{Name}, algos, specification, states, opt
     end
     isempty(processalgos) && error("`@$Name` requires at least one algorithm entry.")
     if iscomposite(laType)
-        processalgos, options = _dsl_declare_scheduled_step_values(processalgos, kept_specification, Any[options...])
+        _dsl_check_scheduled_reads(processalgos, kept_specification, Any[options...])
     end
 
     processalgos_tuple = Tuple(processalgos)
@@ -147,6 +147,7 @@ function _dsl_expand_simplealgorithm_resolved(
     block,
     initial_alias_map::Dict{Symbol, Any} = Dict{Symbol, Any}(),
     initial_context_map::Dict{Symbol, Any} = Dict{Symbol, Any}(),
+    outer_locals::Set{Symbol} = Set{Symbol}(),
 )
     statements = block isa Expr && block.head == :block ? block.args : Any[block]
     collected = _dsl_collect_block(
@@ -156,6 +157,7 @@ function _dsl_expand_simplealgorithm_resolved(
         allow_final = false,
         initial_alias_map,
         initial_context_map,
+        outer_locals,
     )
 
     state_setup_expr = _dsl_state_setup_expr(collected.state_fields, collected.state_name)
@@ -201,8 +203,9 @@ function _dsl_expand_repeated_block(
     repeats_expr,
     initial_alias_map::Dict{Symbol, Any} = Dict{Symbol, Any}(),
     initial_context_map::Dict{Symbol, Any} = Dict{Symbol, Any}(),
+    outer_locals::Set{Symbol} = Set{Symbol}(),
 )
-    inner_expr = _dsl_expand_simplealgorithm_resolved(block, initial_alias_map, initial_context_map)
+    inner_expr = _dsl_expand_simplealgorithm_resolved(block, initial_alias_map, initial_context_map, outer_locals)
     expanded = quote
         let
             local _dsl_inner = $inner_expr
@@ -253,6 +256,10 @@ Assignments:
 - `x = alias(args...)`
 - `a, b = Algo(...)`
 - `state_field = captured_value`
+
+Declared locals (kept between steps; a value a statement assigns lives for one step):
+- `local x`, `local x::T`, `local x = value`
+- `x = 0.0`, `x = nothing`, `x::T = value` (a literal value on the right)
 
 ProcessAlgorithm routes:
 - `x = Algo(input = produced)`

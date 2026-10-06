@@ -387,7 +387,7 @@ Within ProcessAlgorithm route syntax:
 - `target = produced` becomes a simple route
 - `target = @transform(x -> x * 2, produced)` becomes a transformed route
 """
-function _dsl_parse_invocation(alias_map, context_map, ex, known_outputs::Set{Symbol})
+function _dsl_parse_invocation(alias_map, context_map, ex, known_outputs::Set{Symbol}; outer_locals::Set{Symbol} = Set{Symbol}())
     if ex isa Expr && ex.head == :macrocall && ex.args[1] == Symbol("@repeat") && length(ex.args) == 4
         repeats_expr = ex.args[3]
         block = ex.args[4]
@@ -396,7 +396,7 @@ function _dsl_parse_invocation(alias_map, context_map, ex, known_outputs::Set{Sy
             # entity so the outer block can treat it like any other statement.
             return (
                 kind = :resolved_expr,
-                resolved_expr = _dsl_expand_repeated_block(block, repeats_expr, alias_map, context_map),
+                resolved_expr = _dsl_expand_repeated_block(block, repeats_expr, alias_map, context_map, outer_locals),
                 alias_name = Symbol(),
                 positional_specs = (),
                 routed_positional_inputs = (),
