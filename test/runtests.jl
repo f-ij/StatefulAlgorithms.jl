@@ -20,10 +20,12 @@ using StatefulAlgorithms
     include("SymbolIndexingTest.jl")
     include("InnerTypeFilterTest.jl")
     include("InteractiveTest.jl")
+    include("ContextExchangeTest.jl")
     include("ReplacementTest.jl")
     include("CompositeDSLTest.jl")
     include("ProcessAlgorithmMacroTest.jl")
     include("ContextAnalyzerTest.jl")
     include("InspectionTest.jl")
     include("SavingTest.jl")
+    include("ContextDeltaTest.jl")
 end

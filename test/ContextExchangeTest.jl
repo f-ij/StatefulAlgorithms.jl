@@ -1,5 +1,25 @@
+# UNUSED AT THE MOMENT (see the top of src/Interactive/ContextExchange.jl): these tests keep `ContextExchange` working
+# while nothing uses it. Manual steps go through `exchange_stepper`, which keeps one loop cursor as a running loop does.
 using Test
 using StatefulAlgorithms
+
+"""
+    exchange_stepper(algo, context)
+
+A function that steps `algo` once per call, keeping one loop cursor across calls as a running loop does, so children
+on intervals run on their own ticks. (`StatefulAlgorithms._step!(algo, context)` starts a fresh cursor every call,
+so a child on interval 2 never runs.)
+"""
+function exchange_stepper(algo, context)
+    SA = StatefulAlgorithms
+    lifetime = get(SA.getglobals(context), :lifetime, SA.Indefinite())
+    process = SA.LoopRunProcess(lifetime)
+    plan = SA.getplan(algo)
+    cursor = SA.loop_cursor(plan, Val(false))
+    runtimecontext = SA._merge_into_globals(SA._empty_context(), (; lifetime))
+    wiring = SA.PlanWiringView(SA.getwiring(plan))
+    return ctx -> first(SA._step!(plan, cursor, ctx, runtimecontext, wiring, SA.Namespace{nothing}(), process, lifetime))
+end
 
 @testset "ContextExchange buffers interactive updates" begin
     struct ExchangeTargetForTest <: ProcessAlgorithm end
@@ -28,12 +48,13 @@ using StatefulAlgorithms
     @test context[exchange_key].store.pending.value[] == 2.0
     @test context[exchange_key].store.haspending.value[]
 
-    context = StatefulAlgorithms._step!(algo, context)
+    step_algo = exchange_stepper(algo, context)
+    context = step_algo(context)
     @test context.target.value == 1.0
     @test context[exchange_key].store.pending.value[] == 2.0
     @test context[exchange_key].store.haspending.value[]
 
-    context = StatefulAlgorithms._step!(algo, context)
+    context = step_algo(context)
     @test context.target.value == 2.0
     @test !context[exchange_key].store.haspending.value[]
 end
@@ -68,7 +89,8 @@ end
     @test context[exchange_key].store.pending.value[] == 4.0
     @test context[exchange_key].store.haspending.value[]
 
-    context = StatefulAlgorithms._step!(algo, context)
+    step_algo = exchange_stepper(algo, context)
+    context = step_algo(context)
     @test context.target.value == 4.0
     @test ref[] == 4.0
     @test duplicate_ref[] == 4.0
@@ -76,7 +98,7 @@ end
 
     typed_ref = view(context, :value)
     typed_ref[] = 5
-    context = StatefulAlgorithms._step!(algo, context)
+    context = step_algo(context)
     @test typed_ref[] == 5.0
 end
 
@@ -101,7 +123,8 @@ end
     seen_ref = view(context, :seen)
     @test seen_ref[] == 0
 
-    context = StatefulAlgorithms._step!(algo, context)
+    step_algo = exchange_stepper(algo, context)
+    context = step_algo(context)
     @test context.target.seen == 1
     @test seen_ref[] == 1
 
@@ -113,11 +136,12 @@ end
     interval_context = StatefulAlgorithms.context(init(interval_algo, Init(:_exchange; vars = (Var(:target, :seen),)); lifetime = Repeat(4)))
     interval_ref = view(interval_context, :seen)
 
-    interval_context = StatefulAlgorithms._step!(interval_algo, interval_context)
+    step_interval_algo = exchange_stepper(interval_algo, interval_context)
+    interval_context = step_interval_algo(interval_context)
     @test interval_context.target.seen == 1
     @test interval_ref[] == 0
 
-    interval_context = StatefulAlgorithms._step!(interval_algo, interval_context)
+    interval_context = step_interval_algo(interval_context)
     @test interval_context.target.seen == 2
     @test interval_ref[] == 2
 end
@@ -146,7 +170,8 @@ end
 
     ref = view(context, :display)
     ref[] = 3
-    context = StatefulAlgorithms._step!(algo, context)
+    step_algo = exchange_stepper(algo, context)
+    context = step_algo(context)
 
     @test context.target.value == 3.0
     @test ref[] == 3.0
@@ -189,12 +214,13 @@ end
     value_ref = view(context, :value)
     seen_ref = view(context, :seen)
 
-    context = StatefulAlgorithms._step!(algo, context)
+    step_algo = exchange_stepper(algo, context)
+    context = step_algo(context)
     @test value_ref[] == 1.0
     @test seen_ref[] == 1
 
     value_ref[] = 4
-    context = StatefulAlgorithms._step!(algo, context)
+    context = step_algo(context)
     @test context.target.value == 1.0
     @test value_ref[] == 1.0
     @test seen_ref[] == 1

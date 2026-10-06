@@ -74,17 +74,44 @@ Resolved plans keep the namespace outside the wrapper value, so generated and
 non-generated child stepping must view the context through `Namespace{Name}`.
 """
 function _step!(fw::FW, context::C, runtimecontext::RC, wiring::W, namespace::Namespace{Name}, process::P, lifetime::LT) where {FW<:FuncWrapper, C<:AbstractContext, RC<:ProcessContext, W<:PlanWiringView, Name, P<:AbstractProcess, LT<:Lifetime}
-    contextview = @inline view(
-        context,
-        runtimecontext,
-        fw,
-        namespace;
-        sharedcontexts = (@inline shares(wiring)),
-        sharedvars = (@inline routes(wiring)),
-    )
+    contextview = @inline _leaf_view(fw, context, runtimecontext, wiring, namespace)
 
     retval = @inline step!(fw, contextview)
     return @inline merge_funcwrapper_return(contextview, context, runtimecontext, retval, return_demand(wiring, Namespace{:_runtime}()))
+end
+
+"""
+    _funcwrapper_return_names(SCV, R, DemandNames)
+
+Split the return names of a `FuncWrapper` (the field names of `R`): names visible in its view (`SCV`) are real
+state/writeback targets; the others are temporary runtime outputs for later DSL statements, kept when demanded.
+"""
+function _funcwrapper_return_names(SCV::Type, R::Type, DemandNames)
+    view_names = Symbol[]
+    runtime_names = Symbol[]
+    for name in fieldnames(R)
+        location, _ = _compute_location(SCV, name)
+        if isnothing(location)
+            (DemandNames === :all || name in DemandNames) && push!(runtime_names, name)
+        else
+            push!(view_names, name)
+        end
+    end
+    return view_names, runtime_names
+end
+
+# The persistent fields a FuncWrapper writes (see src/Context/Carried/Writes.jl): its view-visible returns.
+@inline function _leaf_payload(fw::FW, context::C, runtimecontext::RC, wiring::W, namespace::N) where {FW<:FuncWrapper,C,RC,W,N}
+    contextview = @inline _leaf_view(fw, context, runtimecontext, wiring, namespace)
+    return @inline _funcwrapper_payload(contextview, (@inline step!(fw, contextview)))
+end
+
+@inline _funcwrapper_payload(contextview::SCV, ::Nothing) where {SCV<:SubContextView} = (;)
+@inline @generated function _funcwrapper_payload(contextview::SCV, retval::R) where {SCV<:SubContextView, R<:NamedTuple}
+    view_names, _ = _funcwrapper_return_names(SCV, R, ())
+    isempty(view_names) && return :((;))
+    view_expr = Expr(:tuple, Expr(:parameters, (Expr(:kw, name, :(getproperty(retval, $(QuoteNode(name))))) for name in view_names)...))
+    return :(@inline _merge_payload(contextview, $view_expr, ReturnDemand{$(Tuple(view_names))}()))
 end
 
 """
@@ -111,20 +138,7 @@ end
     retval::R,
     demand::ReturnDemand{DemandNames},
 ) where {SCV<:SubContextView, C<:ProcessContext, RC<:ProcessContext, R<:NamedTuple, DemandNames}
-    view_names = Symbol[]
-    runtime_names = Symbol[]
-
-    # Partition return names at generation time. Names visible in the
-    # SubContextView are real state/writeback targets; the rest are temporary
-    # runtime outputs for later DSL statements.
-    for name in fieldnames(R)
-        location, _ = _compute_location(SCV, name)
-        if isnothing(location)
-            (DemandNames === :all || name in DemandNames) && push!(runtime_names, name)
-        else
-            push!(view_names, name)
-        end
-    end
+    view_names, runtime_names = _funcwrapper_return_names(SCV, R, DemandNames)
 
     view_expr = Expr(:tuple, Expr(:parameters, (
         Expr(:kw, name, :(getproperty(retval, $(QuoteNode(name)))))

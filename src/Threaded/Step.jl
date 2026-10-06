@@ -126,3 +126,7 @@ Base.@constprop :aggressive @inline @generated function _step!(tca::TCA, cursor:
     push!(exprs, :(return context, runtimecontext))
     return Expr(:block, exprs...)
 end
+
+# The persistent fields a threaded composite writes (see src/Context/Carried/Writes.jl): as a composite's.
+@inline @generated _writes(plan::TCA, cursor::S, context::C, ::Type{RC}, wiring::W, namespace::N, process::P, lifetime::LT) where {TCA<:ThreadedCompositeAlgorithm,S,C<:ProcessContext,RC,W,N,P,LT} =
+    _children_writes_expr(TCA, nothing)

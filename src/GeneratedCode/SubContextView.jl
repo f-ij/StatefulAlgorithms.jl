@@ -141,15 +141,25 @@ end
 end
 
 """
+    _merge_payload(scv, args, demand)
+
+What `merge(scv, args, demand)` writes into the persistent context, as `(; subcontext = (; field = value, ...), ...)`.
+"""
+@inline @generated function _merge_payload(scv::SubContextView{CType, SubKey}, args::NamedTuple, demand::ReturnDemand{Names}) where {CType<:ProcessContext, SubKey, Names}
+    mergetuple_expr, _ = _subcontext_view_merge_exprs(scv, args, Names)
+    return mergetuple_expr
+end
+
+"""
 Merge a step/init/cleanup return into persistent state and loop-local runtime state.
 """
 @inline @generated function Base.merge(scv::SubContextView{CType, SubKey}, args::NamedTuple, demand::ReturnDemand{Names}) where {CType<:ProcessContext, SubKey, Names}
-    mergetuple_expr, runtimetuple_expr = _subcontext_view_merge_exprs(scv, args, Names)
+    _, runtimetuple_expr = _subcontext_view_merge_exprs(scv, args, Names)
 
     # Return the expression that does the merge
     return quote
         $(LineNumberNode(@__LINE__, @__FILE__))
-        mergetuple = $mergetuple_expr
+        mergetuple = @inline _merge_payload(scv, args, demand)
         newcontext = merge_into_subcontexts(getcontext(scv), mergetuple)
         @assert typeof(newcontext) == typeof(getcontext(scv)) "A variable type in a subcontext was changed. This is prohibited for performance reasons.\nIf type mutation is needed, set the variable up as a Ref\n$(sprint(show, ContextTypeDiff(getcontext(scv), newcontext)))"
         runtimetuple = $runtimetuple_expr
