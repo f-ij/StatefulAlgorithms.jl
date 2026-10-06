@@ -151,7 +151,7 @@ Merge a step/init/cleanup return into persistent state and loop-local runtime st
         $(LineNumberNode(@__LINE__, @__FILE__))
         mergetuple = $mergetuple_expr
         newcontext = merge_into_subcontexts(getcontext(scv), mergetuple)
-        @assert _unlogged(typeof(newcontext)) == _unlogged(typeof(getcontext(scv))) "A variable type in a subcontext was changed. This is prohibited for performance reasons.\nIf type mutation is needed, set the variable up as a Ref\n$(sprint(show, ContextTypeDiff(getcontext(scv), newcontext)))"
+        @assert _untraced(typeof(newcontext)) == _untraced(typeof(getcontext(scv))) "A variable type in a subcontext was changed. This is prohibited for performance reasons.\nIf type mutation is needed, set the variable up as a Ref\n$(sprint(show, ContextTypeDiff(getcontext(scv), newcontext)))"
         runtimetuple = $runtimetuple_expr
         newruntimecontext = @inline merge_runtime_subcontexts(getruntimecontext(scv), runtimetuple)
         return newcontext, newruntimecontext

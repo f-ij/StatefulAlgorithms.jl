@@ -118,7 +118,7 @@ Base.@constprop :aggressive @inline @generated function _step!(tca::TCA, cursor:
                 local child_step_wiring = @inline child_wiring_view(wiring, Val($i))
                 local child_namespace = $child_namespace_type()
                 stepped, runtimecontext = @inline _step!(algo, child_cursor, (@inline child_context(context)), runtimecontext, child_step_wiring, child_namespace, process, lifetime)
-                context = @inline with_child_log(context, stepped)
+                context = @inline with_child_trace(context, stepped)
             end
         end)
     end

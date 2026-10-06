@@ -1,7 +1,7 @@
 using Random
 
 # EXPERIMENTAL context-delta loop: the loop carries only the persistent fields its steps can write (src/Context/Carry.jl),
-# found by inference (src/Context/WriteLog.jl). These tests check that the write set is what the plan writes, that the
+# found by inference (src/Context/WriteTrace.jl). These tests check that the write set is what the plan writes, that the
 # results are right, and that the loop really takes the carrying path (it falls back silently otherwise).
 
 # Reads an array and an rng from its context and flips one entry; returns a value that is not state.
@@ -130,14 +130,14 @@ end
     @test !occursin("_written_from_return_type", typed)
 end
 
-@testset "Context delta: only WriteLog.jl builds logged context types" begin
-    # A write is lost only if a step returns a context that keeps a `WriteLog` type without recording the write.
-    # Any other construction drops the log, which makes the plan carry its whole context.
+@testset "Context delta: only WriteTrace.jl builds traced context types" begin
+    # A write is lost only if a step returns a context that keeps a `WriteTrace` type without recording the write.
+    # Any other construction drops the trace, which makes the plan carry its whole context.
     src = joinpath(pkgdir(StatefulAlgorithms), "src")
     for (root, _, files) in walkdir(src), file in files
         endswith(file, ".jl") || continue
         path = joinpath(root, file)
-        file == "WriteLog.jl" && continue
-        @test !occursin("WriteLog{", read(path, String))
+        file == "WriteTrace.jl" && continue
+        @test !occursin("WriteTrace{", read(path, String))
     end
 end
