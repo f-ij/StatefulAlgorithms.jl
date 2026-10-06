@@ -7,9 +7,11 @@ Resolving a plan: everything that can only be decided once the whole composition
    Children are replaced by their raw algorithm and the key goes into the plan's `namespaces`.
    Calls (`Callable`) have no identity: they are not registered and share `:_captured_returns`.
 2. The registry is attached to the root wrapper and to nested `LoopAlgorithm` wrappers.
-3. Wiring: route/share endpoints become context keys, plan-wide wiring is copied into each
-   child's slot, and each plan node records (in its `PlanWiring` type) the locals visible to
-   its children and the names its calls read.
+3. Wiring: route/share endpoints become context keys, and plan-wide wiring is copied into each
+   child's slot.
+4. Scopes: each plan node records (in its `PlanWiring` type) its scope, the declared locals and
+   captured returns its children see by name (`Scope`), and routes that read them point at
+   their slots.
 =#
 
 """
@@ -30,12 +32,13 @@ Base.@nospecializeinfer function resolve(@nospecialize(la::LoopSpec))
     return _resolve_by_trait(_unique_handles_trait(la), la)
 end
 
-@inline function _resolve_typed(la::LA) where {LA<:LoopSpec}
+# `keep_root_returns`: the plan has a final step, which reads every return of the root's calls (see `_resolve_scopes`).
+@inline function _resolve_typed(la::LA, keep_root_returns::Bool = false) where {LA<:LoopSpec}
     if la isa FinalizedAlgorithm
-        return finalstep(_resolve_typed(inneralgorithm(la)), finalfunction(la))
+        return finalstep(_resolve_typed(inneralgorithm(la), true), finalfunction(la))
     end
     if !(la isa LoopAlgorithm)
-        return _resolve_typed(LoopAlgorithm(la))
+        return _resolve_typed(LoopAlgorithm(la), keep_root_returns)
     end
     if isresolved(la)
         return la
@@ -43,7 +46,7 @@ end
 
     registry, keyed_la = setup_registry_and_keyed_algos(la)   # 1. keys and namespaces
     keyed_la = attach_registry_to_tree(keyed_la, registry)     # 2. share the registry
-    keyed_la = resolve_plan_wiring(keyed_la, registry)         # 3. routes, shares, locals
+    keyed_la = resolve_plan_wiring(keyed_la, registry, keep_root_returns)   # 3. and 4. routes, shares, scopes
     # The `RootOption`s of the plan tree stay on the root wrapper.
     return setoptions(keyed_la, _root_options(la))
 end
@@ -173,21 +176,16 @@ end
 # Only `LoopAlgorithm` roots (and finalized ones) have plan wiring to resolve.
 @inline resolve_plan_wiring(la, ::NameSpaceRegistry) = la
 
-@inline function resolve_plan_wiring(la::LoopAlgorithm, registry::NameSpaceRegistry)
-    return setfield(la, :plan, _resolve_plan_wiring_tree(getplan(la), registry, (;)))
+@inline function resolve_plan_wiring(la::LoopAlgorithm, registry::NameSpaceRegistry, keep_root_returns::Bool = false)
+    return setfield(la, :plan, _resolve_scopes(_resolve_plan_wiring_tree(getplan(la), registry, (;)), NoScope, "", keep_root_returns))
 end
 
 """
 Resolve a plan tree and inlay inherited global wiring into concrete children.
-
-`visible_locals` maps each local name visible at this node to its `_declared_locals` storage name;
-this node's own `Local` declarations shadow inherited ones of the same name. It is stored
-in the node's `PlanWiring` type; concrete children's views turn it into routes from `_declared_locals`.
 """
-function _resolve_plan_wiring_tree(la::LA, registry::NameSpaceRegistry, inherited_global::NamedTuple, inherited_locals::NamedTuple = (;), path::String = "") where {LA<:AbstractPlan}
+function _resolve_plan_wiring_tree(la::LA, registry::NameSpaceRegistry, inherited_global::NamedTuple) where {LA<:AbstractPlan}
     raw_wiring = getwiring(la)
     own_locals = getfield(raw_wiring, :locals)
-    visible_locals = _visible_locals(inherited_locals, own_locals, path)
 
     # Global wiring is grouped by resolved target namespace once per plan node.
     # Child buckets below receive the relevant global wiring already inlaid, so
@@ -196,12 +194,11 @@ function _resolve_plan_wiring_tree(la::LA, registry::NameSpaceRegistry, inherite
     combined_global = _merge_global_wiring(inherited_global, own_global)
 
     # Resolve nested plans first. Their own `PlanWiring` then becomes the
-    # child-indexed value passed to that child during parent stepping. A nested plan's
-    # position (`"2.1"`) names the `_declared_locals` slots of the locals it declares.
+    # child-indexed value passed to that child during parent stepping.
     funcs = ntuple(Val(length(getalgos(la)))) do i   # unrolled: every child keeps its concrete type
         child = getalgo(la, i)
         if child isa LoopSpec
-            return _resolve_plan_wiring_tree(child, registry, combined_global, visible_locals, isempty(path) ? string(i) : string(path, ".", i))
+            return _resolve_plan_wiring_tree(child, registry, combined_global)
         end
         return child
     end
@@ -222,37 +219,93 @@ function _resolve_plan_wiring_tree(la::LA, registry::NameSpaceRegistry, inherite
         # Concrete children receive a single resolved `Wiring`: inherited global
         # wiring for their namespace, occluded by child-scoped routes.
         target_global = get(combined_global, target, Wiring())
-        target_child = _local_routes_to_storage(_resolve_child_wiring_bucket(registry, bucket, target), visible_locals)
+        target_child = _resolve_child_wiring_bucket(registry, bucket, target)
         resolved = merge_wiring(target_global, target_child)
         return resolved
     end
 
-    # Stored in the `PlanWiring` type, so stepping reads them at compile time: the locals this
-    # node's children can see, and the names its calls read (they count as demand for the
-    # `_captured_returns` bucket, see `return_demand`).
-    visible = isempty(visible_locals) ? Val((;)) : Val(visible_locals)
-    reads = callable_reads(funcs)
-    return setfield(rebuilt, :wiring, PlanWiring(combined_global, resolved_children, own_locals, visible, isempty(reads) ? Val(()) : Val(reads)))
+    return setfield(rebuilt, :wiring, PlanWiring(combined_global, resolved_children, own_locals))
 end
 
 """
-The wiring with every route that reads a declared local (`Route(:_declared_locals => ..., :y => :x)`) pointed at that local's
-storage name in `_declared_locals` (`y`, or `y@1.2` for a local declared in a nested plan; see `local_storage_name`).
+    _resolve_scopes(plan, Outer, path, keep_returns = false)
+
+`plan` (with resolved wiring) with the scope of every node set (see `Scope`), and every route that reads a declared
+local or a captured return pointed at its slot. `Outer` is the scope the node is in, `path` its position (`"2.1"`).
+
+A node's scope is `Outer` with the node's own declared locals, and the returns of the calls directly in it that are
+read somewhere in the node (all of them with `keep_returns`: the root of a plan with a final step, which reads them). An assignment to a name that is already visible writes that slot: a call in an inner node
+that assigns a local or a return of an enclosing node updates it, as an assignment in a Julia loop body updates a
+variable of the enclosing function.
 """
-_local_routes_to_storage(wiring::Wiring, visible_locals::NamedTuple) =
-    Wiring(map(r -> _local_route_to_storage(r, visible_locals), routes(wiring)), shares(wiring))
-_local_route_to_storage(r::Route, visible_locals::NamedTuple) = r
-function _local_route_to_storage(r::Route{:_declared_locals, To, T, RT, V, A}, visible_locals::NamedTuple) where {To, T, RT, V, A}
-    storage = map(V) do name
-        haskey(visible_locals, name) || construction_error("A route reads the local `", name, "`, which is not declared in this plan or an enclosing one.")
-        return getproperty(visible_locals, name)
+function _resolve_scopes(la::LA, ::Type{Outer}, path::String, keep_returns::Bool = false) where {LA<:AbstractPlan, Outer<:Scope}
+    wiring = getwiring(la)
+    own_locals = getfield(wiring, :locals)
+    locals = _scoped_names(scope_locals(Outer), keys(own_locals), path)
+    read = _return_reads(la)
+    captured = Tuple(unique(Symbol[n for f in getalgos(la) for n in callable_return_names(typeof(f))
+                                   if (keep_returns || n in read) && !haskey(locals, n) && !haskey(scope_returns(Outer), n)]))
+    Sc = Scope{locals, _scoped_names(scope_returns(Outer), captured, path)}
+
+    funcs = ntuple(Val(length(getalgos(la)))) do i   # unrolled: every child keeps its concrete type
+        child = getalgo(la, i)
+        child isa LoopSpec ? _resolve_scopes(child, Sc, isempty(path) ? string(i) : string(path, ".", i)) : child
     end
-    return Route{:_declared_locals, To, T, RT, storage, A, Nothing, Nothing}()
+    rebuilt = rebuild_loopalgorithm_funcs(la, funcs)
+    children = ntuple(Val(length(funcs))) do i
+        funcs[i] isa LoopSpec ? getwiring(funcs[i]) : _scope_routes_to_storage(getfield(child_wiring(wiring), i), Sc)
+    end
+    owners = Tuple(unique(Symbol[plan_child_namespace(rebuilt, i) for i in 1:length(funcs)
+                                 if !(funcs[i] isa LoopSpec) && context_part(Val(plan_child_namespace(rebuilt, i))) isa Stored]))
+    resets = (; returns = map(name -> scoped_storage_name(name, path), captured), owners)
+    return setfield(rebuilt, :wiring, PlanWiring(global_wiring(wiring), children, own_locals, Sc, Val(resets)))
+end
+
+"""`inherited` (`(; name = storage_name, ...)`) with `names`, declared in the plan at `path`, added or hiding the inherited ones."""
+_scoped_names(inherited::NamedTuple, names::Tuple, path::String) =
+    merge(inherited, NamedTuple{names}(map(name -> scoped_storage_name(name, path), names)))
+
+"""Every name read from the captured returns in a plan tree: by the calls in it, and by its routes from `_captured_returns`."""
+function _return_reads(la::AbstractPlan)
+    names = ()
+    for (i, f) in enumerate(getalgos(la))
+        if f isa LoopSpec
+            names = _append_route_demand_names(names, _return_reads(f))
+            continue
+        end
+        names = _append_route_demand_names(names, callable_input_names(typeof(f)))
+        for r in routes(getfield(child_wiring(getwiring(la)), i))
+            names = _append_route_demand_names(names, _returns_read_by(r))
+        end
+    end
+    return names
+end
+_returns_read_by(::Route) = ()
+_returns_read_by(r::Route{:_captured_returns}) = getvarnames(r)
+
+"""
+The wiring with every route that reads a declared local or a captured return (`Route(:_declared_locals => ..., :y => :x)`)
+pointed at its slot in the scope `Sc` (`y`, or `y@1.2` for one declared or captured in a nested plan).
+"""
+_scope_routes_to_storage(wiring::Wiring, ::Type{Sc}) where {Sc<:Scope} =
+    Wiring(map(r -> _route_to_storage(r, Sc), routes(wiring)), shares(wiring))
+_route_to_storage(r::Route, ::Type) = r
+_route_to_storage(r::Route{:_declared_locals, To, T, RT, V, A}, ::Type{Sc}) where {To, T, RT, V, A, Sc} =
+    Route{:_declared_locals, To, T, RT, _slots(scope_locals(Sc), V, "local", "declared"), A, Nothing, Nothing}()
+_route_to_storage(r::Route{:_captured_returns, To, T, RT, V, A}, ::Type{Sc}) where {To, T, RT, V, A, Sc} =
+    Route{:_captured_returns, To, T, RT, _slots(scope_returns(Sc), V, "return", "captured by a call"), A, Nothing, Nothing}()
+
+"""The storage names of `names` (a name, or a tuple of them) in `slots`; an error for one that is not there."""
+_slots(slots::NamedTuple, names::Tuple, kind, how) = map(name -> _slots(slots, name, kind, how), names)
+function _slots(slots::NamedTuple, name::Symbol, kind, how)
+    haskey(slots, name) || construction_error("A route reads the ", kind, " `", name, "`, which is not ", how, " in this plan or an enclosing one.")
+    return getproperty(slots, name)
 end
 
 # A finalized algorithm: resolve the loop inside, keep the final step.
 @inline function resolve_plan_wiring(fa::FA, registry::NameSpaceRegistry) where {FA<:FinalizedAlgorithm}
-    return finalstep(resolve_plan_wiring(inneralgorithm(fa), registry), finalfunction(fa))
+    # The final step reads the root scope after the last step: every return of the root's calls.
+    return finalstep(resolve_plan_wiring(inneralgorithm(fa), registry, true), finalfunction(fa))
 end
 
 #=

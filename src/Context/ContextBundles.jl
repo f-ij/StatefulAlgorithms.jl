@@ -9,17 +9,28 @@ abstract type ContextBundle end
 """
     LoopContext(stored, runtime)
 
-What one step of a loop works on: the stored context and the runtime context (inputs, declared locals and outputs; see
-ContextParts.jl). Steps take one and return one.
+What one step of a loop works on: the stored context, the runtime context (inputs, declared locals, captured and
+subcontext returns; see ContextParts.jl), and the plan node whose scope it is in (`Node`, its `PlanWiring` type, or
+`Nothing` outside every node; see `Scope` for the declared locals and captured returns visible by name, and
+`PlanWiringView` for why a node is named by its type). Steps take one and return one.
+
+A plan node is a scope. Stepping it enters its scope (`enter_scope`): its names become visible and its returns are
+unset, so a return lives for one step of the node that captures it. Leaving it (`leave_scope`) puts back the enclosing
+scope: the node's declared locals keep their values for the run, its returns are no longer visible. A `LoopContext`
+made from just a stored and a runtime context is in no scope, as at the start of a step of the loop.
 
 The loop never carries a `LoopContext` from one step to the next: it carries only the stored fields its steps write and
 the runtime context, and builds the `LoopContext` again at the start of every step (see Carried/Carry.jl). Building it
 costs nothing once compiled, and the fields no step writes are read where they already are instead of being copied.
 """
-struct LoopContext{S<:ProcessContext, R<:ProcessContext} <: ContextBundle
+struct LoopContext{S<:ProcessContext, R<:ProcessContext, Node} <: ContextBundle
     stored::S
     runtime::R
+    LoopContext{S, R, Node}(stored::S, runtime::R) where {S<:ProcessContext, R<:ProcessContext, Node} = new{S, R, Node}(stored, runtime)
 end
+LoopContext(stored::S, runtime::R) where {S<:ProcessContext, R<:ProcessContext} = LoopContext{S, R, Nothing}(stored, runtime)
+"""A `LoopContext` in the scope of the plan node `Node` (its `PlanWiring` type, or `Nothing` for none)."""
+@inline LoopContext(stored::S, runtime::R, ::Type{Node}) where {S<:ProcessContext, R<:ProcessContext, Node} = LoopContext{S, R, Node}(stored, runtime)
 
 """
     InitContext(stored, algo, lifetime)
@@ -39,8 +50,13 @@ end
 @inline getruntimecontext(lc::LoopContext) = getfield(lc, :runtime)
 @inline init_lifetime(ic::InitContext) = getfield(ic, :lifetime)
 
-"""The bundle with another stored context."""
-@inline withstored(lc::LoopContext, stored::ProcessContext) = LoopContext(stored, getruntimecontext(lc))
+"""The scope a bundle is in: a `LoopContext`'s (see `Scope`); init is in none."""
+bundle_scope(::Type{<:LoopContext{S, R, Node}}) where {S, R, Node} = node_scope(Node)
+bundle_scope(::Type{<:InitContext}) = NoScope
+
+"""The bundle with another stored context, or (a `LoopContext`) another stored and runtime context, in the same scope."""
+@inline withstored(lc::LoopContext{S, R, Node}, stored::ProcessContext) where {S, R, Node} = LoopContext(stored, getruntimecontext(lc), Node)
+@inline withcontexts(::LoopContext{S, R, Node}, stored::ProcessContext, runtime::ProcessContext) where {S, R, Node} = LoopContext(stored, runtime, Node)
 @inline withstored(ic::InitContext, stored::ProcessContext) = InitContext(stored, getfield(ic, :algo), getfield(ic, :lifetime))
 
 """The stored context type of a bundle type, and the runtime context type of a `LoopContext` type."""
@@ -74,5 +90,18 @@ The bundle after a merge: `stored` as the new stored context, and the runtime va
 (`(; part = (; name = value, ...), ...)`) merged into the runtime context. An init merge has no runtime values.
 """
 @inline _rebundle(lc::LoopContext, stored::ProcessContext, runtime_patch::NamedTuple) =
-    LoopContext(stored, (@inline merge_runtime_subcontexts(getruntimecontext(lc), runtime_patch)))
+    @inline withcontexts(lc, stored, (@inline merge_runtime_subcontexts(getruntimecontext(lc), runtime_patch)))
 @inline _rebundle(ic::InitContext, stored::ProcessContext, ::NamedTuple{()}) = withstored(ic, stored)
+
+"""
+    enter_scope(lc, wiring)
+
+`lc` in the scope of the plan node whose wiring view is `wiring`: the node's names visible, and its captured returns
+and the subcontext returns of the algorithms directly in it unset (see `LoopContext`). Typed slots (Outputs.jl) are
+made unset; a return without a slot is removed.
+"""
+@inline enter_scope(lc::LoopContext, wiring::PlanWiringView{Root, W}) where {Root, W<:PlanWiring} =
+    LoopContext(getcontext(lc), (@inline _unset_returns(getruntimecontext(lc), Val(node_resets(W)))), W)
+
+"""`inner` (a `LoopContext` after the steps of a scope) back in the scope of `outer`."""
+@inline leave_scope(inner::LoopContext, ::LoopContext{S, R, Node}) where {S, R, Node} = LoopContext(getcontext(inner), getruntimecontext(inner), Node)

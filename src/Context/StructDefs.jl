@@ -50,6 +50,6 @@ export inject
 Where a variable a view sees is stored. The type parameter is the kind of location:
     - :state       the view's namespace's own field (stored context)
     - :subcontext  a field of another subcontext (a route or share from it)
-    - :runtime     a runtime value (declared local, input, output)
+    - :runtime     a runtime value (declared local, input, captured or subcontext return)
     - :injected    a value given to the view directly
 """

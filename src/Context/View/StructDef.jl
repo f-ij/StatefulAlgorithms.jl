@@ -54,8 +54,8 @@ end
 
 """
 What one algorithm (`instance`, in namespace `SubName`) sees of a context bundle (`LoopContext` while stepping,
-`InitContext` while initializing): its state, the variables wired to it, and, from the bundle, declared locals, inputs
-and outputs. `injected` holds values given to it directly.
+`InitContext` while initializing): its state, the variables wired to it, and, from the bundle, inputs and the names
+of the scope it is in (declared locals, captured returns). `injected` holds values given to it directly.
 """
 struct SubContextView{B<:ContextBundle, SubName, T, NT, VarAliases, SharedContexts, SharedVars} <: AbstractContext
     bundle::B

@@ -21,6 +21,8 @@ Base.@constprop :aggressive @inline @generated function _step!(ca::CA, cursor::S
     sizehint!(exprs, algo_count + 4)
     push!(exprs, :(local algos = @inline getalgos(ca)))
     push!(exprs, :(local this_inc = @inline inc(cursor)))
+    push!(exprs, :(local outer = lc))
+    push!(exprs, :(lc = @inline enter_scope(lc, wiring)))
 
     for i in 1:algo_count
         schedule_value = schedule_values[i]
@@ -37,7 +39,7 @@ Base.@constprop :aggressive @inline @generated function _step!(ca::CA, cursor::S
     end
 
     push!(exprs, :(@inline inc!(cursor, ca)))
-    push!(exprs, :(return lc))
+    push!(exprs, :(return @inline leave_scope(lc, outer)))
     return Expr(:block, exprs...)
 end
 
@@ -99,7 +101,7 @@ end
         # The repeats carry only the fields the child writes, as the loops do (see src/Context/Carried/Carry.jl); `context`
         # stays the routine's starting context.
         carried = @inline create_carried(func, func_cursor, lc, child_step_wiring, namespace, process, lifetime)
-        stepped_lc = @inline _step!(func, func_cursor, LoopContext((@inline carried_context(context, carried)), runtimecontext), child_step_wiring, namespace, process, lifetime)
+        stepped_lc = @inline _step!(func, func_cursor, (@inline withcontexts(lc, (@inline carried_context(context, carried)), runtimecontext)), child_step_wiring, namespace, process, lifetime)
         stepped, runtimecontext = (@inline getcontext(stepped_lc)), (@inline getruntimecontext(stepped_lc))
         carried = @inline next_carried(carried, stepped)
         @inline tick!(process)
@@ -109,7 +111,7 @@ end
             if !(@inline _routine_local_breakcondition(subroutine_lifetime, process, stepped, resume_point))
                 @inline set_resume_point!(routine_cursor, idx, next_idx)
             end
-            return LoopContext((@inline carried_context(context, carried)), runtimecontext)
+            return (@inline withcontexts(lc, (@inline carried_context(context, carried)), runtimecontext))
         end
 
         for lidx in next_idx:this_repeat_count
@@ -119,14 +121,14 @@ end
                 if !(@inline _routine_local_breakcondition(subroutine_lifetime, process, current, lidx))
                     @inline set_resume_point!(routine_cursor, idx, lidx)
                 end
-                return LoopContext(current, runtimecontext)
+                return @inline withcontexts(lc, current, runtimecontext)
             end
-            stepped_lc = @inline _step!(func, func_cursor, LoopContext((@inline carried_context(context, carried)), runtimecontext), child_step_wiring, namespace, process, lifetime)
+            stepped_lc = @inline _step!(func, func_cursor, (@inline withcontexts(lc, (@inline carried_context(context, carried)), runtimecontext)), child_step_wiring, namespace, process, lifetime)
             stepped, runtimecontext = (@inline getcontext(stepped_lc)), (@inline getruntimecontext(stepped_lc))
             carried = @inline next_carried(carried, stepped)
             @inline tick!(process)
         end
-        return LoopContext((@inline carried_context(context, carried)), runtimecontext)
+        return (@inline withcontexts(lc, (@inline carried_context(context, carried)), runtimecontext))
     end
     return lc
 end
@@ -176,6 +178,8 @@ Base.@constprop :aggressive @inline @generated function _step!(r::R, cursor::S, 
     exprs = Any[]
     sizehint!(exprs, algo_count + 4)
     push!(exprs, :(local algos = @inline getalgos(r)))
+    push!(exprs, :(local outer = lc))
+    push!(exprs, :(lc = @inline enter_scope(lc, wiring)))
 
     for i in 1:algo_count
         repeat_value = repeat_values[i]
@@ -191,6 +195,6 @@ Base.@constprop :aggressive @inline @generated function _step!(r::R, cursor::S, 
         end)
     end
 
-    push!(exprs, :(return lc))
+    push!(exprs, :(return @inline leave_scope(lc, outer)))
     return Expr(:block, exprs...)
 end

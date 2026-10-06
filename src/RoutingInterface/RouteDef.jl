@@ -77,7 +77,6 @@ end
 """Require resolved wiring endpoints to be context-name symbols."""
 function _assert_resolved_endpoint(endpoint, role::String)
     endpoint isa Symbol && return nothing
-    endpoint isa AbstractScope && return nothing   # e.g. `LocalScope()`: a binding inside a view
     construction_error(role, " endpoint must be resolved to a Symbol, got ", endpoint, ".")
 end
 

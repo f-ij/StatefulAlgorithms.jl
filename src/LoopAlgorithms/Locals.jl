@@ -64,16 +64,11 @@ _with_local_options(options::Tuple, wiring::PlanWiring) =
     isempty(getfield(wiring, :locals)) ? options : (options..., Local{typeof(getfield(wiring, :locals))}(getfield(wiring, :locals)))
 
 """
-Name of a local's slot in the runtime `_declared_locals` subcontext. A local declared on the root
-plan keeps its name; one declared on a nested plan is suffixed with that plan's position.
+Name of the slot of a declared local (in `_declared_locals`) or a captured return (in `_captured_returns`). One of the
+root plan keeps its name; one of a nested plan is suffixed with that plan's position, `x@1.2` (see `Scope`).
 """
 # `path` is the plan's position, e.g. "1.2"; a `String` so the resolver's recursion keeps one type.
-local_storage_name(name::Symbol, path::String) = isempty(path) ? name : Symbol(name, "@", path)
-
-"""Locals visible at a plan node: the inherited ones, shadowed by the node's own (names from the type, not the value)."""
-_visible_locals(inherited::NamedTuple, ::NamedTuple{()}, path::String) = inherited
-_visible_locals(inherited::NamedTuple, ::NamedTuple{names}, path::String) where {names} =
-    merge(inherited, NamedTuple{names}(map(name -> local_storage_name(name, path), names)))
+scoped_storage_name(name::Symbol, path::String) = isempty(path) ? name : Symbol(name, "@", path)
 
 """
 Initial values of every local declared in a plan tree, keyed by storage name: the
@@ -84,7 +79,7 @@ memory for all of them is allocated in `_declared_locals` when a run starts.
     values = Any[]
     function collect!(::Type{T}, expr, path) where {T}
         for name in fieldnames(fieldtype(fieldtype(T, :wiring), :locals))
-            push!(names, local_storage_name(name, join(path, ".")))
+            push!(names, scoped_storage_name(name, join(path, ".")))
             push!(values, :(getfield(getfield(getfield($expr, :wiring), :locals), $(QuoteNode(name)))))
         end
         F = fieldtype(T, :funcs)
@@ -121,7 +116,7 @@ struct Maybe{T, F<:Unsigned, Empty}
     Maybe{T, F, Empty}(x) where {T, F, Empty} = new{T, F, Empty}(one(F), x)
 end
 maybe_type(::Type{T}, ::Type{Empty}) where {T, Empty} = Maybe{T, _maybe_flagtype(T), Empty}
-_maybe_flagtype(::Type{T}) where {T} = (a = Base.datatype_alignment(T); a >= 8 ? UInt64 : a == 4 ? UInt32 : a == 2 ? UInt16 : UInt8)
+_maybe_flagtype(::Type{T}) where {T} = isconcretetype(T) ? (a = Base.datatype_alignment(T); a >= 8 ? UInt64 : a == 4 ? UInt32 : a == 2 ? UInt16 : UInt8) : UInt8
 Base.convert(::Type{Maybe{T, F, Empty}}, ::Empty) where {T, F, Empty} = Maybe{T, F, Empty}()
 Base.convert(::Type{Maybe{T, F, Empty}}, x) where {T, F, Empty} = Maybe{T, F, Empty}(convert(T, x))
 Base.convert(::Type{M}, m::M) where {M<:Maybe} = m
@@ -136,6 +131,9 @@ _throw_undef() = throw(UndefRefError())
     !iszero(getfield(m, :isset)) ? subcontext_view_value(getfield(m, :value), view) : nothing
 @inline subcontext_view_value(m::Maybe{T, F, UndefInitializer}, view::V) where {T, F, V<:SubContextView} =
     !iszero(getfield(m, :isset)) ? subcontext_view_value(getfield(m, :value), view) : _throw_undef()
+"""A return as the final context shows it (`visible_context`): a slot as its value, or `nothing` while unset."""
+_final_value(x) = x
+_final_value(m::Maybe) = iszero(getfield(m, :isset)) ? nothing : getfield(m, :value)
 # A local declared without a value that no step ever writes keeps its `undef`.
 @inline subcontext_view_value(::UndefInitializer, view::V) where {V<:SubContextView} = _throw_undef()
 
@@ -257,7 +255,7 @@ function _find_local_type_culprits!(culprits, ::Type{R}, checking, plan::Abstrac
         end
         namespace = getfield(getfield(plan, :namespaces), i)
         # What the step itself returns (before it is merged into the context), with the locals as in `R`.
-        returned = Core.Compiler.return_type(_step_return, Tuple{typeof(child), LoopContext{typeof(context), R}, typeof(child_wiring), typeof(namespace)})
+        returned = Core.Compiler.return_type(_step_return, Tuple{typeof(child), LoopContext{typeof(context), R, wiring_parent(typeof(child_wiring))}, typeof(child_wiring), typeof(namespace)})
         append!(culprits, _local_type_problems(_step_label(child, namespace), R, returned, typeof(child_wiring), checking))
     end
     return culprits
@@ -287,7 +285,7 @@ function _local_type_problems(label, ::Type{R}, ::Type{Returned}, ::Type{W}, che
     checking || return String[]
     L = _local_data_type(R)
     problems = String[]
-    for (name, slot) in pairs(W.parameters[4])        # the locals this step can see: name => slot
+    for (name, slot) in pairs(scope_locals(node_scope(wiring_parent(W))))        # the locals this step can see: name => slot
         P = fieldtype(L, slot)
         P <: LocalProbe || continue
         first_type, empty = P.parameters[1], P.parameters[2]
