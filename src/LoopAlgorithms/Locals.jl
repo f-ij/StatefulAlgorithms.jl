@@ -161,7 +161,7 @@ end
 #=
 A local declared without a value or as `nothing` has no type of its own. As in Julia, its type
 is the type of every value written to it. That is found by inference before the first step
-(`_settle_locals`), so the context has its final type from the start: a local without a value
+(`_settle_runtime`, Outputs.jl), so the context has its final type from the start: a local without a value
 becomes `Maybe{T,F,UndefInitializer}`, a `nothing` local `Maybe{T,F,Nothing}`. Values written with
 different types are promoted to one type.
 
@@ -187,6 +187,18 @@ end
 
 _is_untyped_local(::Type{T}) where {T} = T === UndefInitializer || T === Nothing
 
+_local_data_type(::Type{RC}) where {RC<:ProcessContext} = fieldtype(fieldtype(fieldtype(RC, :subcontexts), :_declared_locals), :data)
+
+"""`RC` with each field type of its `_declared_locals` subcontext data replaced by `f(name, type)`."""
+function _replace_local_types(f, ::Type{RC}) where {RC<:ProcessContext}
+    D = fieldtype(RC, :subcontexts)
+    :_declared_locals in fieldnames(D) || return RC
+    L = _local_data_type(RC)
+    newL = NamedTuple{fieldnames(L), Tuple{(f(n, fieldtype(L, n)) for n in fieldnames(L))...}}
+    newD = NamedTuple{fieldnames(D), Tuple{(n === :_declared_locals ? SubContext{:_declared_locals, newL} : fieldtype(D, n) for n in fieldnames(D))...}}
+    return ProcessContext{newD, fieldtype(RC, :reg)}
+end
+
 """Runtime context type with every untyped local replaced by a probe that has seen no writes."""
 @generated function _probe_runtime_type(::Type{RC}) where {RC<:ProcessContext}
     return _replace_local_types(RC) do name, T
@@ -195,12 +207,10 @@ _is_untyped_local(::Type{T}) where {T} = T === UndefInitializer || T === Nothing
 end
 
 """
-The probes in context type `RC`, each widened by the types the step wrote to it. `RT` is what
-inference says one plan step returns: `Tuple{context, runtimecontext}`, or a union of those.
+The probes in context type `RC`, each widened by the types the step wrote to it, given the runtime context types one
+plan step can return (`returned`). Used by `_next_runtime_type` (Outputs.jl).
 """
-@generated function _next_probe_type(::Type{RC}, ::Type{RT}) where {RC<:ProcessContext, RT}
-    _inferred_contexts(RT) === nothing && return :(Nothing)   # not inferable: `_settle_locals` names the step
-    returned = _inferred_contexts(RT)
+function _probe_joined_type(::Type{RC}, returned) where {RC<:ProcessContext}
     return _replace_local_types(RC) do name, P
         P <: LocalProbe || return P
         T, Empty = P.parameters
@@ -221,48 +231,10 @@ function _inferred_contexts(RT)
     return returned
 end
 
-_local_data_type(::Type{RC}) where {RC<:ProcessContext} = fieldtype(fieldtype(fieldtype(RC, :subcontexts), :_declared_locals), :data)
-
-"""`RC` with each field type of its `_declared_locals` subcontext data replaced by `f(name, type)`."""
-function _replace_local_types(f, ::Type{RC}) where {RC<:ProcessContext}
-    D = fieldtype(RC, :subcontexts)
-    :_declared_locals in fieldnames(D) || return RC
-    L = _local_data_type(RC)
-    newL = NamedTuple{fieldnames(L), Tuple{(f(n, fieldtype(L, n)) for n in fieldnames(L))...}}
-    newD = NamedTuple{fieldnames(D), Tuple{(n === :_declared_locals ? SubContext{:_declared_locals, newL} : fieldtype(D, n) for n in fieldnames(D))...}}
-    return ProcessContext{newD, fieldtype(RC, :reg)}
-end
 
 @inline _probe_step(plan, cursor, context, runtimecontext, wiring, process, lifetime) =
     _step!(plan, cursor, context, runtimecontext, wiring, Namespace{nothing}(), process, lifetime)
 
-"""
-    _settle_locals(plan, cursor, context, runtimecontext, wiring, process, lifetime)
-
-Give every local declared without a value or as `nothing` its final type, before the first
-step. All of this is resolved while the run is compiled; nothing of it runs per step.
-
-1. In the runtime context's type, each such local becomes a probe that has seen no writes.
-2. Inference runs one plan step on that type. A write to a probe stores nothing; it records
-   the written type in the probe. Inference covers every branch, so a write that only
-   happens later or under a condition is included. Different types from different writers
-   are promoted to one type. This is the local's type.
-3. Check the design rule that a local keeps its type after the first value: run inference
-   once more, now with each local read as its type. A step that reads a local and writes it
-   back (`x = f(x)`) must write the same type; if any local changes, it is an error.
-4. Each local is created as an unset `Maybe` of its type.
-"""
-@inline function _settle_locals(plan, cursor, context, runtimecontext::RC, wiring, process, lifetime) where {RC<:ProcessContext}
-    _has_untyped_locals(RC) || return runtimecontext
-    step = (plan, cursor, context, wiring, process, lifetime)
-    no_writes_seen = _probe_runtime_type(RC)
-    typed = _widen_probes(no_writes_seen, step...)   # each local's type
-    typed === Nothing && _local_type_error(no_writes_seen, false, step...)
-    checked = _widen_probes(typed, step...)          # the same, with each local read as that type
-    checked === typed || _local_type_error(typed, true, step...)
-    settled = _settled_locals(get_declared_locals(runtimecontext), typed)
-    return @inline with_subcontext(runtimecontext, Val(:_declared_locals), SubContext{:_declared_locals}(settled))
-end
 
 """
 Throw the error for a failed local typing round, naming the steps (algorithms and calls) that
@@ -341,9 +313,6 @@ function _local_type_problems(label, ::Type{R}, ::Type{Returned}, ::Type{W}, che
     return unique(problems)
 end
 
-"""The probes in `R`, widened by every type one plan step (run with these probes) can write."""
-@inline _widen_probes(::Type{R}, plan::PL, cursor::CU, context::C, wiring::W, process::P, lifetime::LT) where {R, PL, CU, C, W, P, LT} =
-    _next_probe_type(R, Core.Compiler.return_type(_probe_step, Tuple{PL, CU, C, R, W, P, LT}))
 
 @generated function _has_untyped_locals(::Type{RC}) where {RC<:ProcessContext}
     :_declared_locals in fieldnames(fieldtype(RC, :subcontexts)) || return false
