@@ -402,7 +402,7 @@ Accepted top-level statements inside the block:
 
 `@finally` is root-only and handled by the surrounding block collector.
 """
-function _dsl_build_statement(stmt, alias_map, context_map, known_outputs::Set{Symbol}, state_outputs::Set{Symbol}, expected_schedule::Symbol, owner_name::Symbol; include_condition = nothing, context_alias::Symbol = Symbol())
+function _dsl_build_statement(stmt, alias_map, context_map, known_outputs::Set{Symbol}, state_outputs::Set{Symbol}, expected_schedule::Symbol, owner_name::Symbol; include_condition = nothing, context_alias::Symbol = Symbol(), outer_locals::Set{Symbol} = Set{Symbol}())
     if stmt isa Expr && stmt.head == :macrocall && stmt.args[1] == Symbol("@state")
         return nothing
     elseif stmt isa Expr && stmt.head == :macrocall && stmt.args[1] == Symbol("@input")
@@ -417,6 +417,8 @@ function _dsl_build_statement(stmt, alias_map, context_map, known_outputs::Set{S
         return nothing
     elseif stmt isa Expr && stmt.head == :macrocall && stmt.args[1] == Symbol("@finally")
         error("@finally is root-only and must appear as a top-level DSL statement.")
+    elseif stmt isa Expr && stmt.head == :local
+        error("`$(stmt)`: declare locals at the top level of a block, not inside `@include_if` or `@context`.")
     end
 
     global_route = _dsl_build_global_route_statement(stmt, alias_map, context_map; include_condition)
@@ -465,7 +467,7 @@ function _dsl_build_statement(stmt, alias_map, context_map, known_outputs::Set{S
     end
 
     context_write = _dsl_parse_context_write_assignment(alias_map, context_map, outputs, rhs, known_outputs, state_outputs)
-    parsed = isnothing(context_write) ? _dsl_parse_invocation(alias_map, context_map, rhs, known_outputs) : context_write
+    parsed = isnothing(context_write) ? _dsl_parse_invocation(alias_map, context_map, rhs, known_outputs; outer_locals) : context_write
     outputs_expr = Expr(:tuple, [QuoteNode(sym) for sym in outputs]...)
     schedule_expr = _dsl_schedule_expr(parsed.schedule_kind, parsed.schedule_value, expected_schedule, owner_name)
     entity_expr = _dsl_contextual_entity_expr(context_alias)
@@ -684,11 +686,15 @@ function _dsl_collect_block(
     allow_final::Bool = false,
     initial_alias_map::Dict{Symbol, Any} = Dict{Symbol, Any}(),
     initial_context_map::Dict{Symbol, Any} = Dict{Symbol, Any}(),
+    outer_locals::Set{Symbol} = Set{Symbol}(),
 )
     alias_map = copy(initial_alias_map)
     context_map = copy(initial_context_map)
-    known_outputs = Set{Symbol}()
+    # The locals declared in enclosing blocks are in this block's scope too: read by name from the declared locals.
+    declared = copy(outer_locals)
+    known_outputs = copy(outer_locals)
     step_exprs = Any[]
+    isempty(outer_locals) || push!(step_exprs, :(StatefulAlgorithms._composite_dsl_inherit_locals!(_dsl_producers, $(Tuple(outer_locals)))))
     state_fields = Any[]
     input_fields = Any[]
     state_outputs = Set{Symbol}()
@@ -777,8 +783,17 @@ function _dsl_collect_block(
             continue
         end
 
+        declarations = _dsl_parse_local_declaration(stmt, union(known_outputs, state_outputs, keys(alias_map)))
+        if !isnothing(declarations)
+            isnothing(current_line) || push!(step_exprs, current_line)
+            push!(step_exprs, _dsl_local_declaration_expr(declarations))
+            union!(known_outputs, first.(declarations))
+            union!(declared, first.(declarations))
+            continue
+        end
+
         _dsl_reject_input_assignment(stmt, input_fields, current_line)
-        step_expr = _dsl_build_statement(stmt, alias_map, context_map, known_outputs, state_outputs, expected_schedule, owner_name)
+        step_expr = _dsl_build_statement(stmt, alias_map, context_map, known_outputs, state_outputs, expected_schedule, owner_name; outer_locals = declared)
         if !isnothing(step_expr)
             step_expr = Base.remove_linenums!(step_expr)
             isnothing(current_line) || push!(step_exprs, current_line)

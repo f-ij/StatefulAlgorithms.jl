@@ -504,6 +504,24 @@ algo = @CompositeAlgorithm begin
 end
 ```
 
+A value a statement assigns (`sampled` above) lives for one step: statements later in the same step read it.
+Reading it in a step where it was not assigned is an error when the block is built. To keep a value between steps,
+declare it as a local at the top of the block, as in Julia:
+
+```julia
+algo = @CompositeAlgorithm begin
+    @state value = 1
+    local sampled                 # no value yet: its type is the type of what is assigned to it
+    sampled = @every 10 Sample(value)
+    Report(sampled)               # every step: the last sample
+end
+```
+
+The forms are `local x`, `local x::T`, `local x = v` (`v` is evaluated where the block is built), and an assignment of
+a literal value, `x = 0.0`, `x = nothing` or `x::Float32 = 1`. A local lives for the run and is kept on a pause.
+Reading a local declared without a value before anything is assigned to it is an error; one declared as `nothing`
+reads `nothing` until then.
+
 Inside `@Routine`, use `@repeat`.
 
 ```julia
@@ -539,10 +557,11 @@ algo = @CompositeAlgorithm begin
 end
 ```
 
-Repeated sub-blocks are nested plans. Declare block-owned state inside the block,
-or refer to surrounding algorithms through inherited `@alias`/`@context` owned
-field paths; bare state/output names from the surrounding block are not captured
-as block-local routes. Keep transient dataflow consumers inside the block. To
+Repeated sub-blocks are nested plans. They see the locals declared in the blocks
+around them (`local x`, `x = 0.0`) by name, and assigning one updates it. Declare
+block-owned state inside the block, or refer to surrounding algorithms through
+inherited `@alias`/`@context` owned field paths; other bare state/output names
+from the surrounding block are not captured as block-local routes. Keep transient dataflow consumers inside the block. To
 route persistent state across a named plan boundary, define that plan separately
 and insert it with `@context`.
 
