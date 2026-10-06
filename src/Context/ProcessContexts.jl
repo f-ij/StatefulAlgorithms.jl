@@ -222,8 +222,26 @@ end
 Merge values into the declared outputs of a runtime context.
 """
 @inline function _merge_into_declared_outputs(pc::ProcessContext, args::NamedTuple)
-    runtime = @inline merge(get_declared_outputs(pc), args)
+    runtime = @inline _merge_slots(get_declared_outputs(pc), args)
     return @inline with_subcontext(pc, Val(:_declared_outputs), SubContext{:_declared_outputs}(runtime))
+end
+
+"""
+`merge(old, args)`, except that a field of `old` keeps its type when the new value fits it. The outputs get slots typed
+before the run (see `_settle_runtime`), e.g. `Union{Nothing, Float64}`; writing a `Float64` keeps that type, so the
+runtime context has the same type in every step. A value that does not fit (outputs that could not be typed before
+the run) replaces the field as `merge` does.
+"""
+@inline @generated function _merge_slots(old::NT, args::A) where {NT<:NamedTuple, A<:NamedTuple}
+    names = Symbol[fieldnames(NT)...]
+    append!(names, (n for n in fieldnames(A) if !(n in fieldnames(NT))))
+    types = map(names) do name
+        name in fieldnames(A) || return fieldtype(NT, name)
+        name in fieldnames(NT) && fieldtype(A, name) <: fieldtype(NT, name) && return fieldtype(NT, name)
+        return fieldtype(A, name)
+    end
+    values = [:(getfield($(n in fieldnames(A) ? :args : :old), $(QuoteNode(n)))) for n in names]
+    return :(NamedTuple{$(Tuple(names)), Tuple{$(types...)}}(($(values...),)))
 end
 
 @inline merge_runtime_return(context::C, ::Nothing) where {C<:ProcessContext} = context
@@ -243,7 +261,7 @@ end
 @inline function merge_owner_runtime_return(runtimecontext::C, ::Val{owner}, args::A) where {C<:ProcessContext,owner,A<:NamedTuple}
     outputs = @inline get_subcontext_outputs(runtimecontext)
     old_data = haskey(outputs, owner) ? getproperty(outputs, owner) : (;)
-    new_outputs = @inline merge(outputs, NamedTuple{(owner,)}(((@inline merge(old_data, args)),)))
+    new_outputs = @inline merge(outputs, NamedTuple{(owner,)}(((@inline _merge_slots(old_data, args)),)))
     return @inline with_subcontext(runtimecontext, Val(:_subcontext_outputs), SubContext{:_subcontext_outputs}(new_outputs))
 end
 

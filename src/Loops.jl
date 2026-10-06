@@ -128,7 +128,7 @@ Run a single function in a loop indefinitely.
     step_cursor = @inline _loop_cursor(process, step_plan, resume)
     context = @inline _loop_state_context(stored_context, resume)
     runtimecontext = @inline _loop_runtime_context(func, inputs, process, lifetime, stored_context, resume)
-    isresuming || (runtimecontext = @inline _settle_locals(step_plan, step_cursor, context, runtimecontext, step_wiring, process, lifetime))
+    runtimecontext = @inline _settle_runtime(step_plan, step_cursor, context, runtimecontext, step_wiring, process, lifetime)
 
     if isresuming
         @atomic process.paused = false
@@ -179,7 +179,7 @@ Base.@constprop :aggressive @inline function loop(process::P, algo::F, stored_co
     step_cursor = @inline _loop_cursor(process, step_plan, resume)
     context = @inline _loop_state_context(stored_context, resume)
     runtimecontext = @inline _loop_runtime_context(algo, inputs, process, lifetime, stored_context, resume)
-    isresuming || (runtimecontext = @inline _settle_locals(step_plan, step_cursor, context, runtimecontext, step_wiring, process, lifetime))
+    runtimecontext = @inline _settle_runtime(step_plan, step_cursor, context, runtimecontext, step_wiring, process, lifetime)
 
     if isresuming
         @atomic process.paused = false
