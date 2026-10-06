@@ -204,23 +204,9 @@ function Base.summary(io::IO, la::LA) where {LA<:LoopAlgorithm}
 end
 
 """
-Print a compact label for concrete `LoopAlgorithm` types.
-
-Type display still exposes that a value is a runtime wrapper, but it elides the
-lifecycle type parameters that are not useful in user-facing output.
-"""
-function Base.show(io::IO, laT::Type{LA}) where {Plan, LA<:LoopAlgorithm{Plan}}
-    print(io, "LoopAlgorithm{")
-    show(io, Plan)
-    print(io, "}")
-    return nothing
-end
-
-"""
-Print a fallback label for abstract or partially specified `LoopAlgorithm` types.
-
-This method handles `LoopAlgorithm` itself and unionall forms whose execution
-plan parameter is not concrete.
+Print a compact label for a `LoopAlgorithm` type: `LoopAlgorithm{plan type}`, eliding the lifecycle type parameters
+that are not useful in user-facing output, or `LoopAlgorithm` when the plan type is not known (`LoopAlgorithm` itself,
+or a type in a method signature whose plan is a type variable).
 """
 function Base.show(io::IO, laT::Type{<:LoopAlgorithm})
     dt = Base.unwrap_unionall(laT)
