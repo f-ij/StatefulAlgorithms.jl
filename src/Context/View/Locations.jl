@@ -8,10 +8,10 @@
  Local variables => VarLocations
 """
 
+"""The view's namespace's state (its subcontext in the stored context), by name."""
 function get_local_locations(sct::Type{SCT}) where {SCT<:SubContextView{CType, SubKey}} where {CType, SubKey}
-    # A call's view has namespace `_declared_outputs`: no variables of its own. `_declared_outputs` is in the runtime context, not in
-    # `CType`, and it is shared by every call, so its values are read last (the fallback in `getproperty(view, Val(name))`),
-    # after routes, shares and declared locals. As own variables they would take precedence over those.
+    # A call has no state: its namespace is `_declared_outputs`, the runtime part that holds what calls return
+    # (see `get_output_locations`).
     SubKey === :_declared_outputs && return (;)
     _subcontext_type = subcontext_type(SCT)
     _data_type = getdatatype(_subcontext_type)
@@ -88,6 +88,23 @@ function get_declared_locations(::Type{SCT}) where {SCT<:SubContextView}
     end
 end
 
+"""
+The outputs the view sees by name, from the slots typed before the run (Outputs.jl): for a call (namespace
+`_declared_outputs`) every declared output, for an algorithm its own subcontext outputs. They come after every other
+kind, so a wire or a declared local of the same name wins.
+"""
+function get_output_locations(::Type{SCT}) where {SCT<:SubContextView{CType, SubKey, RuntimeCType}} where {CType, SubKey, RuntimeCType}
+    RuntimeCType <: ProcessContext || return (;)
+    D = fieldtype(RuntimeCType, :subcontexts)
+    names = if SubKey === :_declared_outputs
+        :_declared_outputs in fieldnames(D) ? fieldnames(getdatatype(fieldtype(D, :_declared_outputs))) : ()
+    else
+        outputs = :_subcontext_outputs in fieldnames(D) ? getdatatype(fieldtype(D, :_subcontext_outputs)) : NamedTuple{(), Tuple{}}
+        SubKey in fieldnames(outputs) ? fieldnames(fieldtype(outputs, SubKey)) : ()
+    end
+    return NamedTuple{names}(map(name -> VarLocation{:runtime}(SubKey, name), names))
+end
+
 function get_injected_locations(sct::Type{SCT}) where {SCT<:SubContextView{CType, SubKey}} where {CType, SubKey}
     injected_vars = injectedfieldnames(SCT)
     injst = ntuple(i ->VarLocation{:injected}(SubKey, injected_vars[i]), length(injected_vars))
@@ -104,9 +121,10 @@ function _compute_varlocations(::Type{C}) where {C<:SubContextView{CType, SubKey
     routedvars = get_routed_locations(C)
     injectedvars = get_injected_locations(C)
     declaredvars = get_declared_locations(C)
+    outputvars = get_output_locations(C)
     # On a name clash: injected over routes, routes over the namespace's own state, own state over shares, shares over
-    # declared loop locals
-    return (;declaredvars..., sharedvars..., locals..., routedvars..., injectedvars...)
+    # declared loop locals, declared loop locals over outputs
+    return (;outputvars..., declaredvars..., sharedvars..., locals..., routedvars..., injectedvars...)
 end
 
 """
@@ -119,9 +137,10 @@ function _compute_all_locations(::Type{SCT}) where {SCT<:SubContextView}
     routedvars = get_routed_locations(SCT)
     injectedvars = get_injected_locations(SCT)
     declaredvars = get_declared_locations(SCT)
+    outputvars = get_output_locations(SCT)
     # On a name clash: injected over routes, routes over the namespace's own state, own state over shares, shares over
-    # declared loop locals
-    return (;declaredvars..., sharedvars..., locals..., routedvars..., injectedvars...)
+    # declared loop locals, declared loop locals over outputs
+    return (;outputvars..., declaredvars..., sharedvars..., locals..., routedvars..., injectedvars...)
 end
 
 @inline @generated function _generated_varlocations(::Type{C}) where {C<:SubContextView}
@@ -157,6 +176,9 @@ function _compute_location(::Type{SCT}, name::Symbol) where {SCT<:SubContextView
 
     declared = get_declared_locations(SCT)
     hasproperty(declared, name) && return getproperty(declared, name), name
+
+    outputs = get_output_locations(SCT)
+    hasproperty(outputs, name) && return getproperty(outputs, name), name
 
     return nothing, subcontext_name
 end
@@ -358,6 +380,7 @@ end
             locations = get_all_locations(sct)
             available = keys(locations)
             return quote
+                # Outputs without slots (inference could not type them before the run, see Outputs.jl): look them up now.
                 if @inline _runtime_has_var(getruntimecontext(sct), Val($(QuoteNode(SubKey))), Val($(QuoteNode(key))))
                     return @inline _runtime_get_var(getruntimecontext(sct), Val($(QuoteNode(SubKey))), Val($(QuoteNode(key))))
                 end
