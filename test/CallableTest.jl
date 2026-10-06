@@ -1,5 +1,6 @@
 using Test
 using StatefulAlgorithms
+using StatefulAlgorithms: Callable, Literal, Splat   # internal: tests build calls directly
 
 struct ExSensor <: ProcessAlgorithm end
 StatefulAlgorithms.init(::ExSensor, context) = (; state = 0.0)

@@ -1,5 +1,6 @@
 using Test
 using StatefulAlgorithms
+using StatefulAlgorithms: Callable   # internal: tests build calls directly
 
 struct DSLSourceAlgo <: StatefulAlgorithms.ProcessAlgorithm end
 struct DSLCombineAlgo <: StatefulAlgorithms.ProcessAlgorithm end
