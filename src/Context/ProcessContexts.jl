@@ -88,6 +88,15 @@ end
 
 @inline get_inputs(pc::ProcessContext, name::Symbol) = getproperty(get_inputs(pc), name)
 
+"""
+The subcontext outputs in a runtime context: per namespace, what its algorithm returned this step that is not its
+state, as `(; Sensor_1 = (; extra = ...), ...)`.
+"""
+@inline function get_subcontext_outputs(pc::ProcessContext)
+    subcontexts = @inline get_subcontexts(pc)
+    return haskey(subcontexts, :_subcontext_outputs) ? getdata(getproperty(subcontexts, :_subcontext_outputs)) : (;)
+end
+
 """Return the declared loop-local variables (`Local`) held in a runtime or paused context."""
 @inline function get_declared_locals(pc::ProcessContext)
     subcontexts = @inline get_subcontexts(pc)
@@ -113,8 +122,8 @@ end
 """
     final_visible_context(context, runtimecontext)
 
-Build the one-argument finalstep projection context. Runtime owner subcontexts
-and declared outputs are materialized into a fresh context for final result
+Build the one-argument finalstep projection context. Subcontext outputs (merged
+into their namespaces) and the other runtime parts are materialized into a fresh context for final result
 projection only; the returned process state remains `context`.
 """
 @inline @generated function final_visible_context(context::C, runtimecontext::RC) where {C<:ProcessContext,RC<:ProcessContext}
@@ -127,14 +136,26 @@ projection only; the returned process state remains `context`.
         :(runtime_subcontexts = @inline get_subcontexts(runtimecontext)),
     ]
 
+    # Each runtime part as (name, data): a namespace's outputs are shown in that namespace.
+    parts = Any[]
     for name in runtime_names
+        if name === :_subcontext_outputs
+            outputs_type = getdatatype(fieldtype(RC.parameters[1], name))
+            for owner in fieldnames(outputs_type)
+                push!(parts, (owner, :(getproperty(getdata(getproperty(runtime_subcontexts, :_subcontext_outputs)), $(QuoteNode(owner))))))
+            end
+        else
+            push!(parts, (name, :(getdata(getproperty(runtime_subcontexts, $(QuoteNode(name)))))))
+        end
+    end
+
+    for (name, data_expr) in parts
         if name in state_names
             push!(
                 exprs,
                 quote
                     old_subcontext = @inline getproperty(subcontexts, $(QuoteNode(name)))
-                    runtime_subcontext = @inline getproperty(runtime_subcontexts, $(QuoteNode(name)))
-                    final_data = @inline merge(getdata(old_subcontext), getdata(runtime_subcontext))
+                    final_data = @inline merge(getdata(old_subcontext), $data_expr)
                     final_subcontext = @inline withdata(old_subcontext, final_data)
                     subcontexts = @inline replace_namedtuple_field(subcontexts, Val($(QuoteNode(name))), final_subcontext)
                 end,
@@ -143,8 +164,7 @@ projection only; the returned process state remains `context`.
             push!(
                 exprs,
                 quote
-                    runtime_subcontext = @inline getproperty(runtime_subcontexts, $(QuoteNode(name)))
-                    subcontexts = @inline merge(subcontexts, NamedTuple{$((name,))}((runtime_subcontext,)))
+                    subcontexts = @inline merge(subcontexts, NamedTuple{$((name,))}((SubContext{$(QuoteNode(name))}($data_expr),)))
                 end,
             )
         end
@@ -219,12 +239,17 @@ end
     return runtimecontext
 end
 
+"""A namespace's outputs (`owner` is its key): stored under it in `_subcontext_outputs`."""
 @inline function merge_owner_runtime_return(runtimecontext::C, ::Val{owner}, args::A) where {C<:ProcessContext,owner,A<:NamedTuple}
-    subcontexts = @inline get_subcontexts(runtimecontext)
-    old_data = haskey(subcontexts, owner) ? getdata(getproperty(subcontexts, owner)) : (;)
-    new_data = @inline merge(old_data, args)
-    return @inline with_subcontext(runtimecontext, Val(owner), SubContext{owner}(new_data))
+    outputs = @inline get_subcontext_outputs(runtimecontext)
+    old_data = haskey(outputs, owner) ? getproperty(outputs, owner) : (;)
+    new_outputs = @inline merge(outputs, NamedTuple{(owner,)}(((@inline merge(old_data, args)),)))
+    return @inline with_subcontext(runtimecontext, Val(:_subcontext_outputs), SubContext{:_subcontext_outputs}(new_outputs))
 end
+
+"""Declared outputs (what statements and calls return)."""
+@inline merge_owner_runtime_return(runtimecontext::C, ::Val{:_declared_outputs}, args::A) where {C<:ProcessContext,A<:NamedTuple} =
+    @inline _merge_into_declared_outputs(runtimecontext, args)
 
 """Declared locals keep their declared field types when written."""
 @inline function merge_owner_runtime_return(runtimecontext::C, ::Val{:_declared_locals}, args::A) where {C<:ProcessContext,A<:NamedTuple}
