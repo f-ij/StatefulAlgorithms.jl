@@ -229,7 +229,9 @@ _kwarg_expr(item::Tuple) = Expr(:kw, first(item), _arg_expr(last(item)))
         end
     end
     checks = [:($(_output_var(plan_names[i]))::$(fieldtype(types, i))) for i in 1:length(plan_names) if fieldtype(types, i) !== Any]
-    result = Expr(:tuple, Expr(:parameters, (Expr(:kw, n, _output_var(n)) for n in plan_names)...))
+    # Built by a function call, not a literal: for a value of type `Union{Nothing, T}` a literal infers as the abstract
+    # `NamedTuple{names, <:Tuple}`, which the generated merge cannot handle; a call is split into one concrete type per case.
+    result = :(@inline _call_result(Val($(Tuple(plan_names))), $(map(_output_var, plan_names)...)))
     return quote
         $(reads...)
         $assign
@@ -238,10 +240,20 @@ _kwarg_expr(item::Tuple) = Expr(:kw, first(item), _arg_expr(last(item)))
     end
 end
 
+@inline _call_result(::Val{names}, values::Vararg{Any, N}) where {names, N} = NamedTuple{names}(values)
+
 """The plan names a `Callable` (type) reads, or every name read by the `Callable`s in `funcs`."""
 callable_input_names(::Type{<:Callable{F, Args, Kwargs}}) where {F, Args, Kwargs} =
     Tuple(unique(Symbol[n for item in (Args..., Kwargs...) for n in _input_names(item)]))
 callable_input_names(::Type) = ()
+
+"""The plan names a `Callable` (type) writes its returns to."""
+function callable_return_names(::Type{<:Callable{F, Args, Kwargs, Returns}}) where {F, Args, Kwargs, Returns}
+    kind, names, _ = _returns_parts(Returns)
+    kind === :none && return ()
+    return Tuple(kind === :properties ? map(last, names) : map(n -> n isa Splat ? splatname(n) : n, names))
+end
+callable_return_names(::Type) = ()
 callable_reads(funcs::Tuple) = Tuple(unique(Symbol[n for f in funcs for n in callable_input_names(typeof(f))]))
 
 @inline init(::Callable, context) = (;)
