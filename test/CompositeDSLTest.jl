@@ -1356,6 +1356,18 @@ end
         @test fetch(p)[:_state].seen == [3.0, 6.0]
         close(p)
 
+        # `x = y` with `y` a value of the block is an error: a bare name is not a step.
+        err = try
+            @eval @CompositeAlgorithm begin
+                total = 0.0
+                other = total
+            end
+            nothing
+        catch e
+            e
+        end
+        @test err isa LoadError && occursin("assigns the block's value `total` to `other`", sprint(showerror, err.error))
+
         # Declaring a name the block already has is an error.
         err = try
             @eval @CompositeAlgorithm begin
