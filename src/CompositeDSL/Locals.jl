@@ -34,6 +34,20 @@ function _dsl_parse_local_declaration(stmt, taken::Set{Symbol})
     return [_dsl_local_target(stmt, taken)]
 end
 
+"""
+An error for `x = y` where `y` is a value of the block (a state field, an input, a local or an earlier statement's
+result): a block's statements are steps, and a bare name is not one. Without this, `y` would be read as an algorithm
+entry. An `@alias` name on the right (`x = alias`) is an algorithm entry and stays allowed.
+"""
+function _dsl_reject_name_assignment(stmt, known::Set{Symbol}, alias_map, line)
+    stmt isa Expr && stmt.head == :(=) && stmt.args[2] isa Symbol || return nothing
+    name = stmt.args[2]
+    name in known && !haskey(alias_map, name) || return nothing
+    at = isnothing(line) ? "" : " ($(line.file):$(line.line))"
+    error("`$(stmt)` assigns the block's value `$name` to `$(stmt.args[1])`$at. A statement in a block is a step: a call, ",
+          "an algorithm or a declaration. Read `$name` where it is needed, or copy it with a call (`$(stmt.args[1]) = copy($name)`).")
+end
+
 """One declared local of a `local` statement: `x`, `x::T`, `x = v` or `x::T = v`."""
 function _dsl_local_target(target, taken::Set{Symbol})
     value = nothing

@@ -793,6 +793,7 @@ function _dsl_collect_block(
         end
 
         _dsl_reject_input_assignment(stmt, input_fields, current_line)
+        _dsl_reject_name_assignment(stmt, known_outputs, alias_map, current_line)
         step_expr = _dsl_build_statement(stmt, alias_map, context_map, known_outputs, state_outputs, expected_schedule, owner_name; outer_locals = declared)
         if !isnothing(step_expr)
             step_expr = Base.remove_linenums!(step_expr)
