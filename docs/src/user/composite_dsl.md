@@ -258,14 +258,15 @@ The assignment captures `somevar` when the loop algorithm is constructed. At
 step time, the value is converted to the current context field type when the
 field already exists.
 
-If the right-hand side is a context value, route it explicitly through normal
-DSL syntax:
+If the right-hand side is a value of the block (another state field, an input, a
+local or an earlier result), copy it with a call: a bare name on the right is not
+a step, and `target = source` is an error when the block is built.
 
 ```julia
 algo = @Routine begin
     @state source = 2.0
     @state target = 0.0
-    target = source
+    target = copy(source)
 end
 ```
 
