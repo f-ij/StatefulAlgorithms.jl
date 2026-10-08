@@ -55,7 +55,9 @@ function _dsl_build_loopalgorithm(::Val{Name}, algos, specification, states, opt
         map(x -> x isa Lifetime ? x : Repeat(x), schedule_tuple)
     end
 
+    lifted_states = ()
     if iscomposite(laType)
+        lifted_states = flattened_states(processalgos_tuple)
         processalgos_tuple, normalized_schedule = flatten_comp_funcs(processalgos_tuple, normalized_schedule)
     end
 
@@ -66,7 +68,7 @@ function _dsl_build_loopalgorithm(::Val{Name}, algos, specification, states, opt
         end
     end
 
-    state_tuple = _dsl_normalize_state_entries(states)
+    state_tuple = (lifted_states..., _dsl_normalize_state_entries(states)...)
     option_tuple = (collected_options..., Tuple(options)...)
     return LoopAlgorithm(laType, processalgos_tuple, state_tuple, option_tuple, normalized_schedule)
 end

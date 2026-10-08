@@ -136,13 +136,15 @@ function parse_la_input(laType::Type{LA}, args...) where {LA<:AbstractPlan}
     end
 
     ### FLATTEN ###
+    lifted_states = ()
     if iscomposite(laType)
+        lifted_states = flattened_states(processalgos)
 
         processalgos, intervals_or_repeats = flatten_comp_funcs(processalgos, tuple(intervals_or_repeats...))
     end
 
     ######### PROCESS STATES #########
-    pstates = tuple()
+    pstates = lifted_states
     while true
         el, args = parse_by_func(isa_processstate_input, args...; error = false)
         if isnothing(el)

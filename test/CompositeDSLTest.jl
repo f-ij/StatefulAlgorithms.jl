@@ -551,6 +551,41 @@ end
         @test StatefulAlgorithms.getplan(resolved_outer) isa CompositeAlgorithm
     end
 
+    @testset "Nested blocks keep their state and wiring when flattened into the parent" begin
+        @info "Composite DSL: Nested blocks keep their state and wiring when flattened into the parent"
+        flatten_inc_dsl_test(x) = x + 1
+        make_a() = @CompositeAlgorithm begin
+            @state a = 1
+            a = flatten_inc_dsl_test(a)
+        end
+        make_b() = @CompositeAlgorithm begin
+            @state b = 10
+            b = flatten_inc_dsl_test(b)
+        end
+        # The value of state field `name`, in whichever namespace holds it
+        function state_value(ctx, name)
+            subcontexts = getfield(ctx, :subcontexts)
+            for k in keys(subcontexts)
+                data = getfield(getfield(subcontexts, k), :data)
+                hasproperty(data, name) && return getproperty(data, name)
+            end
+            error("no state field $name")
+        end
+        steps(plan, n) = StatefulAlgorithms.context(run(plan; repeats = n))
+
+        by_hand = steps(CompositeAlgorithm(make_a(), make_b(), (1, 1)), 3)
+        @test state_value(by_hand, :a) == 4
+        @test state_value(by_hand, :b) == 13
+
+        a, b = make_a(), make_b()
+        with_dsl = steps(@CompositeAlgorithm(begin
+            a()
+            b()
+        end), 3)
+        @test state_value(with_dsl, :a) == 4
+        @test state_value(with_dsl, :b) == 13
+    end
+
     @testset "FuncWrapper positional args accept @context property routes" begin
         @info "Composite DSL: FuncWrapper positional args accept @context property routes"
         nested_identity(x) = x
