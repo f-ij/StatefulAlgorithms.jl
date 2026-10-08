@@ -25,12 +25,14 @@ makedocs(
             "Copying Processes" => "user/copying_and_management.md",
             "Threaded Process Managers" => "user/threaded_process_managers.md",
             "Value Semantics and Unique" => "user/value_semantics.md",
+            "Migrating: State Sharing and Plans" => "user/migrating_state.md",
         ],
         "Internals" => [
             "Registry" => "internals/registry.md",
             "Contexts" => "internals/contexts.md",
             "Routes, Shares, and Replacements" => "internals/routes_shares.md",
             "Process Pipeline" => "internals/process_pipeline.md",
+            "DSL Semantics Map" => "internals/dsl_semantics.md",
         ],
     ],
 )

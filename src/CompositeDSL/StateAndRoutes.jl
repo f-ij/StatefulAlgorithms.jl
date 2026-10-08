@@ -385,53 +385,120 @@ Base.@nospecializeinfer function _composite_dsl_prefix_state_diagnostic_paths(@n
     end
 end
 
-"""Mark a field in nested inline states as explicitly shared.
-
-`@bind` and `@merge` do not create a new route by themselves; they mark a future
-`GeneralState` merge as intentional so the registry can coalesce the slots
-without emitting the accidental-overlap warning. The field name is still the
-actual state variable name, not the display path.
-"""
-Base.@nospecializeinfer function _composite_dsl_mark_shared_state_field(@nospecialize(entity), field::Symbol)
-    return _composite_dsl_map_states(entity) do state
-        state isa GeneralState || return state
-        field in general_state_fields(state) || return state
-        return mark_general_state_fields_explicitly_shared(state, (field,))
-    end
+"""The owner of the current block's state field `name` (for `@bind x => ...`), or an error if the block has none."""
+function _composite_dsl_state_owner(state_owners::Dict{Symbol, Any}, name::Symbol)
+    haskey(state_owners, name) || error("`@bind` uses `$name`, which is not a `@state` field of this block.")
+    return state_owners[name]
 end
 
-"""Mark a shared field on the current block's anonymous inline state.
+"""Return the entry a `@context` alias was given (the nested block), from the constructor list of the current block."""
+function _composite_dsl_context_entity(algos::Vector{Any}, context_indices::Dict{Symbol, Int}, context_alias::Symbol)
+    haskey(context_indices, context_alias) || error("`@merge` references unknown context alias `$context_alias`. Declare it first with `@context $context_alias = ...`.")
+    entry = algos[context_indices[context_alias]]
+    return entry isa Pair ? entry.second : entry
+end
 
-This is the current-block half of `@bind buffers => f.buffers`. The local state
-has already been pushed into `_dsl_states` by `_dsl_state_setup_expr`, so the
-metadata update mutates that constructor list before the final loop-algorithm
-constructor call is made.
 """
-function _composite_dsl_mark_local_shared_state_field!(states::S, field::Symbol) where {S<:Vector{Any}}
-    for idx in eachindex(states)
-        entry = states[idx]
-        _composite_dsl_is_block_state(entry) || continue
-        state = _composite_dsl_state_entry_value(entry)
-        state isa GeneralState || continue
-        field in general_state_fields(state) || continue
-        states[idx] = _composite_dsl_rebuild_state_entry(entry, mark_general_state_fields_explicitly_shared(state, (field,)))
-    end
+`@merge c1, c2, ...`: the `@state`s of these nested blocks become one state. It holds the fields of all of them (a field
+they share is one field), and is matched by the id of each (`MatchAny`), so every reference to one of the merged states
+finds it. It is pushed to the current block's states, which are registered before those of the nested blocks.
+"""
+function _composite_dsl_merge_states!(states::Vector{Any}, blocks::Tuple)
+    merged = map(_composite_dsl_block_state, blocks)
+    fields = Tuple(unique(Iterators.flatten(general_state_fields(getalgo(s)) for s in merged)))
+    # Same-named fields are meant to be one here, so they are marked as shared and do not warn.
+    state = reduce(merge, map(s -> mark_general_state_fields_explicitly_shared(getalgo(s), fields), merged))
+    push!(states, IdentifiableAlgo(state, Symbol(), MatchAny{map(id, merged)}()))
     return states
 end
 
-"""Mark a shared field on the child entry named by a `@context` alias.
-
-The parent DSL records the index at which each `@context` entry was pushed into
-`_dsl_algos`. `@bind`/`@merge` use that table to rewrite the already-pushed child
-entry with explicit-sharing metadata. Referencing an unknown alias is a DSL
-authoring error because state-sharing declarations must appear after the relevant
-`@context` declaration.
 """
-function _composite_dsl_mark_context_shared_state_field!(algos::A, context_indices::CI, context_alias::Symbol, field::Symbol) where {A<:Vector{Any}, CI<:Dict{Symbol, Int}}
-    haskey(context_indices, context_alias) || error("`@bind`/`@merge` references unknown context alias `$context_alias`. Declare it first with `@context $context_alias = ...`.")
-    idx = context_indices[context_alias]
-    algos[idx] = _composite_dsl_mark_shared_state_field(algos[idx], field)
-    return algos
+`@bind source => target ...`: inside what the bound statements built (`algos` after `algo_start`, `options` after
+`option_start`), `target` is `source`. Each bind is `(source_owner, source_field, target_owner, target_field)`.
+
+- Every route that reads `target` comes from `source` instead (`_composite_dsl_rebind`), also inside nested blocks;
+  writes back go through the same routes.
+- A nested block whose `@state` holds `target` no longer initializes that field.
+- A target owned by an algorithm also gets a route from `source`, which wins over its own field.
+"""
+function _composite_dsl_rebind!(algos::Vector{Any}, options::Vector{Any}, algo_start::Int, option_start::Int, binds::Tuple)
+    for i in algo_start+1:length(algos)
+        algos[i] = _composite_dsl_rebind(algos[i], binds)
+    end
+    rewired = Any[]
+    for option in options[option_start+1:end]
+        append!(rewired, _composite_dsl_rebind_option(option, binds))
+    end
+    resize!(options, option_start)
+    append!(options, rewired)
+    for (source, source_field, target, target_field) in binds
+        _composite_dsl_is_state_owner(target) && continue
+        push!(options, Route(source => target, source_field => target_field))
+    end
+    return algos, options
+end
+
+_composite_dsl_is_state_owner(owner) = owner isa AbstractIdentifiableAlgo && getalgo(owner) isa AlgoState
+
+"""The bind (source, field) that replaces reading `field` from an endpoint with matcher `endpoint_match`, or `nothing`."""
+function _composite_dsl_bound_source(binds::Tuple, endpoint_match, field::Symbol)
+    endpoint_match isa Symbol && return nothing
+    for (source, source_field, target, target_field) in binds
+        target_field == field && _wiring_endpoint_match(target) == endpoint_match && return (source, source_field)
+    end
+    return nothing
+end
+
+"""A route with its bound variables split off and taken from their source; other options as they are."""
+_composite_dsl_rebind_option(option, binds::Tuple) = (option,)
+_composite_dsl_rebind_option(option::LocalPlanOption, binds::Tuple) =
+    map(o -> LocalPlanOption(getfield(option, :owner), o), _composite_dsl_rebind_option(getfield(option, :option), binds))
+function _composite_dsl_rebind_option(route::Route, binds::Tuple)
+    isresolved(route) && return (route,)
+    from = isnothing(getfrom(route)) ? from_match_by(route) : getfrom(route)
+    to = isnothing(getto(route)) ? to_match_by(route) : getto(route)
+    varnames, aliases = getvarnames(route), getaliases(route)
+    kept = Pair{Symbol, Symbol}[]
+    moved = Any[]
+    for i in eachindex(varnames)
+        bound = _composite_dsl_bound_source(binds, from_match_by(route), varnames[i])
+        if isnothing(bound)
+            push!(kept, varnames[i] => aliases[i])
+        else
+            push!(moved, Route(bound[1] => to, bound[2] => aliases[i]; transform = gettransform(route), reverse_transform = getreverse_transform(route)))
+        end
+    end
+    isempty(moved) && return (route,)
+    isempty(kept) && return Tuple(moved)
+    return (Route(from => to, kept...; transform = gettransform(route), reverse_transform = getreverse_transform(route)), moved...)
+end
+
+"""A nested block with `binds` applied to its wiring, its nested blocks and its `@state`; any other entry as it is."""
+_composite_dsl_rebind(entry, binds::Tuple) = entry
+_composite_dsl_rebind(entry::Pair, binds::Tuple) = entry.first => _composite_dsl_rebind(entry.second, binds)
+_composite_dsl_rebind(la::LoopAlgorithm, binds::Tuple) = setfield(la, :plan, _composite_dsl_rebind(getplan(la), binds))
+_composite_dsl_rebind(fa::FinalizedAlgorithm, binds::Tuple) = finalstep(_composite_dsl_rebind(inneralgorithm(fa), binds), finalfunction(fa))
+function _composite_dsl_rebind(plan::AbstractPlan, binds::Tuple)
+    wiring = Any[]
+    for option in scoped_wiring_values(plan)
+        append!(wiring, _composite_dsl_rebind_option(option, binds))
+    end
+    funcs = map(f -> _composite_dsl_rebind(f, binds), getalgos(plan))
+    # A block state left without fields is dropped.
+    states = filter(s -> !_composite_dsl_is_empty_state(s), map(s -> _composite_dsl_unbind_state(s, binds), getstates(plan)))
+    plan = setwiring(rebuild_loopalgorithm_funcs(plan, funcs), Tuple(wiring))
+    return setstates(plan, states)
+end
+
+_composite_dsl_is_empty_state(state) = _composite_dsl_is_block_state(state) && isempty(general_state_fields(getalgo(state)))
+
+"""A block's `@state` without the fields bound to a source elsewhere."""
+function _composite_dsl_unbind_state(state, binds::Tuple)
+    _composite_dsl_is_block_state(state) || return state
+    match = _wiring_endpoint_match(state)
+    fields = Tuple(target_field for (_, _, target, target_field) in binds if _wiring_endpoint_match(target) == match)
+    isempty(fields) && return state
+    return setfield(state, :func, _general_state_without(getalgo(state), fields))
 end
 
 """Build the `GeneralState` constructor expression for parsed `@state` fields.

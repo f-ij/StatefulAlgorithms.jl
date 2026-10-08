@@ -204,9 +204,10 @@ algo = @CompositeAlgorithm begin
 end
 ```
 
-This lowers to a root `Replace(source => target, :value)` option. During init,
-the target field is created normally and then materialized as a replacement
-marker that points at the source field.
+This lowers to a `Replace(source => target, :value)` option of the block. It
+can be written in any block, also a nested one: `resolve` collects the `Replace`s
+of every plan. During init, the target field is created normally and then
+materialized as a replacement marker that points at the source field.
 
 Aliases are supported on the target side:
 
@@ -368,22 +369,16 @@ the normal route and merge machinery.
 Each construction of a block has its own `@state`, in its own namespace
 (`_state_1`, `_state_2`, ...): two blocks that both declare `buffers` have two
 separate `buffers`, also when they are built by the same code. Using the same
-block value twice shares its state, as for any algorithm.
+block value twice shares its state, as for any algorithm. Sharing anything else is
+written out, in one of three ways:
 
-!!! warning "Being reworked"
-    `@bind` and `@merge` below date from when states with the same field name
-    were merged into one. They do not share state at the moment; they are being
-    reworked (`@merge` for whole states, `@bind` as rewiring inside the block).
+| Statement | What it changes | Where |
+|---|---|---|
+| `@bind source => target` | routing: inside the bound statements, `target` is `source` | the block (or its `begin ... end`) |
+| `@merge c1, c2` | identity: the nested blocks' `@state`s are one state | everywhere |
+| `@replace source => target` | storage: `target` is stored in `source` | everywhere |
 
-Use `@bind` when the parent block owns, defaults, or requires the shared state
-and a child block should use that same slot.
-
-```julia
-@bind buffers => f.buffers
-```
-
-This says: the current block's `buffers` state slot and child context `f`'s
-inline `buffers` state slot are intentionally the same resource.
+### `@bind`
 
 ```julia
 forward = @Routine begin
@@ -398,7 +393,6 @@ end
 
 algo = @CompositeAlgorithm begin
     @state buffers = make_buffers()
-
     @context f = forward()
     @context n = nudged()
 
@@ -407,87 +401,63 @@ algo = @CompositeAlgorithm begin
 end
 ```
 
-In this example, `algo` creates the buffer with `make_buffers()`. Both child
-routines declare `@state buffers` because each routine is still a reusable
-building block with a local contract, but the parent explicitly binds both child
-contracts to the parent-owned state slot.
+Inside `algo`, every read and write of `f.buffers` and `n.buffers` goes to
+`algo`'s `buffers`: the routes inside the nested blocks that read their
+`buffers` are rewired to read `algo`'s instead. The nested blocks' states no
+longer hold a `buffers` of their own, so it does not have to be given at init.
 
-Use `@merge` when child blocks should share with each other and the parent does
-not need to declare a separate state slot:
+The two sides are written like the endpoints of a route: `x` is this block's
+state field, `a.x` a field of an alias or of a nested block (`@context a = ...`).
+The names may differ (`@bind log => f.buffers`). A target owned by an algorithm
+(`@bind level => sink.y`) is given a route from the source, which it reads
+instead of its own field.
+
+Several mappings can be bound at once, and a `begin ... end` limits the bind to
+what its statements build; statements outside it are not affected:
 
 ```julia
-@merge f.buffers, n.buffers
+algo = @CompositeAlgorithm begin
+    @state log = Symbol[]
+    @bind log => f.buffers log => n.buffers begin
+        @context f = forward()
+        @context n = nudged()
+    end
+    @context g = forward()      # keeps its own `buffers`
+end
 ```
 
-This says: child context `f`'s inline `buffers` slot and child context `n`'s
-inline `buffers` slot are intentionally the same resource.
+Without a `begin ... end`, the bind covers the whole block.
+
+### `@merge`
 
 ```julia
 algo = @CompositeAlgorithm begin
     @context f = forward()
     @context n = nudged()
 
-    @merge f.buffers, n.buffers
+    @merge f, n
 end
 ```
 
-If neither child supplies a default, the merged field remains required:
+The `@state`s of `f` and `n` become one state, holding the fields of both (a
+field they both have is one field). It is matched by the identity of each, so
+everything that refers to `f`'s or `n`'s state finds it. A field neither gives a
+default for is required at init, under the merged state's name:
 
 ```julia
-algo = @CompositeAlgorithm begin
-    @context f = forward()
-    @context n = nudged()
-
-    @merge f.buffers, n.buffers
-end
-
 resolved = resolve(algo)
-initialized = init(resolved, Init(:_state; buffers = make_buffers()))
+name = only(keys(states(resolved)))
+initialized = init(resolved, Init(name; buffers = make_buffers()))
 ```
 
-If one side has a default and the other side is required, the default satisfies
-the merged slot:
+`@merge` only takes whole states. To make one field of a block another field,
+use `@bind` (inside a block) or `@replace` (everywhere).
 
-```julia
-forward_with_default = @Routine begin
-    @state buffers = make_buffers()
-    buffers = fill_forward!(buffers)
-end
+### `@replace`
 
-algo = @CompositeAlgorithm begin
-    @context f = forward_with_default()
-    @context n = nudged()
-
-    @merge f.buffers, n.buffers
-end
-```
-
-If multiple merged slots provide defaults for the same field, construction still
-continues but warns because the later default wins. Prefer a single parent
-default with `@bind` when ownership is clear.
-
-Selectors are written against `@context` aliases and must appear after the
-context has been declared:
-
-```julia
-algo = @CompositeAlgorithm begin
-    @context f = forward()
-    @context n = nudged()
-
-    @merge f.buffers, n.buffers
-end
-```
-
-`f.buffers` is transparent syntax for the nested inline state field
-`f._state.buffers`; both forms are accepted:
-
-```julia
-@merge f._state.buffers, n.buffers
-@bind buffers => f._state.buffers
-```
-
-Use `@bind` for parent-to-child sharing. Use `@merge` for peer child-to-child
-sharing.
+`@replace source.x => target.y` (see [Replacements](#Replacements)) is an option
+of the block it is written in, and applies to the whole run wherever that block
+is nested.
 
 ## Context Aliases
 
