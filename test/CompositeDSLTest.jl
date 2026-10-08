@@ -226,6 +226,30 @@ end
             @merge f.buffers, n.buffers
         end
 
+        # A state value made once and added to several blocks is one state: it has one identity
+        shared_state_add!(eq, x) = (eq .+= x; nothing)
+        phase = Unique(@state begin
+            total = zeros(3)
+            x
+        end)
+        forward = @Routine begin
+            @alias ps = phase
+            ps
+            shared_state_add!(ps.total, ps.x)
+        end
+        backward = @Routine begin
+            @alias ps = phase
+            ps
+            shared_state_add!(ps.total, ps.x)
+        end
+        both = resolve(@CompositeAlgorithm(begin
+            forward()
+            backward()
+        end))
+        @test keys(states(both)) == (:ps,)          # keyed by its alias
+        ctx = StatefulAlgorithms.context(run(init(both, Init(:ps; x = [1.0, 2.0, 3.0])); repeats = 2))
+        @test ctx[:ps].total == [4.0, 8.0, 12.0]    # 2 steps of 2 blocks
+
         # `@replace` is an option of its block, also when that block is nested
         inner = @CompositeAlgorithm begin
             @alias a = DSLReplaceSourceAlgo

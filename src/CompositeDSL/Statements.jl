@@ -478,10 +478,10 @@ function _dsl_build_statement(stmt, alias_map, context_map, known_outputs::Set{S
             local _dsl_entity = $entity_expr
             local _dsl_owner = $share_target_expr
             if _dsl_resolved isa StatefulAlgorithms._CompositeDSLResolved{:state}
-                # Inline states are stored separately and claim ownership of
-                # their outputs immediately.
+                # States are stored separately and claim ownership of their
+                # outputs immediately; an aliased state is keyed by its alias.
                 $(_dsl_maybe_guard_metadata_expr(quote
-                    push!(_dsl_states, _dsl_entity)
+                    push!(_dsl_states, _dsl_owner)
                     StatefulAlgorithms._composite_dsl_register_outputs!(_dsl_producers, _dsl_owner, _dsl_outputs)
                 end, include_condition))
             else
