@@ -4,14 +4,16 @@ export Routine, RoutinePlan
 Execution plan that repeats child algorithms.
 
 `Routine` is the repeated counterpart to `CompositeAlgorithm`: it keeps child
-algorithms, repeat metadata, namespaces, and plan wiring. Resume counters are
-allocated as loop cursors only for pausable executions.
+algorithms, repeat metadata, namespaces, plan wiring, its own states and its other
+options. Resume counters are allocated as loop cursors only for pausable executions.
 """
-struct Routine{T, Repeats, Namespaces, W, id} <: AbstractPlan
-    funcs::T     
+struct Routine{T, Repeats, Namespaces, W, id, S, RO} <: AbstractPlan
+    funcs::T
     repeats
     namespaces::Namespaces
     wiring::W
+    states::S
+    rootoptions::RO
 end
 
 const RoutinePlan = Routine
@@ -35,7 +37,9 @@ end
 @inline getwiring(r::Routine) = getfield(r, :wiring)
 @inline getoptions(r::Routine) = _all_plan_wiring(global_wiring(getwiring(r)), child_wiring(getwiring(r)))
 @inline subalgorithms(r::Routine) = getalgos(r)
-@inline getstates(r::Routine) = ()
+@inline getstates(r::Routine) = getfield(r, :states)
+@inline getrootoptions(r::Routine) = getfield(r, :rootoptions)
+statetypes(::Union{Routine{T,R,NS,W,id,S}, Type{<:Routine{T,R,NS,W,id,S}}}) where {T,R,NS,W,id,S} = S.parameters
 
 
 

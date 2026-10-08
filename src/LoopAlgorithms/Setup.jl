@@ -140,15 +140,13 @@ function parse_la_input(laType::Type{LA}, args...) where {LA<:AbstractPlan}
     end
 
     ### FLATTEN ###
-    lifted_states = ()
     if iscomposite(laType)
-        lifted_states = flattened_states(processalgos)
 
         processalgos, intervals_or_repeats = flatten_comp_funcs(processalgos, tuple(intervals_or_repeats...))
     end
 
     ######### PROCESS STATES #########
-    pstates = lifted_states
+    pstates = tuple()
     while true
         el, args = parse_by_func(isa_processstate_input, args...; error = false)
         if isnothing(el)
@@ -196,7 +194,7 @@ end
 Build a plan of type `PlanType` (`CompositeAlgorithm`, `Routine` or `ThreadedCompositeAlgorithm`) from parsed
 constructor input: its children `funcs`, their intervals or repeats `schedule`, and its route/share wiring taken from
 `options`. Child-scoped wiring (`LocalPlanOption`) is split per child; plain routes and shares are stored on the plan.
-The plan is wrapped in a `LoopAlgorithm` only when there are `states` or other options to keep on the wrapper.
+The plan keeps its `states` and its other options (`rootoptions`); `resolve` wraps it in a `LoopAlgorithm`.
 
 `parse_la_input` above and the DSL (`_dsl_build_loopalgorithm`) both end here.
 """
@@ -209,9 +207,8 @@ Base.@nospecializeinfer LoopAlgorithm(PlanType::Type{<:AbstractPlan}, @nospecial
 Base.@nospecializeinfer function _build_plan(PlanType::Type, @nospecialize(funcs::Tuple), @nospecialize(states::Tuple), @nospecialize(options::Tuple), @nospecialize(schedule), id)
     namespaces = Tuple(Any[Namespace{nothing}() for _ in 1:length(funcs)])
     wiring = PlanWiring(_plan_wiring_untyped(options), _plan_child_wiring_runtime(funcs, options))
-    plan = PlanType{typeof(funcs), schedule, typeof(namespaces), typeof(wiring), id}(funcs, schedule, namespaces, wiring)
     root_options = _root_loop_options_untyped(options)
-    return isempty(states) && isempty(root_options) ? plan : LoopAlgorithm(plan; states, options = root_options, id)
+    return PlanType{typeof(funcs), schedule, typeof(namespaces), typeof(wiring), id, typeof(states), typeof(root_options)}(funcs, schedule, namespaces, wiring, states, root_options)
 end
 
 """
@@ -227,9 +224,8 @@ every plan type, which includes every new `Unique` handle (about 175 ms per re-r
 function _build_plan_typed(::Type{PlanType}, funcs::F, states::Tuple, options::Tuple, schedule, id) where {PlanType<:AbstractPlan, F<:Tuple}
     namespaces = ntuple(_ -> Namespace{nothing}(), length(funcs))
     wiring = PlanWiring(_plan_wiring(options), _plan_child_wiring(funcs, options))
-    plan = PlanType{typeof(funcs), schedule, typeof(namespaces), typeof(wiring), id}(funcs, schedule, namespaces, wiring)
     root_options = _root_loop_options(options)
-    return isempty(states) && isempty(root_options) ? plan : LoopAlgorithm(plan; states, options = root_options, id)
+    return PlanType{typeof(funcs), schedule, typeof(namespaces), typeof(wiring), id, typeof(states), typeof(root_options)}(funcs, schedule, namespaces, wiring, states, root_options)
 end
 
 

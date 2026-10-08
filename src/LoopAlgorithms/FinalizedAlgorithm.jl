@@ -58,6 +58,7 @@ end
 @inline getalgos(fa::FinalizedAlgorithm) = getalgos(inneralgorithm(fa))
 @inline getalgo(fa::FinalizedAlgorithm, idx) = getalgo(inneralgorithm(fa), idx)
 @inline getstates(fa::FinalizedAlgorithm) = getstates(inneralgorithm(fa))
+@inline getrootoptions(fa::FinalizedAlgorithm) = getrootoptions(inneralgorithm(fa))
 @inline getoptions(fa::FinalizedAlgorithm) = getoptions(inneralgorithm(fa))
 @inline getwiring(fa::FinalizedAlgorithm) = getwiring(inneralgorithm(fa))
 @inline getregistry(fa::FinalizedAlgorithm) = getregistry(inneralgorithm(fa))

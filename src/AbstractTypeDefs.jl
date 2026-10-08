@@ -67,15 +67,14 @@ const LoopSpec = Union{AbstractPlan, AbstractLoopAlgorithm}
 """
 Runtime wrapper for a loop execution plan.
 
-The `plan` field is the stable "what runs" part, usually a `CompositeAlgorithm`
-or `Routine`. The remaining fields describe the runtime environment in which
-that plan is resolved or initialized: root states, resolved options, registry,
-stored context, initializers, and overrides. Reinitialization should replace
-this wrapper/lifecycle data without changing the type of the wrapped plan.
+The `plan` field is the block as written, a `CompositeAlgorithm`, `Routine` or
+`ThreadedCompositeAlgorithm`, holding its children, wiring and states. The remaining
+fields are what `resolve` and `init` add: the options collected from the whole plan
+tree, the registry, stored context, initializers, and overrides. Reinitialization
+replaces these without changing the type of the wrapped plan.
 """
-struct LoopAlgorithm{Plan<:AbstractPlan, S, O, R, C, Inits, Overrides, id} <: AbstractLoopAlgorithm
+struct LoopAlgorithm{Plan<:AbstractPlan, O, R, C, Inits, Overrides, id} <: AbstractLoopAlgorithm
     plan::Plan
-    states::S
     options::O
     reg::R
     context::C

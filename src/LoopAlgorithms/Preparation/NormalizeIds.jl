@@ -38,13 +38,14 @@ Base.@nospecializeinfer function _has_unique_handles(@nospecialize(x))::Bool
         id isa SimpleId && typeof(id).parameters[1] isa UUID && return true
         return _has_unique_handles(getfield(x, :func))
     elseif x isa LoopAlgorithm
-        return _has_unique_handles(getfield(x, :plan)) || _has_unique_handles(getfield(x, :states)) ||
+        return _has_unique_handles(getfield(x, :plan)) ||
                _has_unique_handles(getfield(x, :options)) || _has_unique_handles(getfield(x, :inits)) ||
                _has_unique_handles(getfield(x, :overrides))
     elseif x isa FinalizedAlgorithm
         return _has_unique_handles(getfield(x, :inner))
     elseif x isa AbstractPlan
-        return _has_unique_handles(getfield(x, :funcs)) || _has_unique_handles(getfield(x, :wiring))
+        return _has_unique_handles(getfield(x, :funcs)) || _has_unique_handles(getfield(x, :wiring)) ||
+               _has_unique_handles(getfield(x, :states)) || _has_unique_handles(getfield(x, :rootoptions))
     elseif x isa Union{Tuple, NamedTuple, PlanWiring, Wiring, Route, Share}
         for i in 1:nfields(x)
             _has_unique_handles(getfield(x, i)) && return true

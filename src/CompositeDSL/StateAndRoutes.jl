@@ -297,22 +297,13 @@ constructors.
 Base.@nospecializeinfer function _composite_dsl_map_states_changed(func::F, @nospecialize(entity)) where {F}
     if entity isa LoopAlgorithm
         plan, plan_changed = _composite_dsl_map_states_changed(func, getfield(entity, :plan))
-        states, states_changed = _composite_dsl_map_state_entries(func, getfield(entity, :states))
-        (plan_changed || states_changed) || return entity, false
-        return LoopAlgorithm(
-            plan;
-            states,
-            options = getoptions(entity),
-            registry = getregistry(entity),
-            context = getstoredcontext(entity),
-            inits = getstoredinits(entity),
-            overrides = getstoredoverrides(entity),
-            id = getid(entity),
-        ), true
+        plan_changed || return entity, false
+        return setfield(entity, :plan, plan), true
     elseif entity isa Union{CompositeAlgorithm, Routine}
         funcs, funcs_changed = _composite_dsl_map_state_children(func, getfield(entity, :funcs))
-        funcs_changed || return entity, false
-        return rebuild_loopalgorithm_funcs(entity, funcs), true
+        states, states_changed = _composite_dsl_map_state_entries(func, getfield(entity, :states))
+        (funcs_changed || states_changed) || return entity, false
+        return setfield(rebuild_loopalgorithm_funcs(entity, funcs), :states, states), true
     elseif entity isa IdentifiableAlgo && getfield(entity, :func) isa LoopSpec
         inner, inner_changed = _composite_dsl_map_states_changed(func, getfield(entity, :func))
         inner_changed || return entity, false
@@ -355,24 +346,15 @@ end
 
 function _composite_dsl_map_states_changed_typed(func::F, entity::LA) where {F, LA<:LoopAlgorithm}
     plan, plan_changed = _composite_dsl_map_states_changed_typed(func, getplan(entity))
-    states, states_changed = _composite_dsl_map_state_entries_typed(func, getstates(entity))
-    (plan_changed || states_changed) || return entity, false
-    return LoopAlgorithm(
-        plan;
-        states,
-        options = getoptions(entity),
-        registry = getregistry(entity),
-        context = getstoredcontext(entity),
-        inits = getstoredinits(entity),
-        overrides = getstoredoverrides(entity),
-        id = getid(entity),
-    ), true
+    plan_changed || return entity, false
+    return setfield(entity, :plan, plan), true
 end
 
 function _composite_dsl_map_states_changed_typed(func::F, entity::LA) where {F, LA<:Union{CompositeAlgorithm, Routine}}
     funcs, funcs_changed = _composite_dsl_map_state_children_typed(func, getalgos(entity))
-    funcs_changed || return entity, false
-    return rebuild_loopalgorithm_funcs(entity, funcs), true
+    states, states_changed = _composite_dsl_map_state_entries_typed(func, getstates(entity))
+    (funcs_changed || states_changed) || return entity, false
+    return setfield(rebuild_loopalgorithm_funcs(entity, funcs), :states, states), true
 end
 
 function _composite_dsl_map_states_changed_typed(func::F, entity::IA) where {F, Inner<:LoopSpec, IA<:AbstractIdentifiableAlgo{Inner}}

@@ -7,11 +7,13 @@ layers.
 The constructor API mirrors [`CompositeAlgorithm`](@ref): pass child algorithms, then an
 interval tuple, then any states and options.
 """
-struct ThreadedCompositeAlgorithm{T, Intervals, Namespaces, W, id} <: AbstractPlan
+struct ThreadedCompositeAlgorithm{T, Intervals, Namespaces, W, id, S, RO} <: AbstractPlan
     funcs::T
     intervals
     namespaces::Namespaces
     wiring::W
+    states::S
+    rootoptions::RO
 end
 
 const BarrieredCompositeAlgorithm = ThreadedCompositeAlgorithm
@@ -27,7 +29,9 @@ function setoptions(tca::ThreadedCompositeAlgorithm, options)
 end
 
 @inline getalgos(tca::ThreadedCompositeAlgorithm) = getfield(tca, :funcs)
-@inline getstates(tca::ThreadedCompositeAlgorithm) = ()
+@inline getstates(tca::ThreadedCompositeAlgorithm) = getfield(tca, :states)
+@inline getrootoptions(tca::ThreadedCompositeAlgorithm) = getfield(tca, :rootoptions)
+statetypes(::Union{ThreadedCompositeAlgorithm{T,I,NS,W,id,S}, Type{<:ThreadedCompositeAlgorithm{T,I,NS,W,id,S}}}) where {T,I,NS,W,id,S} = S.parameters
 @inline getwiring(tca::ThreadedCompositeAlgorithm) = getfield(tca, :wiring)
 @inline getoptions(tca::ThreadedCompositeAlgorithm) = _all_plan_wiring(global_wiring(getwiring(tca)), child_wiring(getwiring(tca)))
 

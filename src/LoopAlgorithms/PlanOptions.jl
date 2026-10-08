@@ -32,10 +32,9 @@ function _append_plan_tree_root_options!(root_options::Vector{Any}, la::LA) wher
     else
         la
     end
+    # A plan's own non-wiring options are in `getrootoptions`; `getoptions(plan)` is its route/share wiring.
+    append!(root_options, getrootoptions(plan))
 
-    # Concrete executable plans store only plan wiring locally, so do not call
-    # `getoptions(plan)` here. That would rebuild all route/share options just
-    # to discard them as non-root options.
     for child in getalgos(plan)
         child isa LoopSpec && _append_plan_tree_root_options!(root_options, child)
     end
@@ -47,10 +46,10 @@ function _root_loop_options(la::LA) where {LA<:LoopAlgorithm}
     return _root_loop_options_tree(la)
 end
 
-# The same walk as `_append_plan_tree_root_options!` (a wrapper's own options first, then its children), as tuple
-# recursion with no accumulator, so the type of the result is inferred.
-@inline _root_loop_options_tree(la::LoopAlgorithm) = (_root_loop_options(getoptions(la))..., _root_loop_options_children(getalgos(getplan(la)))...)
-@inline _root_loop_options_tree(la::LA) where {LA<:LoopSpec} = _root_loop_options_children(getalgos(la))
+# The same walk as `_append_plan_tree_root_options!` (a wrapper's own options first, then each plan's own and its
+# children's), as tuple recursion with no accumulator, so the type of the result is inferred.
+@inline _root_loop_options_tree(la::LoopAlgorithm) = (_root_loop_options(getoptions(la))..., _root_loop_options_tree(getplan(la))...)
+@inline _root_loop_options_tree(la::LA) where {LA<:LoopSpec} = (getrootoptions(la)..., _root_loop_options_children(getalgos(la))...)
 @inline _root_loop_options_children(::Tuple{}) = ()
 @inline function _root_loop_options_children(children::Children) where {Children<:Tuple}
     child = first(children)

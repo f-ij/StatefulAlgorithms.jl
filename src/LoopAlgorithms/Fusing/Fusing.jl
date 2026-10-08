@@ -4,13 +4,14 @@ include("ContextExt.jl")
 
 """
 Return `true` when the nested composite `el` is dissolved into its parent by flattening: always without
-`stop_at_options`, and with it only when neither `el` nor the plan it wraps carries options or route/share wiring.
+`stop_at_options`, and with it only a composite plan that carries nothing of its own (no route/share wiring, states or
+other options). A `LoopAlgorithm` is resolved and then stays whole.
 """
 Base.@nospecializeinfer function _flattens_into_parent(@nospecialize(el), stop_at_options::Bool)
     el isa LoopSpec && iscomposite(el) || return false
     stop_at_options || return true
-    isempty(getoptions(el)) || return false
-    return !(el isa LoopAlgorithm) || isempty(getoptions(getplan(el)))
+    el isa AbstractPlan || return false
+    return isempty(getoptions(el)) && isempty(getstates(el)) && isempty(getrootoptions(el))
 end
 
 """
@@ -40,28 +41,6 @@ Base.@nospecializeinfer function _flatten_comp_funcs!(flat_funcs::Vector{Any}, f
         else
             push!(flat_funcs, el)
             push!(flat_intervals, trait)
-        end
-    end
-    return nothing
-end
-
-"""
-    flattened_states(funcs::Tuple, stop_at_options = true)
-
-The states of the nested composites `flatten_comp_funcs` dissolves into their parent, so the parent can keep them:
-a block's `@state` lives on its wrapper, which flattening drops.
-"""
-Base.@nospecializeinfer function flattened_states(@nospecialize(funcs::Tuple), stop_at_options::Bool = true)
-    states = Any[]
-    _flattened_states!(states, funcs, stop_at_options)
-    return Tuple(states)
-end
-
-Base.@nospecializeinfer function _flattened_states!(states::Vector{Any}, @nospecialize(funcs::Tuple), stop_at_options::Bool)
-    for el in funcs
-        if _flattens_into_parent(el, stop_at_options)
-            append!(states, getstates(el))
-            _flattened_states!(states, getalgos(el), stop_at_options)
         end
     end
     return nothing
