@@ -247,6 +247,11 @@ end
             backward()
         end))
         @test keys(states(both)) == (:ps,)          # keyed by its alias
+        # Also when the blocks are nested with `@context`, which gives their states other diagnostic paths
+        @test_logs min_level = Base.CoreLogging.Warn resolve(@CompositeAlgorithm(begin
+            @context f = forward()
+            @context b = backward()
+        end))
         ctx = StatefulAlgorithms.context(run(init(both, Init(:ps; x = [1.0, 2.0, 3.0])); repeats = 2))
         @test ctx[:ps].total == [4.0, 8.0, 12.0]    # 2 steps of 2 blocks
 

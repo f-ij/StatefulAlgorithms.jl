@@ -52,11 +52,16 @@ function add(rte::RegistryTypeEntry{T}, obj, multiplier = 1.; withkey::WK = noth
         # Some entries allow for merging if they are added with the same key
         # This is decided by the registry_allowmerge trait
         # This requires the entry to implement a merge function
-        # (not with itself: the same state added again, e.g. one shared by several blocks)
-        if registry_allowmerge(rte[fidx], obj) && getalgo(rte[fidx]) !== _merge_inner(obj)
+        # Not the same state with itself: one with an id (`Unique`) shared by several blocks, which may come with
+        # other diagnostic paths (`@context c = ...`) and so not be an identical value.
+        if registry_allowmerge(rte[fidx], obj) && !_same_unique_entry(rte[fidx], obj)
             rte = replace(rte, fidx, merge(rte[fidx], obj)) # Merge the entry with the existing one
         end
 
         return add_multiplier!(rte, fidx, multiplier)::typeof(rte), getentries(rte)[fidx]
     end
 end
+
+"""Return `true` when `a` and `b` are the same entry by an id given to it (`Unique`), rather than by their values."""
+_same_unique_entry(a, b) = a isa AbstractIdentifiableAlgo && b isa AbstractIdentifiableAlgo &&
+    id(a) isa Union{SimpleId, NormalizedId} && id(a) == id(b)
