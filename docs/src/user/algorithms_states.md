@@ -195,7 +195,9 @@ Compose entities with loop plans:
 - `CompositeAlgorithm(...)` for interleaved stepping with intervals.
 - `Routine(...)` for sequential blocks with repeats.
 
-Both can include `ProcessState`s and user options such as `Route` and `Share`.
+Both take `ProcessState`s, wiring (`Route`, `Share`) and options (`RuntimeInputs`, `Replace`) after the children
+and their schedule. A plan keeps the three apart: `getstates`, `getwiring` (with `get_routes` and `get_shares`) and
+`getoptions`.
 
 ### Changing a Loop Algorithm Schedule
 

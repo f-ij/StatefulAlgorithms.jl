@@ -2,9 +2,17 @@ abstract type SteppableAlgorithm end
 
 abstract type StepAlgorithm <: SteppableAlgorithm end
 const ProcessAlgorithm = StepAlgorithm
+"""An option of a plan that is not route/share wiring, such as `RuntimeInputs` or `Replace`; kept in the plan's `options`."""
 abstract type AbstractOption end
+"""
+An option whose effect is on the whole run, wherever in the plan tree it is declared: `RuntimeInputs` (the inputs of a
+run) and `Replace` (where a stored field lives). `resolve` collects them from every plan into the `LoopAlgorithm`.
+"""
+abstract type RootOption <: AbstractOption end
+"""Route/share wiring of a plan (`Route`, `Share`, ...); kept in the plan's `wiring`, separate from its options."""
 abstract type AbstractWiring end
-abstract type ProcessState <: AbstractOption end
+"""A state of a plan (`@state`, `@input`, a `ProcessState` passed to a constructor); kept in the plan's `states`."""
+abstract type ProcessState end
 abstract type ParserOption end
 
 export ThreadsType, Static, Dynamic, Greedy

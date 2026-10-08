@@ -33,7 +33,7 @@ loop-cursor slot preserves scheduler position across pause/resume.
 6. Run registered `init` hooks with persistent and runtime contexts kept
    separate.
 7. Merge `Override` values after init, then apply `Interactive` wrappers.
-8. Materialize root-level `Replace` options into target context fields.
+8. Materialize the `Replace` options collected from the plan tree into target context fields.
 9. Return a loop algorithm with the persistent context and replayable lifecycle
    specs stored on it.
 

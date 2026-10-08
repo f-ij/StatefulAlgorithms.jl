@@ -1,7 +1,7 @@
 """
     getstoredreplacements(la)
 
-Return root-level replacement options attached to `la`.
+Return the `Replace` options of `la`: on a resolved `LoopAlgorithm`, those collected from its whole plan tree.
 """
 @inline getstoredreplacements(la::LA) where {LA<:LoopSpec} =
     filter_by_type(Replace, getoptions(la))
@@ -41,7 +41,7 @@ end
 """
     apply_replace_specs(context, registry, replacements)
 
-Resolve and materialize root-level `Replace` options into the initialized
+Resolve and materialize the collected `Replace` options into the initialized
 persistent context. Replacement stays out of plan wiring; the only runtime
 state change is a `ReplacedVar` marker in each target field.
 """

@@ -207,8 +207,8 @@ Base.@nospecializeinfer LoopAlgorithm(PlanType::Type{<:AbstractPlan}, @nospecial
 Base.@nospecializeinfer function _build_plan(PlanType::Type, @nospecialize(funcs::Tuple), @nospecialize(states::Tuple), @nospecialize(options::Tuple), @nospecialize(schedule), id)
     namespaces = Tuple(Any[Namespace{nothing}() for _ in 1:length(funcs)])
     wiring = PlanWiring(_plan_wiring_untyped(options), _plan_child_wiring_runtime(funcs, options))
-    root_options = _root_loop_options_untyped(options)
-    return PlanType{typeof(funcs), schedule, typeof(namespaces), typeof(wiring), id, typeof(states), typeof(root_options)}(funcs, schedule, namespaces, wiring, states, root_options)
+    plan_options = _non_wiring_untyped(options)
+    return PlanType{typeof(funcs), schedule, typeof(namespaces), typeof(wiring), id, typeof(states), typeof(plan_options)}(funcs, schedule, namespaces, wiring, states, plan_options)
 end
 
 """
@@ -224,8 +224,8 @@ every plan type, which includes every new `Unique` handle (about 175 ms per re-r
 function _build_plan_typed(::Type{PlanType}, funcs::F, states::Tuple, options::Tuple, schedule, id) where {PlanType<:AbstractPlan, F<:Tuple}
     namespaces = ntuple(_ -> Namespace{nothing}(), length(funcs))
     wiring = PlanWiring(_plan_wiring(options), _plan_child_wiring(funcs, options))
-    root_options = _root_loop_options(options)
-    return PlanType{typeof(funcs), schedule, typeof(namespaces), typeof(wiring), id, typeof(states), typeof(root_options)}(funcs, schedule, namespaces, wiring, states, root_options)
+    plan_options = _non_wiring(options)
+    return PlanType{typeof(funcs), schedule, typeof(namespaces), typeof(wiring), id, typeof(states), typeof(plan_options)}(funcs, schedule, namespaces, wiring, states, plan_options)
 end
 
 

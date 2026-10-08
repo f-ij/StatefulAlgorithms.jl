@@ -27,15 +27,16 @@ function newfuncs(r::Routine, funcs)
     setfield(r, :funcs, funcs)
 end
 
-function setoptions(r::Routine, options)
-    wiring = PlanWiring(_plan_wiring(options), _plan_child_wiring(getalgos(r), options))
+"""Rebuild the route/share wiring of `r` from `wiring` (`Route`s, `Share`s, `LocalPlanOption`s)."""
+function setwiring(r::Routine, wiring)
+    wiring = PlanWiring(_plan_wiring(wiring), _plan_child_wiring(getalgos(r), wiring))
     return setfield(r, :wiring, wiring)
 end
 
 @inline getalgos(r::Routine) = getfield(r, :funcs)
 @inline getalgo(r::Routine, idx) = getalgos(r)[idx]
 @inline getwiring(r::Routine) = getfield(r, :wiring)
-@inline getoptions(r::Routine) = (_all_plan_wiring(global_wiring(getwiring(r)), child_wiring(getwiring(r)))..., getfield(r, :options)...)
+@inline getoptions(r::Routine) = getfield(r, :options)
 @inline subalgorithms(r::Routine) = getalgos(r)
 @inline getstates(r::Routine) = getfield(r, :states)
 statetypes(::Union{Routine{T,R,NS,W,id,S}, Type{<:Routine{T,R,NS,W,id,S}}}) where {T,R,NS,W,id,S} = S.parameters

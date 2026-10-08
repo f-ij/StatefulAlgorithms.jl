@@ -16,12 +16,11 @@ function update_keys(cla::LA, base_registry::NameSpaceRegistry) where {LA<:LoopS
     oldsfuncs = getalgos(cla)
     @DebugMode "Updating names for LoopAlgorithm: $cla using base registry: $base_registry"
     newfuncs = update_keys.(oldsfuncs, Ref(base_registry)) #Recursive replace LoopAlgorithm
-    oldoptions = getoptions(cla)
-    newoptions = update_keys.(oldoptions, Ref(base_registry))
+    newwiring = update_keys.(wiring_values(cla), Ref(base_registry))
     # newfuncs = update_name.(funcs, Ref(base_registry)) # Rename IdentifiableAlgos and remove old registries
     # updated_registry = update_keys(getregistry(cla), base_registry)
     cla = rebuild_loopalgorithm_funcs(cla, newfuncs)
-    cla = setoptions(cla, newoptions)
+    cla = setwiring(cla, newwiring)
     cla = _attach_registry(cla, base_registry)
     return cla
     # pa_new = newfuncs(pa, funcs)

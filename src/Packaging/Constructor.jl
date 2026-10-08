@@ -18,17 +18,17 @@ end
 package(args...; kwargs...) = Package(args...; kwargs...)
 
 """
-Build a package from a loop wrapper by packaging its plan and root states.
+Build a package from a loop wrapper by packaging its plan, which holds the states.
 """
 function Package(la::LoopAlgorithm, name = Symbol())
-    return Package(getplan(la), getstates(la), name)
+    return Package(getplan(la), name)
 end
 
 """
 Build a package from a composite execution plan.
 
-Route metadata is converted into a child-aligned `aliases` tuple. Root states
-from the wrapper/composite are stored as explicit package `states`.
+Route metadata is converted into a child-aligned `aliases` tuple. The composite's
+states, and any extra `states` passed, are stored as explicit package `states`.
 """
 function Package(comp::CompositeAlgorithm, name = Symbol())
     return Package(comp, (), name)
@@ -37,7 +37,7 @@ end
 function Package(comp::CompositeAlgorithm, states::States, name = Symbol()) where {States<:Tuple}
     identifiable_funcs = getalgos(comp)
     package_intervals = intervals(comp)
-    routes = typefilter(Route, getoptions(comp))
+    routes = typefilter(Route, wiring_values(comp))
 
     # Package aliases are derived from the concrete endpoint objects retained
     # by unresolved routes. Resolution deliberately replaces those objects

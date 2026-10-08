@@ -58,7 +58,9 @@ end
 @inline getalgos(fa::FinalizedAlgorithm) = getalgos(inneralgorithm(fa))
 @inline getalgo(fa::FinalizedAlgorithm, idx) = getalgo(inneralgorithm(fa), idx)
 @inline getstates(fa::FinalizedAlgorithm) = getstates(inneralgorithm(fa))
-@inline _own_options(fa::FinalizedAlgorithm) = _own_options(inneralgorithm(fa))
+@inline _root_options(fa::FinalizedAlgorithm) = _root_options(inneralgorithm(fa))
+@inline wiring_values(fa::FinalizedAlgorithm) = wiring_values(inneralgorithm(fa))
+@inline _tree_wiring_values(fa::FinalizedAlgorithm) = _tree_wiring_values(inneralgorithm(fa))
 @inline getoptions(fa::FinalizedAlgorithm) = getoptions(inneralgorithm(fa))
 @inline getwiring(fa::FinalizedAlgorithm) = getwiring(inneralgorithm(fa))
 @inline getregistry(fa::FinalizedAlgorithm) = getregistry(inneralgorithm(fa))
@@ -66,6 +68,7 @@ end
 @inline getid(fa::FinalizedAlgorithm) = getid(inneralgorithm(fa))
 
 @inline setoptions(fa::FinalizedAlgorithm, options) = finalstep(setoptions(inneralgorithm(fa), options), finalfunction(fa))
+@inline setwiring(fa::FinalizedAlgorithm, wiring) = finalstep(setwiring(inneralgorithm(fa), wiring), finalfunction(fa))
 @inline _attach_registry(fa::FinalizedAlgorithm, registry::NameSpaceRegistry) = finalstep(_attach_registry(inneralgorithm(fa), registry), finalfunction(fa))
 
 @inline _with_lifecycle(fa::FinalizedAlgorithm, context, inits, overrides) =

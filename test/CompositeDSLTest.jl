@@ -225,8 +225,8 @@ end
         # Before resolve the block is its plan, holding its routes and its `@state`
         @test algo isa CompositeAlgorithm
         @test length(StatefulAlgorithms.getstates(algo)) == 1
-        @test !isempty(StatefulAlgorithms.getoptions(algo, StatefulAlgorithms.Route))
-        @test !isempty(StatefulAlgorithms.getoptions(StatefulAlgorithms.getplan(resolved), StatefulAlgorithms.Route))
+        @test !isempty(StatefulAlgorithms.get_routes(algo))
+        @test !isempty(StatefulAlgorithms.get_routes(StatefulAlgorithms.getplan(resolved)))
         @test intervals(resolved) == (
             StatefulAlgorithms.Interval(1),
             StatefulAlgorithms.Interval(1),
@@ -317,7 +317,7 @@ end
 
         @test algo isa CompositeAlgorithm
         plan = StatefulAlgorithms.getplan(algo)
-        @test length(StatefulAlgorithms.getoptions(plan, StatefulAlgorithms.Route)) == 2
+        @test length(StatefulAlgorithms.get_routes(plan)) == 2
         plan_wiring = StatefulAlgorithms.getwiring(plan)
         @test length(StatefulAlgorithms.routes(StatefulAlgorithms.global_wiring(plan_wiring))) == 1
         @test length(StatefulAlgorithms.routes(StatefulAlgorithms.child_wiring(plan_wiring)[1])) == 1

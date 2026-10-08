@@ -6,9 +6,9 @@ export CompositeAlgorithm, CompositePlan
 Execution plan that steps child algorithms on fixed intervals.
 
 `CompositeAlgorithm` stores the block as written: child algorithms (`funcs`),
-schedule metadata, namespaces, plan wiring (routes and shares), its own states
-(`@state`, `@input`) and its other options (`options`, such as `RuntimeInputs`).
-`getoptions` gives all of them, wiring and the rest. What `resolve`,
+schedule metadata, namespaces, its route/share wiring (`getwiring`), its own
+states (`getstates`: `@state`, `@input`) and its other options (`getoptions`,
+such as `RuntimeInputs` and `Replace`). What `resolve`,
 `init` and `run` add (the registry, stored context, inits, overrides and the
 interval cursor) belongs to the `LoopAlgorithm`/`AbstractLoopCursor` they create.
 """
@@ -34,8 +34,9 @@ function newfuncs(ca::CompositeAlgorithm, funcs)
     setfield(ca, :funcs, funcs)
 end
 
-function setoptions(ca::CompositeAlgorithm, options)
-    wiring = PlanWiring(_plan_wiring(options), _plan_child_wiring(getalgos(ca), options))
+"""Rebuild the route/share wiring of `ca` from `wiring` (`Route`s, `Share`s, `LocalPlanOption`s)."""
+function setwiring(ca::CompositeAlgorithm, wiring)
+    wiring = PlanWiring(_plan_wiring(wiring), _plan_child_wiring(getalgos(ca), wiring))
     return setfield(ca, :wiring, wiring)
 end
 
@@ -48,7 +49,7 @@ subalgotypes(::Type{CA}) where {FT, CA<:CompositeAlgorithm{FT}} = FT.parameters
 
 
 getwiring(ca::CompositeAlgorithm) = getfield(ca, :wiring)
-getoptions(ca::CompositeAlgorithm) = (_all_plan_wiring(global_wiring(getwiring(ca)), child_wiring(getwiring(ca)))..., getfield(ca, :options)...)
+getoptions(ca::CompositeAlgorithm) = getfield(ca, :options)
 
 getid(ca::Union{CompositeAlgorithm{T,I,NS,W,id}, Type{<:CompositeAlgorithm{T,I,NS,W,id}}}) where {T,I,NS,W,id} = id
 setid(ca::CA, id = uuid4()) where {CA<:CompositeAlgorithm} = setparameter(ca, 5, id)

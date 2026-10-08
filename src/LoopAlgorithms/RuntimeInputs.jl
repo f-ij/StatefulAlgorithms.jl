@@ -44,7 +44,7 @@ Loop option carrying all runtime input declarations for a composed algorithm.
 The DSL stores this as an option so `run(...; kwargs...)` can validate keyword
 arguments without inspecting the generated step code.
 """
-struct RuntimeInputs{Specs} <: AbstractOption
+struct RuntimeInputs{Specs} <: RootOption
     specs::Specs
 end
 

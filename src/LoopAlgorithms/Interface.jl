@@ -39,14 +39,9 @@ Base.isempty(wiring::PlanWiring) =
 
 @inline getmultiplier(cla::LoopAlgorithm, obj) = getmultiplier(getregistry(cla), obj)
 @inline Base.getkey(cla::LoopAlgorithm, obj) = getkey(getregistry(cla), obj)
+"""The `RootOption`s of the whole plan tree, collected once by `resolve` (`_root_options`)."""
 @inline getoptions(cla::LoopAlgorithm) = getfield(cla, :options)
 @inline getstates(cla::LoopAlgorithm) = getstates(getplan(cla))
-"""
-The options of one node that are not route/share wiring: a plan's own (`RuntimeInputs`, `Replace`), or, on a
-`LoopAlgorithm`, those `resolve` collected from its whole plan tree. Read without building the wiring options.
-"""
-@inline _own_options(plan::AbstractPlan) = getfield(plan, :options)
-@inline _own_options(cla::LoopAlgorithm) = getoptions(cla)
 @inline getregistry(cla::LoopAlgorithm) = getfield(cla, :reg)
 @inline getstoredcontext(cla::LoopAlgorithm) = getfield(cla, :context)
 @inline getstoredinits(cla::LoopAlgorithm) = getfield(cla, :inits)
@@ -77,11 +72,13 @@ end
 
 @inline plan_child_namespace(la::LoopAlgorithm, idx::Int) = plan_child_namespace(getplan(la), idx)
 
-get_shares(cla::LA) where {LA<:LoopSpec} = @inline filter_by_type(Share, getoptions(cla))
-get_routes(cla::LA) where {LA<:LoopSpec} = @inline filter_by_type(Route, getoptions(cla))
+"""The `Share`s / `Route`s in the wiring of `cla`'s plan (plan-wide and per child)."""
+get_shares(cla::LA) where {LA<:LoopSpec} = @inline filter_by_type(Share, wiring_values(cla))
+get_routes(cla::LA) where {LA<:LoopSpec} = @inline filter_by_type(Route, wiring_values(cla))
 
 @inline getoptions(la::LA, T::Type{O}) where {LA<:LoopSpec, O} = filter_by_type(O, getoptions(la))
 setoptions(la::LA, options) where {LA<:LoopSpec} = error("setoptions not implemented for $(typeof(la))")
+setwiring(la::LoopAlgorithm, wiring) = setfield(la, :plan, setwiring(getplan(la), wiring))
 
 function setoptions(la::LoopAlgorithm{Plan, O, R, C, Inits, Overrides, id}, options) where {Plan, O, R, C, Inits, Overrides, id}
     LoopAlgorithm{Plan, typeof(options), R, C, Inits, Overrides, id}(getplan(la), options, getregistry(la), getstoredcontext(la), getstoredinits(la), getstoredoverrides(la))
