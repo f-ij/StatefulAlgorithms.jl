@@ -79,6 +79,7 @@ get_routes(cla::LA) where {LA<:LoopSpec} = @inline filter_by_type(Route, wiring_
 @inline getoptions(la::LA, T::Type{O}) where {LA<:LoopSpec, O} = filter_by_type(O, getoptions(la))
 setoptions(la::LA, options) where {LA<:LoopSpec} = error("setoptions not implemented for $(typeof(la))")
 setwiring(la::LoopAlgorithm, wiring) = setfield(la, :plan, setwiring(getplan(la), wiring))
+setstates(la::LoopAlgorithm, states) = setfield(la, :plan, setstates(getplan(la), states))
 
 function setoptions(la::LoopAlgorithm{Plan, O, R, C, Inits, Overrides, id}, options) where {Plan, O, R, C, Inits, Overrides, id}
     LoopAlgorithm{Plan, typeof(options), R, C, Inits, Overrides, id}(getplan(la), options, getregistry(la), getstoredcontext(la), getstoredinits(la), getstoredoverrides(la))

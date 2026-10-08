@@ -69,6 +69,7 @@ end
 
 @inline setoptions(fa::FinalizedAlgorithm, options) = finalstep(setoptions(inneralgorithm(fa), options), finalfunction(fa))
 @inline setwiring(fa::FinalizedAlgorithm, wiring) = finalstep(setwiring(inneralgorithm(fa), wiring), finalfunction(fa))
+@inline setstates(fa::FinalizedAlgorithm, states) = finalstep(setstates(inneralgorithm(fa), states), finalfunction(fa))
 @inline _attach_registry(fa::FinalizedAlgorithm, registry::NameSpaceRegistry) = finalstep(_attach_registry(inneralgorithm(fa), registry), finalfunction(fa))
 
 @inline _with_lifecycle(fa::FinalizedAlgorithm, context, inits, overrides) =
