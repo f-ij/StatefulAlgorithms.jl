@@ -167,6 +167,8 @@ _valmatcher_target(::Type{<:ValMatcher{V}}) where {V} = V
 """Return whether a matcher value has the same type-level endpoint identity."""
 _matches_endpoint_match(value, endpoint_match) = value isa endpoint_match
 _matches_endpoint_match(value, ::Type{<:ValMatcher{V}}) where {V} = value == V || value isa ValMatcher{V}
+# A state merged from several (`@merge`) is matched by any of their ids.
+_matches_endpoint_match(value::MatchAny, endpoint_match) = any(m -> _matches_endpoint_match(m, endpoint_match), getmatchers(value))
 
 """Resolve a type-matched endpoint without invoking unrelated matcher equality."""
 function _resolve_type_matched_endpoint(reg::NameSpaceRegistry, endpoint_match::Type{<:TypeMatcher}, role::String)

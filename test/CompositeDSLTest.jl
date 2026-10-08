@@ -61,6 +61,12 @@ dsl_final_summary(context) = (; result = context[DSLValueAlgo].result)
 dsl_runtime_final_summary(context) = (; result = context.result)
 dsl_state_push_writer!(buffers) = (push!(buffers, :writer); buffers)
 dsl_state_push_reader!(buffers) = (push!(buffers, :reader); buffers)
+struct DSLReplaceSourceAlgo <: ProcessAlgorithm end
+StatefulAlgorithms.init(::DSLReplaceSourceAlgo, context) = (; x = 1.0)
+StatefulAlgorithms.step!(::DSLReplaceSourceAlgo, context) = (; x = context.x + 1)
+struct DSLReplaceSinkAlgo <: ProcessAlgorithm end
+StatefulAlgorithms.init(::DSLReplaceSinkAlgo, context) = (; y = 0.0, seen = 0.0)
+StatefulAlgorithms.step!(::DSLReplaceSinkAlgo, context) = (; seen = context.y)
 
 @StepAlgorithm function DSLPositionalCallAlgo(value)
     return (; seen = value)
@@ -146,8 +152,8 @@ end
         @test StatefulAlgorithms.init(overlap_merged, (; scale = 3.0)) == (; seed = 7, scale = 3.0)
     end
 
-    @testset "Explicit state bind and merge document overlapping child state" begin
-        @info "Composite DSL: Explicit state bind and merge document overlapping child state"
+    @testset "@bind, @merge and @replace share state explicitly" begin
+        @info "Composite DSL: @bind, @merge and @replace share state explicitly"
         writer = @Routine begin
             @state buffers
             buffers = dsl_state_push_writer!(buffers)
@@ -156,17 +162,19 @@ end
             @state buffers
             buffers = dsl_state_push_reader!(buffers)
         end
+        # Every state namespace => its fields
+        state_data(ctx) = (subcontexts = getfield(ctx, :subcontexts);
+            Dict(k => getfield(getfield(subcontexts, k), :data) for k in keys(subcontexts) if startswith(string(k), "_state_")))
+        steps(plan, n = 1) = StatefulAlgorithms.context(run(plan; repeats = n))
 
-        # Two blocks' `@state` fields with the same name are separate fields: each block has its own state
-        implicit_overlap = @CompositeAlgorithm begin
+        # Without any of them, two blocks' fields named `buffers` are two fields
+        separate = resolve(@CompositeAlgorithm(begin
             @context f = writer()
             @context n = reader()
-        end
-        resolved_overlap = @test_logs resolve(implicit_overlap)
-        @test count(k -> startswith(string(k), "_state_"), keys(StatefulAlgorithms.getregistry(resolved_overlap))) == 2
+        end))
+        @test count(k -> startswith(string(k), "_state_"), keys(states(separate))) == 2
 
-        # `@bind` and `@merge` only silenced the overlap warning while states with the same field were one state; they
-        # share state again once they are reworked
+        # `@bind x => c.x`: in the block, `c.x` is this block's `x`; the nested states lose the bound field
         bound = @CompositeAlgorithm begin
             @state buffers = Symbol[]
             @context f = writer()
@@ -174,35 +182,62 @@ end
             @bind buffers => f.buffers
             @bind buffers => n.buffers
         end
-        function bound_buffers()
-            p = Process(resolve(bound), repeat = 1)
-            StatefulAlgorithms.run(p)
-            wait(p)
-            return context(p)[:_state_1].buffers
-        end
-        @test_broken bound_buffers() == [:writer, :reader]
+        @test state_data(steps(bound)) == Dict(:_state_1 => (; buffers = [:writer, :reader]))
 
-        merged_required = @CompositeAlgorithm begin
+        # Several mappings, other field names, and a scope: only what the `begin ... end` builds is bound
+        free_writer = @Routine begin
+            @state buffers = Symbol[]
+            buffers = dsl_state_push_writer!(buffers)
+        end
+        scoped = @CompositeAlgorithm begin
+            @state log = Symbol[]
+            @bind log => f.buffers log => n.buffers begin
+                @context f = writer()
+                @context n = reader()
+            end
+            @context g = free_writer()
+        end
+        @test Set(values(state_data(steps(scoped)))) == Set([(; log = [:writer, :reader]), (; buffers = [:writer])])
+
+        # An algorithm's own field as the target: it reads the bound value instead of its own `y` (0.0)
+        bound_algo = @CompositeAlgorithm begin
+            @state level = 7.0
+            @alias sink = DSLReplaceSinkAlgo
+            sink()
+            @bind level => sink.y
+        end
+        @test steps(bound_algo)[:sink].seen == 7.0
+
+        # `@merge c1, c2`: the nested blocks' states become one state, matched by both
+        merged = resolve(@CompositeAlgorithm(begin
             @context f = writer()
             @context n = reader()
+            @merge f, n
+        end))
+        name = only(keys(states(merged)))
+        @test_throws ErrorException init(merged)    # `buffers` is required by both
+        @test state_data(StatefulAlgorithms.context(run(init(merged, Init(name; buffers = Symbol[])); repeats = 1))) ==
+            Dict(name => (; buffers = [:writer, :reader]))
+
+        # `@merge` takes whole states; one field is shared with `@bind` or `@replace`
+        @test_throws Exception @eval @CompositeAlgorithm begin
+            @context f = $writer()
+            @context n = $reader()
             @merge f.buffers, n.buffers
         end
-        resolved_required = resolve(merged_required)
-        @test_throws ErrorException init(resolved_required)
-        function merged_buffers()
-            p = Process(init(resolved_required, Init(:_state_1; buffers = Symbol[])), repeat = 1)
-            StatefulAlgorithms.run(p)
-            wait(p)
-            return context(p)[:_state_1].buffers
-        end
-        @test_broken merged_buffers() == [:writer, :reader]
 
-        explicit_state_path = @CompositeAlgorithm begin
-            @context f = writer()
-            @context n = reader()
-            @merge f._state.buffers, n.buffers
+        # `@replace` is an option of its block, also when that block is nested
+        inner = @CompositeAlgorithm begin
+            @alias a = DSLReplaceSourceAlgo
+            @alias b = DSLReplaceSinkAlgo
+            a()
+            b()
+            @replace a.x => b.y
         end
-        @test_throws ErrorException init(resolve(explicit_state_path))
+        ctx = steps(@CompositeAlgorithm(begin
+            inner()
+        end), 3)
+        @test ctx[:b].seen == ctx[:a].x == 4.0
     end
 
     @testset "CompositeAlgorithm DSL resolves and runs" begin

@@ -133,7 +133,7 @@ function _dsl_build_global_route_statement(stmt, alias_map, context_map; include
 end
 
 """Parse `@replace source.field => target.field` as a root replacement option."""
-function _dsl_build_global_replace_statement(stmt, alias_map, context_map; include_condition = nothing)
+function _dsl_build_replace_statement(stmt, alias_map, context_map; include_condition = nothing)
     stmt isa Expr && stmt.head == :macrocall && stmt.args[1] == Symbol("@replace") || return nothing
     length(stmt.args) == 3 || error("@replace expects `source.field => target.field`.")
     replace_expr = stmt.args[3]
@@ -173,33 +173,6 @@ function _dsl_register_context_index_expr(context_alias::Symbol)
     return :(_dsl_context_indices[$(QuoteNode(context_alias))] = length(_dsl_algos))
 end
 
-"""Parse a current-block or child inline-state field selector.
-
-Selectors are used by `@bind` and `@merge`. A plain symbol such as `buffers`
-selects the current block's inline state. A dotted expression such as
-`f.buffers` or `f._state.buffers` selects the inline state of the `@context f`
-entry. The returned `scope` is `:local` or `:context`; `display` preserves the
-user-facing selector for diagnostics.
-"""
-function _dsl_parse_state_field_selector(context_map::CM, ex::Ex) where {CM<:Dict, Ex}
-    if ex isa Symbol
-        return (; scope = :local, context_alias = Symbol(), field = ex, display = string(ex))
-    elseif ex isa Expr && ex.head == :. && length(ex.args) == 2 && ex.args[2] isa QuoteNode
-        field = ex.args[2].value
-        field isa Symbol || return nothing
-        base = ex.args[1]
-        if base isa Symbol && haskey(context_map, base)
-            return (; scope = :context, context_alias = base, field, display = string(base, ".", field))
-        elseif base isa Expr && base.head == :. && length(base.args) == 2 && base.args[2] isa QuoteNode && base.args[2].value == :_state
-            context_alias = base.args[1]
-            if context_alias isa Symbol && haskey(context_map, context_alias)
-                return (; scope = :context, context_alias, field, display = string(context_alias, "._state.", field))
-            end
-        end
-    end
-    return nothing
-end
-
 """Return user payload arguments from a DSL-only macro call."""
 function _dsl_macro_payload_args(stmt::S) where {S}
     args = [stmt.args[i] for i in 3:length(stmt.args) if !(stmt.args[i] isa LineNumberNode)]
@@ -209,46 +182,57 @@ function _dsl_macro_payload_args(stmt::S) where {S}
     return args
 end
 
-"""Parse `@bind source => child.field` as an explicit state-sharing approval."""
-function _dsl_build_state_bind_statement(stmt::S, context_map::CM) where {S, CM<:Dict}
-    stmt isa Expr && stmt.head == :macrocall && stmt.args[1] == Symbol("@bind") || return nothing
-    args = _dsl_macro_payload_args(stmt)
-    length(args) == 1 || error("@bind expects one mapping like `@bind buffers => f.buffers`.")
-    mapping = only(args)
-    mapping isa Expr && mapping.head == :call && mapping.args[1] == :(=>) && length(mapping.args) == 3 ||
-        error("@bind expects one mapping like `@bind buffers => f.buffers`.")
-
-    source = _dsl_parse_state_field_selector(context_map, mapping.args[2])
-    target = _dsl_parse_state_field_selector(context_map, mapping.args[3])
-    isnothing(source) && error("@bind source must be a state field like `buffers`.")
-    isnothing(target) && error("@bind target must be a child state field like `f.buffers`.")
-    source.scope == :local || error("@bind source must be a current-block state field. Got `$(source.display)`.")
-    target.scope == :context || error("@bind target must be a child state field. Got `$(target.display)`.")
-    source.field == target.field || error("@bind currently requires matching field names. Got `$(source.display)` and `$(target.display)`.")
-
-    return quote
-        StatefulAlgorithms._composite_dsl_mark_local_shared_state_field!(_dsl_states, $(QuoteNode(source.field)))
-        StatefulAlgorithms._composite_dsl_mark_context_shared_state_field!(_dsl_algos, _dsl_context_indices, $(QuoteNode(target.context_alias)), $(QuoteNode(target.field)))
+"""
+Parse one side of a `@bind` mapping into `(owner, field)` expressions: `x` is the current block's state field `x`;
+`a.x` is field `x` of an alias, or of a nested block's state (`@context a = ...`), and deeper paths like `c.inner.x`
+work as in routes.
+"""
+function _dsl_bind_endpoint(alias_map, context_map, ex)
+    if ex isa Symbol
+        return (; owner = :(StatefulAlgorithms._composite_dsl_state_owner(_dsl_state_owners, $(QuoteNode(ex)))), field = ex)
+    elseif ex isa Expr && ex.head == :. && ex.args[1] isa Symbol && haskey(context_map, ex.args[1]) && ex.args[2] isa QuoteNode
+        # `c.x` with `@context c = ...`: the state of the nested block that was added, not its expression evaluated again
+        block = :(StatefulAlgorithms._composite_dsl_context_entity(_dsl_algos, _dsl_context_indices, $(QuoteNode(ex.args[1]))))
+        return (; owner = :(StatefulAlgorithms._composite_dsl_block_state($block)), field = ex.args[2].value)
     end
+    parsed = _dsl_parse_owned_route_expr(alias_map, context_map, ex)
+    isnothing(parsed) && error("@bind endpoints are a state field like `x` or an owned field like `a.x`. Got `$ex`.")
+    return (; owner = esc(parsed.owner), field = parsed.source)
 end
 
-"""Parse `@merge child.field, other_child.field` as an explicit peer state merge approval."""
-function _dsl_build_state_merge_statement(stmt::S, context_map::CM) where {S, CM<:Dict}
-    stmt isa Expr && stmt.head == :macrocall && stmt.args[1] == Symbol("@merge") || return nothing
+"""Split `@bind a.x => b.y c.z => d.z [begin ... end]` into its mappings and the statements of its scope (or `nothing`)."""
+function _dsl_split_bind(stmt)
     args = _dsl_macro_payload_args(stmt)
-    length(args) >= 2 || error("@merge expects at least two child state fields, e.g. `@merge f.buffers, n.buffers`.")
-    selectors = map(arg -> _dsl_parse_state_field_selector(context_map, arg), args)
-    any(isnothing, selectors) && error("@merge only accepts child state fields like `f.buffers` or `f._state.buffers`.")
-    all(selector -> selector.scope == :context, selectors) || error("@merge only accepts child state fields; use `@bind` for current-block state.")
-    field = first(selectors).field
-    all(selector -> selector.field == field, selectors) || error("@merge currently requires matching field names. Got `$(join(getproperty.(selectors, :display), ", "))`.")
+    scope = !isempty(args) && last(args) isa Expr && last(args).head == :block ? pop!(args).args : nothing
+    isempty(args) && error("@bind expects mappings like `@bind x => c.x` or `@bind a.x => b.y c.z => d.z begin ... end`.")
+    return args, scope
+end
 
-    shared_field_marks = map(selectors) do selector
-        :(StatefulAlgorithms._composite_dsl_mark_context_shared_state_field!(_dsl_algos, _dsl_context_indices, $(QuoteNode(selector.context_alias)), $(QuoteNode(selector.field))))
+"""
+An expression for the tuple of `(source_owner, :source_field, target_owner, :target_field)`, one per `@bind` mapping
+`source => target` (in the bind's scope, `target` is `source`).
+"""
+function _dsl_bind_tuple(mappings, alias_map, context_map)
+    binds = map(mappings) do mapping
+        mapping isa Expr && mapping.head == :call && mapping.args[1] == :(=>) && length(mapping.args) == 3 ||
+            error("@bind expects mappings like `source => target`. Got `$mapping`.")
+        source = _dsl_bind_endpoint(alias_map, context_map, mapping.args[2])
+        target = _dsl_bind_endpoint(alias_map, context_map, mapping.args[3])
+        :(($(source.owner), $(QuoteNode(source.field)), $(target.owner), $(QuoteNode(target.field))))
     end
-    return quote
-        $(shared_field_marks...)
+    return Expr(:tuple, binds...)
+end
+
+"""Parse `@merge c1, c2, ...`: the `@state`s of these nested blocks (`@context` aliases) become one state."""
+function _dsl_build_state_merge_statement(stmt::S, context_map::CM) where {S, CM<:Dict}
+    args = _dsl_macro_payload_args(stmt)
+    length(args) >= 2 || error("@merge expects at least two nested blocks, e.g. `@merge f, n`.")
+    for arg in args
+        arg isa Symbol && haskey(context_map, arg) && continue
+        error("@merge merges whole states of nested blocks named with `@context`, like `@merge f, n`. Got `$arg`. To make one field of one block another's, use `@replace` or `@bind`.")
     end
+    blocks = Expr(:tuple, (:(StatefulAlgorithms._composite_dsl_context_entity(_dsl_algos, _dsl_context_indices, $(QuoteNode(arg)))) for arg in args)...)
+    return :(StatefulAlgorithms._composite_dsl_merge_states!(_dsl_states, $blocks))
 end
 
 """Return whether a RHS expression should stay on the normal invocation parser."""
@@ -425,8 +409,8 @@ function _dsl_build_statement(stmt, alias_map, context_map, known_outputs::Set{S
     global_route = _dsl_build_global_route_statement(stmt, alias_map, context_map; include_condition)
     isnothing(global_route) || return global_route
 
-    global_replace = _dsl_build_global_replace_statement(stmt, alias_map, context_map; include_condition)
-    isnothing(global_replace) || return global_replace
+    replace_option = _dsl_build_replace_statement(stmt, alias_map, context_map; include_condition)
+    isnothing(replace_option) || return replace_option
 
     outputs = ()
     rhs = stmt
@@ -693,7 +677,10 @@ function _dsl_collect_block(
     final_expr = nothing
     current_line = nothing
 
-    for stmt in statements
+    block_binds = Any[]
+    pending = Any[statements...]
+    while !isempty(pending)
+        stmt = popfirst!(pending)
         if stmt isa LineNumberNode
             current_line = stmt
             continue
@@ -733,12 +720,24 @@ function _dsl_collect_block(
             end
             continue
         elseif stmt isa Expr && stmt.head == :macrocall && stmt.args[1] == Symbol("@bind")
-            step_expr = _dsl_build_state_bind_statement(stmt, context_map)
-            if !isnothing(step_expr)
-                step_expr = Base.remove_linenums!(step_expr)
-                isnothing(current_line) || push!(step_exprs, current_line)
-                push!(step_exprs, step_expr)
+            mappings, scope = _dsl_split_bind(stmt)
+            if isnothing(scope)
+                # Without a scope, the bind covers the whole block: applied after its last statement.
+                push!(block_binds, mappings)
+            else
+                # With a scope, it covers what the statements of its `begin ... end` build: they are expanded here,
+                # between a mark of what the block held before them and the rewrite. The mappings are read after
+                # them, so they can name the `@context`s declared inside.
+                start = gensym(:dsl_bind_start)
+                push!(step_exprs, :(local $start = (length(_dsl_algos), length(_dsl_options))))
+                pushfirst!(pending, Expr(:dsl_bind_end, start, mappings))
+                foreach(s -> pushfirst!(pending, s), reverse(scope))
             end
+            continue
+        elseif stmt isa Expr && stmt.head == :dsl_bind_end
+            start, mappings = stmt.args
+            binds = _dsl_bind_tuple(mappings, alias_map, context_map)
+            push!(step_exprs, :(StatefulAlgorithms._composite_dsl_rebind!(_dsl_algos, _dsl_options, $start[1], $start[2], $binds)))
             continue
         elseif stmt isa Expr && stmt.head == :macrocall && stmt.args[1] == Symbol("@merge")
             step_expr = _dsl_build_state_merge_statement(stmt, context_map)
@@ -767,6 +766,11 @@ function _dsl_collect_block(
         end
         # Outputs become available to the statements that follow them.
         _dsl_known_outputs!(known_outputs, stmt)
+    end
+
+    for mappings in block_binds
+        binds = _dsl_bind_tuple(mappings, alias_map, context_map)
+        push!(step_exprs, :(StatefulAlgorithms._composite_dsl_rebind!(_dsl_algos, _dsl_options, 0, 0, $binds)))
     end
 
     return (; step_exprs, state_fields, input_fields, state_name, final_expr)

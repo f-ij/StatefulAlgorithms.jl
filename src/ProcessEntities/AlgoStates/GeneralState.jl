@@ -30,7 +30,7 @@ What a general state matches by: its id when it has one (a block's `@state`, one
 (a named state, `@state name begin … end`, which every state with that key shares).
 """
 match_by(ia::Union{IdentifiableAlgo{<:GeneralState}, Type{<:IdentifiableAlgo{<:GeneralState}}}) = _general_state_match(id(ia), getkey(ia))
-@inline _general_state_match(id::Union{SimpleId, NormalizedId}, key) = id
+@inline _general_state_match(id::Union{SimpleId, NormalizedId, MatchAny}, key) = id
 @inline _general_state_match(id, key) = ValMatcher(key)
 
 """A block's `@state` is named `_state_1`, `_state_2`, … in the context."""
@@ -207,6 +207,16 @@ function Base.merge(
         () -> merge(a.default_values_builder(), b.default_values_builder())
     end
     return GeneralState(merged_builder, Val{merged_fields}(), Val{merged_required}(), Val{merged_explicitly_shared_fields}(), Val{merged_diagnostic_paths}())
+end
+
+"""
+The state without `fields`: they are no longer initialized or required. Used when `@bind` makes those fields of a
+block's state live elsewhere. The default builder is kept as it is, so their defaults are still computed at init.
+"""
+function _general_state_without(state::GeneralState{Fields, Required, B, Shared, Paths}, fields::Tuple{Vararg{Symbol}}) where {Fields, Required, B, Shared, Paths}
+    kept = filter(f -> !(f in fields), Fields)
+    paths = Tuple(Paths[i] for i in eachindex(Fields) if !(Fields[i] in fields))
+    return GeneralState(state.default_values_builder, Val{kept}(), Val{filter(f -> f in kept, Required)}(), Val{filter(f -> f in kept, Shared)}(), Val{paths}())
 end
 
 """Fetch a required state input or raise a readable error."""
