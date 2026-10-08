@@ -8,6 +8,7 @@ what to write now.
 | Old code | What it did | Now |
 |---|---|---|
 | two nested blocks both declaring `@state buffers`, nothing else | one `buffers` shared by both, with an overlap warning | two separate `buffers`. To share them: `@merge f, n` (the whole states) or `@bind buffers => f.buffers` in the parent |
+| several blocks that share a set of fields by declaring the same `@state` names | one shared state | make the state once, outside the blocks, and add it to each: `phase = Unique(@state begin x; y end)`, then in each block `@alias ps = phase; ps` and use `ps.x`. It is one state named `ps`: `Init(:ps; x = ...)`, `context(p).ps` |
 | `@bind buffers => f.buffers` | silenced the overlap warning; the sharing came from the equal names | the same line: `f.buffers` is the parent's `buffers` inside the parent. The names may now differ: `@bind log => f.buffers` |
 | `@merge f.buffers, n.buffers` | silenced the overlap warning | `@merge f, n` merges the whole states. For one field: `@bind buffers => f.buffers` and `@bind buffers => n.buffers` with a `@state buffers` in the parent, or `@replace` |
 | `@merge f._state.buffers, n.buffers` | as above | as above |

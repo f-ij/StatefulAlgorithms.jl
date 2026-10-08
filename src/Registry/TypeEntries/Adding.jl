@@ -52,7 +52,8 @@ function add(rte::RegistryTypeEntry{T}, obj, multiplier = 1.; withkey::WK = noth
         # Some entries allow for merging if they are added with the same key
         # This is decided by the registry_allowmerge trait
         # This requires the entry to implement a merge function
-        if registry_allowmerge(rte[fidx], obj)
+        # (not with itself: the same state added again, e.g. one shared by several blocks)
+        if registry_allowmerge(rte[fidx], obj) && getalgo(rte[fidx]) !== _merge_inner(obj)
             rte = replace(rte, fidx, merge(rte[fidx], obj)) # Merge the entry with the existing one
         end
 

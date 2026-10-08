@@ -55,7 +55,7 @@ end
 
 """Resolve one non-function DSL entity into the internal representation used by the block builder."""
 function _resolve_composite_dsl_entity(spec, inputs::Tuple, output_symbols::Tuple{Vararg{Symbol}}, ::Val{Name}) where {Name}
-    if spec isa Union{AlgoState, Type{<:AlgoState}}
+    if spec isa Union{AlgoState, Type{<:AlgoState}} || _is_identified_state(spec)
         # States participate in the block like algorithms, but they do not accept
         # routed inputs through this syntax.
         isempty(inputs) || error("AlgoStates in the DSL cannot declare routed inputs.")
