@@ -76,6 +76,13 @@ Each was reproduced in the September 2026 code review unless marked *(unverified
 - [ ] `src/CompositeDSL/StateAndRoutes.jl:173`: hygiene problem: escaped expressions contain `StatefulAlgorithms.`-qualified names, so they fail if the caller hasn't bound that module name.
 - [ ] `src/CompositeDSL/Macros.jl:53`: the DSL re-implements the constructor parser, and the copy has drifted (no `RunIf`).
 
+## DSL refactor (proposed 2026-10-06, nothing started; each item needs the owner's approval first)
+- [ ] **Think hard about state in the DSL: who defines it, who owns it, and who may require it.** Open questions: must a block declare `@state` for every field its children use, or may children bring their own (today each nested block declares `@state x` and overlapping fields merge with a warning, resolved by `@bind`/`@merge`)? How do `@state` fields relate to `ProcessState` entries, `Init(...)`, `@input` and the declared `Local` loop locals from `exp/declared-locals`? Should required fields be declared once at the owning block, and what does a reusable child block promise about its own state? This decision shapes the `@state`/`@bind`/`@merge` syntax and the docs, so settle it before touching them.
+- [ ] Write the DSL design-principles page (three evaluation times, what a bare identifier means, statement table, identity). A draft is in the session scratchpad (`Overview.draft.jl`); it replaces the `src/CompositeDSL/Overview.jl` header.
+- [ ] Backend, no behaviour change, one commit per step: (1) a single `_dsl_is_macro(stmt, :name)` helper instead of ~25 hand-written `stmt.args[1] == Symbol("@...")` checks; (2) one `RouteInput` struct instead of four NamedTuple `kind`s; (3) one `_dsl_emit_entry` instead of four near-identical emit branches in `_dsl_build_statement`; (4) `@include_if` reuses the block walker. Reference: 854 tests pass on `main` before the refactor.
+- [ ] Frontend, backward-compatible: deprecate `@every` in favour of `@interval`; give `@route`/`@replace` the same option syntax; fix the DSL front-end bugs above; decide whether to expose `Local` as `@local`.
+- [ ] Docs: restructure `docs/src/user/composite_dsl.md` into tutorial, concepts and reference; shrink the macro docstrings to a pointer plus a syntax summary; expand the README; give `docs/src/index.md` a first-reader path; work through `DOCS_REVIEW_NOTES.md`.
+
 ## Inspection / ContextAnalyzer
 - [ ] `src/ContextAnalyzer/ContextAnalyzer.jl:309`: the analyzer ignores routes and shares, so `inspect` lists routed and defaulted values as unresolved requests.
 
