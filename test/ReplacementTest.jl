@@ -68,13 +68,13 @@ end
         initialized = init(algo; lifetime = Repeat(1))
         context = StatefulAlgorithms.context(initialized)
 
-        @test context.target.value isa ReplacedVar
+        @test context[Var(:target, :value)] == 3
         @test context.source.value == 3
 
         stepped_context = StatefulAlgorithms._step!(initialized, context)
 
         @test stepped_context.source.value == 4
-        @test stepped_context.target.value isa ReplacedVar
+        @test stepped_context[Var(:target, :value)] == 4
         @test stepped_context.target.seen == 3
     end
 
@@ -90,7 +90,7 @@ end
         stepped_context = StatefulAlgorithms._step!(initialized, StatefulAlgorithms.context(initialized))
 
         @test stepped_context.target.seen == 8
-        @test stepped_context.target.value isa ReplacedVar
+        @test stepped_context[Var(:target, :value)] === stepped_context.source.value
     end
 
     @testset "DSL @replace lowers to root replacement option" begin
@@ -107,7 +107,7 @@ end
 
         initialized = init(resolved; lifetime = Repeat(1))
         context = StatefulAlgorithms.context(initialized)
-        @test context.target.value isa ReplacedVar
+        @test context[Var(:target, :value)] == 3
 
         stepped_context = StatefulAlgorithms._step!(initialized, context)
         @test stepped_context.source.value == 4
