@@ -86,3 +86,25 @@ using StatefulAlgorithms
 
     @test all_resolved(resolved_wiring)
 end
+
+@testset "A route wins over a field of the same name in the target's state" begin
+    struct RoutePrecedenceSource <: ProcessAlgorithm end
+    StatefulAlgorithms.init(::RoutePrecedenceSource, context) = (; level = 5)
+    StatefulAlgorithms.step!(::RoutePrecedenceSource, context) = (; level = context.level + 1)
+
+    struct RoutePrecedenceTarget <: ProcessAlgorithm end
+    StatefulAlgorithms.init(::RoutePrecedenceTarget, context) = (; level = 100, seen = 0)
+    StatefulAlgorithms.step!(::RoutePrecedenceTarget, context) = (; seen = context.level)
+
+    plan = CompositeAlgorithm(
+        RoutePrecedenceSource,
+        RoutePrecedenceTarget,
+        (1, 1),
+        Route(RoutePrecedenceSource => RoutePrecedenceTarget, :level),
+    )
+    c = StatefulAlgorithms.context(run(plan; repeats = 3))
+    # The target reads the routed `level` (the source's: 6, 7, 8), not its own (100)
+    @test c[RoutePrecedenceTarget].seen == 8
+    @test c[RoutePrecedenceTarget].level == 100
+    @test c[RoutePrecedenceSource].level == 8
+end

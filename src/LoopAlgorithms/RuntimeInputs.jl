@@ -44,11 +44,14 @@ Loop option carrying all runtime input declarations for a composed algorithm.
 The DSL stores this as an option so `run(...; kwargs...)` can validate keyword
 arguments without inspecting the generated step code.
 """
-struct RuntimeInputs{Specs} <: AbstractOption
+struct RuntimeInputs{Specs} <: RootOption
     specs::Specs
 end
 
 RuntimeInputs(specs::Tuple = ()) = RuntimeInputs{typeof(specs)}(specs)
+
+"""Runtime inputs name no algorithm or state, so there is no key to update."""
+update_keys(inputs::RuntimeInputs, ::NameSpaceRegistry) = inputs
 
 """
 Registry-visible marker state for runtime input names.
@@ -57,7 +60,7 @@ Runtime inputs are not persistent state. This marker exists so the composition
 registry can route DSL references such as `temperature` to the runtime input
 owner while initialization still produces an empty persistent subcontext.
 """
-struct RuntimeInputState{Specs} <: ProcessState
+struct RuntimeInputState{Specs} <: AlgoState
     specs::Specs
 end
 
@@ -78,8 +81,7 @@ options or as `RuntimeInputState` process states. The latter is used by the DSL
 so inputs can participate in routing through the registry.
 """
 function runtimeinputs(la::LA) where {LA<:LoopSpec}
-    opts = getoptions(la)
-    inputs = filter_by_type(RuntimeInputs, opts)
+    inputs = filter_by_type(RuntimeInputs, getoptions(la))
     if !isempty(inputs)
         specs = mapreduce(x -> x.specs, (a, b) -> (a..., b...), inputs; init = ())
         return RuntimeInputs(specs)

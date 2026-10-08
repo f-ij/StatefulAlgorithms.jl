@@ -200,9 +200,20 @@ Plain algorithms use the normal keyed owner wrapper.
 """
 function _composite_dsl_write_owner(entity, name::Symbol)
     if entity isa LoopSpec
-        return getproperty(entity, :_state)
+        return _composite_dsl_block_state(entity)
     end
     return IdentifiableAlgo(entity, name)
+end
+
+"""Return `true` for a block's own `@state`: a `GeneralState` carrying the id it got when the block was built."""
+_composite_dsl_is_block_state(entry) = entry isa AbstractIdentifiableAlgo && getalgo(entry) isa GeneralState && id(entry) isa Union{SimpleId, NormalizedId}
+
+"""Return the `@state` of the DSL block `entity` (its identified `GeneralState`), the owner of `c.field` references."""
+function _composite_dsl_block_state(entity::LoopSpec)
+    for state in getstates(entity)
+        _composite_dsl_is_block_state(state) && return state
+    end
+    error("The block has no `@state`.")
 end
 
 """Return the key carried by a state constructor entry.
@@ -286,22 +297,13 @@ constructors.
 Base.@nospecializeinfer function _composite_dsl_map_states_changed(func::F, @nospecialize(entity)) where {F}
     if entity isa LoopAlgorithm
         plan, plan_changed = _composite_dsl_map_states_changed(func, getfield(entity, :plan))
-        states, states_changed = _composite_dsl_map_state_entries(func, getfield(entity, :states))
-        (plan_changed || states_changed) || return entity, false
-        return LoopAlgorithm(
-            plan;
-            states,
-            options = getoptions(entity),
-            registry = getregistry(entity),
-            context = getstoredcontext(entity),
-            inits = getstoredinits(entity),
-            overrides = getstoredoverrides(entity),
-            id = getid(entity),
-        ), true
+        plan_changed || return entity, false
+        return setfield(entity, :plan, plan), true
     elseif entity isa Union{CompositeAlgorithm, Routine}
         funcs, funcs_changed = _composite_dsl_map_state_children(func, getfield(entity, :funcs))
-        funcs_changed || return entity, false
-        return rebuild_loopalgorithm_funcs(entity, funcs), true
+        states, states_changed = _composite_dsl_map_state_entries(func, getfield(entity, :states))
+        (funcs_changed || states_changed) || return entity, false
+        return setstates(rebuild_loopalgorithm_funcs(entity, funcs), states), true
     elseif entity isa IdentifiableAlgo && getfield(entity, :func) isa LoopSpec
         inner, inner_changed = _composite_dsl_map_states_changed(func, getfield(entity, :func))
         inner_changed || return entity, false
@@ -344,24 +346,15 @@ end
 
 function _composite_dsl_map_states_changed_typed(func::F, entity::LA) where {F, LA<:LoopAlgorithm}
     plan, plan_changed = _composite_dsl_map_states_changed_typed(func, getplan(entity))
-    states, states_changed = _composite_dsl_map_state_entries_typed(func, getstates(entity))
-    (plan_changed || states_changed) || return entity, false
-    return LoopAlgorithm(
-        plan;
-        states,
-        options = getoptions(entity),
-        registry = getregistry(entity),
-        context = getstoredcontext(entity),
-        inits = getstoredinits(entity),
-        overrides = getstoredoverrides(entity),
-        id = getid(entity),
-    ), true
+    plan_changed || return entity, false
+    return setfield(entity, :plan, plan), true
 end
 
 function _composite_dsl_map_states_changed_typed(func::F, entity::LA) where {F, LA<:Union{CompositeAlgorithm, Routine}}
     funcs, funcs_changed = _composite_dsl_map_state_children_typed(func, getalgos(entity))
-    funcs_changed || return entity, false
-    return rebuild_loopalgorithm_funcs(entity, funcs), true
+    states, states_changed = _composite_dsl_map_state_entries_typed(func, getstates(entity))
+    (funcs_changed || states_changed) || return entity, false
+    return setstates(rebuild_loopalgorithm_funcs(entity, funcs), states), true
 end
 
 function _composite_dsl_map_states_changed_typed(func::F, entity::IA) where {F, Inner<:LoopSpec, IA<:AbstractIdentifiableAlgo{Inner}}
@@ -417,7 +410,7 @@ constructor call is made.
 function _composite_dsl_mark_local_shared_state_field!(states::S, field::Symbol) where {S<:Vector{Any}}
     for idx in eachindex(states)
         entry = states[idx]
-        _composite_dsl_state_entry_key(entry) == :_state || continue
+        _composite_dsl_is_block_state(entry) || continue
         state = _composite_dsl_state_entry_value(entry)
         state isa GeneralState || continue
         field in general_state_fields(state) || continue
@@ -592,10 +585,15 @@ function _dsl_state_setup_expr(state_fields, state_name::Symbol)
 
     state_expr = _dsl_expand_state_expr(state_fields)
     outputs_expr = Expr(:tuple, [QuoteNode(field.name) for field in state_fields]...)
-    state_owner_expr = _dsl_known_owner_expr(:(_dsl_state), state_name)
+    # A block's own state gets an id here, once per construction, so two blocks built from the same code keep separate
+    # state (`_state_1`, `_state_2`); a named state is keyed by its name and shared by every state with that name.
+    state_entry_expr = state_name == :_state ?
+        :(StatefulAlgorithms.IdentifiableAlgo($state_expr, Symbol(), StatefulAlgorithms.uuid4())) :
+        :($(QuoteNode(state_name)) => $state_expr)
+    state_owner_expr = state_name == :_state ? :(_dsl_state) : _dsl_known_owner_expr(:(_dsl_state.second), state_name)
     return quote
-        local _dsl_state = $state_expr
-        push!(_dsl_states, $(QuoteNode(state_name)) => _dsl_state)
+        local _dsl_state = $state_entry_expr
+        push!(_dsl_states, _dsl_state)
         local _dsl_state_owner = $state_owner_expr
         StatefulAlgorithms._composite_dsl_register_outputs!(_dsl_producers, _dsl_state_owner, $outputs_expr)
         StatefulAlgorithms._composite_dsl_register_state_outputs!(_dsl_state_owners, _dsl_state_owner, $outputs_expr)

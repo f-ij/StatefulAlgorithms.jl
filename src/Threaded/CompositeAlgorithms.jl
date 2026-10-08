@@ -7,11 +7,13 @@ layers.
 The constructor API mirrors [`CompositeAlgorithm`](@ref): pass child algorithms, then an
 interval tuple, then any states and options.
 """
-struct ThreadedCompositeAlgorithm{T, Intervals, Namespaces, W, id} <: AbstractPlan
+struct ThreadedCompositeAlgorithm{T, Intervals, Namespaces, W, id, S, O} <: AbstractPlan
     funcs::T
     intervals
     namespaces::Namespaces
     wiring::W
+    states::S
+    options::O
 end
 
 const BarrieredCompositeAlgorithm = ThreadedCompositeAlgorithm
@@ -21,15 +23,17 @@ iscomposite(::Type{TCA}) where {TCA<:ThreadedCompositeAlgorithm} = true
 ThreadedCompositeAlgorithm(args...) = parse_la_input(ThreadedCompositeAlgorithm, args...)
 
 
-function setoptions(tca::ThreadedCompositeAlgorithm, options)
-    wiring = PlanWiring(_plan_wiring(options), _plan_child_wiring(getalgos(tca), options))
+"""Rebuild the route/share wiring of `tca` from `wiring` (`Route`s, `Share`s, `LocalPlanOption`s)."""
+function setwiring(tca::ThreadedCompositeAlgorithm, wiring)
+    wiring = PlanWiring(_plan_wiring(wiring), _plan_child_wiring(getalgos(tca), wiring))
     return setfield(tca, :wiring, wiring)
 end
 
 @inline getalgos(tca::ThreadedCompositeAlgorithm) = getfield(tca, :funcs)
-@inline getstates(tca::ThreadedCompositeAlgorithm) = ()
+@inline getstates(tca::ThreadedCompositeAlgorithm) = getfield(tca, :states)
+statetypes(::Union{ThreadedCompositeAlgorithm{T,I,NS,W,id,S}, Type{<:ThreadedCompositeAlgorithm{T,I,NS,W,id,S}}}) where {T,I,NS,W,id,S} = S.parameters
 @inline getwiring(tca::ThreadedCompositeAlgorithm) = getfield(tca, :wiring)
-@inline getoptions(tca::ThreadedCompositeAlgorithm) = _all_plan_wiring(global_wiring(getwiring(tca)), child_wiring(getwiring(tca)))
+@inline getoptions(tca::ThreadedCompositeAlgorithm) = getfield(tca, :options)
 
 subalgorithms(tca::ThreadedCompositeAlgorithm) = getalgos(tca)
 subalgotypes(tca::ThreadedCompositeAlgorithm{FT}) where {FT} = FT.parameters

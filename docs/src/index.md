@@ -5,7 +5,7 @@ StatefulAlgorithms.jl helps you build Julia loops from small named pieces.
 An **algorithm** is a piece of loop code. It is a subtype of
 `StepAlgorithm` and usually defines `StatefulAlgorithms.step!`.
 
-A **state** is a piece of setup data. It is a subtype of `ProcessState` and
+A **state** is a piece of setup data. It is a subtype of `AlgoState` and
 usually defines `StatefulAlgorithms.init`.
 
 A **process** combines algorithms, states, inputs, and stop rules into a running

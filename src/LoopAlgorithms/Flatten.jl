@@ -49,3 +49,33 @@ function flat_comp(ca::CompositeAlgorithm, interval)
     end
     return funcs, intervals
 end
+
+export states
+
+"""
+    states(la)
+
+Every state of a resolved loop algorithm, flat: a `NamedTuple` from namespace to state, for example
+`(_state_1 = GeneralState(a), _state_2 = GeneralState(a), _input = RuntimeInputState(...))`. Read from the registry, so a
+state used by several blocks appears once, under the namespace it has in the context. Type stable.
+
+Names are given by `resolve`, so a plan has to be resolved first: `states(resolve(plan))`.
+"""
+states(la::LoopAlgorithm) = _registry_states(getregistry(la))
+states(fa::FinalizedAlgorithm) = states(inneralgorithm(fa))
+states(::LoopSpec) = error("States are named when the plan is resolved; use `states(resolve(plan))`.")
+
+"""The states among the entries of `reg` (entries wrapping a `AlgoState`), as namespace => state."""
+@generated function _registry_states(reg::NameSpaceRegistry{E}) where {E}
+    names = Symbol[]
+    values = Any[]
+    for (i, typeentry) in enumerate(E.parameters)
+        entrytypes = fieldtype(typeentry, :entries).parameters
+        for (j, entry) in enumerate(entrytypes)
+            entry <: AbstractIdentifiableAlgo && algotype(entry) <: AlgoState || continue
+            push!(names, getkey(entry))
+            push!(values, :(getalgo(getfield(getfield(getfield(reg, :entries), $i), :entries)[$j])))
+        end
+    end
+    return :(NamedTuple{$(Tuple(names))}(($(values...),)))
+end

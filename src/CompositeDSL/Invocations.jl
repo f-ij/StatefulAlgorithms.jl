@@ -464,7 +464,7 @@ function _dsl_parse_invocation(alias_map, context_map, ex, known_outputs::Set{Sy
                 _dsl_parse_function_call(alias_map, context_map, inner, known_outputs)
             else
                 # Pure keyword calls are resolved at runtime: plain functions are
-                # wrapped, while ProcessAlgorithms/ProcessStates go through the
+                # wrapped, while ProcessAlgorithms/AlgoStates go through the
                 # normal entity route path. Keep the macro as syntax lowering only.
                 parsed_function = _dsl_parse_function_call(alias_map, context_map, inner, known_outputs)
                 inputs, shares = _dsl_parse_entity_call_args(alias_map, context_map, args, known_outputs)

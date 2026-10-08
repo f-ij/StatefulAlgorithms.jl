@@ -15,10 +15,10 @@ using StatefulAlgorithms
         Route(PrepSource => PrepOther, :value => :target),
     )
 
-    @test length(StatefulAlgorithms.getoptions(algo, StatefulAlgorithms.Route)) == 1
+    @test length(StatefulAlgorithms.get_routes(algo)) == 1
     @test algo isa StatefulAlgorithms.CompositeAlgorithm
     @test StatefulAlgorithms.getplan(algo) isa StatefulAlgorithms.CompositeAlgorithm
-    @test length(StatefulAlgorithms.getoptions(StatefulAlgorithms.getplan(algo), StatefulAlgorithms.Route)) == 1
+    @test length(StatefulAlgorithms.get_routes(StatefulAlgorithms.getplan(algo))) == 1
 
     resolved = StatefulAlgorithms.resolve(algo)
     registry = StatefulAlgorithms.getregistry(resolved)
@@ -32,7 +32,7 @@ using StatefulAlgorithms
     @test StatefulAlgorithms.isresolved(resolved)
     @test all(child -> !(child isa StatefulAlgorithms.AbstractIdentifiableAlgo), StatefulAlgorithms.getalgos(resolved))
     @test all(entry -> entry isa StatefulAlgorithms.AbstractIdentifiableAlgo, StatefulAlgorithms.all_algos(registry))
-    @test length(StatefulAlgorithms.getoptions(StatefulAlgorithms.getplan(resolved), StatefulAlgorithms.Route)) == 1
+    @test length(StatefulAlgorithms.get_routes(StatefulAlgorithms.getplan(resolved))) == 1
     @test length(StatefulAlgorithms.child_wiring(StatefulAlgorithms.getwiring(StatefulAlgorithms.getplan(resolved)))) == length(StatefulAlgorithms.getalgos(resolved))
     @test !isnothing(source_name)
     @test !isnothing(target_name)

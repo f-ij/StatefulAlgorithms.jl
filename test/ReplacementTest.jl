@@ -1,7 +1,7 @@
 using Test
 using StatefulAlgorithms
 
-struct ReplacementSourceState <: ProcessState end
+struct ReplacementSourceState <: AlgoState end
 struct ReplacementSourceAlgo <: ProcessAlgorithm end
 struct ReplacementTargetAlgo <: ProcessAlgorithm end
 struct ReplacementReadTargetAlgo <: ProcessAlgorithm end
@@ -113,4 +113,44 @@ end
         @test stepped_context.source.value == 4
         @test stepped_context.target.seen == 3
     end
+end
+
+@testset "update_keys updates the keys of a plan's Replace, route and children" begin
+    struct UKSource <: ProcessAlgorithm end
+    StatefulAlgorithms.init(::UKSource, context) = (; x = 1.0)
+    StatefulAlgorithms.step!(::UKSource, context) = (; x = context.x + 1)
+    struct UKSink <: ProcessAlgorithm end
+    StatefulAlgorithms.init(::UKSink, context) = (; seen = 0.0, y = 0.0)
+    StatefulAlgorithms.step!(::UKSink, context) = (; seen = context.x)
+
+    plan = CompositeAlgorithm(UKSource, UKSink, (1, 1),
+        StatefulAlgorithms.LocalPlanOption(UKSink, Route(UKSource => UKSink, :x)),
+        Replace(UKSource => UKSink, :x => :y))
+    updated = StatefulAlgorithms.update_keys(plan, StatefulAlgorithms.getregistry(resolve(plan)))
+
+    replace = only(getoptions(updated))
+    @test getkey(StatefulAlgorithms.getfrom(replace)) == :UKSource_1
+    @test getkey(StatefulAlgorithms.getto(replace)) == :UKSink_1
+    @test map(getkey, StatefulAlgorithms.getalgos(updated)) == (:UKSource_1, :UKSink_1)
+    # The route still belongs to the sink
+    @test map(w -> length(StatefulAlgorithms.routes(w)), StatefulAlgorithms.child_wiring(StatefulAlgorithms.getwiring(updated))) == (0, 1)
+end
+
+@testset "A Replace declared in a nested plan applies to the whole run" begin
+    struct NRSource <: ProcessAlgorithm end
+    StatefulAlgorithms.init(::NRSource, context) = (; x = 1.0)
+    StatefulAlgorithms.step!(::NRSource, context) = (; x = context.x + 1)
+    struct NRSink <: ProcessAlgorithm end
+    StatefulAlgorithms.init(::NRSink, context) = (; seen = 0.0, y = 0.0)
+    StatefulAlgorithms.step!(::NRSink, context) = (; seen = context.y)
+    struct NROther <: ProcessAlgorithm end
+    StatefulAlgorithms.init(::NROther, context) = (;)
+    StatefulAlgorithms.step!(::NROther, context) = (;)
+
+    inner = CompositeAlgorithm(NRSource, NRSink, (1, 1), Replace(NRSource => NRSink, :x => :y))
+    outer = CompositeAlgorithm(inner, NROther, (1, 1))
+
+    @test only(getoptions(resolve(outer))) isa Replace   # collected from the nested plan
+    c = StatefulAlgorithms.context(run(outer; repeats = 3))
+    @test c[NRSink].seen == c[NRSource].x == 4.0         # the sink's `y` is the source's `x`
 end

@@ -1,5 +1,9 @@
+"""Return `true` for a state that already carries its identity: an identifiable wrapper around a `AlgoState`."""
+_is_identified_state(arg) = arg isa AbstractIdentifiableAlgo && getalgo(arg) isa AlgoState
+
 """Return `true` for loop-constructor children that run or describe runnable children."""
 function _is_loop_child_input(arg)
+    _is_identified_state(arg) && return false
     return arg isa Union{SteppableAlgorithm, AbstractPlan, Type{<:SteppableAlgorithm}, Type{<:AbstractPlan}}
 end
 
@@ -7,7 +11,7 @@ end
 Return `true` when an argument belongs in the algorithm section of a loop constructor.
 
 Named state pairs like `:_state => state` are intentionally excluded here so they
-fall through to the later ProcessState parsing branch.
+fall through to the later AlgoState parsing branch.
 """
 function isa_processentity_input(arg)
     if arg isa ParserOption
@@ -20,7 +24,7 @@ function isa_processentity_input(arg)
             return true
         elseif _is_loop_child_input(arg.second)
             return true
-        elseif arg.second isa ProcessState || arg.second isa Type{<:ProcessState}
+        elseif arg.second isa AlgoState || arg.second isa Type{<:AlgoState}
             return false
         else
             construction_error("If passing algorithms as pairs, the second element must be a SteppableAlgorithm, AbstractPlan, matching Type, or ParserOption, but got: ", arg.second)
@@ -59,8 +63,8 @@ function _filter_loopalgorithm_specification(specification, kept_algos::Tuple)
     return tuple((specification[i] for i in eachindex(kept_algos) if kept_algos[i])...)
 end
 
-"""Return `true` when an argument belongs in the ProcessState section."""
-@inline isa_processstate_input(arg) = (arg isa ProcessState) || (arg isa Type{<:ProcessState}) || (arg isa Pair && arg.first isa Symbol && (arg.second isa ProcessState || arg.second isa Type{<:ProcessState}))
+"""Return `true` when an argument belongs in the AlgoState section."""
+@inline isa_algostate_input(arg) = _is_identified_state(arg) || (arg isa AlgoState) || (arg isa Type{<:AlgoState}) || (arg isa Pair && arg.first isa Symbol && (arg.second isa AlgoState || arg.second isa Type{<:AlgoState}))
 
 #TODO: Don't allow Identifiable wrapping of LoopAlgorithms
 """
@@ -141,16 +145,16 @@ function parse_la_input(laType::Type{LA}, args...) where {LA<:AbstractPlan}
         processalgos, intervals_or_repeats = flatten_comp_funcs(processalgos, tuple(intervals_or_repeats...))
     end
 
-    ######### PROCESS STATES #########
+    ######### STATES #########
     pstates = tuple()
     while true
-        el, args = parse_by_func(isa_processstate_input, args...; error = false)
+        el, args = parse_by_func(isa_algostate_input, args...; error = false)
         if isnothing(el)
             break
         else
             if el isa Pair
                 state = IdentifiableAlgo(el.second, el.first)
-            elseif el isa Union{ProcessState, Type{<:ProcessState}}
+            elseif el isa Union{AlgoState, Type{<:AlgoState}}
                 state = IdentifiableAlgo(el)
             else
                 state = el
@@ -158,27 +162,11 @@ function parse_la_input(laType::Type{LA}, args...) where {LA<:AbstractPlan}
             pstates = tuple(pstates..., state)
         end
     end
-    # first_process_states = findfirst(isa_processstate_input, args)
-    # last_process_state = nothing
-    # pstates = tuple()
-    # if !isnothing(first_process_states)
-    #     last_process_state = findlast(isa_processstate_input, args)
-    #     pstates = args[first_process_states:last_process_state]
-    #     @assert all(isa_processstate_input, pstates) "All arguments between the first and last ProcessState must be ProcessStates, but got: $(pstates)"
-    #     pstates = map(pstates) do state
-    #         if state isa Pair
-    #             IdentifiableAlgo(state.second, state.first)
-    #         else
-    #             IdentifiableAlgo(state)
-    #         end
-    #     end
-    #     args = args[last_process_state + 1:end]
-    # end
 
     options = tuple()
     if !isempty(args)
         options = tuple(args[1:end]...)
-        all(x -> x isa Union{AbstractOption, AbstractWiring} || x isa Type{<:Union{AbstractOption, AbstractWiring}}, options) || construction_assert_error("All arguments after the ProcessStates must be options or wiring, but got: ", options)
+        all(x -> x isa Union{AbstractOption, AbstractWiring} || x isa Type{<:Union{AbstractOption, AbstractWiring}}, options) || construction_assert_error("All arguments after the AlgoStates must be options or wiring, but got: ", options)
     end
     options = tuple(collected_options..., options...)
     return LoopAlgorithm(laType, processalgos, pstates, options, intervals_or_repeats)
@@ -190,7 +178,7 @@ end
 Build a plan of type `PlanType` (`CompositeAlgorithm`, `Routine` or `ThreadedCompositeAlgorithm`) from parsed
 constructor input: its children `funcs`, their intervals or repeats `schedule`, and its route/share wiring taken from
 `options`. Child-scoped wiring (`LocalPlanOption`) is split per child; plain routes and shares are stored on the plan.
-The plan is wrapped in a `LoopAlgorithm` only when there are `states` or other options to keep on the wrapper.
+The plan keeps its `states` and its other options; `resolve` wraps it in a `LoopAlgorithm`.
 
 `parse_la_input` above and the DSL (`_dsl_build_loopalgorithm`) both end here.
 """
@@ -203,9 +191,8 @@ Base.@nospecializeinfer LoopAlgorithm(PlanType::Type{<:AbstractPlan}, @nospecial
 Base.@nospecializeinfer function _build_plan(PlanType::Type, @nospecialize(funcs::Tuple), @nospecialize(states::Tuple), @nospecialize(options::Tuple), @nospecialize(schedule), id)
     namespaces = Tuple(Any[Namespace{nothing}() for _ in 1:length(funcs)])
     wiring = PlanWiring(_plan_wiring_untyped(options), _plan_child_wiring_runtime(funcs, options))
-    plan = PlanType{typeof(funcs), schedule, typeof(namespaces), typeof(wiring), id}(funcs, schedule, namespaces, wiring)
-    root_options = _root_loop_options_untyped(options)
-    return isempty(states) && isempty(root_options) ? plan : LoopAlgorithm(plan; states, options = root_options, id)
+    plan_options = _non_wiring_untyped(options)
+    return PlanType{typeof(funcs), schedule, typeof(namespaces), typeof(wiring), id, typeof(states), typeof(plan_options)}(funcs, schedule, namespaces, wiring, states, plan_options)
 end
 
 """
@@ -221,9 +208,8 @@ every plan type, which includes every new `Unique` handle (about 175 ms per re-r
 function _build_plan_typed(::Type{PlanType}, funcs::F, states::Tuple, options::Tuple, schedule, id) where {PlanType<:AbstractPlan, F<:Tuple}
     namespaces = ntuple(_ -> Namespace{nothing}(), length(funcs))
     wiring = PlanWiring(_plan_wiring(options), _plan_child_wiring(funcs, options))
-    plan = PlanType{typeof(funcs), schedule, typeof(namespaces), typeof(wiring), id}(funcs, schedule, namespaces, wiring)
-    root_options = _root_loop_options(options)
-    return isempty(states) && isempty(root_options) ? plan : LoopAlgorithm(plan; states, options = root_options, id)
+    plan_options = _non_wiring(options)
+    return PlanType{typeof(funcs), schedule, typeof(namespaces), typeof(wiring), id, typeof(states), typeof(plan_options)}(funcs, schedule, namespaces, wiring, states, plan_options)
 end
 
 

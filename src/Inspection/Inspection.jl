@@ -118,7 +118,7 @@ end
 
 function _inspection_kind(obj)
     inner = obj isa AbstractIdentifiableAlgo ? getalgo(obj) : obj
-    if inner isa ProcessState
+    if inner isa AlgoState
         return :state
     elseif inner isa ProcessAlgorithm
         return :algorithm

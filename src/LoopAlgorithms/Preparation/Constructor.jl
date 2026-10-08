@@ -7,8 +7,8 @@ const _REGISTRY_BATCH_CHILD_LIMIT = 16
 Materialize a loop algorithm for context construction.
 
 This wraps bare plan nodes in a concrete `LoopAlgorithm`, builds a registry,
-keys the child algorithms, and resolves route/share options against that
-registry. The returned value is always a runtime wrapper unless the input was a
+keys the child algorithms, resolves the route/share wiring against that
+registry, and collects the `RootOption`s of the plan tree. The returned value is always a runtime wrapper unless the input was a
 `FinalizedAlgorithm`, in which case the finalized outer shape is preserved and
 its inner loop is materialized.
 
@@ -35,7 +35,7 @@ end
     registry, keyed_la = setup_registry_and_keyed_algos(la)
     keyed_la = attach_registry_to_tree(keyed_la, registry)
     keyed_la = resolve_plan_wiring(keyed_la, registry)
-    return setoptions(keyed_la, _root_loop_options(la))
+    return setoptions(keyed_la, _root_options(la))
 end
 
 @inline function setup_registry_and_keyed_algos(la::LoopAlgorithm)
@@ -281,24 +281,7 @@ function _resolve_child_wiring_bucket(registry::NameSpaceRegistry, bucket::Wirin
     return get(grouped, target, Wiring())
 end
 
-"""Collect unresolved options from nested child plan nodes."""
-@inline _plan_tree_child_options(::Tuple{}) = ()
-@inline function _plan_tree_child_options(children::Children) where {Children<:Tuple}
-    child = first(children)
-    head_options = child isa LoopSpec ? _plan_tree_options(child) : ()
-    return (head_options..., _plan_tree_child_options(Base.tail(children))...)
-end
 
-"""Collect unresolved options stored throughout one plan tree."""
-function _plan_tree_options(la::LA) where {LA<:LoopSpec}
-    nested = _plan_tree_child_options(getalgos(la))
-    return (getoptions(la)..., nested...)
-end
-
-@inline _plan_tree_options(la::LoopAlgorithm) = (_plan_tree_options(getplan(la))..., getoptions(la)...)
-
-@inline _unresolved_options(la::LoopAlgorithm) = (_plan_tree_options(getplan(la))..., getoptions(la)...)
-@inline _unresolved_options(la::LA) where {LA<:LoopSpec} = _plan_tree_options(la)
 
 @inline function _resolve_options(la::LA) where {LA<:LoopSpec}
     resolved = resolve(la)

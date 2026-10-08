@@ -1,61 +1,87 @@
 """
-    _root_loop_options(options::Tuple)
+    _non_wiring(options::Tuple)
 
-Return the options that stay on the outer `LoopAlgorithm`: every option except routes and shares
-(`AbstractWiring`), in their original order. Routes and shares are not kept here because they are stored in the
-plan's wiring instead. For example `(state, route, runtime_inputs)` gives `(state, runtime_inputs)`.
+The options that are not routes or shares (`AbstractWiring`), in their original order: what a plan keeps in its
+`options` field, next to its `wiring`. For example `(route, runtime_inputs, replace)` gives `(runtime_inputs, replace)`.
 """
-@inline function _root_loop_options(options::Options) where {Options<:Tuple}
+@inline function _non_wiring(options::Options) where {Options<:Tuple}
     # Written as recursion instead of `filter` so that the result type stays known for any number of options: Base's
     # `filter` on a tuple of 32 or more elements goes through a `Vector`, which loses the types. The recursion runs on
     # the front of the tuple and decides about the last option on the way back, so its argument only gets shorter.
-    kept = _root_loop_options(Base.front(options))
+    kept = _non_wiring(Base.front(options))
     option = last(options)
     return option isa AbstractWiring ? kept : (kept..., option)
 end
-@inline _root_loop_options(::Tuple{}) = ()
+@inline _non_wiring(::Tuple{}) = ()
 
-"""Append non-wiring options to `root_options` without constructing a large tuple."""
-function _append_root_loop_options!(root_options::Vector{Any}, options::Options) where {Options<:Tuple}
-    for option in options
-        option isa AbstractWiring && continue
-        push!(root_options, option)
-    end
-    return root_options
+"""The `RootOption`s among `options`, in their original order (written as recursion for the reason in `_non_wiring`)."""
+@inline function _root_only(options::Options) where {Options<:Tuple}
+    kept = _root_only(Base.front(options))
+    option = last(options)
+    return option isa RootOption ? (kept..., option) : kept
 end
+@inline _root_only(::Tuple{}) = ()
 
-"""Collect root options from a loop tree without materializing plan wiring."""
-function _append_plan_tree_root_options!(root_options::Vector{Any}, la::LA) where {LA<:LoopSpec}
-    plan = if la isa LoopAlgorithm
-        _append_root_loop_options!(root_options, getoptions(la))
-        getplan(la)
-    else
-        la
-    end
+"""
+    _root_options(la)
 
-    # Concrete executable plans store only plan wiring locally, so do not call
-    # `getoptions(plan)` here. That would rebuild all route/share options just
-    # to discard them as non-root options.
-    for child in getalgos(plan)
-        child isa LoopSpec && _append_plan_tree_root_options!(root_options, child)
-    end
-    return root_options
-end
-
-"""Return non-wiring options stored anywhere in an unresolved loop tree."""
-function _root_loop_options(la::LA) where {LA<:LoopAlgorithm}
-    return _root_loop_options_tree(la)
-end
-
-# The same walk as `_append_plan_tree_root_options!` (a wrapper's own options first, then its children), as tuple
-# recursion with no accumulator, so the type of the result is inferred.
-@inline _root_loop_options_tree(la::LoopAlgorithm) = (_root_loop_options(getoptions(la))..., _root_loop_options_children(getalgos(getplan(la)))...)
-@inline _root_loop_options_tree(la::LA) where {LA<:LoopSpec} = _root_loop_options_children(getalgos(la))
-@inline _root_loop_options_children(::Tuple{}) = ()
-@inline function _root_loop_options_children(children::Children) where {Children<:Tuple}
+The `RootOption`s of every plan in the tree of `la`, in tree order: what `resolve` keeps on the `LoopAlgorithm`. A
+nested resolved `LoopAlgorithm` is read through its plan, not through the options it collected, so nothing is counted
+twice.
+"""
+@inline _root_options(plan::AbstractPlan) = (_root_only(getoptions(plan))..., _root_options_children(getalgos(plan))...)
+@inline _root_options(la::LoopAlgorithm) = _root_options(getplan(la))
+@inline _root_options_children(::Tuple{}) = ()
+@inline function _root_options_children(children::Children) where {Children<:Tuple}
     child = first(children)
-    head = child isa LoopSpec ? _root_loop_options_tree(child) : ()
-    return (head..., _root_loop_options_children(Base.tail(children))...)
+    head = child isa LoopSpec ? _root_options(child) : ()
+    return (head..., _root_options_children(Base.tail(children))...)
+end
+
+"""The route/share wiring stored in one plan (plan-wide and per child), as one tuple of `Route`s and `Share`s."""
+@inline wiring_values(plan::AbstractPlan) = _all_plan_wiring(global_wiring(getwiring(plan)), child_wiring(getwiring(plan)))
+@inline wiring_values(la::LoopAlgorithm) = wiring_values(getplan(la))
+
+"""
+The route/share wiring of one plan as constructor input that keeps its scope: plan-wide routes and shares as they are,
+and those of one child as `LocalPlanOption(child, route)`. `setwiring` (or a constructor) rebuilds the same wiring from
+it, which `wiring_values` alone cannot: it loses which child a route belonged to.
+"""
+function scoped_wiring_values(plan::AbstractPlan)
+    wiring = getwiring(plan)
+    plan_wide = global_wiring(wiring)
+    scoped = (routes(plan_wide)..., shares(plan_wide)...)
+    funcs = getalgos(plan)
+    buckets = child_wiring(wiring)
+    for i in eachindex(buckets)
+        bucket = buckets[i]
+        bucket isa Wiring || continue
+        for option in (routes(bucket)..., shares(bucket)...)
+            scoped = (scoped..., LocalPlanOption(funcs[i], option))
+        end
+    end
+    return scoped
+end
+
+"""Rebuild `plan` with other `states` and `options`; every plan type stores `funcs`, its schedule, namespaces, wiring, states and options, in that order."""
+function _with_states_options(plan::P, states, options) where {P<:AbstractPlan}
+    params = P.parameters
+    return P.name.wrapper{params[1], params[2], params[3], params[4], params[5], typeof(states), typeof(options)}(
+        getfield(plan, 1), getfield(plan, 2), getfield(plan, 3), getfield(plan, 4), states, options)
+end
+
+"""Set the states / the options of a plan."""
+setstates(plan::AbstractPlan, states) = _with_states_options(plan, states, getoptions(plan))
+setoptions(plan::AbstractPlan, options) = _with_states_options(plan, getstates(plan), options)
+
+"""The route/share wiring of every plan in the tree of `la`, in tree order."""
+@inline _tree_wiring_values(plan::AbstractPlan) = (wiring_values(plan)..., _tree_wiring_values_children(getalgos(plan))...)
+@inline _tree_wiring_values(la::LoopAlgorithm) = _tree_wiring_values(getplan(la))
+@inline _tree_wiring_values_children(::Tuple{}) = ()
+@inline function _tree_wiring_values_children(children::Children) where {Children<:Tuple}
+    child = first(children)
+    head = child isa LoopSpec ? _tree_wiring_values(child) : ()
+    return (head..., _tree_wiring_values_children(Base.tail(children))...)
 end
 
 """Collect plan-wide route/share wiring into a `Wiring` value."""
@@ -244,13 +270,13 @@ Base.@nospecializeinfer function _plan_wiring_untyped(@nospecialize(options::Tup
     return Wiring(Tuple(routes), Tuple(shares))
 end
 
-"""`_root_loop_options` for construction: the non-wiring options, from untyped values."""
-Base.@nospecializeinfer function _root_loop_options_untyped(@nospecialize(options::Tuple))
-    root_options = Any[]
+"""`_non_wiring` for construction: the options that are not routes or shares, from untyped values."""
+Base.@nospecializeinfer function _non_wiring_untyped(@nospecialize(options::Tuple))
+    kept = Any[]
     for option in options
-        option isa AbstractWiring || push!(root_options, option)
+        option isa AbstractWiring || push!(kept, option)
     end
-    return Tuple(root_options)
+    return Tuple(kept)
 end
 
 #=

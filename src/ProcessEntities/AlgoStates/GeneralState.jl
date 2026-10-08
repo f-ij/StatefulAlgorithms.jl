@@ -1,7 +1,7 @@
 export GeneralState, InlineState
 
 """
-General-purpose `ProcessState` that acts as an initialization scheme.
+General-purpose `AlgoState` that acts as an initialization scheme.
 
 Core init semantics:
 - `Fields`: subcontext variables initialized by this state.
@@ -20,16 +20,21 @@ because registry construction merges `GeneralState` values and needs enough
 context to warn about accidental DSL state sharing before the final init scheme
 is used.
 """
-struct GeneralState{Fields, Required, DefaultValuesBuilder, ExplicitlySharedFields, DiagnosticFieldPaths} <: ProcessState
+struct GeneralState{Fields, Required, DefaultValuesBuilder, ExplicitlySharedFields, DiagnosticFieldPaths} <: AlgoState
     default_values_builder::DefaultValuesBuilder
 end
 
 
-# TODO Maybe make it match with any general state where one has a subset of the fields of the other? 
 """
-General states match by key for now
+What a general state matches by: its id when it has one (a block's `@state`, one per construction), else its key
+(a named state, `@state name begin … end`, which every state with that key shares).
 """
-match_by(ia::Union{IdentifiableAlgo{<:GeneralState}, Type{<:IdentifiableAlgo{<:GeneralState}}}) = ValMatcher(getkey(ia))
+match_by(ia::Union{IdentifiableAlgo{<:GeneralState}, Type{<:IdentifiableAlgo{<:GeneralState}}}) = _general_state_match(id(ia), getkey(ia))
+@inline _general_state_match(id::Union{SimpleId, NormalizedId}, key) = id
+@inline _general_state_match(id, key) = ValMatcher(key)
+
+"""A block's `@state` is named `_state_1`, `_state_2`, … in the context."""
+autokey_basename(::Union{GeneralState, Type{<:GeneralState}}) = :_state
 
 const InlineState = GeneralState
 

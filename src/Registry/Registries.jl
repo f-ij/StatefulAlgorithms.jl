@@ -111,7 +111,7 @@ function add(reg::NameSpaceRegistry{T}, obj, multiplier = 1.; withkey = nothing)
     if isnothing(fidx) # New Entry
         newentry = RegistryTypeEntry{entry_t}()
         newentry, keyed_obj = add(newentry, obj, multiplier; withkey)
-        if entry_t <: ProcessState # States go first
+        if entry_t <: AlgoState # States go first
             new_entries = (newentry, getentries(reg)...)
         else
             new_entries = (getentries(reg)..., newentry)
@@ -446,7 +446,7 @@ end
 ########################
 """
 Return all named objects
-    First ProcessStates, then rest
+    First AlgoStates, then rest
 """
 function all_algos(reg::NameSpaceRegistry)
     return flat_collect_broadcast(getentries, getentries(reg))

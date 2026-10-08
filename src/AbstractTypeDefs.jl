@@ -2,9 +2,17 @@ abstract type SteppableAlgorithm end
 
 abstract type StepAlgorithm <: SteppableAlgorithm end
 const ProcessAlgorithm = StepAlgorithm
+"""An option of a plan that is not route/share wiring, such as `RuntimeInputs` or `Replace`; kept in the plan's `options`."""
 abstract type AbstractOption end
+"""
+An option whose effect is on the whole run, wherever in the plan tree it is declared: `RuntimeInputs` (the inputs of a
+run) and `Replace` (where a stored field lives). `resolve` collects them from every plan into the `LoopAlgorithm`.
+"""
+abstract type RootOption <: AbstractOption end
+"""Route/share wiring of a plan (`Route`, `Share`, ...); kept in the plan's `wiring`, separate from its options."""
 abstract type AbstractWiring end
-abstract type ProcessState <: AbstractOption end
+"""A state of a plan (`@state`, `@input`, a `AlgoState` passed to a constructor); kept in the plan's `states`."""
+abstract type AlgoState end
 abstract type ParserOption end
 
 export ThreadsType, Static, Dynamic, Greedy
@@ -67,15 +75,14 @@ const LoopSpec = Union{AbstractPlan, AbstractLoopAlgorithm}
 """
 Runtime wrapper for a loop execution plan.
 
-The `plan` field is the stable "what runs" part, usually a `CompositeAlgorithm`
-or `Routine`. The remaining fields describe the runtime environment in which
-that plan is resolved or initialized: root states, resolved options, registry,
-stored context, initializers, and overrides. Reinitialization should replace
-this wrapper/lifecycle data without changing the type of the wrapped plan.
+The `plan` field is the block as written, a `CompositeAlgorithm`, `Routine` or
+`ThreadedCompositeAlgorithm`, holding its children, wiring and states. The remaining
+fields are what `resolve` and `init` add: the options collected from the whole plan
+tree, the registry, stored context, initializers, and overrides. Reinitialization
+replaces these without changing the type of the wrapped plan.
 """
-struct LoopAlgorithm{Plan<:AbstractPlan, S, O, R, C, Inits, Overrides, id} <: AbstractLoopAlgorithm
+struct LoopAlgorithm{Plan<:AbstractPlan, O, R, C, Inits, Overrides, id} <: AbstractLoopAlgorithm
     plan::Plan
-    states::S
     options::O
     reg::R
     context::C

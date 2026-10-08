@@ -1,10 +1,10 @@
 export Destructure, DynamicStore, destructure, release!, getdestructure_id, getdynamicstore_id
 export DestructureInput
 
-abstract type AbstractDestructure{T,F} <: ProcessState end
+abstract type AbstractDestructure{T,F} <: AlgoState end
 
 """
-ProcessState wrapper for an arbitrary value that is destructured into its fields
+AlgoState wrapper for an arbitrary value that is destructured into its fields
 during init.
 """
 struct Destructure{T,F} <: AbstractDestructure{T,F}
@@ -71,7 +71,7 @@ _unwrap_container(d::Destructure{T, F}) where {T, F} = getvalue(d)
 ################################
 ####### Destruct an input ######
 ################################
-struct DestructureInput{F} <: ProcessState
+struct DestructureInput{F} <: AlgoState
     func::F
 
     function DestructureInput(f::Union{Function, Nothing} = nothing)

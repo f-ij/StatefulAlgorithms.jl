@@ -9,10 +9,8 @@ function resolve(la1::LA1, la2::LA2, las::Vararg{LoopSpec}) where {LA1<:LoopSpec
     registry, keyed_loopalgorithms = _shared_registry_and_keyed_algos(loopalgorithms)
     return map(keyed_loopalgorithms) do resolved
         resolved = attach_registry_to_tree(resolved, registry)
-        options = _unresolved_options(resolved)
-        options isa Tuple || error("Resolving multiple loop algorithms together requires unresolved loop algorithms, but got $(typeof(resolved)) with options of type $(typeof(options)).")
         resolved = resolve_plan_wiring(resolved, registry)
-        setoptions(resolved, _root_loop_options(options))
+        setoptions(resolved, _root_options(resolved))
     end
 end
 

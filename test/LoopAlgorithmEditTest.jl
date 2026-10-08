@@ -5,7 +5,7 @@ using StatefulAlgorithms
     struct EditAlgoA <: ProcessAlgorithm end
     struct EditAlgoB <: ProcessAlgorithm end
     struct EditAlgoC <: ProcessAlgorithm end
-    struct EditState <: ProcessState end
+    struct EditState <: AlgoState end
 
     inner = CompositeAlgorithm(:left => EditAlgoA, EditAlgoB, (1, 2))
     outer = CompositeAlgorithm(inner, EditAlgoC, (3, 4))
@@ -45,8 +45,8 @@ using StatefulAlgorithms
     @test getkey(only(StatefulAlgorithms.getstates(with_state))) == :stateful
 
     with_option = addoption(outer, Share(EditAlgoC, EditAlgoA))
-    @test length(getoptions(with_option)) == length(getoptions(outer)) + 1
-    @test only(getoptions(with_option, Share)) isa Share
+    @test length(StatefulAlgorithms.wiring_values(with_option)) == length(StatefulAlgorithms.wiring_values(outer)) + 1
+    @test only(get_shares(with_option)) isa Share
 
     left = IdentifiableAlgo(EditAlgoA(), :left)
     right = IdentifiableAlgo(EditAlgoB(), :right)

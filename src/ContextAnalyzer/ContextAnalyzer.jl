@@ -430,7 +430,7 @@ function analyse_steps(la::ALA; globals = (;), inputs = (;), init = true) where 
         end
     end
 
-    # ProcessState entries participate in init but do not own step! hooks.
+    # AlgoState entries participate in init but do not own step! hooks.
     for algo in findall(StepAlgorithm, getregistry(mocked))
         analyse_step(algo, analyser)
     end

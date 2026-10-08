@@ -90,15 +90,15 @@ end
         x = @repeat 3 delta_plus_one(x)
     end)
 
-    @test written_fields_of(writes_state) === Val(((:_state, :x),))
+    @test written_fields_of(writes_state) === Val(((:_state_1, :x),))
     @test written_fields_of(output_only) === Val(())          # a function output that is not state is runtime-only
-    @test written_fields_of(assigns_state) === Val(((:_state, :y),))
-    @test written_fields_of(repeats_write_state) === Val(((:_state, :x),))
+    @test written_fields_of(assigns_state) === Val(((:_state_1, :y),))
+    @test written_fields_of(repeats_write_state) === Val(((:_state_1, :x),))
 
-    @test run_steps(writes_state, 100)[:_state].x == 100.0
-    @test run_steps(output_only, 100)[:_state].seed == 4.0
-    @test run_steps(assigns_state, 100)[:_state].y == DELTA_OFFSET
-    @test run_steps(repeats_write_state, 100)[:_state].x == 300.0
+    @test run_steps(writes_state, 100)[:_state_1].x == 100.0
+    @test run_steps(output_only, 100)[:_state_1].seed == 4.0
+    @test run_steps(assigns_state, 100)[:_state_1].y == DELTA_OFFSET
+    @test run_steps(repeats_write_state, 100)[:_state_1].x == 300.0
 end
 
 @testset "Context delta: results" begin

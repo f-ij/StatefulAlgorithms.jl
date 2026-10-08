@@ -5,17 +5,20 @@ export CompositeAlgorithm, CompositePlan
 """
 Execution plan that steps child algorithms on fixed intervals.
 
-`CompositeAlgorithm` stores only the executable plan: child algorithms
-(`funcs`), schedule metadata, namespaces, and plan wiring. Runtime state such as
-the registry, root process states, stored context, inputs, overrides, and
-interval cursor belongs to the concrete `LoopAlgorithm`/`AbstractLoopCursor`
-created by `resolve`/`init`/`run`.
+`CompositeAlgorithm` stores the block as written: child algorithms (`funcs`),
+schedule metadata, namespaces, its route/share wiring (`getwiring`), its own
+states (`getstates`: `@state`, `@input`) and its other options (`getoptions`,
+such as `RuntimeInputs` and `Replace`). What `resolve`,
+`init` and `run` add (the registry, stored context, inits, overrides and the
+interval cursor) belongs to the `LoopAlgorithm`/`AbstractLoopCursor` they create.
 """
-struct CompositeAlgorithm{T, Intervals, Namespaces, W, id} <: AbstractPlan
+struct CompositeAlgorithm{T, Intervals, Namespaces, W, id, S, O} <: AbstractPlan
     funcs::T
     intervals
     namespaces::Namespaces
     wiring::W
+    states::S
+    options::O
 end
 
 const CompositePlan = CompositeAlgorithm
@@ -31,21 +34,22 @@ function newfuncs(ca::CompositeAlgorithm, funcs)
     setfield(ca, :funcs, funcs)
 end
 
-function setoptions(ca::CompositeAlgorithm, options)
-    wiring = PlanWiring(_plan_wiring(options), _plan_child_wiring(getalgos(ca), options))
+"""Rebuild the route/share wiring of `ca` from `wiring` (`Route`s, `Share`s, `LocalPlanOption`s)."""
+function setwiring(ca::CompositeAlgorithm, wiring)
+    wiring = PlanWiring(_plan_wiring(wiring), _plan_child_wiring(getalgos(ca), wiring))
     return setfield(ca, :wiring, wiring)
 end
 
 subalgorithms(ca::CompositeAlgorithm) = getalgos(ca)
 algotypes(ca::Union{CompositeAlgorithm{FT}, Type{<:CompositeAlgorithm{FT}}}) where FT = FT.parameters
-statetypes(ca::Union{CompositeAlgorithm, Type{<:CompositeAlgorithm}}) = ()
+statetypes(::Union{CompositeAlgorithm{T,I,NS,W,id,S}, Type{<:CompositeAlgorithm{T,I,NS,W,id,S}}}) where {T,I,NS,W,id,S} = S.parameters
 subalgotypes(ca::CompositeAlgorithm{FT}) where FT = FT.parameters
 subalgotypes(::Type{CA}) where {FT, CA<:CompositeAlgorithm{FT}} = FT.parameters
-@inline getstates(ca::CompositeAlgorithm) = ()
+@inline getstates(ca::CompositeAlgorithm) = getfield(ca, :states)
 
 
 getwiring(ca::CompositeAlgorithm) = getfield(ca, :wiring)
-getoptions(ca::CompositeAlgorithm) = _all_plan_wiring(global_wiring(getwiring(ca)), child_wiring(getwiring(ca)))
+getoptions(ca::CompositeAlgorithm) = getfield(ca, :options)
 
 getid(ca::Union{CompositeAlgorithm{T,I,NS,W,id}, Type{<:CompositeAlgorithm{T,I,NS,W,id}}}) where {T,I,NS,W,id} = id
 setid(ca::CA, id = uuid4()) where {CA<:CompositeAlgorithm} = setparameter(ca, 5, id)

@@ -17,7 +17,7 @@ function _dsl_normalize_state_entries(states)
     for state in states
         if state isa Pair
             push!(normalized, IdentifiableAlgo(state.second, state.first))
-        elseif state isa Union{ProcessState, Type{<:ProcessState}}
+        elseif state isa Union{AlgoState, Type{<:AlgoState}}
             push!(normalized, IdentifiableAlgo(state))
         else
             push!(normalized, state)

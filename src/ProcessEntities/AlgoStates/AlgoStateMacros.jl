@@ -1,8 +1,8 @@
 """
-Macro to define a ProcessState from a function definition.
-This creates a struct subtype of ProcessState with a init method.
+Macro to define a AlgoState from a function definition.
+This creates a struct subtype of AlgoState with a init method.
 """
-macro ProcessState(ex)
+macro AlgoState(ex)
     F, args, body = nothing, nothing, nothing
     @capture(ex, function F_(args__) body_ end)
     if isnothing(F)
@@ -29,7 +29,7 @@ macro ProcessState(ex)
     typeless_args = map(arg -> arg isa Expr && arg.head == :(::) ? arg.args[1] : arg, args)
 
     q = quote
-            struct $FFunction <: ProcessState end
+            struct $FFunction <: AlgoState end
 
             @inline function StatefulAlgorithms.init(s::$FFunction, context::C) where C <: StatefulAlgorithms.AbstractContext
                 (;$(splatnames...)) = context
@@ -41,4 +41,4 @@ macro ProcessState(ex)
     esc(q)
 end
 
-export @ProcessState
+export @AlgoState

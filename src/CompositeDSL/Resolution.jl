@@ -55,10 +55,10 @@ end
 
 """Resolve one non-function DSL entity into the internal representation used by the block builder."""
 function _resolve_composite_dsl_entity(spec, inputs::Tuple, output_symbols::Tuple{Vararg{Symbol}}, ::Val{Name}) where {Name}
-    if spec isa Union{ProcessState, Type{<:ProcessState}}
+    if spec isa Union{AlgoState, Type{<:AlgoState}}
         # States participate in the block like algorithms, but they do not accept
         # routed inputs through this syntax.
-        isempty(inputs) || error("ProcessStates in the DSL cannot declare routed inputs.")
+        isempty(inputs) || error("AlgoStates in the DSL cannot declare routed inputs.")
         return _CompositeDSLResolved{:state, typeof(spec), typeof(inputs)}(spec, inputs)
     elseif spec isa AbstractIdentifiableAlgo
         # Already-named/unique algorithms can pass straight through.
@@ -76,7 +76,7 @@ function _resolve_composite_dsl_entity(spec, inputs::Tuple, output_symbols::Tupl
         resolved = _dsl_with_customname(wrapped, Val(Name))
         return _CompositeDSLResolved{:algo, typeof(resolved), typeof(inputs)}(resolved, inputs)
     else
-        error("Unsupported DSL entry `$spec`. Expected a SteppableAlgorithm, AbstractPlan, ProcessState, or Function.")
+        error("Unsupported DSL entry `$spec`. Expected a SteppableAlgorithm, AbstractPlan, AlgoState, or Function.")
     end
 end
 

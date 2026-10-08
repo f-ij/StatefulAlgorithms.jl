@@ -5,8 +5,9 @@
 """
 This file defines `Replace`, the constructor-time replacement declaration.
 
-`Replace` is not the value stored in a context. It is a root option that records
-which target field should be replaced after initialization. During
+`Replace` is not the value stored in a context. It is a `RootOption`: it can be
+declared in any plan, and its effect is on the whole run. It records which target
+field should be replaced after initialization. During
 materialization, `Replace` resolves its endpoints and writes a `ReplacedVar`
 marker into the target context field.
 """
@@ -15,11 +16,12 @@ marker into the target context field.
     Replace(source => target, :name)
     Replace(source => target, :source_name => :target_name)
 
-Root-level constructor option that marks a target context field as locally
-backed by a source context field. `Replace` is not plan wiring; it is
-materialized into the initialized persistent context as a `ReplacedVar`.
+Option (a `RootOption`) that marks a target context field as backed by a source
+context field. `Replace` is not plan wiring; `resolve` collects it from every
+plan, and it is materialized into the initialized persistent context as a
+`ReplacedVar`.
 """
-struct Replace{Fmatch, Tmatch, varnames, aliases, F, T} <: AbstractOption
+struct Replace{Fmatch, Tmatch, varnames, aliases, F, T} <: RootOption
     from::F
     to::T
 end

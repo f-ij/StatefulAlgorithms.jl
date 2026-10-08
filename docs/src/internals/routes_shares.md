@@ -1,9 +1,10 @@
 # [Routes, Shares, and Replacements Internals](@id routes_shares_internals)
 
-`Route`, `Share`, and `Replace` are plan options. Route/share resolution happens
-when a plan is wrapped and resolved as a concrete `LoopAlgorithm`. Replacement
-resolution is stored as a root option and materialized after lifecycle init has
-created the persistent context.
+`Route` and `Share` are wiring: a plan keeps them in its `wiring`, plan-wide or for
+one child, and their endpoints are resolved when the plan is wrapped and resolved as
+a concrete `LoopAlgorithm`. `Replace` is an option, a `RootOption`: a plan keeps it in
+its `options`, `resolve` collects it from every plan in the tree, and it is
+materialized after lifecycle init has created the persistent context.
 
 Relevant files:
 

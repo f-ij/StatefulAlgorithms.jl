@@ -91,7 +91,7 @@ function _assert_route_endpoint(endpoint, role::String)
     endpoint isa ProcessEntity && return nothing
     endpoint isa Type && endpoint <: ProcessEntity && return nothing
     endpoint isa AbstractIdentifiableAlgo && return nothing
-    construction_error(role, " of a Route must be a Symbol, ProcessAlgorithm, ProcessState, or identifiable wrapper. Got: ", endpoint)
+    construction_error(role, " of a Route must be a Symbol, ProcessAlgorithm, AlgoState, or identifiable wrapper. Got: ", endpoint)
 end
 
 """Require resolved wiring endpoints to be context-name symbols."""

@@ -1,9 +1,9 @@
 # [Algorithms and States](@id algorithms_states_user)
 
-`StepAlgorithm` and `ProcessState` are the two main building blocks you compose into a process.
+`StepAlgorithm` and `AlgoState` are the two main building blocks you compose into a process.
 
 - Use `StepAlgorithm` for something that actively participates in the loop by implementing `StatefulAlgorithms.step!`.
-- Use `ProcessState` for data that should be initialized into a subcontext and then shared or read by algorithms.
+- Use `AlgoState` for data that should be initialized into a subcontext and then shared or read by algorithms.
 
 Both are process entities: values that the package knows how to place inside a
 process. When a process is prepared, each entity gets a named part of the
@@ -59,7 +59,7 @@ end
 ```
 
 ```julia
-struct MyState <: ProcessState end
+struct MyState <: AlgoState end
 
 function StatefulAlgorithms.init(::MyState, context)
     return (; shared_buffer = Float64[])
@@ -178,12 +178,12 @@ If you want `ContextAnalyser` to discover dependencies more reliably:
 
 See [Init Analysis](@ref init_analysis_user) for the analyzer workflow and limitations.
 
-### `@ProcessState`
+### `@AlgoState`
 
-`@ProcessState` creates a `ProcessState` and an `init` method.
+`@AlgoState` creates a `AlgoState` and an `init` method.
 
 ```julia
-@ProcessState function SharedParams(dt)
+@AlgoState function SharedParams(dt)
     return (; dt)
 end
 ```
@@ -195,7 +195,9 @@ Compose entities with loop plans:
 - `CompositeAlgorithm(...)` for interleaved stepping with intervals.
 - `Routine(...)` for sequential blocks with repeats.
 
-Both can include `ProcessState`s and user options such as `Route` and `Share`.
+Both take `AlgoState`s, wiring (`Route`, `Share`) and options (`RuntimeInputs`, `Replace`) after the children
+and their schedule. A plan keeps the three apart: `getstates`, `getwiring` (with `get_routes` and `get_shares`) and
+`getoptions`.
 
 ### Changing a Loop Algorithm Schedule
 
