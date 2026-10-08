@@ -11,7 +11,7 @@ Base.@nospecializeinfer function _flattens_into_parent(@nospecialize(el), stop_a
     el isa LoopSpec && iscomposite(el) || return false
     stop_at_options || return true
     el isa AbstractPlan || return false
-    return isempty(getoptions(el)) && isempty(getstates(el)) && isempty(getrootoptions(el))
+    return isempty(getoptions(el)) && isempty(getstates(el))
 end
 
 """

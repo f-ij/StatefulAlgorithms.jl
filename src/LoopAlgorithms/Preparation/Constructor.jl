@@ -292,7 +292,7 @@ end
 """Collect unresolved options stored throughout one plan tree."""
 function _plan_tree_options(la::LA) where {LA<:LoopSpec}
     nested = _plan_tree_child_options(getalgos(la))
-    return (getoptions(la)..., getrootoptions(la)..., nested...)
+    return (getoptions(la)..., nested...)
 end
 
 @inline _plan_tree_options(la::LoopAlgorithm) = (_plan_tree_options(getplan(la))..., getoptions(la)...)

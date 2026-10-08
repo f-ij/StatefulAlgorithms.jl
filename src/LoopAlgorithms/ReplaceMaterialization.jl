@@ -4,7 +4,7 @@
 Return root-level replacement options attached to `la`.
 """
 @inline getstoredreplacements(la::LA) where {LA<:LoopSpec} =
-    filter_by_type(Replace, getrootoptions(la))
+    filter_by_type(Replace, getoptions(la))
 
 """Return one required stored value from a persistent context field."""
 function _replacement_context_value(context::C, ::Val{subcontext}, ::Val{name}, role::String) where {C<:ProcessContext, subcontext, name}

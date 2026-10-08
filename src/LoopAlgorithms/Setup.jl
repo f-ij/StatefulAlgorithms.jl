@@ -194,7 +194,7 @@ end
 Build a plan of type `PlanType` (`CompositeAlgorithm`, `Routine` or `ThreadedCompositeAlgorithm`) from parsed
 constructor input: its children `funcs`, their intervals or repeats `schedule`, and its route/share wiring taken from
 `options`. Child-scoped wiring (`LocalPlanOption`) is split per child; plain routes and shares are stored on the plan.
-The plan keeps its `states` and its other options (`rootoptions`); `resolve` wraps it in a `LoopAlgorithm`.
+The plan keeps its `states` and its other options; `resolve` wraps it in a `LoopAlgorithm`.
 
 `parse_la_input` above and the DSL (`_dsl_build_loopalgorithm`) both end here.
 """

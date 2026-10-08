@@ -41,8 +41,12 @@ Base.isempty(wiring::PlanWiring) =
 @inline Base.getkey(cla::LoopAlgorithm, obj) = getkey(getregistry(cla), obj)
 @inline getoptions(cla::LoopAlgorithm) = getfield(cla, :options)
 @inline getstates(cla::LoopAlgorithm) = getstates(getplan(cla))
-"""The options that are not route/share wiring: a plan's own (`RuntimeInputs`, `Replace`), or, on a `LoopAlgorithm`, those collected from its whole plan tree by `resolve`."""
-@inline getrootoptions(cla::LoopAlgorithm) = getoptions(cla)
+"""
+The options of one node that are not route/share wiring: a plan's own (`RuntimeInputs`, `Replace`), or, on a
+`LoopAlgorithm`, those `resolve` collected from its whole plan tree. Read without building the wiring options.
+"""
+@inline _own_options(plan::AbstractPlan) = getfield(plan, :options)
+@inline _own_options(cla::LoopAlgorithm) = getoptions(cla)
 @inline getregistry(cla::LoopAlgorithm) = getfield(cla, :reg)
 @inline getstoredcontext(cla::LoopAlgorithm) = getfield(cla, :context)
 @inline getstoredinits(cla::LoopAlgorithm) = getfield(cla, :inits)

@@ -7,13 +7,13 @@ Execution plan that repeats child algorithms.
 algorithms, repeat metadata, namespaces, plan wiring, its own states and its other
 options. Resume counters are allocated as loop cursors only for pausable executions.
 """
-struct Routine{T, Repeats, Namespaces, W, id, S, RO} <: AbstractPlan
+struct Routine{T, Repeats, Namespaces, W, id, S, O} <: AbstractPlan
     funcs::T
     repeats
     namespaces::Namespaces
     wiring::W
     states::S
-    rootoptions::RO
+    options::O
 end
 
 const RoutinePlan = Routine
@@ -35,10 +35,9 @@ end
 @inline getalgos(r::Routine) = getfield(r, :funcs)
 @inline getalgo(r::Routine, idx) = getalgos(r)[idx]
 @inline getwiring(r::Routine) = getfield(r, :wiring)
-@inline getoptions(r::Routine) = _all_plan_wiring(global_wiring(getwiring(r)), child_wiring(getwiring(r)))
+@inline getoptions(r::Routine) = (_all_plan_wiring(global_wiring(getwiring(r)), child_wiring(getwiring(r)))..., getfield(r, :options)...)
 @inline subalgorithms(r::Routine) = getalgos(r)
 @inline getstates(r::Routine) = getfield(r, :states)
-@inline getrootoptions(r::Routine) = getfield(r, :rootoptions)
 statetypes(::Union{Routine{T,R,NS,W,id,S}, Type{<:Routine{T,R,NS,W,id,S}}}) where {T,R,NS,W,id,S} = S.parameters
 
 
