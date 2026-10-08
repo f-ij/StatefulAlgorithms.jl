@@ -607,16 +607,16 @@ end
         @test state_values(same) == Dict(:_state_1 => 7)
         @test state_values(steps(CompositeAlgorithm(b1, b1, (1, 2)), 4)) == Dict(:_state_1 => 7)
 
-        # `allstates`: every state of the resolved tree once, by namespace
+        # `states(la)`: every state of the resolved tree once, by namespace
         resolved = resolve(@CompositeAlgorithm(begin
             b1()
             b2()
             @interval 2 b1()
         end))
-        flat = @inferred allstates(resolved)
+        flat = @inferred states(resolved)
         @test keys(flat) == (:_state_1, :_state_2)
         @test all(s -> s isa GeneralState, values(flat))
-        @test_throws ErrorException allstates(b1)
+        @test_throws ErrorException states(b1)
     end
 
     @testset "FuncWrapper positional args accept @context property routes" begin

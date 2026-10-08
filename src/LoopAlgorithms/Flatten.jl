@@ -50,20 +50,20 @@ function flat_comp(ca::CompositeAlgorithm, interval)
     return funcs, intervals
 end
 
-export allstates
+export states
 
 """
-    allstates(la)
+    states(la)
 
 Every state of a resolved loop algorithm, flat: a `NamedTuple` from namespace to state, for example
 `(_state_1 = GeneralState(a), _state_2 = GeneralState(a), _input = RuntimeInputState(...))`. Read from the registry, so a
 state used by several blocks appears once, under the namespace it has in the context. Type stable.
 
-Names are given by `resolve`, so a plan has to be resolved first: `allstates(resolve(plan))`.
+Names are given by `resolve`, so a plan has to be resolved first: `states(resolve(plan))`.
 """
-allstates(la::LoopAlgorithm) = _registry_states(getregistry(la))
-allstates(fa::FinalizedAlgorithm) = allstates(inneralgorithm(fa))
-allstates(::LoopSpec) = error("States are named when the plan is resolved; use `allstates(resolve(plan))`.")
+states(la::LoopAlgorithm) = _registry_states(getregistry(la))
+states(fa::FinalizedAlgorithm) = states(inneralgorithm(fa))
+states(::LoopSpec) = error("States are named when the plan is resolved; use `states(resolve(plan))`.")
 
 """The states among the entries of `reg` (entries wrapping a `ProcessState`), as namespace => state."""
 @generated function _registry_states(reg::NameSpaceRegistry{E}) where {E}
