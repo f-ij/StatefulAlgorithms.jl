@@ -85,9 +85,8 @@ function _compute_varlocations(::Type{C}) where {C<:SubContextView{CType, SubKey
     sharedvars = get_shared_locations(C)
     routedvars = get_routed_locations(C)
     injectedvars = get_injected_locations(C)
-    # Locals take precedene over routes which take precedence over shared if there are name clashes
-    # Injected take precedence over all
-    return (;sharedvars..., routedvars..., locals..., injectedvars...)
+    # On a name clash: injected over routes, routes over the namespace's own state, own state over shares
+    return (;sharedvars..., locals..., routedvars..., injectedvars...)
 end
 
 """
@@ -99,8 +98,8 @@ function _compute_all_locations(::Type{SCT}) where {SCT<:SubContextView}
     sharedvars = get_shared_locations(SCT)
     routedvars = get_routed_locations(SCT)
     injectedvars = get_injected_locations(SCT)
-    # Locals take precedene over routes which take precedence over shared
-    return (;sharedvars..., routedvars..., locals..., injectedvars...)
+    # On a name clash: injected over routes, routes over the namespace's own state, own state over shares
+    return (;sharedvars..., locals..., routedvars..., injectedvars...)
 end
 
 @inline @generated function _generated_varlocations(::Type{C}) where {C<:SubContextView}
@@ -125,11 +124,11 @@ function _compute_location(::Type{SCT}, name::Symbol) where {SCT<:SubContextView
     injected = get_injected_locations(SCT)
     hasproperty(injected, subcontext_name) && return getproperty(injected, subcontext_name), subcontext_name
 
-    local_locations = get_local_locations(SCT)
-    hasproperty(local_locations, subcontext_name) && return getproperty(local_locations, subcontext_name), subcontext_name
-
     routed = get_routed_locations(SCT)
     hasproperty(routed, subcontext_name) && return getproperty(routed, subcontext_name), subcontext_name
+
+    local_locations = get_local_locations(SCT)
+    hasproperty(local_locations, subcontext_name) && return getproperty(local_locations, subcontext_name), subcontext_name
 
     shared = get_shared_locations(SCT)
     hasproperty(shared, subcontext_name) && return getproperty(shared, subcontext_name), subcontext_name
