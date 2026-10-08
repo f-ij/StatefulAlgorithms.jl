@@ -59,7 +59,7 @@ end
 @inline function hasautokey(sa::AbstractIdentifiableAlgo)
     key = getkey(sa)
     (!isnothing(key) && key != Symbol()) || return false
-    startswith(string(key), "$(nameof(typeof(getalgo(sa))))_")
+    startswith(string(key), "$(autokey_basename(getalgo(sa)))_")
 end
 @inline function Base.haskey(sa::AbstractIdentifiableAlgo)
     key = getkey(sa)

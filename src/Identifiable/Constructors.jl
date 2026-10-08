@@ -37,7 +37,7 @@ IdentifiableAlgo(na::IdentifiableAlgo, name::Symbol) = setcontextkey(na, name)
 
 function Autokey(f::F, i::Int, id = nothing; customname = Symbol(), aliases...) where F
     f = instantiate(f)
-    TName = nameof(typeof(f))
+    TName = autokey_basename(f)
     key = @inline static_symbol(TName,(:_), i)
     @inline IdentifiableAlgo(f, key, id; customname, aliases...)
 end
@@ -46,7 +46,7 @@ function Autokey(f::IA, i::Int; customname = Symbol(), aliases...) where IA <: I
     if getkey(f) != Symbol() # If it already has a key, don't change it
         return f
     end
-    TName = nameoftype(getalgo(f))
+    TName = autokey_basename(getalgo(f))
     key = @inline static_symbol(TName,(:_), i)
     setcontextkey(f, key)
 end

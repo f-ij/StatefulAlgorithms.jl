@@ -54,7 +54,7 @@ function _dsl_parse_context_route_expr(context_map, ex)
         source = ex.args[2].value
         source isa Symbol || return nothing
         if ex.args[1] isa Symbol && haskey(context_map, ex.args[1])
-            owner = Expr(:., context_map[ex.args[1]], QuoteNode(:_state))
+            owner = :(StatefulAlgorithms._composite_dsl_block_state($(context_map[ex.args[1]])))
             return (; owner, source)
         end
         owner, changed = _dsl_rewrite_context_root(context_map, ex.args[1])

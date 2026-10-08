@@ -365,9 +365,15 @@ the normal route and merge machinery.
 
 ## Explicit State Sharing
 
-Nested DSL blocks can independently declare the same state field. That remains
-compatible, but the merge now warns unless the parent documents the intended
-sharing.
+Each construction of a block has its own `@state`, in its own namespace
+(`_state_1`, `_state_2`, ...): two blocks that both declare `buffers` have two
+separate `buffers`, also when they are built by the same code. Using the same
+block value twice shares its state, as for any algorithm.
+
+!!! warning "Being reworked"
+    `@bind` and `@merge` below date from when states with the same field name
+    were merged into one. They do not share state at the moment; they are being
+    reworked (`@merge` for whole states, `@bind` as rewiring inside the block).
 
 Use `@bind` when the parent block owns, defaults, or requires the shared state
 and a child block should use that same slot.
@@ -481,9 +487,7 @@ end
 ```
 
 Use `@bind` for parent-to-child sharing. Use `@merge` for peer child-to-child
-sharing. Without either declaration, overlapping child state fields are still
-merged for compatibility, but the DSL warns with paths such as
-`f.buffers <=> n.buffers` and suggests an explicit `@bind` or `@merge`.
+sharing.
 
 ## Context Aliases
 

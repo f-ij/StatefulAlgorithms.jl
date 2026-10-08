@@ -1,5 +1,9 @@
+"""Return `true` for a state that already carries its identity: an identifiable wrapper around a `ProcessState`."""
+_is_identified_state(arg) = arg isa AbstractIdentifiableAlgo && getalgo(arg) isa ProcessState
+
 """Return `true` for loop-constructor children that run or describe runnable children."""
 function _is_loop_child_input(arg)
+    _is_identified_state(arg) && return false
     return arg isa Union{SteppableAlgorithm, AbstractPlan, Type{<:SteppableAlgorithm}, Type{<:AbstractPlan}}
 end
 
@@ -60,7 +64,7 @@ function _filter_loopalgorithm_specification(specification, kept_algos::Tuple)
 end
 
 """Return `true` when an argument belongs in the ProcessState section."""
-@inline isa_processstate_input(arg) = (arg isa ProcessState) || (arg isa Type{<:ProcessState}) || (arg isa Pair && arg.first isa Symbol && (arg.second isa ProcessState || arg.second isa Type{<:ProcessState}))
+@inline isa_processstate_input(arg) = _is_identified_state(arg) || (arg isa ProcessState) || (arg isa Type{<:ProcessState}) || (arg isa Pair && arg.first isa Symbol && (arg.second isa ProcessState || arg.second isa Type{<:ProcessState}))
 
 #TODO: Don't allow Identifiable wrapping of LoopAlgorithms
 """

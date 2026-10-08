@@ -9,6 +9,9 @@ function nameoftype(f)
     end
 end
 
+"""The name an automatic key starts with: `T_i` for an entity of type `T`, unless the type says otherwise."""
+autokey_basename(f) = nameoftype(f)
+
 isidentifiable(obj) = false # Trait to signify that an algorithm has an identity
 
 include("VarAlias.jl")

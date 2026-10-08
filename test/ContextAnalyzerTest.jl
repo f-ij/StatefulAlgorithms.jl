@@ -48,13 +48,13 @@ end
     )
 
     @test StatefulAlgorithms.requested_inputs(analysis) == Dict(
-        :_state => [:seed],
+        :_state_1 => [:seed],
         :CaptureSeedForAnalyzerTest_1 => [:seed],
         :DirectContextReadForAnalyzerTest_1 => [:noise, :missing_value, :capture_seed],
     )
 
     stored = StatefulAlgorithms.stored_inputs(analysis_with_inputs)
-    @test stored[:_state] == (; seed = 4)
+    @test stored[:_state_1] == (; seed = 4)
     @test stored[:CaptureSeedForAnalyzerTest_1] == (; seed = 4, scale = 2.0, history = Int[])
     @test stored[:DirectContextReadForAnalyzerTest_1] == (; noise = 8.0, upstream = 8.0, mis = 99, indexed = nothing)
     @test haskey(stored, :Logger_1)
