@@ -65,7 +65,7 @@ using StatefulAlgorithms
     @test isnothing(paused.loop_cursor)
     @test_throws TypeError StatefulAlgorithms.getloopcursor(paused)
 
-    struct LoopRunIfFlag <: ProcessState end
+    struct LoopRunIfFlag <: AlgoState end
     struct LoopRunIfCounter <: ProcessAlgorithm end
 
     StatefulAlgorithms.init(::LoopRunIfFlag, context) = (; enabled = false)

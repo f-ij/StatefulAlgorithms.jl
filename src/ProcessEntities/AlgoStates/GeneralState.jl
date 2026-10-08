@@ -1,7 +1,7 @@
 export GeneralState, InlineState
 
 """
-General-purpose `ProcessState` that acts as an initialization scheme.
+General-purpose `AlgoState` that acts as an initialization scheme.
 
 Core init semantics:
 - `Fields`: subcontext variables initialized by this state.
@@ -20,7 +20,7 @@ because registry construction merges `GeneralState` values and needs enough
 context to warn about accidental DSL state sharing before the final init scheme
 is used.
 """
-struct GeneralState{Fields, Required, DefaultValuesBuilder, ExplicitlySharedFields, DiagnosticFieldPaths} <: ProcessState
+struct GeneralState{Fields, Required, DefaultValuesBuilder, ExplicitlySharedFields, DiagnosticFieldPaths} <: AlgoState
     default_values_builder::DefaultValuesBuilder
 end
 

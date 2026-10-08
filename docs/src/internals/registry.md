@@ -79,7 +79,7 @@ For loop algorithms this is derived from composition structure (intervals/repeat
 
 `setup_registry` adds:
 
-1. `ProcessState`s first.
+1. `AlgoState`s first.
 2. Then flattened algorithms.
 
 (see `src/LoopAlgorithms/Setup.jl`)

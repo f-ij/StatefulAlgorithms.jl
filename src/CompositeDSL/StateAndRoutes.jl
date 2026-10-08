@@ -303,7 +303,7 @@ Base.@nospecializeinfer function _composite_dsl_map_states_changed(func::F, @nos
         funcs, funcs_changed = _composite_dsl_map_state_children(func, getfield(entity, :funcs))
         states, states_changed = _composite_dsl_map_state_entries(func, getfield(entity, :states))
         (funcs_changed || states_changed) || return entity, false
-        return setfield(rebuild_loopalgorithm_funcs(entity, funcs), :states, states), true
+        return setstates(rebuild_loopalgorithm_funcs(entity, funcs), states), true
     elseif entity isa IdentifiableAlgo && getfield(entity, :func) isa LoopSpec
         inner, inner_changed = _composite_dsl_map_states_changed(func, getfield(entity, :func))
         inner_changed || return entity, false
@@ -354,7 +354,7 @@ function _composite_dsl_map_states_changed_typed(func::F, entity::LA) where {F, 
     funcs, funcs_changed = _composite_dsl_map_state_children_typed(func, getalgos(entity))
     states, states_changed = _composite_dsl_map_state_entries_typed(func, getstates(entity))
     (funcs_changed || states_changed) || return entity, false
-    return setfield(rebuild_loopalgorithm_funcs(entity, funcs), :states, states), true
+    return setstates(rebuild_loopalgorithm_funcs(entity, funcs), states), true
 end
 
 function _composite_dsl_map_states_changed_typed(func::F, entity::IA) where {F, Inner<:LoopSpec, IA<:AbstractIdentifiableAlgo{Inner}}

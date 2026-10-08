@@ -11,8 +11,8 @@ run) and `Replace` (where a stored field lives). `resolve` collects them from ev
 abstract type RootOption <: AbstractOption end
 """Route/share wiring of a plan (`Route`, `Share`, ...); kept in the plan's `wiring`, separate from its options."""
 abstract type AbstractWiring end
-"""A state of a plan (`@state`, `@input`, a `ProcessState` passed to a constructor); kept in the plan's `states`."""
-abstract type ProcessState end
+"""A state of a plan (`@state`, `@input`, a `AlgoState` passed to a constructor); kept in the plan's `states`."""
+abstract type AlgoState end
 abstract type ParserOption end
 
 export ThreadsType, Static, Dynamic, Greedy

@@ -42,6 +42,38 @@ end
 @inline wiring_values(plan::AbstractPlan) = _all_plan_wiring(global_wiring(getwiring(plan)), child_wiring(getwiring(plan)))
 @inline wiring_values(la::LoopAlgorithm) = wiring_values(getplan(la))
 
+"""
+The route/share wiring of one plan as constructor input that keeps its scope: plan-wide routes and shares as they are,
+and those of one child as `LocalPlanOption(child, route)`. `setwiring` (or a constructor) rebuilds the same wiring from
+it, which `wiring_values` alone cannot: it loses which child a route belonged to.
+"""
+function scoped_wiring_values(plan::AbstractPlan)
+    wiring = getwiring(plan)
+    plan_wide = global_wiring(wiring)
+    scoped = (routes(plan_wide)..., shares(plan_wide)...)
+    funcs = getalgos(plan)
+    buckets = child_wiring(wiring)
+    for i in eachindex(buckets)
+        bucket = buckets[i]
+        bucket isa Wiring || continue
+        for option in (routes(bucket)..., shares(bucket)...)
+            scoped = (scoped..., LocalPlanOption(funcs[i], option))
+        end
+    end
+    return scoped
+end
+
+"""Rebuild `plan` with other `states` and `options`; every plan type stores `funcs`, its schedule, namespaces, wiring, states and options, in that order."""
+function _with_states_options(plan::P, states, options) where {P<:AbstractPlan}
+    params = P.parameters
+    return P.name.wrapper{params[1], params[2], params[3], params[4], params[5], typeof(states), typeof(options)}(
+        getfield(plan, 1), getfield(plan, 2), getfield(plan, 3), getfield(plan, 4), states, options)
+end
+
+"""Set the states / the options of a plan."""
+setstates(plan::AbstractPlan, states) = _with_states_options(plan, states, getoptions(plan))
+setoptions(plan::AbstractPlan, options) = _with_states_options(plan, getstates(plan), options)
+
 """The route/share wiring of every plan in the tree of `la`, in tree order."""
 @inline _tree_wiring_values(plan::AbstractPlan) = (wiring_values(plan)..., _tree_wiring_values_children(getalgos(plan))...)
 @inline _tree_wiring_values(la::LoopAlgorithm) = _tree_wiring_values(getplan(la))

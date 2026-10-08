@@ -5,7 +5,7 @@ using StatefulAlgorithms
     struct EditAlgoA <: ProcessAlgorithm end
     struct EditAlgoB <: ProcessAlgorithm end
     struct EditAlgoC <: ProcessAlgorithm end
-    struct EditState <: ProcessState end
+    struct EditState <: AlgoState end
 
     inner = CompositeAlgorithm(:left => EditAlgoA, EditAlgoB, (1, 2))
     outer = CompositeAlgorithm(inner, EditAlgoC, (3, 4))

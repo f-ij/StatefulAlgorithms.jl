@@ -11,7 +11,7 @@ module StatefulAlgorithms
 
     import DataStructures: Queue, dequeue!, enqueue!
 
-    export StepAlgorithm, ProcessAlgorithm, ProcessState, ParserOption, IfWrapped, AbstractPlan, AbstractLoopAlgorithm, AbstractLoopCursor, LoopSpec, profile_step_return, filter_by_type
+    export StepAlgorithm, ProcessAlgorithm, AlgoState, ParserOption, IfWrapped, AbstractPlan, AbstractLoopAlgorithm, AbstractLoopCursor, LoopSpec, profile_step_return, filter_by_type
 
     const DEBUG_MODE = @load_preference("debug", false)
     debug_mode() = @load_preference("debug", false)
@@ -39,6 +39,9 @@ module StatefulAlgorithms
     include("Identifiable/Identifiable.jl")
 
     include("Registry/Registry.jl")
+    # The general state (`@state`) is an algorithm state like the others in ProcessEntities/AlgoStates, but it needs
+    # the matching and registry merge rules above.
+    include("ProcessEntities/AlgoStates/GeneralState.jl")
 
     include("RoutingInterface/RoutingInterface.jl")
     include("Context/Context.jl")
@@ -71,7 +74,6 @@ module StatefulAlgorithms
     include("Copy.jl")
     include("Manager/Manager.jl")
     
-    # include("ProcessStates/ProcessStates.jl")
     # include("ProcessAlgorithms.jl")
 
     include("LoopAlgorithms/LoopAlgorithms.jl")

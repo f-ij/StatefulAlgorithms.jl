@@ -4,6 +4,9 @@ Parked on 2026-09-25 while work focuses on core stability and speed. These issue
 the core (entities/identity, registry/routing/context, loop algorithms, loop kernel, Process/InlineProcess).
 Each was reproduced in the September 2026 code review unless marked *(unverified)*.
 
+## Core: to look at
+- [ ] **`FinalizedAlgorithm` (a block with `@finally`) is an `AbstractLoopAlgorithm`, but it can wrap an unresolved plan.** Since `fix/state-scoping`, a plan holds its own states and options and `LoopAlgorithm` only means "resolved", so `FinalizedAlgorithm` is the one wrapper that does not fit that split. Decide what it is (a plan option? a wrapper only after resolve?). Noted 2026-10-08.
+
 ## HIGH PRIORITY: performance
 - [ ] **Every `Process` built from a DSL block whose `@state` expression captures an outer value gets a brand-new algorithm type, so its loop is recompiled on every construction** (~55 ms and ~19 MiB for a trivial one-step process, ~0.5 s for the Gray-Scott one). Found while benchmarking `Demos/gray_scott` (2026-10-01, single thread). This is a *fixed cost per new Process*, not per iteration: 5 and 30000 iterations both took ~55 ms. Without a capture the type is stable and the second construction costs ~0.02 ms; the loop itself then costs ~7 ns per iteration, i.e. the framework is at ~zero overhead once compiled. Where the new type is minted is **not identified** (no `eval` in `src/CompositeDSL`), and it is not checked whether `main` behaves the same. A profile (`Profile.Allocs`) attributes the allocations to the compiler, running inside `makeloop!` (`src/Process.jl:336`) and `Locations.jl:324`. Verified repro:
 

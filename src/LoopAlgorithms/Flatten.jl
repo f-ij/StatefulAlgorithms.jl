@@ -65,14 +65,14 @@ states(la::LoopAlgorithm) = _registry_states(getregistry(la))
 states(fa::FinalizedAlgorithm) = states(inneralgorithm(fa))
 states(::LoopSpec) = error("States are named when the plan is resolved; use `states(resolve(plan))`.")
 
-"""The states among the entries of `reg` (entries wrapping a `ProcessState`), as namespace => state."""
+"""The states among the entries of `reg` (entries wrapping a `AlgoState`), as namespace => state."""
 @generated function _registry_states(reg::NameSpaceRegistry{E}) where {E}
     names = Symbol[]
     values = Any[]
     for (i, typeentry) in enumerate(E.parameters)
         entrytypes = fieldtype(typeentry, :entries).parameters
         for (j, entry) in enumerate(entrytypes)
-            entry <: AbstractIdentifiableAlgo && algotype(entry) <: ProcessState || continue
+            entry <: AbstractIdentifiableAlgo && algotype(entry) <: AlgoState || continue
             push!(names, getkey(entry))
             push!(values, :(getalgo(getfield(getfield(getfield(reg, :entries), $i), :entries)[$j])))
         end
