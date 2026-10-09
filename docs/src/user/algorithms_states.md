@@ -135,12 +135,13 @@ Rules worth knowing:
 #### Supertype
 
 The generated struct is a `StepAlgorithm`. To make it a subtype of your own abstract type (which must itself be a
-`StepAlgorithm`), write `@supertype` before the function, or as a statement in the block form:
+`StepAlgorithm`), write `<: T` after the signature. With a `where` clause, put its parameters in braces
+(`where {S} <: T`), since `where S <: T` is a bound on `S`.
 
 ```julia
 abstract type MonteCarloAlgorithm <: StepAlgorithm end
 
-@StepAlgorithm @supertype MonteCarloAlgorithm @inline function Metropolis(spins, T, @managed(rng = Xoshiro(1)))
+@StepAlgorithm @inline function Metropolis(spins, T, @managed(rng = Xoshiro(1))) <: MonteCarloAlgorithm
     # ...
 end
 ```

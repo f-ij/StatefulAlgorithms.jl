@@ -36,7 +36,6 @@ _pa_is_macrocall(ex, names::Symbol...) =
 
 _pa_is_inputs_macro(ex) = _pa_is_macrocall(ex, Symbol("@init"), Symbol("@input"), Symbol("@inputs"))
 _pa_is_config_macro(ex) = _pa_is_macrocall(ex, Symbol("@config"))
-_pa_is_supertype_macro(ex) = _pa_is_macrocall(ex, Symbol("@supertype"))
 _pa_is_inline_macro(ex) = ex isa Expr && ex.head == :macrocall &&
     (ex.args[1] == Symbol("@inline") || ex.args[1] == Expr(:., :Base, QuoteNode(Symbol("@inline"))))
 _pa_macro_args(ex) = [arg for arg in ex.args[2:end] if !(arg isa LineNumberNode)]
@@ -97,34 +96,27 @@ function _pa_parse_config_macro(ex)
 end
 
 """
-Split the `@StepAlgorithm` input into `(function_ex, config_fields, force_inline, supertype)`.
-`force_inline` is true when the user wrote `@inline` on the function definition. `supertype` is the type given with
-`@supertype`, or `nothing` for the default `StepAlgorithm`.
+Split the `@StepAlgorithm` input into `(function_ex, config_fields, force_inline)`.
+`force_inline` is true when the user wrote `@inline` on the function definition.
 """
 function _pa_extract_processalgorithm_parts(ex)
     if ex isa Expr && ex.head == :function
-        return ex, NamedTuple[], false, nothing
+        return ex, NamedTuple[], false
     elseif _pa_is_inline_macro(ex)
         args = _pa_macro_args(ex)
         length(args) == 1 || error("@inline used with @StepAlgorithm must wrap exactly one function definition.")
-        function_ex, config_fields, _, supertype = _pa_extract_processalgorithm_parts(args[1])
-        return function_ex, config_fields, true, supertype
-    elseif _pa_is_supertype_macro(ex)
-        args = _pa_macro_args(ex)
-        length(args) == 2 || error("@supertype used with @StepAlgorithm must be written `@supertype T function ... end`.")
-        function_ex, config_fields, force_inline, nested = _pa_extract_processalgorithm_parts(args[2])
-        nested === nothing || error("@StepAlgorithm takes one @supertype.")
-        return function_ex, config_fields, force_inline, args[1]
+        function_ex, config_fields, _ = _pa_extract_processalgorithm_parts(args[1])
+        return function_ex, config_fields, true
     elseif _pa_is_config_macro(ex)
         args = _pa_macro_args(ex)
         isempty(args) && error("@config requires at least one field and a function definition when used with @StepAlgorithm.")
         length(args) >= 2 || error("@config used with @StepAlgorithm must wrap a function definition.")
 
-        function_ex, nested_config_fields, force_inline, supertype = _pa_extract_processalgorithm_parts(args[end])
+        function_ex, nested_config_fields, force_inline = _pa_extract_processalgorithm_parts(args[end])
         config_macro = Expr(:macrocall, Symbol("@config"), LineNumberNode(0, Symbol("none")), args[1:end-1]...)
         config_fields = _pa_parse_config_macro(config_macro)
         append!(config_fields, nested_config_fields)
-        return function_ex, config_fields, force_inline, supertype
+        return function_ex, config_fields, force_inline
     elseif ex isa Expr && ex.head == :block
         statements = [stmt for stmt in ex.args if !(stmt isa LineNumberNode)]
         is_definition(stmt) = stmt isa Expr && (stmt.head == :function || _pa_is_inline_macro(stmt))
@@ -132,21 +124,18 @@ function _pa_extract_processalgorithm_parts(ex)
         length(function_defs) == 1 || error("@StepAlgorithm block form requires exactly one function definition.")
 
         config_fields = NamedTuple[]
-        supertype = nothing
         for stmt in statements
             if stmt === only(function_defs)
                 continue
             elseif _pa_is_config_macro(stmt)
                 append!(config_fields, _pa_parse_config_macro(stmt))
-            elseif _pa_is_supertype_macro(stmt) && length(_pa_macro_args(stmt)) == 1 && supertype === nothing
-                supertype = only(_pa_macro_args(stmt))
             else
-                error("@StepAlgorithm block form only supports `@config ...` statements, one `@supertype T` and one function definition. Got `$stmt`.")
+                error("@StepAlgorithm block form only supports `@config ...` statements plus one function definition. Got `$stmt`.")
             end
         end
 
-        function_ex, _, force_inline, _ = _pa_extract_processalgorithm_parts(only(function_defs))
-        return function_ex, config_fields, force_inline, supertype
+        function_ex, _, force_inline = _pa_extract_processalgorithm_parts(only(function_defs))
+        return function_ex, config_fields, force_inline
     end
     error("@StepAlgorithm expects a function definition or a block containing `@config` declarations and one function definition.")
 end
@@ -477,11 +466,12 @@ from the algorithm subcontext, and forwards everything to the generated implemen
 
 # Supertype
 
-`@supertype T` before the function (or as a statement in the block form) makes the generated struct a subtype of
-`T` instead of `StepAlgorithm`; `T` must itself be a `StepAlgorithm`:
+`<: T` after the signature makes the generated struct a subtype of `T` instead of `StepAlgorithm`; `T` must itself
+be a `StepAlgorithm`. With a `where` clause, write its parameters in braces (`where {S} <: T`): `where S <: T` is a
+bound on `S`.
 
 ```julia
-@StepAlgorithm @supertype MonteCarloAlgorithm function Metropolis(spins, T, @managed(rng = Xoshiro(1)))
+@StepAlgorithm function Metropolis(spins, T, @managed(rng = Xoshiro(1))) <: MonteCarloAlgorithm
     # ...
 end
 ```
@@ -515,8 +505,8 @@ argument annotations still constrain the implementation entrypoint, but the cont
 bindings themselves are intentionally kept simple and untyped.
 """
 function _step_algorithm_macro(ex)
-    function_ex, outer_config_fields, force_inline, supertype = _pa_extract_processalgorithm_parts(ex)
-    supertype = something(supertype, :(StatefulAlgorithms.StepAlgorithm))
+    function_ex, outer_config_fields, force_inline = _pa_extract_processalgorithm_parts(ex)
+    function_ex, supertype = _pa_split_supertype(function_ex)
     signature = _pa_parse_signature(function_ex.args[1])
     body = function_ex.args[2]
     config_fields = vcat(outer_config_fields, signature.config_fields)
@@ -652,6 +642,23 @@ function _step_algorithm_macro(ex)
         $dsl_metadata_defs
     end
     return esc(q)
+end
+
+"""
+    _pa_split_supertype(function_ex) -> (function_ex, supertype)
+
+`function F(...) <: T` parses as a function whose body starts with the statement `<:T`; take that statement out and
+return `T` as the supertype of the generated struct. Without it the supertype is `StepAlgorithm`.
+"""
+function _pa_split_supertype(function_ex)
+    body = function_ex.args[2]
+    idx = findfirst(stmt -> !(stmt isa LineNumberNode), body.args)
+    stmt = idx === nothing ? nothing : body.args[idx]
+    if stmt isa Expr && stmt.head == :<: && length(stmt.args) == 1
+        newbody = Expr(:block, body.args[1:idx-1]..., body.args[idx+1:end]...)
+        return Expr(:function, function_ex.args[1], newbody), only(stmt.args)
+    end
+    return function_ex, :(StatefulAlgorithms.StepAlgorithm)
 end
 
 """Define a step algorithm from a function-like signature."""
