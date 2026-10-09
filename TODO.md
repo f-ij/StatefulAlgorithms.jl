@@ -79,6 +79,20 @@ Each was reproduced in the September 2026 code review unless marked *(unverified
 - [ ] `src/CompositeDSL/StateAndRoutes.jl:173`: hygiene problem: escaped expressions contain `StatefulAlgorithms.`-qualified names, so they fail if the caller hasn't bound that module name.
 - [ ] `src/CompositeDSL/Macros.jl:53`: the DSL re-implements the constructor parser, and the copy has drifted (no `RunIf`).
 
+## DSL refactor (proposed 2026-10-06; each item needs the owner's approval first)
+Restored 2026-10-09 from `fix/type-stability` (`e1dcbbf`, now tag `archive/type-stability`); the status lines were checked against `main` and the open branches on that date.
+- [ ] **Think hard about state in the DSL: who defines it, who owns it, and who may require it.** What a reusable child block promises about its own state, and how `@state` fields relate to `AlgoState` entries (was `ProcessState`), `Init(...)`, `@input` and declared locals.
+  - Partly settled on `main` by the `fix/state-scoping` merges (`6dc8fca`..`c6a41e6`): each construction of a block has its own `@state`, nested blocks keep theirs, sharing is written out with `@bind`/`@merge` (`f3414ff`), and one state object can be shared by several blocks (`6108f93`). `@state x` without a default is required at init (`docs/src/internals/dsl_semantics.md`).
+  - Still open: the relation to `Init(...)`, `@input` and declared locals. Declared locals are `local x` / `x = 0.0` on `refactor/dsl-locals` (`8d999ff`, not merged; it replaces `Local` from `exp/declared-locals`).
+- [ ] Write the DSL design-principles page (three evaluation times, what a bare identifier means, statement table, identity); it replaces the `src/CompositeDSL/Overview.jl` header.
+  - The scratchpad draft (`Overview.draft.jl`) is gone. Start from `docs/src/internals/dsl_semantics.md`: `main` has the version from `f3414ff`, `refactor/dsl-locals` a larger one from `dcddb30` (+195/-56 lines against `main`). The two must be reconciled when that branch is rebased.
+- [ ] Backend, no behaviour change, one commit per step: (1) a single `_dsl_is_macro(stmt, :name)` helper instead of the hand-written `Symbol("@...")` checks (50 in `src` on `main`); (2) one `RouteInput` struct instead of four NamedTuple `kind`s; (3) one `_dsl_emit_entry` instead of four near-identical emit branches in `_dsl_build_statement`; (4) `@include_if` reuses the block walker.
+  - Not started on any branch. `exp/runtime-gen` (not merged) replaces the old lowering (`4764544`: block collector, nested repeat blocks, `Control.jl`, guards), so decide on that branch before doing (3) and (4). Count the passing tests on `main` before starting (854 was the count on 2026-10-06).
+- [ ] Frontend, backward-compatible: deprecate `@every` in favour of `@interval`; give `@route`/`@replace` the same option syntax; fix the DSL front-end bugs above.
+  - `@every` is not deprecated on any branch. `@replace` is a block option on `main` (`f3414ff`). The question of exposing `Local` as `@local` is answered on `refactor/dsl-locals` by plain Julia `local x` (`8d999ff`, not merged).
+- [ ] Docs: restructure `docs/src/user/composite_dsl.md` into tutorial, concepts and reference; shrink the macro docstrings to a pointer plus a syntax summary; expand the README; give `docs/src/index.md` a first-reader path; work through `DOCS_REVIEW_NOTES.md`.
+  - Not started. `composite_dsl.md` gained a state section on `main` with the state-scoping work.
+
 ## Inspection / ContextAnalyzer
 - [ ] `src/ContextAnalyzer/ContextAnalyzer.jl:309`: the analyzer ignores routes and shares, so `inspect` lists routed and defaulted values as unresolved requests.
 
