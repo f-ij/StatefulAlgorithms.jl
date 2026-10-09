@@ -203,3 +203,24 @@ end
     @test StatefulAlgorithms.init(algo, (;)).total == 0.0
     @test StatefulAlgorithms.step!(algo, (; x = 2.0, total = 1.0)).total == 3.0
 end
+
+abstract type SupertypeForMacroTest <: StepAlgorithm end
+@StepAlgorithm @supertype SupertypeForMacroTest @inline function WithSupertypeForTest(x, @managed(total = start); @inputs((; start = 0.0)))
+    total += x
+    return (; total)
+end
+@StepAlgorithm begin
+    @supertype SupertypeForMacroTest
+    @config k = 2
+    function BlockWithSupertypeForTest(x)
+        return (; x = k * x)
+    end
+end
+
+@testset "StepAlgorithm macro @supertype" begin
+    @test WithSupertypeForTest <: SupertypeForMacroTest
+    @test BlockWithSupertypeForTest <: SupertypeForMacroTest
+    @test StatefulAlgorithms.init(WithSupertypeForTest(), (; start = 1.0)).total == 1.0
+    @test StatefulAlgorithms.step!(WithSupertypeForTest(), (; x = 2.0, total = 1.0)).total == 3.0
+    @test StatefulAlgorithms.step!(BlockWithSupertypeForTest(), (; x = 3)).x == 6
+end

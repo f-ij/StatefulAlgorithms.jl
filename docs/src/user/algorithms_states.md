@@ -132,6 +132,19 @@ Rules worth knowing:
 - plain positional arguments are runtime-only and are not available while constructing managed state.
 - Julia `where` signatures are supported.
 
+#### Supertype
+
+The generated struct is a `StepAlgorithm`. To make it a subtype of your own abstract type (which must itself be a
+`StepAlgorithm`), write `@supertype` before the function, or as a statement in the block form:
+
+```julia
+abstract type MonteCarloAlgorithm <: StepAlgorithm end
+
+@StepAlgorithm @supertype MonteCarloAlgorithm @inline function Metropolis(spins, T, @managed(rng = Xoshiro(1)))
+    # ...
+end
+```
+
 #### Inlining the body
 
 By default Julia decides whether the algorithm body is inlined into the plan's step. That is
