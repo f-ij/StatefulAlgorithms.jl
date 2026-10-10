@@ -783,14 +783,21 @@ function _dsl_collect_block(
             continue
         end
 
-        declarations = _dsl_parse_local_declaration(stmt, union(known_outputs, state_outputs, keys(alias_map)))
-        if !isnothing(declarations)
+        parsed_local = _dsl_parse_local_declaration(stmt, union(known_outputs, state_outputs, keys(alias_map)))
+        if !isnothing(parsed_local)
+            declarations = parsed_local.declarations
             isnothing(current_line) || push!(step_exprs, current_line)
             push!(step_exprs, _dsl_local_declaration_expr(declarations))
             union!(known_outputs, first.(declarations))
             union!(declared, first.(declarations))
+            # `local x = f()`: after declaring `x`, the step `x = f()` (one per name of `local a = f(), b = g()`).
+            for step in parsed_local.steps
+                step_expr = _dsl_build_statement(_dsl_assignment_as_call(step), alias_map, context_map, known_outputs, state_outputs, expected_schedule, owner_name; outer_locals = union(known_outputs, state_outputs))
+                isnothing(step_expr) || push!(step_exprs, Base.remove_linenums!(step_expr))
+            end
             continue
         end
+        stmt = _dsl_assignment_as_call(stmt)
 
         _dsl_reject_input_assignment(stmt, input_fields, current_line)
         _dsl_reject_name_assignment(stmt, known_outputs, alias_map, current_line)

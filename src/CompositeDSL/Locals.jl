@@ -3,35 +3,55 @@ Declared locals in a DSL block, written as in Julia:
 
     local x            # no value yet; its type is the type of what is written to it
     local x::Float64   # a type, no value yet
-    local x = x0       # a value (any expression, evaluated where the block is built)
-    x = 0.0            # a literal value: a number, string, `nothing`, a vector or tuple literal
+    local x = x0       # a value: a literal or an outside name, taken where the block is built
+    local x = f()      # a local, assigned by the step `x = f()` where it is written
+    x = 0.0            # a literal value: a number, string, char, symbol, `nothing`, or a tuple of those
     x::Float32 = 1     # a type and a value
 
 Each lowers to a `Local` on the block (a declared local of its scope, see `Scope`): it lives for the run and is kept on
 a pause. Statements read it by name and write it by assigning it (`x = f(x)`). A right-hand side that is a call or a
 macro (`x = f()`, `x = @every 3 f()`) is a step, not a declaration; a bare name (`x = Algo`) is an algorithm entry.
+An array literal or an interpolated string is a call too (`[0, 0]` is `Base.vect(0, 0)`), so `x = [0, 0]` makes a new
+array every step, as in a Julia loop body; a value kept from run start belongs in `@state`.
 Reading a local declared without a value before anything is written to it is an error.
 =#
 
 """Whether `rhs` is a value that declares a local when assigned in a block (`x = 0.0`), rather than a step."""
-_dsl_is_local_value(rhs) = rhs isa Number || rhs isa AbstractString || rhs isa Char || rhs isa QuoteNode || rhs === :nothing ||
-    (rhs isa Expr && rhs.head in (:vect, :tuple, :vcat, :hcat, :string) && !_dsl_has_call_args(rhs))
-_dsl_has_call_args(ex::Expr) = any(a -> a isa Expr && a.head in (:call, :macrocall, :.), ex.args) || any(a -> a isa Expr && _dsl_has_call_args(a), ex.args)
+_dsl_is_local_value(rhs) = rhs isa Number || rhs isa AbstractString || rhs isa Char || rhs isa QuoteNode || rhs === :nothing
+_dsl_is_local_value(rhs::Expr) = rhs.head == :tuple && all(_dsl_is_local_value, rhs.args)
+
+"""Whether `value` in `local x = value` is a step (a call, a macro, an array literal, an interpolated string), assigned where it is written."""
+_dsl_is_step_value(value) = value isa Expr && value.head in (:call, :macrocall, :vect, :vcat, :hcat, :ncat, :string, :comprehension)
+
+"""`stmt` with its right-hand side as a call when it is an assignment (see `_dsl_as_call`), else as it is."""
+_dsl_assignment_as_call(stmt) = stmt isa Expr && stmt.head == :(=) ? Expr(:(=), stmt.args[1], _dsl_as_call(stmt.args[2])) : stmt
+
+"""`rhs` as a call when it is an array literal or an interpolated string (`[a, b]` is `Base.vect(a, b)`), else as it is."""
+function _dsl_as_call(rhs)
+    rhs isa Expr || return rhs
+    f = get((; vect = :vect, vcat = :vcat, hcat = :hcat, string = :string), rhs.head, nothing)
+    isnothing(f) && return rhs
+    return Expr(:call, Expr(:., :Base, QuoteNode(f)), rhs.args...)
+end
 
 """
-The locals a block statement declares, as `(name, type expression or nothing, value expression or nothing)` tuples, or
-`nothing` when `stmt` is not a declaration (see the note above). `taken` are the names the block already has.
+The locals a block statement declares, as `(; declarations, steps)`, or `nothing` when `stmt` is not a declaration
+(see the note above). `declarations` are `(name, type expression or nothing, value expression or nothing)` tuples;
+`steps` are the assignments `local x = f()` adds after declaring `x`. `taken` are the names the block already has.
 """
 function _dsl_parse_local_declaration(stmt, taken::Set{Symbol})
     if stmt isa Expr && stmt.head == :local
         targets = length(stmt.args) == 1 && stmt.args[1] isa Expr && stmt.args[1].head == :tuple ? stmt.args[1].args : stmt.args
-        return [_dsl_local_target(target, taken) for target in targets]
+        declarations = [_dsl_local_target(target, taken) for target in targets]
+        steps = [:($name = $value) for (name, _, value) in declarations if _dsl_is_step_value(value)]
+        declarations = [(name, type, _dsl_is_step_value(value) ? nothing : value) for (name, type, value) in declarations]
+        return (; declarations, steps)
     end
     stmt isa Expr && stmt.head == :(=) && _dsl_is_local_value(stmt.args[2]) || return nothing
     lhs = stmt.args[1]
     (lhs isa Symbol || (lhs isa Expr && lhs.head == :(::) && length(lhs.args) == 2 && lhs.args[1] isa Symbol)) || return nothing
     lhs isa Symbol && lhs in taken && return nothing   # assigning a name the block has: not a declaration
-    return [_dsl_local_target(stmt, taken)]
+    return (; declarations = [_dsl_local_target(stmt, taken)], steps = Any[])
 end
 
 """

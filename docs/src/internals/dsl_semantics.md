@@ -108,15 +108,17 @@ its returns are reset on the same steps its readers run.
 | `@CompositeAlgorithm name(a, b::T = v) begin … end` | A header: assigns the plan to `name`, and each argument is an `@input` of the block (`a`, `b::T = v`). Keyword arguments too. |
 | `local x` | A declared local without a value: its type is the type of what is first assigned to it (decided before the run). Reading it before that is an `UndefRefError`. |
 | `local x::T` | A declared local of type `T` without a value. |
-| `local x = v` | A declared local starting at `v`, an outside value evaluated at build. |
-| `x = 0.0`, `x = "s"`, `x = :s`, `x = [0, 0]`, `x = (1, 2)` | A declared local starting at that literal. A literal is a number, string, character, quoted symbol, `nothing`, or a vector/tuple literal without calls in it. |
+| `local x = v` | A declared local starting at `v`, a literal or an outside name taken at build. |
+| `local x = f(…)` | A declared local, and the step `x = f(…)`: assigned every time the statement runs, as in a Julia loop body. |
+| `x = 0.0`, `x = "s"`, `x = :s`, `x = (1, 2)` | A declared local starting at that literal. A literal is a number, string, character, quoted symbol, `nothing`, or a tuple of those. An array literal is a call (`x = [0, 0]` is `x = Base.vect(0, 0)`): a new array every step. |
 | `x = nothing` | A declared local that reads `nothing` until something is assigned to it. |
 | `x::T = v` | A declared local of type `T` starting at `convert(T, v)`. |
 | `@alias a = Algo(…)` | Names an algorithm for later statements: `a(…)` runs it, `a.field` reads its field. |
 | `@context c = nested()` | Runs `nested()` like any statement, and names it so later statements can write `c.sub.field`. |
 
-A declared local's starting value is taken from the plan at the start of every run. (Open: a mutable starting value,
-`local buf = zeros(3)` or `x = [0, 0]`, is one array shared by all runs of the plan; see [Open](#Open).)
+A declared local's starting value is taken from the plan at the start of every run. Starting values are literals
+or outside names, so nothing the block creates is shared between runs; a value kept from the start of the run belongs
+in `@state`.
 
 ### Steps
 
@@ -237,7 +239,4 @@ as `a.y`. Capturing it into the block's scope by name instead, like a call's ret
 uniform (and close the nested-block gap above), at the cost of `a.y` from outside the block, which then needs the
 value to be state or a declared local of the outer block.
 
-**Mutable starting values of declared locals.** `local buf = zeros(3)` evaluates `zeros(3)` once, at build; every run
-of the plan starts from that same array, so a second run starts with what the first left in it. Julia's
-`local buf = zeros(3)` gives a fresh array on each call. Proposed: copy a starting value that is not plain data at the
-start of each run.
+

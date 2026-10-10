@@ -531,8 +531,10 @@ algo = @CompositeAlgorithm begin
 end
 ```
 
-The forms are `local x`, `local x::T`, `local x = v` (`v` is evaluated where the block is built), and an assignment of
-a literal value, `x = 0.0`, `x = nothing` or `x::Float32 = 1`. A local lives for the run and is kept on a pause.
+The forms are `local x`, `local x::T`, `local x = v` (`v` a literal or an outside name, taken where the block is
+built), `local x = f(…)` (declares `x` and assigns it every time the statement runs), and an assignment of a literal
+value, `x = 0.0`, `x = nothing` or `x::Float32 = 1`. An array literal is a call: `x = [0, 0]` makes a new array every
+step, as in a Julia loop body. Use `@state` for a buffer kept between steps. A local lives for the run and is kept on a pause.
 Reading a local declared without a value before anything is assigned to it is an error; one declared as `nothing`
 reads `nothing` until then.
 
