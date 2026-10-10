@@ -881,7 +881,7 @@ function _dsl_check_scheduled_reads(children::Vector{Any}, schedule::Vector{Any}
             j = findfirst(j -> j > i && !_dsl_runs_with(producer, _dsl_entry_interval(schedule[j])) && _dsl_reads_output(children[j], options, name), eachindex(children))
             isnothing(j) && continue
             reader = _dsl_entry_interval(schedule[j])
-            error("`$name` is assigned on a schedule (every $(something(producer, "conditional")) steps) and read by a statement that also runs in other steps (every $(something(reader, "conditional")) steps). A value assigned in a step lives for that step only. To keep it between steps, declare it at the top of the block: `local $name` (reading it before its first assignment is an error) or `$name = nothing`.")
+            error("`$name` is assigned on a schedule (every $(something(producer, "conditional")) steps) and read by a statement that also runs in other steps (every $(something(reader, "conditional")) steps). A value assigned in a step lives for that step only. To keep it between steps, declare it at the top of the block: `local $name` (reading it before its first assignment is an error) or `local $name = nothing`.")
         end
     end
     return nothing

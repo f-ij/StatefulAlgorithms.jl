@@ -1280,10 +1280,10 @@ end
         end
         @test err isa ErrorException && occursin("declare it at the top of the block: `local y`", sprint(showerror, err))
 
-        # `y = nothing` declares it: `nothing` until its first assignment, then its last value.
+        # `local y = nothing` declares it: `nothing` until its first assignment, then its last value.
         algo = @CompositeAlgorithm begin
             @state seen = Any[]
-            y = nothing
+            local y = nothing
             y = @every 3 produce_dsl_test()
             v = keep_value_dsl_test(y)
             seen = push_seen_dsl_test(seen, v)
@@ -1314,15 +1314,15 @@ end
         close(p)
     end
 
-    @testset "Declared locals: local x, local x::T, x = value, x::T = value" begin
+    @testset "Declared locals: local x, local x::T, local x = value, local x::T = value" begin
         @info "Composite DSL: Declared locals"
         start = 10.0
         algo = @CompositeAlgorithm begin
             @state seen = Any[]
-            total = 0.0
+            local total = 0.0
             local count::Int
             local offset = start
-            scale::Float32 = 2
+            local scale::Float32 = 2
             total = plus_one_dsl_test(total)
             count = length(seen)
             seen = push_four_dsl_test(seen, total, count, offset, scale)
@@ -1343,10 +1343,21 @@ end
         @test fetch(p)[:_state].seen == [1.0, 2.0, 3.0]
         close(p)
 
-        # A nested block reads and writes the locals of the blocks around it.
+        # Without `local`, `x = 0.0` assigns `x` every step, as in a Julia loop body.
         algo = @CompositeAlgorithm begin
             @state seen = Any[]
             total = 0.0
+            total = plus_one_dsl_test(total)
+            seen = push_seen_dsl_test(seen, total)
+        end
+        p = Process(resolve(algo), repeat = 3); run(p)
+        @test fetch(p)[:_state].seen == [1.0, 1.0, 1.0]
+        close(p)
+
+        # A nested block reads and writes the locals of the blocks around it.
+        algo = @CompositeAlgorithm begin
+            @state seen = Any[]
+            local total = 0.0
             @repeat 3 begin
                 total = plus_one_dsl_test(total)
             end
