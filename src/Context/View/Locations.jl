@@ -164,7 +164,7 @@ end
 @inline getregistry(scv::SCV) where SCV <: SubContextView = getregistry(getcontext(scv))
 
 """The runtime values under `subcontextname`: a runtime part (`_captured_returns`, `_inputs`, ...), or a namespace's subcontext returns."""
-@inline function _runtime_subcontext_data(runtimecontext::ProcessContext, ::Val{subcontextname}) where {subcontextname}
+@inline function _runtime_values(runtimecontext::ProcessContext, ::Val{subcontextname}) where {subcontextname}
     subcontexts = @inline get_subcontexts(runtimecontext)
     haskey(subcontexts, subcontextname) && return getdata(getproperty(subcontexts, subcontextname))
     outputs = @inline get_subcontext_returns(runtimecontext)
@@ -172,11 +172,11 @@ end
 end
 
 @inline function _runtime_has_var(runtimecontext, ::Val{subcontextname}, ::Val{varname}) where {subcontextname,varname}
-    return haskey(_runtime_subcontext_data(runtimecontext, Val(subcontextname)), varname)
+    return haskey(_runtime_values(runtimecontext, Val(subcontextname)), varname)
 end
 
 @inline function _runtime_get_var(runtimecontext, ::Val{subcontextname}, ::Val{varname}) where {subcontextname,varname}
-    return getproperty(_runtime_subcontext_data(runtimecontext, Val(subcontextname)), varname)
+    return getproperty(_runtime_values(runtimecontext, Val(subcontextname)), varname)
 end
 
 """

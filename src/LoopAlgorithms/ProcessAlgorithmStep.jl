@@ -79,7 +79,7 @@ the current plan wiring.
 ) where {A<:ProcessAlgorithm,L<:LoopContext,W<:PlanWiringView,P<:AbstractProcess,LT<:Lifetime}
     context = @inline getcontext(lc)
     retval = @inline step!(algo, context)
-    runtimecontext = @inline merge_owner_runtime_return(
+    runtimecontext = @inline merge_runtime_return(
         (@inline getruntimecontext(lc)),
         Val(:_captured_returns),
         retval,

@@ -196,8 +196,8 @@ end
     return getwiring(getalgo(child))
 end
 
-"""Return whether a child value receives one runtime-scoped wiring option."""
-Base.@nospecializeinfer function _runtime_scoped_wiring_matches_child(@nospecialize(child), @nospecialize(option::LocalPlanOption))::Bool
+"""Whether the child-local wiring `option` (a route or share written for one call or algorithm) belongs to `child`."""
+Base.@nospecializeinfer function _local_wiring_matches_child(@nospecialize(child), @nospecialize(option::LocalPlanOption))::Bool
     scoped_wiring = _wrapped_plan_wiring(option)
     if scoped_wiring isa Route
         # A route into a function call names the call object itself.
@@ -233,7 +233,7 @@ Base.@nospecializeinfer function _plan_child_wiring_runtime(@nospecialize(funcs:
         scoped_wiring = _wrapped_plan_wiring(option)
         assigned = false
         for i in eachindex(route_buckets)
-            _runtime_scoped_wiring_matches_child(funcs[i], option) || continue
+            _local_wiring_matches_child(funcs[i], option) || continue
             if scoped_wiring isa Route
                 push!(route_buckets[i], scoped_wiring)
             elseif scoped_wiring isa Share
