@@ -35,9 +35,21 @@ StepResult(value) = StepResult(value, StateUpdates((;)))
 """
     updated_names(algo or its type)
 
-The names an algorithm's step writes back (its `@update`s), as a tuple of symbols. Empty for an algorithm that updates
-nothing, and for a hand-written `step!` unless it defines a method. The DSL reads it when a block is built to say which
-of the block's values an algorithm changes.
+The names of the arguments an algorithm's step writes back, as a tuple of symbols: `updated_names(AddOne!) == (:val,)`.
+
+When a block is built, the DSL reads it for every algorithm statement: a value of the block passed to one of these
+arguments changes, so it warns unless the value is state or declared `@mutable`, and an `@input`, an outside value or
+a `@transform` passed there is an error.
+
+`@StepAlgorithm` defines it from the body's `@update`s. A hand-written `step!` that returns
+`StepResult(value, StateUpdates(; x))` defines it with the same names, so these checks apply to it too:
+
+```julia
+StatefulAlgorithms.updated_names(::Type{MyAlgo}) = (:x,)
+```
+
+Without a method it is `()`: the step still writes back what it returns, but building a block checks nothing for it
+(also for a hand-written `step!` that returns a plain named tuple, which writes every name back).
 """
 updated_names(::Type) = ()
 updated_names(algo) = updated_names(typeof(algo))
