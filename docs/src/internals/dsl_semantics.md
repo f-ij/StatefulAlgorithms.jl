@@ -69,8 +69,7 @@ Every bare name a statement reads is one of these. The kind decides where the va
 | state field | `@state x = v`, `@state x`; an algorithm's `init` (its `@managed` fields) | persistent: the process | kept, and saved | stored context, under the block's `_state` or the algorithm's namespace |
 | input | `@input x`, `@input x::T`, `@input x = v` | the run, read-only | kept | runtime context, `_inputs` |
 | declared local | `local x`, `local x::T`, `local x = v`, `local x::T = v` | the run | kept | runtime context, `_declared_locals` |
-| captured return | `y = f(…)` with `f` a function (a call) | one step of its block | dropped | runtime context, `_captured_returns` |
-| algorithm output | `y = Algo(…)`: a name an algorithm returns that is not its state | one step of the block the algorithm is in | dropped | runtime context, `_subcontext_returns`, under the algorithm's namespace |
+| captured return | `y = f(…)` or `y = Algo(…)`: what a call or an algorithm returns, and `x = v` | one step of its block | dropped | runtime context, `_captured_returns` |
 | alias | `@alias a = Algo(…)` | build only | – | macro time: `a` names the algorithm in later statements |
 | context alias | `@context c = nested()` | build only | – | macro time: `c.sub.field` names fields of a nested plan |
 
@@ -113,6 +112,8 @@ its returns are reset on the same steps its readers run.
 | `local x = nothing` | A declared local that reads `nothing` until something is assigned to it. |
 | `local x::T = v` | A declared local of type `T` starting at `convert(T, v)`. |
 | `@alias a = Algo(…)` | Names an algorithm for later statements: `a(…)` runs it, `a.field` reads its field. |
+| `(; a, b) = @state(X)` | From here on, `a` and `b` name the fields `a`, `b` of `X`'s state (`X` an alias or an algorithm of the block). `@state(X).a` reads one inline. |
+| `@mutable y = …`, `@mutable local x …` | The statement, and: an algorithm may update `y` (see [What a step's returns do](#What-a-step's-returns-do)). Changes nothing else; it silences the warning. |
 | `@context c = nested()` | Runs `nested()` like any statement, and names it so later statements can write `c.sub.field`. |
 
 A declared local's starting value is taken from the plan at the start of every run. Starting values are literals
@@ -128,7 +129,7 @@ in `@state`.
 | `x = 0.0`, `x = "s"`, `x = (1, 2)`, `x = [0, 0]` | Assigns `x` that value, as in a Julia loop body: the same as `x = f(…)`, a value for one step (or a write, if `x` is a state field or a declared local). A literal is the call `identity(0.0)`; an array literal is a call too (`Base.vect(0, 0)`), so a new array every step. |
 | `x::T = v` | `x = convert(T, v)`. |
 | `Algo`, `Algo()`, `a()`, `Algo(args…)` | Runs the algorithm's `step!`. `Algo` is an algorithm type or value, or an alias. |
-| `y = Algo(…)` | Runs the algorithm and binds its returned `y` for later statements (see [What a step's returns do](#What-a-step's-returns-do)). |
+| `y = Algo(…)`, `a, b = Algo(…)`, `(; a, b) = Algo(…)` | Runs the algorithm and captures its return value as for a call: the whole value, a tuple unpacked, or its properties `a`, `b` (see [What a step's returns do](#What-a-step's-returns-do)). |
 | `x = f(…)` with `x` a state field | Calls `f` and writes the return into the state field `x`. |
 | `x = v` with `x` a state field, `v` an outside value | Writes `v` (taken at build) into the state field every step (`ContextWrite`). |
 | `owner.field = f(…)` | Calls `f` every step and writes the return into the algorithm's or nested plan's field. |
@@ -137,8 +138,8 @@ in `@state`.
 
 Which name a statement's arguments read:
 
-- A bare name that is a block name (a state field, input, declared local, captured return or bound output, in this
-  block or a block around it) reads that value in the step.
+- A bare name that is a block name (a state field, input, declared local or captured return, in this block or a block
+  around it) reads that value in the step.
 - `a.field` / `c.sub.field` reads a field of an aliased algorithm or a nested plan's state.
 - `@transform(f, name)` reads `name` and passes `f(name)`. `x[]`, `x[i]`, `x[2:3]` read `x` and index it.
 - Anything else is an outside value, evaluated once at build: `f(somevar)`, `f(1.5)`, but also `f((a, b))` and
@@ -179,20 +180,27 @@ Nothing runs; these decide where values go.
 
 ## What a step's returns do
 
-A call's return (`y = f(x)`, or `(; y)` returned by a call) is captured into the block's scope under the names on the
-left of `=`. Names nothing reads are dropped.
+A step returns a value, as a Julia function does, and separately writes back its updates.
 
-An algorithm returns a named tuple. Each returned name goes to one place:
+- **The value.** `y = f(x)` and `y = Algo(x)` capture it into the block's scope under the names on the left of `=`
+  (`a, b = …` unpacks a tuple, `(; a, b) = …` takes properties). Names nothing reads are dropped. For an algorithm,
+  the plan keeps its return for one step (under `_return` in its namespace's subcontext returns) and a call of
+  `identity` right after it, on the same schedule, captures it; a name on the left that is a state field of the block
+  is written there, one that is a declared local writes the local.
+- **The updates.** A `@StepAlgorithm` writes back exactly what its body marks with `@update x` (`updated_names` lists
+  them): `x`'s value at the `return` goes to where the algorithm read `x` from, its own `@managed` state or the
+  variable of the block passed as `x` (through the wire of that argument, or a share). A hand-written `step!` returns
+  `StepResult(value, StateUpdates(; x))` for the same, or a plain named tuple, which keeps the older meaning: every
+  returned name is written back where it lives, and the named tuple is also its value.
 
-1. A name that is one of the algorithm's state fields (a field of its namespace in the stored context) writes that
-   field. That is how an algorithm updates its state.
-2. A name that is wired to it (a keyword argument, `@route`) writes back to the wire's source.
-3. A declared local in scope with that name is written.
-4. Any other name is an algorithm output: kept for one step of the block, under the algorithm's namespace. `y = Algo()`
-   makes later statements read it as `y`; `a.y` reads it too, also from other blocks.
+Which values of the block an update may change:
 
-The weak point is rule 1: whether a returned `T` updates the algorithm's state or is an output depends on whether `T`
-happens to be a field of its namespace, which `init`, `Init(…)` and overrides all can put there. See [Open](#Open).
+| Passed as the updated argument | What happens |
+|---|---|
+| a state field (the block's, or `a.field`) | changed: state is mutable memory |
+| a captured return or a declared local | changed, and building the block warns, unless the name was declared `@mutable` |
+| an `@input` or an outside value | error when the block is built |
+| a value read through `@transform` | error when the block is built |
 
 ## Errors when the block is built
 
@@ -204,6 +212,8 @@ happens to be a field of its namespace, which `init`, `Init(…)` and overrides 
 - `local x` inside `@include_if` or `@context`.
 - A schedule on the left (`@every 3 y = f()`), `@finally` in a nested block, a route that reads a local or return
   no block declares or captures.
+- An algorithm that updates an argument given an `@input`, an outside value or a `@transform` (see above).
+- `y = @state(X)`: take fields by name, `(; a, b) = @state(X)`.
 
 ## Known gaps
 
@@ -212,32 +222,10 @@ happens to be a field of its namespace, which `init`, `Init(…)` and overrides 
 
 ## Open
 
-**A state update from `@StepAlgorithm`.** Today an algorithm updates its state by returning a field that happens to
-be in its namespace (rule 1 above). Returning `T` overwrites the algorithm's `T` if `T` was put into its namespace in
-any way, also by `Init(…)` or an override, and is an output otherwise; nothing in the algorithm's definition says
-which. Wrapping updates (`(; E, T = UpdateState(T))`) would make it explicit but adds friction to every algorithm.
+**One algorithm type used twice in a block.** Two statements with the same step type (`AddRand!(y)`, `AddRand!(x)`)
+share one namespace and one wiring, so both read and update the last call's argument. This is older than the
+rules above (see TODO.md, DSL front-end, HIGH) but `@update` makes it easier to run into.
 
-Suggestion: let the algorithm's definition say it, with the declaration that already exists. In `@StepAlgorithm`, its
-state is what it declares with `@managed`:
-
-```julia
-@StepAlgorithm function Anneal(E, @managed(T = 1.0); rate = 0.999)
-    return (; T = T * rate, E_scaled = E / T)
-end
-```
-
-- A returned name that is `@managed` updates the algorithm's state (`T` above). No wrapper: the macro knows the
-  managed names and marks them in the `step!` it generates.
-- Every other returned name is an output (`E_scaled`), captured at the call site like a call's return.
-- A value the algorithm reads but does not declare (a plain positional argument such as `E`, or a `T` that is a plain
-  argument) is an input. Returning it is an output; to update it, declare it `@managed(T)` (which takes its starting
-  value from the init context, as `@managed(name)` does now).
-- A hand-written `step!` (no macro) keeps rule 1 with "its state" meaning the fields its own `init` returns, not
-  whatever else ends up in its namespace.
-
-**Algorithm outputs in the scope.** Rule 4 keeps an algorithm's output under its namespace, readable from other blocks
-as `a.y`. Capturing it into the block's scope by name instead, like a call's return, would make one-step values
-uniform (and close the nested-block gap above), at the cost of `a.y` from outside the block, which then needs the
-value to be state or a declared local of the outer block.
-
-
+**Unread captures.** A capture whose names nothing reads still makes the algorithm keep its return for the step
+(the `_return` slot). It costs no time per step that could be measured; pruning such captures when the block is built
+would remove the slot.

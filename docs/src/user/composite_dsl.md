@@ -143,6 +143,51 @@ end
 
 `Sink(value = produced)` routes `produced` into the target as `value`.
 
+## Algorithm Returns and Updates
+
+An algorithm statement is a call: what the algorithm returns is captured on the left, as for a function.
+
+```julia
+algo = @CompositeAlgorithm begin
+    y = Counter()              # the whole return value
+    (; E, M) = Measure()       # the properties E and M of a returned named tuple
+    a, b = Split()             # a returned tuple, unpacked
+    Report(y, E, a)
+end
+```
+
+The names are values of the block for that step, like `y = f(x)`. A `@StepAlgorithm` writes back only what
+its definition marks with `@update` (see the algorithms page): its own state, or the argument it was given.
+(A hand-written `step!` that returns a named tuple keeps the older meaning: every returned name is written
+back where it lives.)
+
+```julia
+@StepAlgorithm function AddRand!(val, @managed(rng = Xoshiro(1)))
+    @update val = val + rand(rng)
+end
+
+algo = @CompositeAlgorithm begin
+    @mutable y = produce()
+    AddRand!(y)        # changes y; with `@state y = 0.0` instead, it changes the state field
+    Report(y)
+end
+```
+
+Passing a value of the block that is not state (a captured return or a `local`) to an argument the
+algorithm updates changes that value, and building the block warns about it: `@mutable y = ...` (or
+`@mutable local y`) says it is intended and silences the warning, nothing else. An `@input` or an outside
+value cannot be updated: an error when the block is built.
+
+Read an algorithm's state by name with `@state(X)`, `X` an alias or an algorithm of the block:
+
+```julia
+algo = @CompositeAlgorithm begin
+    Counter()
+    (; count) = @state(Counter)     # from here on, `count` is Counter's state field `count`
+    Report(@state(Counter).count)   # the same, inline
+end
+```
+
 Step algorithms created with `@StepAlgorithm` can also use direct
 positional syntax when their positional argument names are known:
 
@@ -573,13 +618,10 @@ algo = @CompositeAlgorithm begin
 end
 ```
 
-Repeated sub-blocks are nested plans. They see the locals declared in the blocks
-around them (`local x`, `x = 0.0`) by name, and assigning one updates it. Declare
-block-owned state inside the block, or refer to surrounding algorithms through
-inherited `@alias`/`@context` owned field paths; other bare state/output names
-from the surrounding block are not captured as block-local routes. Keep transient dataflow consumers inside the block. To
-route persistent state across a named plan boundary, define that plan separately
-and insert it with `@context`.
+Repeated sub-blocks are nested plans. They see every name of the blocks around them
+(state fields, inputs, `local`s and the values assigned before the block) and
+assigning a `local` of an outer block updates it. To route persistent state across
+a named plan boundary, define that plan separately and insert it with `@context`.
 
 Write schedules on the right-hand side:
 

@@ -11,7 +11,8 @@ process context. That named part is its **subcontext**.
 
 User methods receive a view of the current subcontext, plus any routed or shared
 values that were made visible to it. In normal code, treat that view like a
-read-only input object. Return a `NamedTuple` to write values back.
+read-only input object. A step writes values back by returning them (see
+[Returns and updates](#Returns-and-updates)).
 
 ## Lifecycle Hooks
 
@@ -58,6 +59,17 @@ function StatefulAlgorithms.cleanup(::MyAlgo, context)
 end
 ```
 
+A hand-written `step!` that returns a named tuple writes each name back where it lives: `x` above is the
+algorithm's state, so returning it updates it. To return a value and write back separately, return a
+`StepResult`:
+
+```julia
+function StatefulAlgorithms.step!(a::MyAlgo, context)
+    x = context.x + a.gain
+    return StepResult(2x, StateUpdates(; x))   # the value 2x; x is written back
+end
+```
+
 ```julia
 struct MyState <: AlgoState end
 
@@ -75,12 +87,33 @@ function signature.
 
 ```julia
 @StepAlgorithm function Accumulate(x, gain)
-    x = x + gain
-    return (; x)
+    @update x = x + gain
 end
 ```
 
 You can still define `init` and `cleanup` manually for the generated type.
+
+#### Returns and updates
+
+A `@StepAlgorithm` body is a Julia function body: `return v` (or its last expression) is its return value,
+which a block captures with `y = Accumulate(...)`. Assigning an argument (`x = x + gain`) only changes the
+body's local `x`, as in any Julia function. To write an argument back, mark it with `@update`:
+
+- `@update x` writes `x`'s value at the `return` back to where the algorithm read it: its `@managed` state,
+  or the variable of the block passed as `x`.
+- `@update x = v` (or `@update x += v`, ...) assigns and marks in one line; `@update x, y` marks several.
+- A body that ends in `@update ...` returns `nothing`.
+- Only arguments can be updated (positional, `@managed`, keyword).
+
+```julia
+@StepAlgorithm function Anneal(E, @managed(T = 1.0); rate = 0.999)
+    @update T = T * rate        # the algorithm's state
+    return E / T                # a value: `scaled = Anneal(E)` in a block
+end
+```
+
+`updated_names(Anneal) == (:T,)`: the names an algorithm updates, read when a block is built. Passing a
+value of the block to an updated argument changes it; see the composite DSL page for the rules.
 
 #### Macro-Generated Algorithm Semantics
 
@@ -113,8 +146,8 @@ Example:
         @inbounds for i in eachindex(signal)
             buffer[i] = damp * scale * signal[i]
         end
-        metric = sum(buffer)
-        return (; buffer, scale, metric)
+        @update metric = sum(buffer)   # `buffer` is changed in place; `metric` is written back
+        return metric
     end
 end
 ```
