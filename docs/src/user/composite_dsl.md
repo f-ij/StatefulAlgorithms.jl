@@ -84,6 +84,19 @@ Forms:
 Use runtime `@input` for scalar parameters or small values that can change from
 run to run. Use `@state` or `Init(...)` for persistent buffers and setup data.
 
+A header names the plan and declares its inputs in one line. Each argument is one
+`@input`, positional and keyword arguments alike:
+
+```julia
+@CompositeAlgorithm algo(temperature::AbstractFloat, sweep = 1) begin
+    @state energy = 0.0
+    accepted = metropolis_step(energy, temperature; sweep = sweep)
+end
+```
+
+is the same as `algo = @CompositeAlgorithm begin @input temperature::AbstractFloat; @input sweep = 1; … end`.
+`@Routine` takes the same header.
+
 ## Aliases
 
 Use `@alias` to name an algorithm constructor or value for later DSL entries.

@@ -105,6 +105,7 @@ its returns are reset on the same steps its readers run.
 |---|---|
 | `@state x = v` / `@state x` / `@state name begin … end` | A state field of the block (key `_state_1`, `_state_2`, ... per construction, or `name`). With a value, `v` is evaluated at each `init`; without one, `init` must supply it. |
 | `@input x` / `@input x::T` / `@input x = v` | A per-run input, given as a keyword to `run`, checked before the loop starts. Assigning it is an error. |
+| `@CompositeAlgorithm name(a, b::T = v) begin … end` | A header: assigns the plan to `name`, and each argument is an `@input` of the block (`a`, `b::T = v`). Keyword arguments too. |
 | `local x` | A declared local without a value: its type is the type of what is first assigned to it (decided before the run). Reading it before that is an `UndefRefError`. |
 | `local x::T` | A declared local of type `T` without a value. |
 | `local x = v` | A declared local starting at `v`, an outside value evaluated at build. |
