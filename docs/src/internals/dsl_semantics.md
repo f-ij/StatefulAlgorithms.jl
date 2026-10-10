@@ -204,10 +204,6 @@ happens to be a field of its namespace, which `init`, `Init(…)` and overrides 
 
 ## Known gaps
 
-- A nested `@repeat n begin … end` sees the outer block's declared locals, but not its captured returns or algorithm
-  outputs: `y = f(x)` outside, `g(y)` inside reads `y` as an outside value. Planned: the nested block treats every
-  outer name as a block name; captured returns and locals are then found through the scope, algorithm outputs through
-  a route from the algorithm.
 - The how-to's "Direct State Writes" shows `target = source` with two state fields. That never worked (it read
   `source` as an outside value); it is now the `x = y` error. Write `target = copy(source)`.
 

@@ -243,6 +243,7 @@ function _dsl_expand_repeated_block(
     inner_expr = _dsl_expand_simplealgorithm_resolved(block, initial_alias_map, initial_context_map, outer_locals)
     expanded = quote
         let
+            local _dsl_outer_producers = _dsl_producers
             local _dsl_inner = $inner_expr
             local _dsl_owner = nothing
             local _dsl_outputs = ()

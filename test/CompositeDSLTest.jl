@@ -1422,6 +1422,25 @@ end
         @test seen_routine == [10.0]
     end
 
+    @testset "A nested block reads the names of the blocks around it" begin
+        @info "Composite DSL: A nested block reads the names of the blocks around it"
+        one_nested_test() = 1.0
+        addone_nested_test(x) = x + 1
+        seen = Float64[]
+        r = @Routine begin
+            y = one_nested_test()
+            @repeat 2 begin
+                z = addone_nested_test(y)
+                @repeat 2 begin
+                    push!(seen, z)
+                    push!(seen, y)
+                end
+            end
+        end
+        run(r; repeats = 1)
+        @test seen == repeat([2.0, 1.0], 4)
+    end
+
     @testset "Function call runtime output shape does not persist" begin
         @info "Composite DSL: Function call runtime output shape does not persist"
         count = Ref(0)

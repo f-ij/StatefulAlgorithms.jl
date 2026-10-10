@@ -690,11 +690,11 @@ function _dsl_collect_block(
 )
     alias_map = copy(initial_alias_map)
     context_map = copy(initial_context_map)
-    # The locals declared in enclosing blocks are in this block's scope too: read by name from the declared locals.
+    # The names of enclosing blocks are in this block's scope too: each is read from where the enclosing block has it.
     declared = copy(outer_locals)
     known_outputs = copy(outer_locals)
     step_exprs = Any[]
-    isempty(outer_locals) || push!(step_exprs, :(StatefulAlgorithms._composite_dsl_inherit_locals!(_dsl_producers, $(Tuple(outer_locals)))))
+    isempty(outer_locals) || push!(step_exprs, :(StatefulAlgorithms._composite_dsl_inherit_names!(_dsl_producers, _dsl_outer_producers, $(Tuple(outer_locals)))))
     state_fields = Any[]
     input_fields = Any[]
     state_outputs = Set{Symbol}()
@@ -794,7 +794,7 @@ function _dsl_collect_block(
 
         _dsl_reject_input_assignment(stmt, input_fields, current_line)
         _dsl_reject_name_assignment(stmt, known_outputs, alias_map, current_line)
-        step_expr = _dsl_build_statement(stmt, alias_map, context_map, known_outputs, state_outputs, expected_schedule, owner_name; outer_locals = declared)
+        step_expr = _dsl_build_statement(stmt, alias_map, context_map, known_outputs, state_outputs, expected_schedule, owner_name; outer_locals = union(known_outputs, state_outputs))
         if !isnothing(step_expr)
             step_expr = Base.remove_linenums!(step_expr)
             isnothing(current_line) || push!(step_exprs, current_line)
