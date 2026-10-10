@@ -1110,7 +1110,7 @@ end
             @state seed = 3
             @include_if include_block begin
                 (; produced, passthrough) = @interval 2 DSLSourceAlgo(seed = seed)
-                DSLSinkAlgo(value = produced)
+                @interval 2 DSLSinkAlgo(value = produced)   # `produced` exists only in the steps it is assigned
             end
             DSLValueAlgo(value = seed)
         end
@@ -1121,7 +1121,7 @@ end
         @test StatefulAlgorithms.intervals(resolved_block) == (
             StatefulAlgorithms.Interval(2),
             StatefulAlgorithms.Interval(2),
-            StatefulAlgorithms.Interval(1),
+            StatefulAlgorithms.Interval(2),
             StatefulAlgorithms.Interval(1),
         )
 
