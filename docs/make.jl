@@ -13,6 +13,7 @@ makedocs(
         "User Documentation" => [
             "Algorithms and States" => "user/algorithms_states.md",
             "Composite DSL" => "user/composite_dsl.md",
+            "Migrating to Returns and Updates" => "user/migrating_dsl.md",
             "Referencing Algorithms" => "user/referencing_algorithms.md",
             "Contexts and Indexing" => "user/contexts.md",
             "Init Analysis" => "user/init_analysis.md",
@@ -32,7 +33,7 @@ makedocs(
             "Contexts" => "internals/contexts.md",
             "Routes, Shares, and Replacements" => "internals/routes_shares.md",
             "Process Pipeline" => "internals/process_pipeline.md",
-            "DSL Semantics Map" => "internals/dsl_semantics.md",
+            "DSL Semantics" => "internals/dsl_semantics.md",
         ],
     ],
 )
