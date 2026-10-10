@@ -66,9 +66,9 @@ Ratio = tokens added / the package's tokens added (package = 1.00; above 1 means
 
 | implementation | tokens added | tokens added / package's | existing lines changed |
 |---|---|---|---|
-| hand-written monolith | 68 (net growth of `hand_go!`) | 0.54 | 5 (the loop header, the parameter used by the step, the recompute condition, and a stage-2 branch) |
-| package | 125 (a new `GammaRamp` component 84, plus an instance, an alias and a call in stage 2, 41) | 1.00 | 0 |
-| SciML | 149 (a new callback 103, plus the shared helper `gamma_after` 46) | 1.19 | 1 (the `CallbackSet(...)` list) |
+| hand-written monolith | 68 (net growth of `hand_go!`) | 0.56 | 5 (the loop header, the parameter used by the step, the recompute condition, and a stage-2 branch) |
+| package | 122 (a new `GammaRamp` component 81, plus an instance, an alias and a call in stage 2, 41) | 1.00 | 0 |
+| SciML | 149 (a new callback 103, plus the shared helper `gamma_after` 46) | 1.22 | 1 (the `CallbackSet(...)` list) |
 
 The damping ramp changes the dynamics (the trace sum goes from 3430.4 to 3447.6 and the final polarization differs).
 
@@ -77,7 +77,7 @@ The damping ramp changes the dynamics (the trace sum goes from 3430.4 to 3447.6 
 Counted in source tokens (identifiers, literals, operators, keywords, brackets; whitespace and comments ignored; `../code_size.jl`), not lines:
 lines depend on how much is packed onto one line (the SciML callbacks are written with `->` and `;`), so a line count made SciML look
 three to four times shorter than it is. The integrator is **not counted** for the package: SciML provides its solver (`DP5()`,
-`init`, `solve!`), so counting `ChainFixed` (151 tokens, plus the 87-line Dormand-Prince core in `../ode/dp5.jl`, both written for
+`init`, `solve!`), so counting `ChainFixed` (149 tokens, plus the 87-line Dormand-Prince core in `../ode/dp5.jl`, both written for
 these demos because the package has no stock integrator) would not be like for like; hosting SciML's integrator inside a step, as
 `../ode` does, is the alternative. The loggers and the protocols are user-written in both versions: in the package as reusable algorithms, in
 SciML as callbacks inside `sciml_setup` (and `sciml_go!`, which also holds a one-call fix for the last step).
@@ -88,10 +88,10 @@ Ratio = SciML tokens / package tokens (the package is 1.00, so above 1 means Sci
 |---|---|---|---|
 | the experiment alone, before the damping change (package: stages, core, routine, wiring; SciML: solve, callbacks, closing fix, loggers and protocols included) | 296 | 362 | 1.22 |
 | the experiment alone, after the damping change | 337 | 465 | 1.38 |
-| everything the user writes, before the change (package: the experiment plus `Polarization` 38, `FieldLoop` 52, `FieldRamp` 65 = 155) | 451 | 362 | 0.80 |
-| everything the user writes, after the change (the components add `GammaRamp` 84, 239 in all) | 576 | 465 | 0.81 |
+| everything the user writes, before the change (package: the experiment plus `Polarization` 38, `FieldLoop` 52, `FieldRamp` 62 = 152) | 448 | 362 | 0.81 |
+| everything the user writes, after the change (the components add `GammaRamp` 81, 233 in all) | 570 | 465 | 0.82 |
 
-So the package version has to write more for this experiment, about 25% more tokens in total (576 against 465), while the experiment
+So the package version has to write more for this experiment, about 23% more tokens in total (570 against 465), while the experiment
 description alone (337) is smaller than SciML's (465) because the loggers and protocols are separate, reusable components there. The
 components are reusable (the manuscript reuses its loggers and protocols across all of its experiments), so counting them per experiment
 overstates the package: with them taken as given the package is 337 against 465 tokens. For a sweep whose stages all have the same shape (a ramp
