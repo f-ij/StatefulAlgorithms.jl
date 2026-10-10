@@ -91,9 +91,9 @@ _dsl_local_initial(value, ::Nothing) = value
 _dsl_local_initial(::UndefInitializer, ::Type{T}) where {T} = maybe_type(T, UndefInitializer)()
 _dsl_local_initial(value, ::Type{T}) where {T} = convert(T, value)
 
-"""Record the locals of enclosing blocks (`names`) as read from the declared locals in a nested block."""
-function _composite_dsl_inherit_locals!(producers::Dict{Symbol, Any}, names::Tuple)
-    foreach(name -> producers[name] = :_declared_locals, names)
+"""Give a nested block the names of its enclosing blocks (`names`): each is read from the same producer as outside (`outer`)."""
+function _composite_dsl_inherit_names!(producers::Dict{Symbol, Any}, outer::Dict{Symbol, Any}, names::Tuple)
+    foreach(name -> haskey(outer, name) && (producers[name] = outer[name]), names)
     return producers
 end
 
