@@ -208,17 +208,17 @@ end
 
 abstract type SupertypeForMacroTest <: StepAlgorithm end
 @StepAlgorithm @inline function WithSupertypeForTest(x, @managed(total = start); @inputs((; start = 0.0))) <: SupertypeForMacroTest
-    total += x
-    return (; total)
+    @update total += x
+    return total
 end
 @StepAlgorithm begin
     @config k = 2
     function BlockWithSupertypeForTest(x) <: SupertypeForMacroTest
-        return (; x = k * x)
+        return k * x
     end
 end
 @StepAlgorithm function WhereWithSupertypeForTest(x::X) where {X} <: SupertypeForMacroTest
-    return (; x = 2x)
+    return 2x
 end
 
 @testset "StepAlgorithm macro <: supertype" begin
@@ -226,7 +226,7 @@ end
     @test BlockWithSupertypeForTest <: SupertypeForMacroTest
     @test WhereWithSupertypeForTest <: SupertypeForMacroTest
     @test StatefulAlgorithms.init(WithSupertypeForTest(), (; start = 1.0)).total == 1.0
-    @test StatefulAlgorithms.step!(WithSupertypeForTest(), (; x = 2.0, total = 1.0)).total == 3.0
-    @test StatefulAlgorithms.step!(BlockWithSupertypeForTest(), (; x = 3)).x == 6
-    @test StatefulAlgorithms.step!(WhereWithSupertypeForTest(), (; x = 3)).x == 6
+    @test StatefulAlgorithms.step_updates(StatefulAlgorithms.step!(WithSupertypeForTest(), (; x = 2.0, total = 1.0))).total == 3.0
+    @test StatefulAlgorithms.step_value(StatefulAlgorithms.step!(BlockWithSupertypeForTest(), (; x = 3))) == 6
+    @test StatefulAlgorithms.step_value(StatefulAlgorithms.step!(WhereWithSupertypeForTest(), (; x = 3))) == 6
 end

@@ -4,14 +4,15 @@ include("ContextExt.jl")
 
 """
 Return `true` when the nested composite `el` is dissolved into its parent by flattening: always without
-`stop_at_options`, and with it only a composite plan that carries nothing of its own (no route/share wiring, states or
-other options). A `LoopAlgorithm` is resolved and then stays whole.
+`stop_at_options`, and with it only a composite plan that carries nothing of its own (no route/share wiring, declared
+locals, states or other options): one with declared locals is a scope of its own. A `LoopAlgorithm` is resolved and then
+stays whole.
 """
 Base.@nospecializeinfer function _flattens_into_parent(@nospecialize(el), stop_at_options::Bool)
     el isa LoopSpec && iscomposite(el) || return false
     stop_at_options || return true
     el isa AbstractPlan || return false
-    return isempty(wiring_values(el)) && isempty(getoptions(el)) && isempty(getstates(el))
+    return isempty(wiring_values(el)) && isempty(getfield(getwiring(el), :locals)) && isempty(getoptions(el)) && isempty(getstates(el))
 end
 
 """

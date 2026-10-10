@@ -554,7 +554,7 @@ _composite_dsl_is_state_owner(owner) = owner isa AbstractIdentifiableAlgo && get
 function _composite_dsl_bound_source(binds::Tuple, endpoint_match, field::Symbol)
     endpoint_match isa Symbol && return nothing
     for (source, source_field, target, target_field) in binds
-        target_field == field && _wiring_endpoint_match(target) == endpoint_match && return (source, source_field)
+        target_field == field && scref_match(target) == endpoint_match && return (source, source_field)
     end
     return nothing
 end
@@ -588,15 +588,38 @@ _composite_dsl_rebind(entry, binds::Tuple) = entry
 _composite_dsl_rebind(entry::Pair, binds::Tuple) = entry.first => _composite_dsl_rebind(entry.second, binds)
 _composite_dsl_rebind(la::LoopAlgorithm, binds::Tuple) = setfield(la, :plan, _composite_dsl_rebind(getplan(la), binds))
 _composite_dsl_rebind(fa::FinalizedAlgorithm, binds::Tuple) = finalstep(_composite_dsl_rebind(inneralgorithm(fa), binds), finalfunction(fa))
+# A statement's own wires (`WithWiring`, see `_composite_dsl_call_wires`) are rebound where they are.
+_composite_dsl_rebind(w::WithWiring, binds::Tuple) =
+    WithWiring(_composite_dsl_rebind(getfield(w, :child), binds), _composite_dsl_rebind_wires(getfield(w, :wires), binds))
+_composite_dsl_rebind(w::IfWrapped, binds::Tuple) = IfWrapped(_composite_dsl_rebind(getfield(w, :algo), binds), getfield(w, :cond))
+_composite_dsl_rebind_wires(wires::Tuple, binds::Tuple) = Tuple(Iterators.flatten(_composite_dsl_rebind_option(w, binds) for w in wires))
+
 function _composite_dsl_rebind(plan::AbstractPlan, binds::Tuple)
-    wiring = Any[]
-    for option in scoped_wiring_values(plan)
-        append!(wiring, _composite_dsl_rebind_option(option, binds))
-    end
+    wiring = getwiring(plan)
     funcs = map(f -> _composite_dsl_rebind(f, binds), getalgos(plan))
+    plan_wide = global_wiring(wiring)
+    options = Any[]
+    for option in (routes(plan_wide)..., shares(plan_wide)...)
+        append!(options, _composite_dsl_rebind_option(option, binds))
+    end
+    # The routes of one child stay with its position (re-attached with `WithWiring`, not by matching the child, which
+    # would give two equal children each other's routes); its shares are matched to it.
+    buckets = child_wiring(wiring)
+    children = Any[]
+    for i in eachindex(funcs)
+        bucket = buckets[i]
+        if bucket isa Wiring && !isempty(bucket)
+            foreach(share -> push!(options, LocalPlanOption(funcs[i], share)), shares(bucket))
+            push!(children, isempty(routes(bucket)) ? funcs[i] : WithWiring(funcs[i], _composite_dsl_rebind_wires(routes(bucket), binds)))
+        else
+            push!(children, funcs[i])
+        end
+    end
+    raw, child_buckets = _plan_children(Tuple(children), Tuple(options))
+    rewired = PlanWiring(_plan_wiring(Tuple(options)), child_buckets, getfield(wiring, :locals))
+    plan = setfield(rebuild_loopalgorithm_funcs(plan, raw), :wiring, rewired)
     # A block state left without fields is dropped.
     states = filter(s -> !_composite_dsl_is_empty_state(s), map(s -> _composite_dsl_unbind_state(s, binds), getstates(plan)))
-    plan = setwiring(rebuild_loopalgorithm_funcs(plan, funcs), Tuple(wiring))
     return setstates(plan, states)
 end
 
@@ -605,8 +628,8 @@ _composite_dsl_is_empty_state(state) = _composite_dsl_is_block_state(state) && i
 """A block's `@state` without the fields bound to a source elsewhere."""
 function _composite_dsl_unbind_state(state, binds::Tuple)
     _composite_dsl_is_block_state(state) || return state
-    match = _wiring_endpoint_match(state)
-    fields = Tuple(target_field for (_, _, target, target_field) in binds if _wiring_endpoint_match(target) == match)
+    match = scref_match(state)
+    fields = Tuple(target_field for (_, _, target, target_field) in binds if scref_match(target) == match)
     isempty(fields) && return state
     return setfield(state, :func, _general_state_without(getalgo(state), fields))
 end

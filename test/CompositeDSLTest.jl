@@ -759,7 +759,7 @@ end
         @test length(routes) == 1
         @test StatefulAlgorithms.gettransform(first(routes)) !== nothing
         @test occursin("@transform", sprint(show, StatefulAlgorithms.getplan(resolved)))
-        @test occursin("_state.clamping_beta", sprint(show, StatefulAlgorithms.getplan(resolved)))
+        @test occursin("_state_1.clamping_beta", sprint(show, StatefulAlgorithms.getplan(resolved)))
 
         p = Process(resolved, repeat = 1)
         StatefulAlgorithms.run(p)
@@ -937,9 +937,9 @@ end
         resolved = resolve(algo)
         wrapper = StatefulAlgorithms.getalgo(resolved, 1)
         wrapper_summary = sprint(show, StatefulAlgorithms.getplan(resolved))
-        @test occursin("a = _state.b", wrapper_summary)
-        @test occursin("x = _state.x", wrapper_summary)
-        @test occursin("y = _state.y", wrapper_summary)
+        @test occursin("a = _state_1.b", wrapper_summary)
+        @test occursin("x = _state_1.x", wrapper_summary)
+        @test occursin("y = _state_1.y", wrapper_summary)
 
         p = Process(resolved, repeat = 1)
         run(p)
@@ -1289,7 +1289,7 @@ end
         end
         produced[] = 0
         p = Process(resolve(algo), repeat = 7); run(p)
-        @test fetch(p)[:_state].seen == [nothing, nothing, 1.0, 1.0, 1.0, 2.0, 2.0]
+        @test fetch(p)[:_state_1].seen == [nothing, nothing, 1.0, 1.0, 1.0, 2.0, 2.0]
         close(p)
 
         # `local y` declares it without a value: reading it before its first assignment is an error.
@@ -1309,7 +1309,7 @@ end
         end
         produced[] = 0
         p = Process(resolve(algo), repeat = 7); run(p)
-        @test fetch(p)[:_state].seen == [1.0, 2.0]
+        @test fetch(p)[:_state_1].seen == [1.0, 2.0]
         close(p)
     end
 
@@ -1327,8 +1327,8 @@ end
             seen = push_four_dsl_test(seen, total, count, offset, scale)
         end
         p = Process(resolve(algo), repeat = 3); run(p)
-        @test fetch(p)[:_state].seen == [(1.0, 0, 10.0, 2.0f0), (2.0, 1, 10.0, 2.0f0), (3.0, 2, 10.0, 2.0f0)]
-        @test fetch(p)[:_state].seen[1][4] isa Float32
+        @test fetch(p)[:_state_1].seen == [(1.0, 0, 10.0, 2.0f0), (2.0, 1, 10.0, 2.0f0), (3.0, 2, 10.0, 2.0f0)]
+        @test fetch(p)[:_state_1].seen[1][4] isa Float32
         close(p)
 
         # An algorithm statement reads a local through its input; assigning its return writes the local.
@@ -1339,7 +1339,7 @@ end
             seen = push_seen_dsl_test(seen, x)
         end
         p = Process(resolve(algo), repeat = 3); run(p)
-        @test fetch(p)[:_state].seen == [1.0, 2.0, 3.0]
+        @test fetch(p)[:_state_1].seen == [1.0, 2.0, 3.0]
         close(p)
 
         # Without `local`, `x = 0.0` assigns `x` every step, as in a Julia loop body.
@@ -1350,7 +1350,7 @@ end
             seen = push_seen_dsl_test(seen, total)
         end
         p = Process(resolve(algo), repeat = 3); run(p)
-        @test fetch(p)[:_state].seen == [1.0, 1.0, 1.0]
+        @test fetch(p)[:_state_1].seen == [1.0, 1.0, 1.0]
         close(p)
 
         # A nested block reads and writes the locals of the blocks around it.
@@ -1363,7 +1363,7 @@ end
             seen = push_seen_dsl_test(seen, total)
         end
         p = Process(resolve(algo), repeat = 2); run(p)
-        @test fetch(p)[:_state].seen == [3.0, 6.0]
+        @test fetch(p)[:_state_1].seen == [3.0, 6.0]
         close(p)
 
         # `x = y` with `y` a value of the block is an error: a bare name is not a step.
