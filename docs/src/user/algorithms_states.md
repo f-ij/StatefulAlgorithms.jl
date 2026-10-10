@@ -68,7 +68,13 @@ function StatefulAlgorithms.step!(a::MyAlgo, context)
     x = context.x + a.gain
     return StepResult(2x, StateUpdates(; x))   # the value 2x; x is written back
 end
+StatefulAlgorithms.updated_names(::Type{MyAlgo}) = (:x,)   # the names in `StateUpdates`
 ```
+
+`updated_names` tells the DSL which arguments the step writes back, so a block that passes a value of its own to
+`x` gets the same checks as for a `@StepAlgorithm` (a warning unless the value is state or `@mutable`, an error for an
+`@input`). `@StepAlgorithm` defines it from its `@update`s; a hand-written `step!` defines it itself, and without it
+nothing is checked.
 
 ```julia
 struct MyState <: AlgoState end
