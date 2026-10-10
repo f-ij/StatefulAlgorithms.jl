@@ -181,7 +181,7 @@ Wiring() = Wiring((), ())
 Compile-time set of runtime return fields demanded from one executed child.
 
 The names are attached to resolved child wiring, so generated step/merge code can
-avoid writing owner-scoped runtime returns that no downstream route asks for.
+avoid writing returns that nothing reads.
 """
 struct ReturnDemand{Names} end
 

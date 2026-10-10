@@ -68,8 +68,8 @@ runtime_type(::Type{<:LoopContext{S, R}}) where {S, R} = R
 @inline bundle_of(pc::ProcessContext) = LoopContext(pc, _empty_context())
 
 # Runtime values (ContextParts.jl): a `LoopContext` has them, an `InitContext` none.
-@inline _runtime_subcontext_data(lc::LoopContext, name::Val) = @inline _runtime_subcontext_data(getruntimecontext(lc), name)
-@inline _runtime_subcontext_data(::InitContext, ::Val) = (;)
+@inline _runtime_values(lc::LoopContext, name::Val) = @inline _runtime_values(getruntimecontext(lc), name)
+@inline _runtime_values(::InitContext, ::Val) = (;)
 
 @inline get_part_data(lc::LoopContext, part::ContextPart) = @inline get_part_data(getruntimecontext(lc), part)
 @inline get_part_data(::InitContext, ::ContextPart) = (;)
@@ -90,7 +90,7 @@ The bundle after a merge: `stored` as the new stored context, and the runtime va
 (`(; part = (; name = value, ...), ...)`) merged into the runtime context. An init merge has no runtime values.
 """
 @inline _rebundle(lc::LoopContext, stored::ProcessContext, runtime_patch::NamedTuple) =
-    @inline withcontexts(lc, stored, (@inline merge_runtime_subcontexts(getruntimecontext(lc), runtime_patch)))
+    @inline withcontexts(lc, stored, (@inline merge_runtime_returns(getruntimecontext(lc), runtime_patch)))
 @inline _rebundle(ic::InitContext, stored::ProcessContext, ::NamedTuple{()}) = withstored(ic, stored)
 
 """

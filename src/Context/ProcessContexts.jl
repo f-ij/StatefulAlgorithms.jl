@@ -222,13 +222,18 @@ Merge values into the captured returns of a runtime context.
     return @inline with_subcontext(pc, Val(:_captured_returns), SubContext{:_captured_returns}(runtime))
 end
 
-"""Merge owner-scoped runtime returns into `runtimecontext`."""
-@inline function merge_owner_runtime_return(runtimecontext::C, ::Val{owner}, ::Nothing) where {C<:ProcessContext,owner}
+"""
+    merge_runtime_return(runtimecontext, Val(owner), returns)
+
+`runtimecontext` with `returns`, a step's returns for `owner`, written into the part `owner` names: captured returns,
+declared locals, or (any other `owner`, a namespace) its subcontext returns. Nothing returned leaves it as it is.
+"""
+@inline function merge_runtime_return(runtimecontext::C, ::Val{owner}, ::Nothing) where {C<:ProcessContext,owner}
     return runtimecontext
 end
 
 """A namespace's subcontext returns (`owner` is its key): stored under it in `_subcontext_returns`."""
-@inline function merge_owner_runtime_return(runtimecontext::C, ::Val{owner}, args::A) where {C<:ProcessContext,owner,A<:NamedTuple}
+@inline function merge_runtime_return(runtimecontext::C, ::Val{owner}, args::A) where {C<:ProcessContext,owner,A<:NamedTuple}
     returns = @inline get_subcontext_returns(runtimecontext)
     old_data = haskey(returns, owner) ? getproperty(returns, owner) : (;)
     new_returns = @inline merge(returns, NamedTuple{(owner,)}(((@inline _merge_slots(old_data, args)),)))
@@ -236,20 +241,20 @@ end
 end
 
 """Captured returns (what statements and calls return)."""
-@inline merge_owner_runtime_return(runtimecontext::C, ::Val{:_captured_returns}, args::A) where {C<:ProcessContext,A<:NamedTuple} =
+@inline merge_runtime_return(runtimecontext::C, ::Val{:_captured_returns}, args::A) where {C<:ProcessContext,A<:NamedTuple} =
     @inline _merge_into_captured_returns(runtimecontext, args)
 
 """Declared locals keep their declared field types when written."""
-@inline function merge_owner_runtime_return(runtimecontext::C, ::Val{:_declared_locals}, args::A) where {C<:ProcessContext,A<:NamedTuple}
+@inline function merge_runtime_return(runtimecontext::C, ::Val{:_declared_locals}, args::A) where {C<:ProcessContext,A<:NamedTuple}
     locals = @inline _merge_declared(get_declared_locals(runtimecontext), args)
     return @inline with_subcontext(runtimecontext, Val(:_declared_locals), SubContext{:_declared_locals}(locals))
 end
 
-@inline function merge_owner_runtime_return(runtimecontext::C, ::Val{owner}, args::A, demand::ReturnDemand{Names}) where {C<:ProcessContext,owner,A<:NamedTuple,Names}
-    return @inline merge_owner_runtime_return(runtimecontext, Val(owner), _demanded_namedtuple(args, demand))
+@inline function merge_runtime_return(runtimecontext::C, ::Val{owner}, args::A, demand::ReturnDemand{Names}) where {C<:ProcessContext,owner,A<:NamedTuple,Names}
+    return @inline merge_runtime_return(runtimecontext, Val(owner), _demanded_namedtuple(args, demand))
 end
 
-@inline function merge_owner_runtime_return(runtimecontext::C, ::Val{owner}, ::Nothing, demand::ReturnDemand) where {C<:ProcessContext,owner}
+@inline function merge_runtime_return(runtimecontext::C, ::Val{owner}, ::Nothing, demand::ReturnDemand) where {C<:ProcessContext,owner}
     return runtimecontext
 end
 
@@ -262,8 +267,8 @@ end
     return :(NamedTuple{$kept}(($(exprs...),)))
 end
 
-"""Merge nested owner runtime patches into `runtimecontext`."""
-@inline @generated function merge_runtime_subcontexts(runtimecontext::C, args::As) where {C<:ProcessContext,As<:NamedTuple}
+"""`runtimecontext` with the returns of several owners written in, `args` holding `owner = returns` (see `merge_runtime_return`)."""
+@inline @generated function merge_runtime_returns(runtimecontext::C, args::As) where {C<:ProcessContext,As<:NamedTuple}
     names = fieldnames(As)
     isempty(names) && return :(runtimecontext)
 
@@ -271,7 +276,7 @@ end
     for name in names
         push!(
             exprs,
-            :(merged_runtime = @inline merge_owner_runtime_return(
+            :(merged_runtime = @inline merge_runtime_return(
                 merged_runtime,
                 Val($(QuoteNode(name))),
                 getproperty(args, $(QuoteNode(name))),
