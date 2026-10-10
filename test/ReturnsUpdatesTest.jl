@@ -34,6 +34,10 @@ end
     return
 end
 
+@StepAlgorithm function RUProbe(v)
+    return v
+end
+
 struct RUHandWritten <: ProcessAlgorithm end
 StatefulAlgorithms.init(::RUHandWritten, context) = (; total = 0)
 StatefulAlgorithms.step!(::RUHandWritten, context) = StepResult(context.total * 10, StateUpdates(; total = context.total + 1))
@@ -69,7 +73,7 @@ ru_true() = true
             RUAddOne!(s)
         end); repeats = 3)
         run(p)
-        @test SAru.getcontext(p)[:_state].s == 3.0
+        @test SAru.getcontext(p)[:_state_1].s == 3.0
 
         seen = Float64[]
         @test_logs (:warn, r"`RUAddOne!` updates its argument `val`, so it changes `x` here") run(@CompositeAlgorithm(begin
@@ -116,6 +120,37 @@ ru_true() = true
         @test SAru.getcontext(p)[RUCounter].count == 4   # one state, stepped twice per step
     end
 
+    @testset "`@bind` rewires each position's own arguments" begin
+        seen = Any[]
+        run(@CompositeAlgorithm(begin
+            @state src = 5.0
+            @state t = 1.0
+            @state u = 2.0
+            @bind src => t begin
+                p1 = RUProbe(t)
+                p2 = RUProbe(u)
+                ru_record!(seen, p1, p2)
+            end
+        end); repeats = 1)
+        @test seen == [(5.0, 2.0)]
+
+        inner() = @CompositeAlgorithm begin
+            @state t = 1.0
+            @state u = 2.0
+            p1 = RUProbe(t)
+            p2 = RUProbe(u)
+            ru_record!(seen, p1, p2)
+        end
+        blk = inner()
+        empty!(seen)
+        run(@CompositeAlgorithm(begin
+            @state src = 7.0
+            @context n = blk()
+            @bind src => n.t
+        end); repeats = 1)
+        @test seen == [(7.0, 2.0)]
+    end
+
     @testset "An `@update` in a branch writes the value at the return" begin
         p = InlineProcess(@CompositeAlgorithm(begin
             @state s = 0.0
@@ -123,14 +158,14 @@ ru_true() = true
             RUMaybe!(s, flag)
         end); repeats = 3)
         run(p)
-        @test SAru.getcontext(p)[:_state].s == 3.0
+        @test SAru.getcontext(p)[:_state_1].s == 3.0
         p = InlineProcess(@CompositeAlgorithm(begin
             @state s = 0.0
             @state flag = false
             RUMaybe!(s, flag)
         end); repeats = 3)
         run(p)
-        @test SAru.getcontext(p)[:_state].s == 0.0
+        @test SAru.getcontext(p)[:_state_1].s == 0.0
     end
 
     @testset "An `@input` cannot be updated: an error when the block is built" begin
