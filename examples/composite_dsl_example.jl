@@ -32,9 +32,9 @@ composite = @CompositeAlgorithm begin
     @state seed = 3
     @alias source = ExampleSourceAlgo
 
-    produced, passthrough = source(seed = seed)
+    (; produced, passthrough) = source(seed = seed)
     doubled = @interval n scaled_double_example(produced; scale = 2)
-    combined = @interval n ExampleCombineAlgo(left = passthrough, right = doubled)
+    (; combined) = @interval n ExampleCombineAlgo(left = passthrough, right = doubled)
     @interval n ExampleSinkAlgo(value = combined)
 end
 
@@ -50,7 +50,7 @@ println()
 @CompositeAlgorithm :print begin
     @state seed = 3
     @alias source = ExampleSourceAlgo
-    produced = source(seed = seed)
+    (; produced) = source(seed = seed)
 end
 println()
 
@@ -61,7 +61,7 @@ named_state_composite = @CompositeAlgorithm begin
     end
 
     @alias source = ExampleSourceAlgo
-    produced, passthrough = source(seed = seed)
+    (; produced, passthrough) = source(seed = seed)
     value = +(produced, offset)
     ExampleSinkAlgo(value = value)
 end
@@ -77,7 +77,7 @@ routine = @Routine begin
     @state seed = 2
     @alias source = ExampleSourceAlgo
 
-    produced, passthrough = @repeat 3 source(seed = seed)
+    (; produced, passthrough) = @repeat 3 source(seed = seed)
     doubled = scaled_double_example(produced; scale = 4)
     value = +(doubled, passthrough)
     ExampleSinkAlgo(value = value)
@@ -96,7 +96,7 @@ repeated_block = @CompositeAlgorithm begin
         @state seed = 6
         @alias source = ExampleSourceAlgo
 
-        produced, passthrough = source(seed = seed)
+        (; produced, passthrough) = source(seed = seed)
         carried = scaled_double_example(produced; scale = 3)
         value = scaled_double_example(carried; scale = passthrough)
         ExampleSinkAlgo(value = value)

@@ -24,7 +24,7 @@ include(joinpath(@__DIR__, "framework.jl")); include(joinpath(@__DIR__, "sciml.j
     else
         nrej += 1; dt = dtt * min(1.0, fac)
     end
-    return (; t, dt, nacc, nrej, Fk, stale)
+    @update t, dt, nacc, nrej, Fk, stale
 end
 
 function setup_with(Integ)

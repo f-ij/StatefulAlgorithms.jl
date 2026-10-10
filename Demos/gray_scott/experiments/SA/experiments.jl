@@ -17,8 +17,8 @@ include(joinpath(@__DIR__, "..", "common.jl"))
     @config kp::Float32 = 0.02f0
     @config ki::Float32 = 0.00005f0
     function Controller(V, feed, @managed(integral = 0f0))
-        newfeed, integral = controller_action(interior(V), integral, target, kp, ki)
-        return (; feed = newfeed, integral)
+        feed, integral = controller_action(interior(V), integral, target, kp, ki)
+        @update feed, integral
     end
 end
 #<< E1
@@ -27,10 +27,10 @@ end
 @StepAlgorithm begin
     @config capacity::Int = 64
     function Recorder(V, feed, steps, @managed(buf = zeros(Float32, 4, capacity), head = 0, count = 0))
-        head = head % capacity + 1
+        @update head = head % capacity + 1
         Vi = interior(V)
         buf[:, head] .= (steps[], meanv(Vi), coverage(Vi), feed)
-        return (; head, count = min(count + 1, capacity))
+        @update count = min(count + 1, capacity)
     end
 end
 #<< E2
@@ -44,7 +44,7 @@ end
                                   kicks = 0, peak = 0f0, last = 0f0, results = Tuple{Int,Float32,Float32}[]))
         calls, kicks, peak, last = probe_action!(interior(U), interior(V), base, rng, calls, every, radius,
                                                  kicks, peak, last, results)
-        return (; calls, kicks, peak, last)
+        @update calls, kicks, peak, last
     end
 end
 #<< E4
@@ -86,8 +86,8 @@ end
     @config hi::Float32 = 0.050f0
     @config np::Int = 5
     function SetFeed(feed, @managed(i = 0))
-        i += 1
-        return (; feed = ramp_value(i, lo, hi, np), i)
+        @update i += 1
+        @update feed = ramp_value(i, lo, hi, np)
     end
 end
 

@@ -11,7 +11,7 @@ using StatefulAlgorithms
     end
     dp5_step!(prob, B, u, t, DT)
     t += DT; dp5_accept!(u, B)
-    return (; t, Ek, stale)
+    @update t, Ek, stale
 end
 
 @StepAlgorithm function Polarization(u, @managed(trace = Float32[]))
@@ -30,9 +30,8 @@ end
     @config stop::Float64 = 1.0
     @config n::Int = 1
     function FieldRamp(E, @managed(k = 0))
-        k += 1
-        E = start + (stop - start) * (k / n)
-        return (; E, k)
+        @update k += 1
+        @update E = start + (stop - start) * (k / n)
     end
 end
 
@@ -42,9 +41,8 @@ end
     @config stop::Float64 = 0.6
     @config n::Int = 1
     function GammaRamp(par, @managed(k = 0))
-        k += 1
-        par = ChainParams(par.N, par.a, par.b, par.c, start + (stop - start) * (k / n))
-        return (; par, k)
+        @update k += 1
+        @update par = ChainParams(par.N, par.a, par.b, par.c, start + (stop - start) * (k / n))
     end
 end
 

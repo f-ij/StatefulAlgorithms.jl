@@ -62,14 +62,12 @@ end
 @StepAlgorithm begin
     @config N::Int = 1
     function Protocol(@managed(step = 1), @managed(T = T0), @managed(h = 0.0))
-        T = anneal_T(step, N); h = pulse_h(step, N)
-        step += 1
-        return (; step, T, h)
+        @update T = anneal_T(step, N); @update h = pulse_h(step, N)
+        @update step += 1
     end
 end
 @StepAlgorithm function Dynamics(T, h, @managed(spins = fresh_spins()), @managed(rng = Xoshiro(1)), @managed(m = 0))
-    m += flip!(spins, rng, T, h)
-    return (; m)
+    @update m += flip!(spins, rng, T, h)
 end
 @StepAlgorithm begin
     @config N::Int = 1
@@ -88,8 +86,7 @@ end
     end
 end
 @StepAlgorithm @inline function DynamicsI(T, h, @managed(spins = fresh_spins()), @managed(rng = Xoshiro(1)), @managed(m = 0))
-    m += flip!(spins, rng, T, h)
-    return (; m)
+    @update m += flip!(spins, rng, T, h)
 end
 function w2_framework_with(Dyn)
     return function (N)

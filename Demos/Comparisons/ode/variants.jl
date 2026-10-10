@@ -55,7 +55,7 @@ hand_untyped_variant(name) = Variant(name, dp5_state_untyped, dp5_loop_untyped!,
     else
         nrej += 1; dt = dtt * min(1.0, fac)
     end
-    return (; t, dt, nacc, nrej, started)
+    @update t, dt, nacc, nrej, started
 end
 
 @StepAlgorithm @inline function DP5AttemptInline(@managed(prob), @managed(rtol), @managed(atol),
@@ -73,7 +73,7 @@ end
     else
         nrej += 1; dt = dtt * min(1.0, fac)
     end
-    return (; t, dt, nacc, nrej, started)
+    @update t, dt, nacc, nrej, started
 end
 
 
@@ -88,8 +88,7 @@ framework_variant(name, T = DP5Attempt) = Variant(name,
 #### W. SciML's integrator hosted inside a StatefulAlgorithms step (wrap, don't rewrite) ####
 @StepAlgorithm function SciMLHost(@managed(integ), @managed(t = 0.0))
     SciMLBase.step!(integ)
-    t = integ.t
-    return (; t)
+    @update t = integ.t
 end
 
 hosted_variant(name, alg) = Variant(name,

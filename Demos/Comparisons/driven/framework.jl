@@ -6,16 +6,13 @@
 using StatefulAlgorithms
 
 @StepAlgorithm function SineDrive(t, @managed(F = 0.0))
-    F = sine_force(t, nothing, 0)
-    return (; F)
+    @update F = sine_force(t, nothing, 0)
 end
 @StepAlgorithm function SquareDrive(t, @managed(F = 0.0))
-    F = square_force(t, nothing, 0)
-    return (; F)
+    @update F = square_force(t, nothing, 0)
 end
 @StepAlgorithm function FeedbackDrive(t, u, @managed(F = 0.0))
-    F = feedback_force(t, u, PARAMS.N)
-    return (; F)
+    @update F = feedback_force(t, u, PARAMS.N)
 end
 
 @StepAlgorithm function ChainDP5(F, @managed(u0), @managed(u = copy(u0)), @managed(B = dp5_buffers(u0)),
@@ -33,21 +30,19 @@ end
     else
         nrej += 1; dt = dtt * min(1.0, fac)
     end
-    return (; t, dt, nacc, nrej, Fk)
+    @update t, dt, nacc, nrej, Fk
 end
 
 @StepAlgorithm function Checkpointer(u, t, dt, nacc, @managed(snaps = Snapshot[]), @managed(last = 0))
     if nacc != last && nacc % CKPT_EVERY == 0
         push!(snaps, Snapshot(t, dt, copy(u)))
     end
-    last = nacc
-    return (; last)
+    @update last = nacc
 end
 
 # Several drives at once: they go in a nested Routine, and a small algorithm adds their forces.
 @StepAlgorithm function ForceSum(F1, F2, @managed(F = 0.0))
-    F = F1 + F2
-    return (; F)
+    @update F = F1 + F2
 end
 
 function framework_setup(drive)

@@ -7,7 +7,7 @@ using Printf, LinearAlgebra, Random
 include(joinpath(@__DIR__, "scenario.jl")); include(joinpath(@__DIR__, "hand.jl"))
 include(joinpath(@__DIR__, "framework.jl")); include(joinpath(@__DIR__, "sciml.jl")); include(joinpath(@__DIR__, "modifiers.jl"))
 
-@StepAlgorithm function NeverFires(u, @managed(count = 0)); count += 1; return (; count); end
+@StepAlgorithm function NeverFires(u, @managed(count = 0)); @update count += 1; end
 
 function build(drive, extras, intervals)
     integ = ChainDP5(); ckpt = Checkpointer()

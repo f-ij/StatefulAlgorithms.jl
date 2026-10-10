@@ -9,8 +9,7 @@ include(joinpath(@__DIR__, "framework.jl")); include(joinpath(@__DIR__, "sciml.j
 # K distinct component types (identical instances of one type share one entry in the plan)
 for k in 1:8
     @eval @StepAlgorithm function $(Symbol(:NeverFires, k))(u, @managed(count = 0))
-        count += 1
-        return (; count)
+        @update count += 1
     end
 end
 
