@@ -68,7 +68,7 @@ Every bare name a statement reads is one of these. The kind decides where the va
 |---|---|---|---|---|
 | state field | `@state x = v`, `@state x`; an algorithm's `init` (its `@managed` fields) | persistent: the process | kept, and saved | stored context, under the block's `_state` or the algorithm's namespace |
 | input | `@input x`, `@input x::T`, `@input x = v` | the run, read-only | kept | runtime context, `_inputs` |
-| declared local | `local x`, `local x::T`, `local x = v`, `x = <literal>`, `x::T = v` | the run | kept | runtime context, `_declared_locals` |
+| declared local | `local x`, `local x::T`, `local x = v`, `local x::T = v` | the run | kept | runtime context, `_declared_locals` |
 | captured return | `y = f(…)` with `f` a function (a call) | one step of its block | dropped | runtime context, `_captured_returns` |
 | algorithm output | `y = Algo(…)`: a name an algorithm returns that is not its state | one step of the block the algorithm is in | dropped | runtime context, `_subcontext_returns`, under the algorithm's namespace |
 | alias | `@alias a = Algo(…)` | build only | – | macro time: `a` names the algorithm in later statements |
@@ -110,9 +110,8 @@ its returns are reset on the same steps its readers run.
 | `local x::T` | A declared local of type `T` without a value. |
 | `local x = v` | A declared local starting at `v`, a literal or an outside name taken at build. |
 | `local x = f(…)` | A declared local, and the step `x = f(…)`: assigned every time the statement runs, as in a Julia loop body. |
-| `x = 0.0`, `x = "s"`, `x = :s`, `x = (1, 2)` | A declared local starting at that literal. A literal is a number, string, character, quoted symbol, `nothing`, or a tuple of those. An array literal is a call (`x = [0, 0]` is `x = Base.vect(0, 0)`): a new array every step. |
-| `x = nothing` | A declared local that reads `nothing` until something is assigned to it. |
-| `x::T = v` | A declared local of type `T` starting at `convert(T, v)`. |
+| `local x = nothing` | A declared local that reads `nothing` until something is assigned to it. |
+| `local x::T = v` | A declared local of type `T` starting at `convert(T, v)`. |
 | `@alias a = Algo(…)` | Names an algorithm for later statements: `a(…)` runs it, `a.field` reads its field. |
 | `@context c = nested()` | Runs `nested()` like any statement, and names it so later statements can write `c.sub.field`. |
 
@@ -126,6 +125,8 @@ in `@state`.
 |---|---|
 | `f(a, b; k = c)` | Calls `f`. `f` is a function, so this is a call: a `Callable` in the plan, with no state and no identity. |
 | `y = f(…)`, `a, b = f(…)` | Calls `f` and captures its return as `y` (or unpacks a tuple into `a`, `b`). |
+| `x = 0.0`, `x = "s"`, `x = (1, 2)`, `x = [0, 0]` | Assigns `x` that value, as in a Julia loop body: the same as `x = f(…)`, a value for one step (or a write, if `x` is a state field or a declared local). A literal is the call `identity(0.0)`; an array literal is a call too (`Base.vect(0, 0)`), so a new array every step. |
+| `x::T = v` | `x = convert(T, v)`. |
 | `Algo`, `Algo()`, `a()`, `Algo(args…)` | Runs the algorithm's `step!`. `Algo` is an algorithm type or value, or an alias. |
 | `y = Algo(…)` | Runs the algorithm and binds its returned `y` for later statements (see [What a step's returns do](#What-a-step's-returns-do)). |
 | `x = f(…)` with `x` a state field | Calls `f` and writes the return into the state field `x`. |
@@ -199,7 +200,7 @@ happens to be a field of its namespace, which `init`, `Init(…)` and overrides 
 - Assigning an `@input`.
 - `x = y` with `y` a block name: a bare name is not a step. Copy it with a call, `x = copy(y)`.
 - A captured return read in a step where it was not assigned: `y = @every 3 f()` read by a statement that runs every
-  step. Declare `y` (`local y`, `y = nothing`) to keep it between steps.
+  step. Declare `y` (`local y`, `local y = nothing`) to keep it between steps.
 - `local x` inside `@include_if` or `@context`.
 - A schedule on the left (`@every 3 y = f()`), `@finally` in a nested block, a route that reads a local or return
   no block declares or captures.

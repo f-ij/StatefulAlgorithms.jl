@@ -294,8 +294,8 @@ Assignments:
 - `state_field = captured_value`
 
 Declared locals (kept between steps; a value a statement assigns lives for one step):
-- `local x`, `local x::T`, `local x = value`
-- `x = 0.0`, `x = nothing`, `x::T = value` (a literal value on the right)
+- `local x`, `local x::T`, `local x = value`, `local x = f(...)`
+- without `local`, `x = 0.0` assigns `x` every step, like `x = f(...)`
 
 ProcessAlgorithm routes:
 - `x = Algo(input = produced)`
