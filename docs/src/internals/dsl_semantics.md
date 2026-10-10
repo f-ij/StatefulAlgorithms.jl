@@ -147,6 +147,8 @@ Which name a statement's arguments read:
   statements: `t = g(a, b)`, `f(t)`).
 - For an algorithm, keyword arguments are wires: `Sink(value = produced)` gives `Sink` the name `value` reading
   `produced`. An algorithm defined with `@StepAlgorithm` also takes its positional arguments by position.
+- Wires belong to the statement: the same algorithm at two positions (`AddOne!(y)`, `AddOne!(x)`) is one algorithm
+  with one state, and each position reads and updates its own arguments.
 
 ### Schedules
 
@@ -221,10 +223,6 @@ Which values of the block an update may change:
   `source` as an outside value); it is now the `x = y` error. Write `target = copy(source)`.
 
 ## Open
-
-**One algorithm type used twice in a block.** Two statements with the same step type (`AddRand!(y)`, `AddRand!(x)`)
-share one namespace and one wiring, so both read and update the last call's argument. This is older than the
-rules above (see TODO.md, DSL front-end, HIGH) but `@update` makes it easier to run into.
 
 **Unread captures.** A capture whose names nothing reads still makes the algorithm keep its return for the step
 (the `_return` slot). It costs no time per step that could be measured; pruning such captures when the block is built

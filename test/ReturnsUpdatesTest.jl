@@ -94,10 +94,26 @@ ru_true() = true
             @mutable y = RUCounter()
             @mutable local x = 0.0
             RUAddOne!(y)
-            RUAddTwo!(x)   # not `RUAddOne!` twice: one step type used twice in a block shares one wiring (TODO.md, DSL front-end)
+            RUAddTwo!(x)
             ru_record_sum!(seen, y, x)
         end); repeats = 2)
         @test seen == [5.0, 9.0]
+    end
+
+    @testset "One algorithm at two positions: shared state, each position its own arguments" begin
+        seen = Any[]
+        p = InlineProcess(@CompositeAlgorithm(begin
+            @mutable local y = 10.0
+            @mutable local x = 0.0
+            RUAddOne!(y)
+            RUAddOne!(x)
+            c1 = RUCounter()
+            c2 = RUCounter()
+            ru_record!(seen, y, x, c1, c2)
+        end); repeats = 2)
+        run(p)
+        @test seen == [(11.0, 1.0, 2.0, 4.0), (12.0, 2.0, 6.0, 8.0)]
+        @test SAru.getcontext(p)[RUCounter].count == 4   # one state, stepped twice per step
     end
 
     @testset "An `@update` in a branch writes the value at the return" begin

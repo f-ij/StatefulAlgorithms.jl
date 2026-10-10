@@ -488,14 +488,14 @@ function _dsl_build_statement(stmt, alias_map, context_map, known_outputs::Set{S
 
     if parsed.kind == :entity
         customname = _dsl_customname(parsed.spec_expr, parsed.alias_name)
-        algo_entry_expr = _dsl_maybe_conditional_entry_expr(_dsl_algorithm_entry_expr(parsed.alias_name), include_condition)
+        algo_entry_expr = _dsl_maybe_conditional_entry_expr(_dsl_algorithm_entry_expr(parsed.alias_name, :(StatefulAlgorithms._composite_dsl_with_wires(_dsl_entity, _dsl_call_wires))), include_condition)
         share_target_expr = _dsl_share_endpoint_expr(parsed.alias_name)
         inputs_expr = _dsl_inputs_expr(parsed.inputs)
         metadata_expr = quote
             $(map(parsed.shares) do share_source
                 :(StatefulAlgorithms._composite_dsl_push_local_option!(_dsl_options, _dsl_owner, StatefulAlgorithms.Share($(share_source), _dsl_owner)))
             end...)
-            StatefulAlgorithms._composite_dsl_add_routes!(_dsl_options, _dsl_producers, _dsl_external_inputs, _dsl_owner, _dsl_resolved.inputs)
+            StatefulAlgorithms._composite_dsl_add_inputs!(_dsl_options, _dsl_producers, _dsl_external_inputs, _dsl_owner, _dsl_resolved.entity, _dsl_resolved.inputs)
             $(_dsl_bind_returns_expr())
         end
         return quote
@@ -516,6 +516,7 @@ function _dsl_build_statement(stmt, alias_map, context_map, known_outputs::Set{S
             else
                 # Algorithms are appended to the constructor argument list and
                 # then wired into the routing tables.
+                local _dsl_call_wires = StatefulAlgorithms._composite_dsl_call_wires(_dsl_resolved.entity, _dsl_producers, _dsl_resolved.inputs)
                 local _dsl_schedule = $schedule_expr
                 push!(_dsl_algos, $algo_entry_expr)
                 push!(_dsl_specification, _dsl_schedule)

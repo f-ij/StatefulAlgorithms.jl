@@ -84,11 +84,31 @@ function _composite_dsl_add_routes!(options::Vector{Any}, producers::Dict{Symbol
 end
 
 """
-Wires for one DSL call, attached to it with `WithWiring`: reads from algorithm state (an
-algorithm statement's output, `owner.field`) and transforms. A plain name produced by an
-earlier call, or a declared local, needs no wire: the call reads it by name from its scope.
+Wires for one DSL statement, attached to its position in the plan with `WithWiring`: what it reads, routed to its
+arguments. For a call: reads from algorithm state (`owner.field`) and transforms; a plain name produced by an earlier
+call, or a declared local, needs no wire, the call reads it by name from its scope. For a step algorithm: every
+argument it is given. Wires belong to the statement, not to the algorithm: the same algorithm at two positions
+(`AddOne!(y)`, `AddOne!(x)`) shares its state, but each position reads (and updates) its own arguments.
+A nested plan gets no wires here (see `_composite_dsl_add_inputs!`).
 """
 _composite_dsl_call_wires(entity, producers::Dict{Symbol, Any}, inputs::Tuple) = ()
+_composite_dsl_call_wires(entity::AbstractIdentifiableAlgo, producers::Dict{Symbol, Any}, inputs::Tuple) =
+    _composite_dsl_call_wires(getalgo(entity), producers, inputs)
+function _composite_dsl_call_wires(entity::Union{StepAlgorithm, Type{<:StepAlgorithm}}, producers::Dict{Symbol, Any}, inputs::Tuple)
+    @nospecialize entity inputs
+    wires = Any[]
+    for input in inputs
+        transform = hasproperty(input, :transform) ? input.transform : nothing
+        source_owner = if input.kind in (:simple, :simple_transform)
+            haskey(producers, input.source) || continue   # an outside input, recorded by `_composite_dsl_add_inputs!`
+            producers[input.source]
+        else
+            input.owner
+        end
+        push!(wires, Route(source_owner => ThisChild(), input.source => input.destination; transform))
+    end
+    return Tuple(wires)
+end
 function _composite_dsl_call_wires(entity::Callable, producers::Dict{Symbol, Any}, inputs::Tuple)
     @nospecialize entity inputs
     wires = Any[]
@@ -118,9 +138,14 @@ function _composite_dsl_register_call_inputs!(external_inputs::Vector{Pair{Symbo
     return external_inputs
 end
 
-"""The inputs of a DSL statement: a call records the outside names it reads; an algorithm gets routes."""
-_composite_dsl_add_inputs!(options::Vector{Any}, producers::Dict{Symbol, Any}, external_inputs::Vector{Pair{Symbol, Symbol}}, owner, entity::Callable, inputs::Tuple) =
+"""
+The inputs of a DSL statement: a call or a step algorithm records the outside names it reads (its wires are attached
+to its position, see `_composite_dsl_call_wires`); a nested plan gets routes.
+"""
+_composite_dsl_add_inputs!(options::Vector{Any}, producers::Dict{Symbol, Any}, external_inputs::Vector{Pair{Symbol, Symbol}}, owner, entity::Union{StepAlgorithm, Type{<:StepAlgorithm}}, inputs::Tuple) =
     _composite_dsl_register_call_inputs!(external_inputs, producers, inputs)
+_composite_dsl_add_inputs!(options::Vector{Any}, producers::Dict{Symbol, Any}, external_inputs::Vector{Pair{Symbol, Symbol}}, owner, entity::AbstractIdentifiableAlgo, inputs::Tuple) =
+    _composite_dsl_add_inputs!(options, producers, external_inputs, owner, getalgo(entity), inputs)
 _composite_dsl_add_inputs!(options::Vector{Any}, producers::Dict{Symbol, Any}, external_inputs::Vector{Pair{Symbol, Symbol}}, owner, entity, inputs::Tuple) =
     _composite_dsl_add_routes!(options, producers, external_inputs, owner, inputs)
 
@@ -238,6 +263,7 @@ normal process entities, but nested loop algorithms are already keyed through
 their own tree. This helper centralizes that distinction so route ownership and
 constructor entries keep the same identity convention.
 """
+_composite_dsl_entry(entity::WithWiring, name::Symbol) = WithWiring(_composite_dsl_entry(getfield(entity, :child), name), getfield(entity, :wires))
 function _composite_dsl_entry(entity, name::Symbol)
     if name == Symbol() || entity isa LoopSpec
         return entity
