@@ -77,6 +77,17 @@ function _dsl_algorithm_entry_expr(alias_name::Symbol, entity_expr::E = :(_dsl_e
     return :(StatefulAlgorithms._composite_dsl_entry($entity_expr, $(QuoteNode(alias_name))))
 end
 
+"""
+The code that binds a statement's left-hand side (see `_composite_dsl_bind_returns!`): what the DSL rules of the block
+(`_dsl_rules`) say an algorithm's or a call's return gives the names on the left.
+"""
+_dsl_bind_returns_expr() = quote
+    StatefulAlgorithms._composite_dsl_check_updates(_dsl_resolved.entity, _dsl_resolved.inputs, _dsl_producers, _dsl_state_owners, _dsl_mutable)
+    StatefulAlgorithms._composite_dsl_bind_returns!(
+        _dsl_rules, _dsl_algos, _dsl_specification, _dsl_options, _dsl_producers, _dsl_state_owners,
+        _dsl_resolved.entity, _dsl_owner, _dsl_returns, _dsl_outputs, _dsl_schedule)
+end
+
 """Wrap an algorithm constructor entry in a parser option when conditionally included."""
 function _dsl_maybe_conditional_entry_expr(entry_expr, include_condition)
     isnothing(include_condition) && return entry_expr
@@ -428,6 +439,7 @@ function _dsl_build_statement(stmt, alias_map, context_map, known_outputs::Set{S
     isnothing(replace_option) || return replace_option
 
     outputs = ()
+    returns_expr = :(())
     rhs = stmt
     if stmt isa Expr && stmt.head == :(.=)
         rhs = _dsl_broadcast_assignment_call(stmt.args[1], stmt.args[2])
@@ -441,6 +453,7 @@ function _dsl_build_statement(stmt, alias_map, context_map, known_outputs::Set{S
             owned_write = _dsl_build_owned_write_statement(lhs, rhs, alias_map, context_map, known_outputs, expected_schedule, owner_name; include_condition)
             !isnothing(owned_write) && return owned_write
             outputs = _dsl_parse_output_symbols(lhs)
+            returns_expr = _dsl_returns_spec(lhs)
         end
     end
 
@@ -483,13 +496,14 @@ function _dsl_build_statement(stmt, alias_map, context_map, known_outputs::Set{S
                 :(StatefulAlgorithms._composite_dsl_push_local_option!(_dsl_options, _dsl_owner, StatefulAlgorithms.Share($(share_source), _dsl_owner)))
             end...)
             StatefulAlgorithms._composite_dsl_add_routes!(_dsl_options, _dsl_producers, _dsl_external_inputs, _dsl_owner, _dsl_resolved.inputs)
-            StatefulAlgorithms._composite_dsl_bind_outputs!(_dsl_options, _dsl_producers, _dsl_state_owners, _dsl_owner, _dsl_outputs)
+            $(_dsl_bind_returns_expr())
         end
         return quote
             local _dsl_outputs = $outputs_expr
+            local _dsl_returns = $returns_expr
             # Resolve the user-facing DSL entity into a normal algorithm/state
             # object plus the routed input metadata the builder needs.
-            local _dsl_resolved = StatefulAlgorithms._resolve_composite_dsl_entity($(esc(parsed.spec_expr)), $inputs_expr, _dsl_outputs, Val{$(QuoteNode(customname))}())
+            local _dsl_resolved = StatefulAlgorithms._resolve_composite_dsl_entity($(esc(parsed.spec_expr)), $inputs_expr, _dsl_returns, Val{$(QuoteNode(customname))}())
             local _dsl_entity = $entity_expr
             local _dsl_owner = $share_target_expr
             if _dsl_resolved isa StatefulAlgorithms._CompositeDSLResolved{:state}
@@ -502,8 +516,9 @@ function _dsl_build_statement(stmt, alias_map, context_map, known_outputs::Set{S
             else
                 # Algorithms are appended to the constructor argument list and
                 # then wired into the routing tables.
+                local _dsl_schedule = $schedule_expr
                 push!(_dsl_algos, $algo_entry_expr)
-                push!(_dsl_specification, $schedule_expr)
+                push!(_dsl_specification, _dsl_schedule)
                 $context_index_expr
                 $(_dsl_maybe_guard_metadata_expr(metadata_expr, include_condition))
             end
@@ -551,23 +566,25 @@ function _dsl_build_statement(stmt, alias_map, context_map, known_outputs::Set{S
                 :(StatefulAlgorithms._composite_dsl_push_local_option!(_dsl_options, _dsl_owner, StatefulAlgorithms.Share($(share_source), _dsl_owner)))
             end...)
             $call_inputs_expr
-            StatefulAlgorithms._composite_dsl_bind_outputs!(_dsl_options, _dsl_producers, _dsl_state_owners, _dsl_owner, _dsl_outputs)
+            $(_dsl_bind_returns_expr())
         end
         return quote
             local _dsl_outputs = $outputs_expr
+            local _dsl_returns = $returns_expr
             local _dsl_resolved = StatefulAlgorithms._resolve_composite_dsl_keyword_call(
                 $(esc(parsed.spec_expr)),
                 $keyword_args_expr,
                 $keyword_display_expr,
                 $inputs_expr,
-                _dsl_outputs,
+                _dsl_returns,
                 Val{$(QuoteNode(customname))}(),
             )
             local _dsl_entity = $entity_expr
             local _dsl_owner = $share_target_expr
         $call_wires_expr
+            local _dsl_schedule = $schedule_expr
             push!(_dsl_algos, $algo_entry_expr)
-            push!(_dsl_specification, $schedule_expr)
+            push!(_dsl_specification, _dsl_schedule)
             $context_index_expr
             $(_dsl_maybe_guard_metadata_expr(metadata_expr, include_condition))
         end
@@ -575,10 +592,11 @@ function _dsl_build_statement(stmt, alias_map, context_map, known_outputs::Set{S
 
     metadata_expr = quote
         $call_inputs_expr
-        StatefulAlgorithms._composite_dsl_bind_outputs!(_dsl_options, _dsl_producers, _dsl_state_owners, _dsl_owner, _dsl_outputs)
+        $(_dsl_bind_returns_expr())
     end
     return quote
         local _dsl_outputs = $outputs_expr
+        local _dsl_returns = $returns_expr
         # Function-call syntax stays on a dedicated path so we can recover
         # positional inputs and keyword values for the call's signature.
         local _dsl_resolved = StatefulAlgorithms._resolve_composite_dsl_call(
@@ -587,7 +605,7 @@ function _dsl_build_statement(stmt, alias_map, context_map, known_outputs::Set{S
             $positional_values_expr,
             $positional_display_expr,
             $keyword_display_expr,
-            _dsl_outputs,
+            _dsl_returns,
             $routed_positional_inputs_expr,
             $inputs_expr,
             Val{$(QuoteNode(customname))}(),
@@ -595,11 +613,30 @@ function _dsl_build_statement(stmt, alias_map, context_map, known_outputs::Set{S
         local _dsl_entity = $entity_expr
         local _dsl_owner = $share_target_expr
         $call_wires_expr
+        local _dsl_schedule = $schedule_expr
         push!(_dsl_algos, $algo_entry_expr)
-        push!(_dsl_specification, $schedule_expr)
+        push!(_dsl_specification, _dsl_schedule)
         $context_index_expr
         $(_dsl_maybe_guard_metadata_expr(metadata_expr, include_condition))
     end
+end
+
+"""
+The statements with each `(; a, b) = @state(X)` written as `a = @state(X).a` and `b = @state(X).b`: from here on in
+the block, `a` names the field `a` of `X`'s state.
+"""
+function _dsl_expand_state_reads(statements)
+    expanded = Any[]
+    for stmt in statements
+        if stmt isa Expr && stmt.head == :(=) && !isnothing(_dsl_state_of(stmt.args[2]))
+            _dsl_is_property_destructuring(stmt.args[1]) ||
+                error("`$(stmt)`: take fields of `@state(X)` by name, `(; a, b) = @state(X)`, or read one inline as `@state(X).a`.")
+            append!(expanded, (Expr(:(=), name, Expr(:., stmt.args[2], QuoteNode(name))) for name in only(stmt.args[1].args).args))
+        else
+            push!(expanded, stmt)
+        end
+    end
+    return expanded
 end
 
 """Build a constructor-time conditional include block."""
@@ -703,12 +740,19 @@ function _dsl_collect_block(
     current_line = nothing
 
     block_binds = Any[]
-    pending = Any[statements...]
+    pending = Any[_dsl_expand_state_reads(statements)...]
     while !isempty(pending)
         stmt = popfirst!(pending)
         if stmt isa LineNumberNode
             current_line = stmt
             continue
+        end
+
+        # `@mutable stmt`: the names `stmt` assigns may be changed by an algorithm that updates them (see `@update`).
+        mutable_names = _dsl_mutable_names(stmt)
+        if !isnothing(mutable_names)
+            push!(step_exprs, :(union!(_dsl_mutable, $(Tuple(mutable_names)))))
+            stmt = _dsl_mutable_inner(stmt)
         end
 
         if stmt isa Expr && stmt.head == :macrocall && stmt.args[1] == Symbol("@state")

@@ -264,11 +264,11 @@ end
 _step_label(child::Callable, ::Namespace) = _callable_string(child)
 _step_label(child, namespace::Namespace) = string("`", namesymbol(namespace), "` (", nameof(typeof(child)), ")")
 
-"""What a plan child's own step returns, as the plan's step would call it (calls are viewed from `_captured_returns`)."""
+"""What a plan child's own step writes back (see `step_updates`), as the plan's step would call it (calls are viewed from `_captured_returns`)."""
 @inline function _step_return(algo, lc, wiring, namespace::Namespace)
     viewed_as = algo isa Callable ? Namespace{:_captured_returns}() : namespace
     contextview = view(lc, algo, viewed_as; sharedcontexts = shares(wiring), sharedvars = routes(wiring))
-    return step!(algo, contextview)
+    return step_updates(step!(algo, contextview))
 end
 
 """

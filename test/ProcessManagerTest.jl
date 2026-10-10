@@ -940,8 +940,7 @@ end
     @managed(total = base);
     @inputs((; base = 0))
 )
-    total += delta
-    return (; total)
+    @update total += delta
 end
 
 @testset "ProcessManager recipe steps can prepare context and pass runtime inputs" begin

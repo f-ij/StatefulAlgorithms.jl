@@ -136,3 +136,72 @@ _is_scope_part(::ContextPart) = false
 """Whether a DSL producer is the declared locals (a name declared with `local`)."""
 _dsl_is_declared(owner) = false
 _dsl_is_declared(owner::Symbol) = context_part(Val(owner)) isa DeclaredLocals
+
+"""
+    @mutable y = f()
+    @mutable local x = 0.0
+
+In a DSL block: the names this statement assigns or declares may be changed by an algorithm that updates its argument
+(`@update` in `@StepAlgorithm`). It changes nothing else; it only says that this is intended, so building the block
+does not warn about it.
+"""
+macro mutable(args...)
+    error("`@mutable` is only valid as a statement of a `@CompositeAlgorithm` or `@Routine` block.")
+end
+
+"""Whether a DSL producer is the block's `@input`s."""
+_dsl_is_input_owner(owner) = false
+_dsl_is_input_owner(owner::AbstractIdentifiableAlgo) = getalgo(owner) isa RuntimeInputState
+
+_dsl_is_mutable(stmt) = stmt isa Expr && stmt.head == :macrocall && stmt.args[1] == Symbol("@mutable")
+
+"""The statement inside `@mutable stmt`."""
+function _dsl_mutable_inner(stmt)
+    args = [a for a in stmt.args[2:end] if !(a isa LineNumberNode)]
+    length(args) == 1 || error("`@mutable` takes one statement: `@mutable y = f()` or `@mutable local x = v`. Got `$stmt`.")
+    return only(args)
+end
+
+"""The names `@mutable stmt` marks (those `stmt` assigns or declares), or `nothing` when `stmt` is not `@mutable`."""
+function _dsl_mutable_names(stmt)
+    _dsl_is_mutable(stmt) || return nothing
+    inner = _dsl_mutable_inner(stmt)
+    if inner isa Expr && inner.head == :local
+        targets = length(inner.args) == 1 && inner.args[1] isa Expr && inner.args[1].head == :tuple ? inner.args[1].args : inner.args
+        return [first(_dsl_local_target(target, Set{Symbol}())) for target in targets]
+    elseif inner isa Expr && inner.head == :(=)
+        lhs = inner.args[1]
+        lhs isa Expr && lhs.head == :(::) && (lhs = lhs.args[1])
+        outputs = _dsl_try_parse_output_symbols(lhs)
+        isnothing(outputs) || return collect(outputs)
+    end
+    error("`@mutable` marks an assignment or a declaration: `@mutable y = f()`, `@mutable local x = v`. Got `$stmt`.")
+end
+
+"""
+Check the values an algorithm statement passes to the arguments the algorithm updates (`updated_names`): a value of
+the block that is not state changes too, so building the block warns unless it was declared `@mutable`. An `@input`,
+an outside value, or a value read through `@transform` cannot be updated: an error.
+"""
+function _composite_dsl_check_updates(entity, inputs::Tuple, producers::Dict{Symbol, Any}, state_owners::Dict{Symbol, Any}, mutable::Set{Symbol})
+    @nospecialize entity inputs
+    algo = entity isa AbstractIdentifiableAlgo ? getalgo(entity) : entity
+    updated = updated_names(algo isa Type ? algo : typeof(algo))
+    isempty(updated) && return nothing
+    algo_name = nameof(algo isa Type ? algo : typeof(algo))
+    for input in inputs
+        input.destination in updated || continue
+        what = "`$(algo_name)` updates its argument `$(input.destination)`"
+        input.kind in (:simple, :context_simple) || error("$what, which reads `$(input.source)` through a transform: that cannot be written back. Pass `$(input.source)` itself.")
+        input.kind == :context_simple && continue                     # a field of an algorithm's or a block's state
+        source = input.source
+        haskey(producers, source) || error("$what, which is `$source` here: an `@input` or an outside value, which cannot be changed.")
+        producer = producers[source]
+        _dsl_is_input_owner(producer) && error("$what, which is `$source` here: an `@input`, which cannot be changed.")
+        haskey(state_owners, source) && state_owners[source] === producer && continue   # a state field of the block
+        source in mutable && continue
+        _dsl_read_by_name(producer) || continue          # not a value of the block (a captured return or a local)
+        @warn "$what, so it changes `$source` here. If that is intended, declare it with `@mutable` (`@mutable $source = ...` or `@mutable local $source`)." _id = (algo_name, source) maxlog = 1
+    end
+    return nothing
+end

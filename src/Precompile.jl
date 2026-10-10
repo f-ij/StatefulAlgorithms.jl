@@ -84,8 +84,8 @@ _process_precompile_scale(x; scale = 1.0) = x * scale
         gain = 1.0,
         @inputs((; start = 0.0))
     )
-        total = total + x * gain
-        return (; total)
+        @update total = total + x * gain
+        return total
     end
 
     @StepAlgorithm @config offset::Float64 = 1.0 begin
@@ -387,7 +387,7 @@ _process_precompile_scale(x; scale = 1.0) = x * scale
             @state seed = 2.0
             @state bias = 1.0
             @alias src = _ProcessPrecompileSource
-            produced, passthrough = src(seed)
+            (; produced, passthrough) = src(seed)
             scaled = _process_precompile_scale(produced; scale = 3.0)
             combined = _process_precompile_add(scaled, passthrough; bias = bias)
             _ProcessPrecompileSink(value = combined)

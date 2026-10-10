@@ -79,11 +79,30 @@ function _dsl_rewrite_alias_owner_root(alias_map, ex)
     return ex, false
 end
 
-"""Extract a lowered route owner/source pair from a known alias field reference."""
+"""`X` of `@state(X)`, or `nothing` when `ex` is not one."""
+function _dsl_state_of(ex)
+    ex isa Expr && ex.head == :macrocall && ex.args[1] == Symbol("@state") || return nothing
+    args = [a for a in ex.args[2:end] if !(a isa LineNumberNode)]
+    length(args) == 1 || error("`@state(X)` names one algorithm: an alias or an algorithm of the block. Got `$ex`.")
+    return only(args)
+end
+
+"""
+The owner `@state(X)` refers to: the aliased algorithm when `X` is an alias, else `X` itself (an algorithm of the
+block, matched like any route endpoint).
+"""
+function _dsl_state_owner(alias_map, x)
+    owner, changed = _dsl_rewrite_alias_owner_root(alias_map, x)
+    return changed ? owner : x
+end
+
+"""Extract a lowered route owner/source pair from a known alias field reference, or `@state(X).field`."""
 function _dsl_parse_alias_route_expr(alias_map, ex)
     if ex isa Expr && ex.head == :. && length(ex.args) == 2 && ex.args[2] isa QuoteNode
         source = ex.args[2].value
         source isa Symbol || return nothing
+        x = _dsl_state_of(ex.args[1])
+        isnothing(x) || return (; owner = _dsl_state_owner(alias_map, x), source)
         owner, changed = _dsl_rewrite_alias_owner_root(alias_map, ex.args[1])
         return changed ? (; owner, source) : nothing
     end

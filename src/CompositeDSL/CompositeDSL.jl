@@ -1,4 +1,4 @@
-export @CompositeAlgorithm, @Routine, @state
+export @CompositeAlgorithm, @Routine, @state, @mutable
 
 include("Overview.jl")
 include("Resolution.jl")

@@ -271,6 +271,103 @@ function _pa_bind_config_fields(fields, algosym)
 end
 
 """
+    @update x
+    @update x = value
+    @update x, y
+    @update begin x = value; y end
+
+Inside a `@StepAlgorithm` body: write `x` back when the step returns, to where the algorithm read it from (its
+`@managed` state, or the variable of the block passed as `x`). The value written is `x`'s value at the `return`.
+`@update x = value` (or `@update x += value`, ...) assigns and marks `x` in one line. `x` is an argument of the algorithm. A plain `x = value`
+without `@update` only changes the body's local `x`, as in any Julia function.
+"""
+macro update(args...)
+    error("`@update` is only valid inside a `@StepAlgorithm` body.")
+end
+
+_pa_is_update(ex) = _pa_is_macrocall(ex, Symbol("@update"))
+# `@update x += v` and the other updating operators.
+const _PA_UPDATING_OPERATORS = (:+=, :-=, :*=, :/=, :\=, :÷=, :%=, :^=, :&=, :|=, :⊻=, :<<=, :>>=, :>>>=)
+# Expressions whose `return`s and `@update`s belong to another function, or are not code.
+_pa_is_opaque(ex) = ex isa Expr && ex.head in (:function, :->, :quote)
+
+"""
+The body with each `@update` written as plain Julia (`@update x = v` is `x = v`; a bare `@update x` is `nothing`),
+pushing the updated names to `names`.
+"""
+function _pa_lower_updates(ex, names::Vector{Symbol})
+    ex isa Expr || return ex
+    _pa_is_opaque(ex) && return ex
+    _pa_is_update(ex) || return Expr(ex.head, (_pa_lower_updates(a, names) for a in ex.args)...)
+    args = [a for a in ex.args[2:end] if !(a isa LineNumberNode)]
+    length(args) == 1 || error("`@update` takes one argument: `@update x`, `@update x = v`, `@update x, y` or `@update begin ... end`. Got `$ex`.")
+    return _pa_update_target(only(args), names)
+end
+
+function _pa_update_target(arg, names::Vector{Symbol})
+    if arg isa Symbol
+        push!(names, arg)
+        return :nothing
+    elseif arg isa Expr && (arg.head == :(=) || arg.head in _PA_UPDATING_OPERATORS) && arg.args[1] isa Symbol
+        push!(names, arg.args[1])
+        return Expr(:block, Expr(arg.head, arg.args[1], _pa_lower_updates(arg.args[2], names)), :nothing)
+    elseif arg isa Expr && arg.head == :tuple
+        foreach(a -> _pa_update_target(a, names), arg.args)
+        return :nothing
+    elseif arg isa Expr && arg.head == :block
+        lowered = [_pa_update_target(a, names) for a in arg.args if !(a isa LineNumberNode)]
+        return Expr(:block, lowered..., :nothing)
+    end
+    error("`@update` updates an argument by name: `@update x`, `@update x = v`, `@update x, y`. Got `$arg`.")
+end
+
+"""The body with every `return v` written as `return StepResult(v, updates)` (`updates_expr` builds the updates)."""
+function _pa_wrap_returns(ex, updates_expr)
+    ex isa Expr || return ex
+    _pa_is_opaque(ex) && return ex
+    if ex.head == :return
+        value = isempty(ex.args) ? nothing : ex.args[1]
+        return Expr(:return, :(StatefulAlgorithms.StepResult($value, $updates_expr)))
+    end
+    return Expr(ex.head, (_pa_wrap_returns(a, updates_expr) for a in ex.args)...)
+end
+
+"""The names of the named tuples a body returns literally (`return (; a, b = x)`, or its last expression)."""
+function _pa_literal_return_names(body)
+    names = Symbol[]
+    namedtuple_names(v) = v isa Expr && v.head == :tuple && !isempty(v.args) && v.args[1] isa Expr && v.args[1].head == :parameters ?
+        [a isa Symbol ? a : a.args[1] for a in v.args[1].args if a isa Symbol || (a isa Expr && a.head in (:kw, :(=)) && a.args[1] isa Symbol)] :
+        v isa Expr && v.head == :tuple ? [a.args[1] for a in v.args if a isa Expr && a.head == :(=) && a.args[1] isa Symbol] : Symbol[]
+    walk(ex) = if ex isa Expr && !_pa_is_opaque(ex)
+        ex.head == :return && !isempty(ex.args) && append!(names, namedtuple_names(ex.args[1]))
+        foreach(walk, ex.args)
+    end
+    walk(body)
+    statements = body isa Expr && body.head == :block ? [a for a in body.args if !(a isa LineNumberNode)] : Any[body]
+    isempty(statements) || append!(names, namedtuple_names(last(statements)))
+    return unique(names)
+end
+
+"""
+A `@StepAlgorithm` body as a step: its `@update`s lowered, and every return (a `return`, or the value of its last
+expression) a `StepResult` of the returned value and the updated names. Returns the body and the updated names.
+"""
+function _pa_step_body(body, fname, signature)
+    names = Symbol[]
+    lowered = _pa_lower_updates(body, names)
+    names = unique(names)
+    arguments = Set{Symbol}(vcat(getproperty.(signature.positional, :name), getproperty.(signature.normal_kwargs, :name)))
+    for name in names
+        name in arguments || error("`@update $name` in `$fname`: only an argument of the algorithm can be updated (a positional argument, `@managed`, or a keyword).")
+    end
+    stale = [name for name in _pa_literal_return_names(body) if name in arguments && !(name in names)]
+    isempty(stale) || @warn "`$fname` returns $(join(("`$n`" for n in stale), ", ")), which is also an argument. A return is a value: it no longer writes `$(first(stale))` back. Write `@update $(first(stale))` to update it."
+    updates_expr = :(StatefulAlgorithms.StateUpdates($(Expr(:tuple, Expr(:parameters, names...)))))
+    wrapped = _pa_wrap_returns(lowered, updates_expr)
+    return Expr(:return, :(StatefulAlgorithms.StepResult($(Expr(:block, wrapped)), $updates_expr))), Tuple(names)
+end
+
+"""
     @StepAlgorithm function Name(...)
         ...
     end
@@ -301,7 +398,7 @@ The macro accepts normal function signatures and `where` signatures:
 
 ```julia
 @StepAlgorithm function Accumulate(x)
-    return (; x = x + 1)
+    @update x = x + 1
 end
 
 @StepAlgorithm function resetgraph!(isinggraph::G) where G
@@ -309,6 +406,15 @@ end
     return
 end
 ```
+
+# Returns and updates
+
+The body is a Julia function body: `return v` (or its last expression) is the step's return value, which a block
+captures with `y = Name(...)`. Assigning an argument only changes the body's local copy. `@update x` (or
+`@update x = v`, `@update x += v`, `@update x, y`) writes `x`'s value at the `return` back to where the algorithm read
+it: its `@managed` state, or the variable of the block passed as `x`. A body ending in `@update` returns `nothing`.
+In a plan the generated `step!(algo, context)` returns a `StepResult` of the value and the updates;
+`updated_names(Name)` lists the updated names.
 
 # Positional parsing rules
 
@@ -504,7 +610,7 @@ context into local bindings before calling the typed implementation. That means 
 argument annotations still constrain the implementation entrypoint, but the context extraction
 bindings themselves are intentionally kept simple and untyped.
 """
-function _step_algorithm_macro(ex)
+function _step_algorithm_macro(ex; legacy::Bool = false)
     function_ex, outer_config_fields, force_inline = _pa_extract_processalgorithm_parts(ex)
     function_ex, supertype = _pa_split_supertype(function_ex)
     signature = _pa_parse_signature(function_ex.args[1])
@@ -534,6 +640,13 @@ function _step_algorithm_macro(ex)
     impl_signature = _pa_rewrap_where(impl_signature, signature.where_params)
 
     config_assignments = _pa_bind_config_fields(config_fields, :_algo)
+    # A step returns a `StepResult`: its return value and its `@update`s (a legacy step returns what its body returns).
+    if legacy
+        _pa_lower_updates(body, Symbol[]) == body || error("`@update` is not available in `@StepAlgorithm_legacy`; use `@StepAlgorithm`.")
+        updated = ()
+    else
+        body, updated = _pa_step_body(body, fname, signature)
+    end
     impl_def = Expr(:function, impl_signature, Expr(:block, config_assignments..., body))
     # By default Julia decides whether to inline the body. `@inline` on the definition forces it
     # into the plan's step, which pays off for medium-sized hot kernels (see the docstring).
@@ -554,7 +667,7 @@ function _step_algorithm_macro(ex)
                 if !(isnothing(_init) || isempty(_init))
                     error("Cannot pass @input/@inputs/@init values to $(string($fname)) without any @managed arguments")
                 end
-                return $impl_name(_algo, $(map(x -> x.name, signature.positional)...); $(kw_forward...))
+                return StatefulAlgorithms.step_value($impl_name(_algo, $(map(x -> x.name, signature.positional)...); $(kw_forward...)))
             end)
         push!(public_defs, public_def)
     else
@@ -567,7 +680,7 @@ function _step_algorithm_macro(ex)
                 if !isnothing(_init)
                     error("Cannot pass both managed positional arguments and @input/@inputs/@init values to $(string($fname))")
                 end
-                return $impl_name(_algo, $(map(x -> x.name, signature.positional)...); $(kw_forward...))
+                return StatefulAlgorithms.step_value($impl_name(_algo, $(map(x -> x.name, signature.positional)...); $(kw_forward...)))
             end)
 
         bootstrap_signature = Expr(:call, :(StatefulAlgorithms.step!), Expr(:(::), :_algo, fname), plain_pos_bindings...)
@@ -586,7 +699,7 @@ function _step_algorithm_macro(ex)
                 $(public_config_assignments...)
                 $(bootstrap_input_assignments...)
                 $(bootstrap_managed_assignments...)
-                return $impl_name(_algo, $(bootstrap_call_args...); $(kw_forward...))
+                return StatefulAlgorithms.step_value($impl_name(_algo, $(bootstrap_call_args...); $(kw_forward...)))
             end)
 
         push!(public_defs, piped_def)
@@ -615,6 +728,7 @@ function _step_algorithm_macro(ex)
     dsl_metadata_defs = quote
         StatefulAlgorithms._dsl_processalgorithm_positional_names(::$fname) = $positional_name_tuple
         StatefulAlgorithms._dsl_processalgorithm_positional_names(::Type{$fname}) = $positional_name_tuple
+        StatefulAlgorithms.updated_names(::Type{$fname}) = $(Expr(:tuple, QuoteNode.(updated)...))
     end
     step_def = quote
         function StatefulAlgorithms.step!(_algo::$fname, context::C) where {C <: Union{StatefulAlgorithms.AbstractContext, NamedTuple}}
@@ -672,4 +786,4 @@ macro ProcessAlgorithm(ex)
     return _step_algorithm_macro(ex)
 end
 
-export @StepAlgorithm, @ProcessAlgorithm, @init, @input, @inputs
+export @StepAlgorithm, @ProcessAlgorithm, @init, @input, @inputs, @update

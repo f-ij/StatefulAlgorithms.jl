@@ -353,7 +353,7 @@ end
 
 function analyse_step(algo, context::Union{ContextAnalyser, ContextAnalyserView})
     try
-        result = step!(algo, context)
+        result = step_updates(step!(algo, context))
         if context isa ContextAnalyserView && result isa NamedTuple
             view = _view_key(context)
             if !isnothing(view)

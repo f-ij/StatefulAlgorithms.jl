@@ -75,7 +75,7 @@ function _dsl_build_loopalgorithm(::Val{Name}, algos, specification, states, opt
 end
 
 """Expand a top-level DSL block into either a `CompositeAlgorithm` or a `Routine`."""
-function _dsl_expand_loopalgorithm(block, constructor_name::Symbol, expected_schedule::Symbol; print_constructor::Bool = false)
+function _dsl_expand_loopalgorithm(block, constructor_name::Symbol, expected_schedule::Symbol; print_constructor::Bool = false, rules = :(StatefulAlgorithms.CurrentDSL()))
     statements = block isa Expr && block.head == :block ? block.args : Any[block]
     collected = _dsl_collect_block(statements, expected_schedule, constructor_name; allow_final = true)
 
@@ -95,6 +95,10 @@ function _dsl_expand_loopalgorithm(block, constructor_name::Symbol, expected_sch
             local _dsl_state_owners = Dict{Symbol, Any}()
             local _dsl_external_inputs = Pair{Symbol, Symbol}[]
             local _dsl_context_indices = Dict{Symbol, Int}()
+            # The DSL rules of this block and its nested blocks (see `DSLRules`).
+            local _dsl_rules = $rules
+            # The names declared `@mutable` (see `_composite_dsl_check_updates`).
+            local _dsl_mutable = Set{Symbol}()
 
             $(isnothing(state_setup_expr) ? nothing : state_setup_expr)
             $(isnothing(input_setup_expr) ? nothing : input_setup_expr)
