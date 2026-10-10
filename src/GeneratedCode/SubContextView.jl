@@ -1,6 +1,9 @@
 
-"""Whether a step in namespace `own` may write the runtime value under `target`: a declared local, or its own outputs."""
-_writable_runtime(::DeclaredLocals, target::Symbol, own::Symbol) = true
+"""
+Whether a step in namespace `own` may write the runtime value under `target`: a declared local, a captured return (a
+value of the block an algorithm updates, see `@update`), or its own outputs. Inputs are read-only.
+"""
+_writable_runtime(::Union{DeclaredLocals, CapturedReturns}, target::Symbol, own::Symbol) = true
 _writable_runtime(::ContextPart, target::Symbol, own::Symbol) = target === own
 
 """A step that returns `nothing` changes nothing: the view's bundle as it was."""
@@ -28,7 +31,7 @@ function _subcontext_view_merge_exprs(SCV::Type, Args::Type, demanded_runtime_na
         if target_location isa VarLocation{:runtime}  # a runtime location: declared locals and this step's own outputs are writable
             target_subcontext = get_subcontextname(target_location)
             targetname = get_originalname(target_location)
-            _writable_runtime(context_part(Val(target_subcontext)), target_subcontext, SubKey) || error("Algorithm returned `$(algo_varname)`, which is routed from `$(target_subcontext)` and cannot be written. Declare it with `local $(algo_varname)` to share it.")
+            _writable_runtime(context_part(Val(target_subcontext)), target_subcontext, SubKey) || error("An algorithm writes back `$(algo_varname)`, which it reads from `$(target_subcontext)`: that is read-only.")
             exprs = get!(runtime_expressions_by_subcontext, target_subcontext, Expr[])
             # Converted to the slot's type by `merge_runtime_return(…, Val(target_subcontext), …)`.
             push!(exprs, Expr(:(=), targetname, :(getproperty(args, $(QuoteNode(algo_varname))))))

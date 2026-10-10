@@ -1,8 +1,22 @@
-@inline _merge_step_return(contextview, ::Nothing, ::PlanWiringView, namespace::Namespace) =
-    @inline merge(contextview, nothing)
+"""
+What one step of a leaf writes, as a named tuple: its updates (see `step_updates`), and its return value under
+`RETURN_NAME` when a statement captures it (`y = Algo()` routes from it, so it is in the step's return demand).
+"""
+@inline _step_writes(retval, demand::ReturnDemand) = @inline _with_return((@inline step_updates(retval)), (@inline step_value(retval)), demand)
 
-@inline _merge_step_return(contextview, retval::NamedTuple, wiring::PlanWiringView, namespace::Namespace) =
-    @inline merge(contextview, retval, return_demand(wiring, namespace))
+@inline @generated function _with_return(updates::U, value, ::ReturnDemand{Names}) where {U<:NamedTuple, Names}
+    Names isa Tuple && RETURN_NAME in Names || return :updates
+    return :(merge(updates, NamedTuple{($(QuoteNode(RETURN_NAME)),)}((value,))))
+end
+
+"""Merge what a leaf step returned through its view (see `_step_writes`)."""
+@inline function _merge_step_return(contextview, retval, wiring::PlanWiringView, namespace::Namespace)
+    demand = return_demand(wiring, namespace)
+    return @inline _merge_writes(contextview, (@inline _step_writes(retval, demand)), demand)
+end
+
+@inline _merge_writes(contextview, ::NamedTuple{()}, demand::ReturnDemand) = @inline merge(contextview, nothing)
+@inline _merge_writes(contextview, writes::NamedTuple, demand::ReturnDemand) = @inline merge(contextview, writes, demand)
 
 """
 Step a raw `ProcessAlgorithm` child through its resolved loop namespace.
@@ -58,10 +72,13 @@ What one step of a leaf writes into the persistent context (see `_merge_payload`
     return @inline _step_payload(contextview, (@inline step!(algo, contextview)), wiring, namespace)
 end
 
-# As `_merge_step_return`: nothing is written for a `nothing` return.
-@inline _step_payload(contextview, ::Nothing, ::PlanWiringView, namespace::Namespace) = (;)
-@inline _step_payload(contextview, retval::NamedTuple, wiring::PlanWiringView, namespace::Namespace) =
-    @inline _merge_payload(contextview, retval, return_demand(wiring, namespace))
+# As `_merge_step_return`: nothing is written when a step writes nothing.
+@inline function _step_payload(contextview, retval, wiring::PlanWiringView, namespace::Namespace)
+    demand = return_demand(wiring, namespace)
+    return @inline _writes_payload(contextview, (@inline _step_writes(retval, demand)), demand)
+end
+@inline _writes_payload(contextview, ::NamedTuple{()}, demand::ReturnDemand) = (;)
+@inline _writes_payload(contextview, writes::NamedTuple, demand::ReturnDemand) = @inline _merge_payload(contextview, writes, demand)
 
 """
 Step an unscoped root `ProcessAlgorithm` inside the loop runtime.
@@ -78,7 +95,7 @@ the current plan wiring.
     lifetime::LT,
 ) where {A<:ProcessAlgorithm,L<:LoopContext,W<:PlanWiringView,P<:AbstractProcess,LT<:Lifetime}
     context = @inline getcontext(lc)
-    retval = @inline step!(algo, context)
+    retval = @inline step_updates(@inline step!(algo, context))
     runtimecontext = @inline merge_runtime_return(
         (@inline getruntimecontext(lc)),
         Val(:_captured_returns),

@@ -6,16 +6,14 @@ using StatefulAlgorithms
     # variables from one subcontext available (and writable) to the other.
 
     @StepAlgorithm function Oscillator(@managed(dt), @managed(state = 1.0), @managed(velocity = 0.0), @managed(trajectory = Float64[1.0]); @inputs (; dt = 0.1))
-        new_vel = velocity - state * dt
-        new_state = state + new_vel * dt
-        push!(trajectory, new_state)
-        return (; state = new_state, velocity = new_vel)
+        @update velocity = velocity - state * dt
+        @update state = state + velocity * dt
+        push!(trajectory, state)
     end
 
     @StepAlgorithm function Damper(state, velocity, trajectory, @managed(damp = 0.05))
-        velocity = velocity * (1.0 - damp)
+        @update velocity = velocity * (1.0 - damp)   # `velocity` is Oscillator's, shared with `@all`
         push!(trajectory, state)
-        return (; velocity)
     end
 
     shared_algo = @CompositeAlgorithm begin

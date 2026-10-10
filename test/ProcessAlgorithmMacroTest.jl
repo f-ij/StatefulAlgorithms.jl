@@ -5,14 +5,14 @@ using StatefulAlgorithms
 Documented step algorithm for macro docstring tests.
 """
 @StepAlgorithm function DocumentedStepAlgorithmForTest(value)
-    return (; value)
+    return value
 end
 
 """
 Documented config-backed step algorithm for macro docstring tests.
 """
 @StepAlgorithm @config offset::Int = 1 function DocumentedConfiguredStepAlgorithmForTest(value)
-    return (; value = value + offset)
+    return value + offset
 end
 
 @testset "StepAlgorithm macro docstrings" begin
@@ -29,12 +29,12 @@ end
 @testset "ProcessAlgorithm macro deprecation alias" begin
     @test_logs (:warn, r"`@ProcessAlgorithm` is deprecated") @eval begin
         @ProcessAlgorithm function DeprecatedProcessAlgorithmMacroForTest(value)
-            return (; value)
+            return value
         end
     end
 
     @test DeprecatedProcessAlgorithmMacroForTest <: StepAlgorithm
-    @test StatefulAlgorithms.step!(DeprecatedProcessAlgorithmMacroForTest(), 3).value == 3
+    @test StatefulAlgorithms.step!(DeprecatedProcessAlgorithmMacroForTest(), 3) == 3
 end
 
 @testset "StepAlgorithm macro inputs and managed capture" begin
@@ -44,24 +44,25 @@ end
         @managed(b);
         @inputs((; b = 1))
     )
-        b = b + a
-        c = c + b
-        return (; b, c, total = a + b + c)
+        @update b = b + a
+        @update c = c + b
+        return a + b + c
     end
 
     prepared = StatefulAlgorithms.init(CaptureInput(), (; b = 3))
     @test prepared.b == 3
     @test prepared.c == 9
 
+    # In a plan, a step returns its value and its updates.
     stepped = StatefulAlgorithms.step!(CaptureInput(), (; a = 2, b = prepared.b, c = prepared.c))
-    @test stepped.b == 5
-    @test stepped.c == 14
-    @test stepped.total == 21
+    @test stepped isa StepResult
+    @test StatefulAlgorithms.step_updates(stepped) == (; b = 5, c = 14)
+    @test StatefulAlgorithms.step_value(stepped) == 21
+    @test updated_names(CaptureInput) == (:b, :c)
 
+    # Called directly, it returns its value.
     boot_inputs = StatefulAlgorithms.step!(CaptureInput(), 2; @inputs((; b = 4)))
-    @test boot_inputs.b == 6
-    @test boot_inputs.c == 22
-    @test boot_inputs.total == 30
+    @test boot_inputs == 30
 
     boot_init = StatefulAlgorithms.step!(CaptureInput(), 2; @init((; b = 4)))
     @test boot_init == boot_inputs
@@ -82,7 +83,7 @@ end
     @test prepared.c == 3
 
     stepped = StatefulAlgorithms.step!(LegacyInputs(), (; a = 5, b = prepared.b, c = prepared.c))
-    @test stepped.total == 10
+    @test StatefulAlgorithms.step_value(stepped).total == 10
 end
 
 @testset "StepAlgorithm macro can capture managed values directly from init context" begin
@@ -93,7 +94,7 @@ end
         @managed(velocity = 0.0);
         @input((; dt = 0.1))
     )
-        return (; state = state + dt + velocity + x)
+        @update state = state + dt + velocity + x
     end
 
     prepared = StatefulAlgorithms.init(ContextCapture(), (; state = 1.0))
@@ -102,7 +103,8 @@ end
     @test prepared.velocity == 0.0
 
     stepped = StatefulAlgorithms.step!(ContextCapture(), (; x = 0.0, state = prepared.state, dt = prepared.dt, velocity = prepared.velocity))
-    @test stepped.state == 1.1
+    @test StatefulAlgorithms.step_updates(stepped).state == 1.1
+    @test isnothing(StatefulAlgorithms.step_value(stepped))   # a body ending in `@update` returns nothing
 end
 
 @testset "StepAlgorithm macro supports grouped @managed declarations" begin
@@ -111,7 +113,7 @@ end
         @managed(b, c = b + 1, d = nothing);
         @inputs((; b = 2))
     )
-        return (; total = a + b + c, d)
+        return (; total = a + b + c, d_value = d)
     end
 
     prepared = StatefulAlgorithms.init(GroupedManaged(), (;))
@@ -120,8 +122,8 @@ end
     @test isnothing(prepared.d)
 
     stepped = StatefulAlgorithms.step!(GroupedManaged(), (; a = 5, b = prepared.b, c = prepared.c, d = prepared.d))
-    @test stepped.total == 10
-    @test isnothing(stepped.d)
+    @test StatefulAlgorithms.step_value(stepped).total == 10
+    @test isnothing(StatefulAlgorithms.step_value(stepped).d_value)
 end
 
 @testset "StepAlgorithm macro supports where signatures" begin
@@ -193,7 +195,7 @@ end
     @test direct.width == 4
 
     stepped = StatefulAlgorithms.step!(algo, (; target = 2, buffer = prepared.buffer, gain = 3))
-    @test stepped == direct
+    @test StatefulAlgorithms.step_value(stepped) == direct
 end
 
 @testset "StepAlgorithm macro @inline opt-in" begin
@@ -206,25 +208,25 @@ end
     expand(ex) = macroexpand(@__MODULE__, ex; recursive = false)   # keep the generated @inline unexpanded
 
     # not forced by default
-    @test !has_inline(expand(:(@StepAlgorithm function PlainForInlineTest(x) return (; x) end)))
+    @test !has_inline(expand(:(@StepAlgorithm function PlainForInlineTest(x) return x end)))
     # forced in every accepted position
-    @test has_inline(expand(:(@StepAlgorithm @inline function InlineDirectForTest(x) return (; x) end)))
-    @test has_inline(expand(:(@StepAlgorithm @config k = 1 @inline function InlineConfigForTest(x) return (; x = x + k) end)))
+    @test has_inline(expand(:(@StepAlgorithm @inline function InlineDirectForTest(x) return x end)))
+    @test has_inline(expand(:(@StepAlgorithm @config k = 1 @inline function InlineConfigForTest(x) return x + k end)))
     @test has_inline(expand(:(@StepAlgorithm begin
         @config k = 1
         @inline function InlineBlockForTest(x)
-            return (; x = x + k)
+            return x + k
         end
     end)))
 
     # the algorithm behaves the same
     @StepAlgorithm @inline function InlinedAccumulatorForTest(x, @managed(total = 0.0))
-        total += x
-        return (; total)
+        @update total += x
+        return total
     end
     algo = InlinedAccumulatorForTest()
     @test StatefulAlgorithms.init(algo, (;)).total == 0.0
-    @test StatefulAlgorithms.step!(algo, (; x = 2.0, total = 1.0)).total == 3.0
+    @test StatefulAlgorithms.step_updates(StatefulAlgorithms.step!(algo, (; x = 2.0, total = 1.0))).total == 3.0
 end
 
 abstract type SupertypeForMacroTest <: StepAlgorithm end

@@ -12,9 +12,6 @@ end
 @inline _dsl_with_customname(algo, ::Val{Symbol()}) = algo
 @inline _dsl_with_customname(algo, ::Val{Name}) where {Name} = algo
 
-"""A statement's outputs as `Callable` returns: `x = f()` returns `:x`, `a, b = f()` returns `(:a, :b)`."""
-_dsl_call_returns(outputs::Tuple{Vararg{Symbol}}) = length(outputs) == 1 ? only(outputs) : outputs
-
 """Resolve direct-call DSL syntax for a `ProcessAlgorithm` using its declared positional names."""
 function _resolve_composite_dsl_algorithm_call(
     spec,
@@ -57,7 +54,7 @@ function _dsl_retarget_processalgorithm_direct_input(input, destination::Symbol)
 end
 
 """Resolve one non-function DSL entity into the internal representation used by the block builder."""
-function _resolve_composite_dsl_entity(spec, inputs::Tuple, output_symbols::Tuple{Vararg{Symbol}}, ::Val{Name}) where {Name}
+function _resolve_composite_dsl_entity(spec, inputs::Tuple, returns, ::Val{Name}) where {Name}
     if spec isa Union{AlgoState, Type{<:AlgoState}} || _is_identified_state(spec)
         # States participate in the block like algorithms, but they do not accept
         # routed inputs through this syntax.
@@ -75,7 +72,7 @@ function _resolve_composite_dsl_entity(spec, inputs::Tuple, output_symbols::Tupl
         # Bare functions are wrapped so the rest of the system can treat them like
         # normal algorithms with routed inputs/outputs.
         isempty(inputs) || error("Plain functions should use regular call syntax in the DSL, e.g. `f(x)` or `f(x; scale = 2)`.")
-        wrapped = Callable(spec, (), _dsl_call_returns(output_symbols))
+        wrapped = Callable(spec, (), returns)
         resolved = _dsl_with_customname(wrapped, Val(Name))
         return _CompositeDSLResolved{:algo, typeof(resolved), typeof(inputs)}(resolved, inputs)
     else
@@ -90,7 +87,7 @@ function _resolve_composite_dsl_call(
     positional_values::Tuple,
     display_positional_values::Tuple,
     display_keyword_args::NamedTuple,
-    output_symbols::Tuple{Vararg{Symbol}},
+    returns,
     routed_positional_inputs::Tuple,
     routed_keyword_inputs::Tuple,
     ::Val{Name},
@@ -136,7 +133,7 @@ function _resolve_composite_dsl_call(
 
     # The `Callable` holds the call's signature; values that come from algorithm state or
     # transforms are wired to it by the statement (`_composite_dsl_call_wires`).
-    wrapped = Callable(spec, positional_values, keyword_args, _dsl_call_returns(output_symbols))
+    wrapped = Callable(spec, positional_values, keyword_args, returns)
     resolved = _dsl_with_customname(wrapped, Val(Name))
 
     inputs = Any[routed_positional_inputs...]
@@ -151,16 +148,16 @@ function _resolve_composite_dsl_keyword_call(
     keyword_args::NamedTuple,
     display_keyword_args::NamedTuple,
     routed_inputs::Tuple,
-    output_symbols::Tuple{Vararg{Symbol}},
+    returns,
     ::Val{Name},
 ) where {Name}
     if spec isa Function
-        wrapped = Callable(spec, (), keyword_args, _dsl_call_returns(output_symbols))
+        wrapped = Callable(spec, (), keyword_args, returns)
         resolved = _dsl_with_customname(wrapped, Val(Name))
         return _CompositeDSLResolved{:algo, typeof(resolved), typeof(routed_inputs)}(resolved, routed_inputs)
     end
 
-    return _resolve_composite_dsl_entity(spec, routed_inputs, output_symbols, Val(Name))
+    return _resolve_composite_dsl_entity(spec, routed_inputs, returns, Val(Name))
 end
 
 """Rewrite DSL alias references inside expressions while preserving routed symbols."""

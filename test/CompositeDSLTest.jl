@@ -58,11 +58,11 @@ keep_value_dsl_test(v) = v
 plus_one_dsl_test(v) = v + 1.0
 push_four_dsl_test(seen, a, b, c, d) = (push!(seen, (a, b, c, d)); seen)
 @StepAlgorithm function DSLLocalBump(x)
-    return (; x = x + 1.0)
+    return x + 1.0
 end
 push_seen_dsl_test(seen, v) = (push!(seen, v); seen)
 @StepAlgorithm function DSLManagedCounter(@managed(x = 0.0))
-    return (; x = x + 1.0)
+    @update x = x + 1.0
 end
 keyword_value_identity_dsl_test(; value) = value
 dsl_final_summary(context) = (; result = context[DSLValueAlgo].result)
@@ -284,9 +284,9 @@ end
             @state seed = 3
             @state doubled = 10
             @alias source = DSLSourceAlgo
-            produced, passthrough = source(seed = seed)
+            (; produced, passthrough) = source(seed = seed)
             doubled = @interval n scaled_double_dsl_test(produced; scale = 2)
-            combined = DSLCombineAlgo(left = passthrough, right = doubled)
+            (; combined) = DSLCombineAlgo(left = passthrough, right = doubled)
             DSLSinkAlgo(value = combined)
         end
 
@@ -299,12 +299,8 @@ end
         @test length(StatefulAlgorithms.getstates(algo)) == 1
         @test !isempty(StatefulAlgorithms.get_routes(algo))
         @test !isempty(StatefulAlgorithms.get_routes(StatefulAlgorithms.getplan(resolved)))
-        @test intervals(resolved) == (
-            StatefulAlgorithms.Interval(1),
-            StatefulAlgorithms.Interval(1),
-            StatefulAlgorithms.Interval(1),
-            StatefulAlgorithms.Interval(1),
-        )
+        # Each algorithm statement with names on the left is followed by the call that captures its return.
+        @test intervals(resolved) == ntuple(_ -> StatefulAlgorithms.Interval(1), 6)
         @test StatefulAlgorithms.plan_child_namespace(resolved, 1) == :source
         @test length(StatefulAlgorithms.getstates(resolved)) == 1
         @test StatefulAlgorithms._composite_dsl_is_block_state(first(StatefulAlgorithms.getstates(resolved)))
@@ -332,9 +328,10 @@ end
         @test ctx[:_state_1].doubled == 10
         @test StatefulAlgorithms.get_captured_returns(ctx).doubled == 8
         @test !haskey(StatefulAlgorithms.get_captured_returns(context(p)), :doubled)
-        @test ctx[:source].produced == 2
-        @test ctx[:source].passthrough == 3
-        @test ctx[:DSLCombineAlgo_1].combined == 11
+        # An algorithm's return is captured into the block's scope, as a call's is.
+        @test StatefulAlgorithms.get_captured_returns(ctx).produced == 2
+        @test StatefulAlgorithms.get_captured_returns(ctx).passthrough == 3
+        @test StatefulAlgorithms.get_captured_returns(ctx).combined == 11
         @test isempty(ctx[:DSLSinkAlgo_1])
     end
 
@@ -357,7 +354,7 @@ end
     @testset "@all uses known alias keys in share endpoints" begin
         @info "Composite DSL: @all uses known alias keys in share endpoints"
         @StepAlgorithm function DSLShareSource(@managed(x = 1))
-            return (; x)
+            return x
         end
 
         @StepAlgorithm function DSLShareTarget(x)
@@ -382,7 +379,7 @@ end
             @state seed = 2
             @alias source = DSLSourceAlgo
             @alias sink = DSLSinkAlgo
-            produced, passthrough = source(seed = seed)
+            source(seed = seed)
             sink()
             @route source.produced => sink.value
         end
@@ -419,14 +416,14 @@ end
             @state seed = 7
             @alias source = DSLSourceAlgo
             @alias sink = DSLSinkAlgo
-            produced, passthrough = source(seed = seed)
+            (; produced, passthrough) = source(seed = seed)
             sink(value = passthrough)
             @route source.produced => sink.value
         end
 
         resolved = resolve(algo)
         step_wiring = StatefulAlgorithms.child_wiring(StatefulAlgorithms.getwiring(StatefulAlgorithms.getplan(resolved)))
-        sink_routes = @inferred StatefulAlgorithms.routes(step_wiring[2])
+        sink_routes = @inferred StatefulAlgorithms.routes(step_wiring[3])   # 2 is the capture of `source`'s return
         @test length(sink_routes) == 1
         @test StatefulAlgorithms.subvarcontextnames(only(sink_routes)) == (:passthrough,)
 
@@ -955,7 +952,7 @@ end
         @info "Composite DSL: Alias field routes work before later output bindings"
         algo = @Routine begin
             @alias dynamics = DSLHeldStateAlgo()
-            seen = DSLValueAlgo(value = dynamics.state)
+            DSLValueAlgo(value = dynamics.state)
             state = dynamics()
         end
 
@@ -981,7 +978,7 @@ end
             result = keyword_value_identity_dsl_test(value = model_state)
             doubled = scaled_double_dsl_test(model_state)
             transformed = keyword_value_identity_dsl_test(value = @transform(x -> x + 1, model_state))
-            seen = DSLValueAlgo(value = model_state)
+            DSLValueAlgo(value = model_state)
             dynamics()
         end
 
@@ -1056,7 +1053,7 @@ end
         algo = @Routine begin
             @alias dynamics = DSLHeldStateAlgo()
             state = dynamics.state
-            seen = DSLValueAlgo(value = state)
+            DSLValueAlgo(value = state)
             state = dynamics()
         end
 
@@ -1075,7 +1072,7 @@ end
         include_source = false
         skipped = @CompositeAlgorithm begin
             @state seed = 3
-            @include_if include_source produced, passthrough = DSLSourceAlgo(seed = seed)
+            @include_if include_source (; produced, passthrough) = DSLSourceAlgo(seed = seed)
             DSLValueAlgo(value = seed)
         end
 
@@ -1092,12 +1089,12 @@ end
         include_source = true
         included = @CompositeAlgorithm begin
             @state seed = 3
-            @include_if include_source produced, passthrough = DSLSourceAlgo(seed = seed)
+            @include_if include_source (; produced, passthrough) = DSLSourceAlgo(seed = seed)
             DSLValueAlgo(value = produced)
         end
 
         resolved_included = resolve(included)
-        @test length(StatefulAlgorithms.getalgos(resolved_included)) == 2
+        @test length(StatefulAlgorithms.getalgos(resolved_included)) == 3   # with the capture of its return
         @test !isnothing(StatefulAlgorithms.findkey(resolved_included, :DSLSourceAlgo_1))
 
         p_included = Process(resolved_included, repeat = 1)
@@ -1112,15 +1109,17 @@ end
         block_algo = @CompositeAlgorithm begin
             @state seed = 3
             @include_if include_block begin
-                produced, passthrough = @interval 2 DSLSourceAlgo(seed = seed)
+                (; produced, passthrough) = @interval 2 DSLSourceAlgo(seed = seed)
                 DSLSinkAlgo(value = produced)
             end
             DSLValueAlgo(value = seed)
         end
 
         resolved_block = resolve(block_algo)
-        @test length(StatefulAlgorithms.getalgos(resolved_block)) == 3
+        @test length(StatefulAlgorithms.getalgos(resolved_block)) == 4
+        # The capture of `DSLSourceAlgo`'s return runs on its schedule.
         @test StatefulAlgorithms.intervals(resolved_block) == (
+            StatefulAlgorithms.Interval(2),
             StatefulAlgorithms.Interval(2),
             StatefulAlgorithms.Interval(1),
             StatefulAlgorithms.Interval(1),
@@ -1332,7 +1331,7 @@ end
         @test fetch(p)[:_state].seen[1][4] isa Float32
         close(p)
 
-        # An algorithm statement reads a local through its input and writes it by returning it.
+        # An algorithm statement reads a local through its input; assigning its return writes the local.
         algo = @CompositeAlgorithm begin
             @state seen = Any[]
             local x = 0.0

@@ -142,6 +142,47 @@ function _composite_dsl_register_outputs!(producers::Dict{Symbol, Any}, owner, o
     return producers
 end
 
+"""
+The rules a DSL block is built with. `CurrentDSL` for `@CompositeAlgorithm` and `@Routine`; the legacy macros
+(`src/Legacy`) pass their own, which differ only where their methods say so.
+"""
+abstract type DSLRules end
+struct CurrentDSL <: DSLRules end
+
+"""The name the capture of an algorithm's return reads that return under (see `_composite_dsl_bind_returns!`)."""
+const _DSL_RETURNED = :_returned
+
+"""
+Whether a DSL entity is an algorithm whose return value a statement captures (`y = Algo()`): a step algorithm, not a
+call (a `Callable` captures its own return), a state or a nested plan.
+"""
+_dsl_captures_return(entity) = false
+_dsl_captures_return(::Callable) = false
+_dsl_captures_return(entity::AbstractIdentifiableAlgo) = _dsl_captures_return(getalgo(entity))
+_dsl_captures_return(::Union{StepAlgorithm, Type{<:StepAlgorithm}}) = true
+_dsl_captures_return(::ContextWrite) = false   # `x = v` writing a state field: the write is the statement
+
+"""
+Bind the names on the left of a statement (`outputs`, taken from the value as `returns` says, see `_dsl_returns_spec`).
+
+A call (`Callable`) captures its own return. For an algorithm, the return value is captured by a call of `identity`
+added right after it, on the same schedule, that reads the algorithm's return (`RETURN_NAME`) through a route: the
+names become captured returns of the block, as for a call; a name that is a state field of the block is written there
+(the call is wired to it), one that is a declared local writes the local. Anything else (a nested plan) binds by name.
+"""
+function _composite_dsl_bind_returns!(::CurrentDSL, algos::Vector{Any}, specification::Vector{Any}, options::Vector{Any}, producers::Dict{Symbol, Any}, state_owners::Dict{Symbol, Any}, entity, owner, returns, outputs::Tuple{Vararg{Symbol}}, schedule)
+    @nospecialize entity owner returns outputs schedule
+    (_dsl_captures_return(entity) && !isempty(outputs)) || return _composite_dsl_bind_outputs!(options, producers, state_owners, owner, outputs)
+    to_state = Tuple(o for o in outputs if haskey(state_owners, o) && !_dsl_is_declared(get(producers, o, nothing)))
+    wires = (Route(owner => ThisChild(), RETURN_NAME => _DSL_RETURNED), (Route(state_owners[o] => ThisChild(), o => o) for o in to_state)...)
+    capture = Callable(identity, (_DSL_RETURNED,), returns)
+    push!(algos, WithWiring(capture, wires))
+    push!(specification, schedule)
+    _composite_dsl_register_outputs!(producers, capture, Tuple(o for o in outputs if !(o in to_state)))
+    foreach(o -> producers[o] = state_owners[o], to_state)
+    return producers
+end
+
 """Remember which symbols belong to an inline state for later writeback routing."""
 function _composite_dsl_register_state_outputs!(state_owners::Dict{Symbol, Any}, owner, outputs::Tuple{Vararg{Symbol}})
     @nospecialize owner outputs
@@ -757,11 +798,29 @@ multi-output tuples; unsupported LHS forms return `nothing`.
 function _dsl_try_parse_output_symbols(lhs)
     if lhs isa Symbol
         return (lhs,)
+    elseif _dsl_is_property_destructuring(lhs)
+        return Tuple(only(lhs.args).args)
     elseif lhs isa Expr && lhs.head == :tuple
         all(x -> x isa Symbol, lhs.args) || error("Multi-output bindings must use plain symbols like `a, b = algo`.")
         return tuple(lhs.args...)
     end
     return nothing
+end
+
+"""Whether `lhs` is `(; a, b)`: the properties `a` and `b` of the value on the right."""
+_dsl_is_property_destructuring(lhs) = lhs isa Expr && lhs.head == :tuple && length(lhs.args) == 1 &&
+    only(lhs.args) isa Expr && only(lhs.args).head == :parameters && all(a -> a isa Symbol, only(lhs.args).args)
+
+"""
+How a statement's left-hand side takes the value on the right, as `Callable` returns: `y` the whole value, `a, b`
+unpacked, `(; a, b)` its properties `a` and `b`; `()` for no left-hand side.
+"""
+function _dsl_returns_spec(lhs)
+    lhs isa Symbol && return QuoteNode(lhs)
+    # A value, not an expression: the names must not be renamed by the macro's hygiene.
+    _dsl_is_property_destructuring(lhs) && return NamedTuple{Tuple(only(lhs.args).args)}(Tuple(only(lhs.args).args))
+    outputs = _dsl_parse_output_symbols(lhs)
+    return Expr(:tuple, QuoteNode.(outputs)...)
 end
 
 """

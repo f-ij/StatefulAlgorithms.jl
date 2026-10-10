@@ -22,8 +22,7 @@ Base.@constprop :aggressive @inline function step!(pkg::Package{F, S, I, A}, con
     ret = @inline unrollreplace_withargs(acc, getalgos(pkg); args = (context, this_inc), zip = intervals(pkg)) do acc, func, context, this_inc, interval
         if @inline divides(this_inc, interval)
             view = @inline withaliases(context, func, acc, typeof(getvaraliases(typeof(func))))
-            step_ret = @inline step!(getalgo(func), view)
-            isnothing(step_ret) && return acc
+            step_ret = @inline step_updates(@inline step!(getalgo(func), view))
             return @inline merge(acc, step_ret)
         end
         return acc
