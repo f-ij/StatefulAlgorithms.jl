@@ -135,7 +135,6 @@ Restored 2026-10-09 from `fix/type-stability` (`e1dcbbf`, now tag `archive/type-
 ## Later: step returns and declared locals (from the locals design, 2026-10-02)
 - [ ] Rule to document and check (at resolve / `inspect` / debug mode, not per step): a step's returned fields and their types depend only on the types it gets, never on values (no `cond ? (; a, b) : (; a)`). "Sometimes" belongs in the schedule.
 - [ ] Maybe allow a field that is `nothing` for now, if the step returns that field from the start (a guard value, or an explicit `Union{Nothing,T}` in the return). Must not box the context, and the context after the step must stay type-compatible with the initial one. Unsure it fits the pattern.
-- [ ] DSL: function-like header that names the composite and its inputs, e.g. `@CompositeAlgorithm mc(spins) begin ... end` instead of `mc = @CompositeAlgorithm begin @input spins ... end`.
 - [ ] DSL locals (`local x`, `x = 0.0`, src/CompositeDSL/Locals.jl): a mutable initial value (`local buf = zeros(3)`, `x = [0.0]`) is shared by every run of the plan; copy it once per run.
 - [ ] DSL: printed plans show a call's wired arguments by context key (`plus_capture.captured`, `_state.b`), not by the DSL alias the author wrote (`c1.plus_capture.captured`, `b`); the alias only exists in the DSL.
 - [ ] Plan edits (rename/insert) re-attach child-local wiring by matching the child object; two equal children (same unkeyed algorithm type, or identical `Callable`s) with different wires would both get both. Re-attach by position (re-wrap in `WithWiring`) instead.

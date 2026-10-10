@@ -124,18 +124,53 @@ function _dsl_print_constructor_call(constructor_name::Symbol, algos, specificat
     return nothing
 end
 
-"""Parse optional macro flags for `@CompositeAlgorithm` and `@Routine`."""
+"""
+Parse the arguments of `@CompositeAlgorithm` and `@Routine`: an optional `:print` flag, an optional header
+`name(inputs...)`, and the block. Returns `(; block, print_constructor, name)`; with a header, `block` starts with an
+`@input` statement for each of its arguments and `name` is the variable the plan is assigned to (`nothing` without one).
+"""
 function _dsl_parse_loopalgorithm_macro_args(args, macro_name::Symbol)
-    if length(args) == 1
-        return (; block = args[1], print_constructor = false)
-    elseif length(args) == 2
-        flag = args[1]
-        is_print = flag == :print || (flag isa QuoteNode && flag.value == :print)
-        is_print || error("`@$macro_name` only supports the optional `:print` flag before the block.")
-        return (; block = args[2], print_constructor = true)
+    usage = "`@$macro_name` expects `@$macro_name [:print] [name(inputs...)] begin ... end`."
+    1 <= length(args) <= 3 || error(usage)
+    print_constructor = false
+    rest = collect(args)
+    flag = first(rest)
+    if flag == :print || (flag isa QuoteNode && flag.value == :print)
+        print_constructor = true
+        popfirst!(rest)
     end
-    error("`@$macro_name` expects either `@$macro_name begin ... end` or `@$macro_name :print begin ... end`.")
+    length(rest) in (1, 2) || error(usage)
+    length(rest) == 1 && return (; block = only(rest), print_constructor, name = nothing)
+    header, block = rest
+    header isa Expr && header.head == :call && header.args[1] isa Symbol ||
+        error("`@$macro_name`'s header must be a name with its inputs, as `mc(spins, n = 3)`. Got `$header`.")
+    inputs = map(_dsl_header_input_statement, _dsl_header_inputs(header))
+    statements = block isa Expr && block.head == :block ? block.args : Any[block]
+    return (; block = Expr(:block, inputs..., statements...), print_constructor, name = header.args[1])
 end
+
+"""The arguments of a header `name(a, b::T = v; c = w)`: positional and keyword alike, each one input."""
+function _dsl_header_inputs(header::Expr)
+    inputs = Any[]
+    for arg in header.args[2:end]
+        if arg isa Expr && arg.head == :parameters
+            append!(inputs, arg.args)
+        else
+            push!(inputs, arg)
+        end
+    end
+    return inputs
+end
+
+"""The `@input` statement for one header argument: `x`, `x::T`, `x = v` or `x::T = v`."""
+function _dsl_header_input_statement(arg)
+    decl = arg isa Expr && arg.head == :kw ? Expr(:(=), arg.args...) : arg
+    return Expr(:macrocall, Symbol("@input"), LineNumberNode(0), decl)
+end
+
+"""A plan expansion assigned to the header's name, when the macro has one."""
+_dsl_assign_header(expanded, ::Nothing) = expanded
+_dsl_assign_header(expanded, name::Symbol) = :($(esc(name)) = $expanded)
 
 """
 Expand the body used inside `@repeat n begin ... end` into a `CompositeAlgorithm`.
@@ -368,6 +403,14 @@ captures the right-hand-side Julia value and writes it back through the existing
 state writeback route. Use function or algorithm call syntax when the right-hand
 side should be routed or stepped instead of captured.
 
+Header
+======
+
+- `@CompositeAlgorithm mc(spins, n::Int = 3; k = 1.0) begin ... end`
+
+assigns the plan to `mc`; each argument (positional or keyword) is an `@input` of the
+block, so this is `mc = @CompositeAlgorithm begin @input spins; @input n::Int = 3; @input k = 1.0; ... end`.
+
 Debug output
 ============
 
@@ -378,7 +421,7 @@ before it is executed.
 """
 macro CompositeAlgorithm(args...)
     parsed = _dsl_parse_loopalgorithm_macro_args(args, :CompositeAlgorithm)
-    _dsl_expand_loopalgorithm(parsed.block, :CompositeAlgorithm, :every; print_constructor = parsed.print_constructor)
+    _dsl_assign_header(_dsl_expand_loopalgorithm(parsed.block, :CompositeAlgorithm, :every; print_constructor = parsed.print_constructor), parsed.name)
 end
 
 """
@@ -398,8 +441,9 @@ Examples:
 - `Damper(@all(osc...))`
 - `PickRandomSeed(targetseed = n.changeable_seed)`
 - `@Routine :print begin ... end`
+- `@Routine r(spins; n = 3) begin ... end` (a header, as for `@CompositeAlgorithm`)
 """
 macro Routine(args...)
     parsed = _dsl_parse_loopalgorithm_macro_args(args, :Routine)
-    _dsl_expand_loopalgorithm(parsed.block, :Routine, :repeat; print_constructor = parsed.print_constructor)
+    _dsl_assign_header(_dsl_expand_loopalgorithm(parsed.block, :Routine, :repeat; print_constructor = parsed.print_constructor), parsed.name)
 end

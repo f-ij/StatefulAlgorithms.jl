@@ -1396,6 +1396,32 @@ end
         @test err isa LoadError && occursin("which is an `@input` of this block", sprint(showerror, err.error))
     end
 
+    @testset "A header names the plan and declares its inputs" begin
+        @info "Composite DSL: A header names the plan and declares its inputs"
+        scaled_header_test(t, k) = t * k
+        seen = Float64[]
+        @CompositeAlgorithm header_comp(temperature::Float64, k = 2.0) begin
+            y = scaled_header_test(temperature, k)
+            push!(seen, y)
+        end
+        p = Process(header_comp; repeats = 2)
+        run(p; temperature = 3.0)
+        wait(p)
+        @test seen == [6.0, 6.0]
+        inputs = getfield(StatefulAlgorithms.inspect(header_comp; steps = false), :runtime_inputs)
+        @test Dict(getfield.(inputs, :name) .=> getfield.(inputs, :required)) == Dict(:temperature => true, :k => false)
+
+        seen_routine = Float64[]
+        @Routine header_routine(t; k = 10.0) begin
+            y = scaled_header_test(t, k)
+            push!(seen_routine, y)
+        end
+        p = Process(header_routine; repeats = 1)
+        run(p; t = 1.0)
+        wait(p)
+        @test seen_routine == [10.0]
+    end
+
     @testset "Function call runtime output shape does not persist" begin
         @info "Composite DSL: Function call runtime output shape does not persist"
         count = Ref(0)
