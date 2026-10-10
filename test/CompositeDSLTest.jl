@@ -1441,6 +1441,31 @@ end
         @test seen == repeat([2.0, 1.0], 4)
     end
 
+    @testset "An array literal and `local x = f()` are steps" begin
+        @info "Composite DSL: An array literal and `local x = f()` are steps"
+        bump_literal_test!(b) = (b[1] += 1; b)
+        record_copy_test!(v, x) = (push!(v, copy(x)); nothing)
+        seen = Vector{Float64}[]
+        c = @CompositeAlgorithm begin
+            buf = [0.0]
+            bumped = bump_literal_test!(buf)
+            record_copy_test!(seen, bumped)
+        end
+        a = resolve(c)
+        run(a; repeats = 2)
+        run(a; repeats = 2)
+        @test seen == fill([1.0], 4)
+
+        seen_local = Vector{Float64}[]
+        c = @CompositeAlgorithm begin
+            local acc = zeros(1)
+            acc = bump_literal_test!(acc)
+            record_copy_test!(seen_local, acc)
+        end
+        run(c; repeats = 3)
+        @test seen_local == fill([1.0], 3)
+    end
+
     @testset "Function call runtime output shape does not persist" begin
         @info "Composite DSL: Function call runtime output shape does not persist"
         count = Ref(0)
