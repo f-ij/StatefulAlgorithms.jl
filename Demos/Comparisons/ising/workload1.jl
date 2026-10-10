@@ -58,15 +58,13 @@ end
 
 #### C. StatefulAlgorithms: two algorithms, T routed from one to the other ####
 @StepAlgorithm function Metro1(T, @managed(spins = fresh_spins()), @managed(rng = Xoshiro(1)), @managed(m = 0))
-    m += flip!(spins, rng, T, 0.0)
-    return (; m)
+    @update m += flip!(spins, rng, T, 0.0)
 end
 @StepAlgorithm begin
     @config N::Int = 1
     function Anneal(@managed(step = 1), @managed(T = T0))
-        T = anneal_T(step, N)
-        step += 1
-        return (; step, T)
+        @update T = anneal_T(step, N)
+        @update step += 1
     end
 end
 function w1_framework(N)
@@ -78,8 +76,7 @@ end
 
 #### C2. same, with the opt-in `@inline` on the algorithm ####
 @StepAlgorithm @inline function Metro1i(T, @managed(spins = fresh_spins()), @managed(rng = Xoshiro(1)), @managed(m = 0))
-    m += flip!(spins, rng, T, 0.0)
-    return (; m)
+    @update m += flip!(spins, rng, T, 0.0)
 end
 function w1_framework_inline(N)
     a = Anneal(N = N)

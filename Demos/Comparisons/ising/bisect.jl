@@ -2,8 +2,7 @@
 using Printf, Random, StatefulAlgorithms
 include(joinpath(@__DIR__, "kernel.jl"))
 @StepAlgorithm function MetroC(@managed(spins = fresh_spins()), @managed(rng = Xoshiro(1)), @managed(m = 0))
-    m += flip!(spins, rng, 2.0, 0.0)
-    return (; m)
+    @update m += flip!(spins, rng, 2.0, 0.0)
 end
 @noinline function hand_loop(spins, rng, N)
     m = 0

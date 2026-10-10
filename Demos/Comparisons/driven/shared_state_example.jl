@@ -8,10 +8,9 @@ include(joinpath(@__DIR__, "framework.jl")); include(joinpath(@__DIR__, "sciml.j
 @StepAlgorithm function GrowingKick(u, nacc, stale, snaps, @managed(last = 0))
     if nacc != last && nacc % KICK_EVERY == 0
         u[PARAMS.N+1] += KICK * (1 + length(snaps) / 100)      # reads the checkpointer's list
-        stale = true
+        @update stale = true
     end
-    last = nacc
-    return (; last, stale)
+    @update last = nacc
 end
 
 function package_growing()
@@ -20,8 +19,8 @@ function package_growing()
         @alias integ = integ
         @alias ckpt = ckpt
         GrowingKick(u = integ.u, nacc = integ.nacc, stale = integ.stale, snaps = ckpt.snaps)   # <- the new line
-        F = SineDrive(t = integ.t)
-        integ(F = F)
+        SineDrive(t = integ.t)
+        integ(F = @state(SineDrive).F)
         ckpt(u = integ.u, t = integ.t, dt = integ.dt, nacc = integ.nacc)
     end
     la = StatefulAlgorithms.init(resolve(experiment), Init(integ; u0 = U0, par = PARAMS, rtol = RTOL))

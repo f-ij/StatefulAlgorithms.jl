@@ -5,11 +5,12 @@ StatefulAlgorithms.@StepAlgorithm function InspectSource(
     @inputs((; seed::Int = 1))
 )
     value = seed + counter
-    return (; counter = counter + 1, value)
+    @update counter += 1
+    return value
 end
 
 StatefulAlgorithms.@StepAlgorithm function InspectScale(value, factor)
-    return (; scaled = factor * value)
+    return factor * value
 end
 
 StatefulAlgorithms.@StepAlgorithm function InspectSink(
@@ -17,7 +18,7 @@ StatefulAlgorithms.@StepAlgorithm function InspectSink(
     @managed(log = Int[])
 )
     push!(log, value)
-    return (; last = value)
+    return value
 end
 
 StatefulAlgorithms.@StepAlgorithm function InspectOscillator(
@@ -27,10 +28,10 @@ StatefulAlgorithms.@StepAlgorithm function InspectOscillator(
     @managed(trajectory = Float64[]);
     @inputs((; dt = 0.1))
 )
-    velocity = velocity - dt * state
-    state = state + dt * velocity
+    @update velocity = velocity - dt * state
+    @update state = state + dt * velocity
     push!(trajectory, state)
-    return (; state, velocity)
+    return
 end
 
 StatefulAlgorithms.@StepAlgorithm function InspectDamper(
@@ -39,9 +40,9 @@ StatefulAlgorithms.@StepAlgorithm function InspectDamper(
     trajectory,
     @managed(damp = 0.05)
 )
-    velocity = velocity * (1 - damp)
+    @update velocity = velocity * (1 - damp)   # the oscillator's, shared with `Share`
     push!(trajectory, state)
-    return (; velocity)
+    return
 end
 
 function print_report(title, algo; inputs = (;), steps = false)

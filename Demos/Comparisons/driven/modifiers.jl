@@ -73,39 +73,36 @@ end
     else
         nrej += 1; dt = dtt * min(1.0, fac)
     end
-    return (; t, dt, nacc, nrej, Fk, stale)
+    @update t, dt, nacc, nrej, Fk, stale
 end
 
 @StepAlgorithm function DampingRamp(t, par, stale)
     γ = gamma_at(t)
     if γ != par.γ
-        par = ChainParams(par.N, par.a, par.b, par.c, γ)
-        stale = true
+        @update par = ChainParams(par.N, par.a, par.b, par.c, γ)
+        @update stale = true
     end
-    return (; par, stale)
+    return
 end
 
 @StepAlgorithm function ToleranceSchedule(t, rtol)
-    rtol = rtol_at(t)
-    return (; rtol)
+    @update rtol = rtol_at(t)
 end
 
 @StepAlgorithm function StateKick(u, nacc, stale, @managed(last = 0))
     if nacc != last && nacc % KICK_EVERY == 0
         u[PARAMS.N+1] += KICK
-        stale = true
+        @update stale = true
     end
-    last = nacc
-    return (; last, stale)
+    @update last = nacc
 end
 
 @StepAlgorithm function NoiseKick(u, nacc, stale, @managed(rng = Xoshiro(7)), @managed(last = 0))
     if nacc != last && nacc % NOISE_EVERY == 0
         @inbounds for i in 1:PARAMS.N; u[PARAMS.N+i] += 0.001 * (rand(rng) - 0.5); end
-        stale = true
+        @update stale = true
     end
-    last = nacc
-    return (; last, stale)
+    @update last = nacc
 end
 
 function modified_setup(mods)

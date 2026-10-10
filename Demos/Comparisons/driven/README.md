@@ -136,8 +136,8 @@ experiment = @CompositeAlgorithm begin
     StateKick(u = integ.u, nacc = integ.nacc, stale = integ.stale)
     DampingRamp(t = integ.t, par = integ.par, stale = integ.stale)
     ToleranceSchedule(t = integ.t, rtol = integ.rtol)
-    F = SineDrive(t = integ.t)
-    integ(F = F)
+    SineDrive(t = integ.t)
+    integ(F = @state(SineDrive).F)
     Checkpointer(u = integ.u, t = integ.t, dt = integ.dt, nacc = integ.nacc)
 end
 la = init(resolve(experiment), Init(integ; u0 = U0, par = PARAMS, rtol = RTOL))
