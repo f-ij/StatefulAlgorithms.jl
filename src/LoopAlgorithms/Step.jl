@@ -169,8 +169,8 @@ the two cases keep their own types.
     Stepped = Core.Compiler.return_type(_step!, Tuple{ChildType, CursorType, LoopContextType, WiringViewType, NamespaceType, ProcessType, LifetimeType})
     Target = _conditional_loopcontext_type(LoopContextType, Stepped)
     Target === Nothing && return run ? (@inline _step!(child, cursor, lc, wiring, namespace, process, lifetime)) : lc
-    stepped = run ? (@inline _step!(child, cursor, lc, wiring, namespace, process, lifetime)) : lc
-    return @inline _as_conditional(stepped, Target)
+    run && return @inline _as_conditional((@inline _step!(child, cursor, lc, wiring, namespace, process, lifetime)), Target)
+    return @inline _as_conditional(lc, Target)
 end
 
 """
