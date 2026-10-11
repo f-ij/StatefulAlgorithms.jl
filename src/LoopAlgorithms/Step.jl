@@ -97,24 +97,39 @@ end
 
 """
 The expressions that repeat a nested plan inside a routine, written inline: as `_subroutine_step!`, with the nested
-plan's step in place of the `_step!` call. Its runtime context has the same type before and after each repeat (the
-nested plan removes its own returns when it ends), so `lc` keeps one type in the loop.
+plan's step in place of the `_step!` call. The repeats carry only the persistent fields the nested plan writes, as the
+loops do (see src/Context/Carried/Carry.jl), and the runtime context, which has the same type before and after each
+repeat (the nested plan removes its own returns when it ends).
 """
 function _inline_routine_child_exprs(ChildType::Type, child, child_cursor, child_wiring, namespace_expr, lc, routine_cursor, i, repeat_value)
     resume_point, count, lidx, done = gensym(:resume_point), gensym(:count), gensym(:lidx), gensym(:done)
-    # Each copy of the step is generated on its own: a nested routine's code has labels, which must not repeat.
-    step() = _child_step_exprs(ChildType, child, child_cursor, child_wiring, namespace_expr, lc)
+    start_persistent, carried, runtime = gensym(:start_persistent_context), gensym(:carried), gensym(:runtime_context)
+    # One repeat: the nested plan stepped with the carried fields, in its own `LoopContext` variable. Each copy is
+    # generated on its own: a nested routine's code has labels, which must not repeat.
+    function repeat_once()
+        stepped = gensym(:stepped_lc)
+        return Any[:(local $stepped = @inline withcontexts($lc, (@inline with_carried($start_persistent, $carried)), $runtime)),
+                   _child_step_exprs(ChildType, child, child_cursor, child_wiring, namespace_expr, stepped)...,
+                   :($runtime = @inline getruntime($stepped)),
+                   :($carried = @inline next_carried($carried, (@inline getpersistent($stepped)))),
+                   :(@inline tick!(process))]
+    end
     stop_after(idx_expr, next_expr) = quote
-        if @inline routine_breakcondition($repeat_value, lifetime, process, (@inline getpersistent($lc)), $idx_expr)
-            if !(@inline _routine_local_breakcondition($repeat_value, process, (@inline getpersistent($lc)), $idx_expr))
+        if @inline routine_breakcondition($repeat_value, lifetime, process, (@inline with_carried($start_persistent, $carried)), $idx_expr)
+            if !(@inline _routine_local_breakcondition($repeat_value, process, (@inline with_carried($start_persistent, $carried)), $idx_expr))
                 @inline set_resume_point!($routine_cursor, $i, $next_expr)
             end
             $(Expr(:symbolicgoto, done))
         end
     end
     once = repeat_value isa Repeat && repeats(repeat_value) == 1
-    body = Any[:(local $resume_point = @inline get_resume_point($routine_cursor, $i))]
-    first_repeat = Any[step()..., :(@inline tick!(process)), stop_after(resume_point, :($resume_point + 1))]
+    body = Any[:(local $resume_point = @inline get_resume_point($routine_cursor, $i)),
+               :(local $start_persistent = @inline getpersistent($lc)),
+               :(local $runtime = @inline getruntime($lc)),
+               # The fields the nested plan writes (its `_writes`, nested plans inline: not `create_carried`, which asks
+               # what the nested plan's `_step!` returns, from inside this `_step!`).
+               :(local $carried = @inline _written_values($start_persistent, (@inline _writes($child, $child_cursor, $start_persistent, (@inline runtime_type(typeof($lc))), $child_wiring, $namespace_expr, process, lifetime))))]
+    first_repeat = Any[repeat_once()..., stop_after(resume_point, :($resume_point + 1))]
     if once
         push!(body, :(if $resume_point <= 1; $(first_repeat...); end))
     else
@@ -123,12 +138,12 @@ function _inline_routine_child_exprs(ChildType::Type, child, child_cursor, child
             $(first_repeat...)
             for $lidx in ($resume_point + 1):$count
                 $(stop_after(lidx, lidx))
-                $(step()...)
-                @inline tick!(process)
+                $(repeat_once()...)
             end
         end))
     end
     push!(body, Expr(:symboliclabel, done))
+    push!(body, :($lc = @inline withcontexts($lc, (@inline with_carried($start_persistent, $carried)), $runtime)))
     return body
 end
 
@@ -224,6 +239,14 @@ function _conditional_value_expr(Target::Type, source, SourceType)
 end
 
 """
+The runtime context type after a plan node ends, given the type at its end and the type of its wiring view: without
+the node's returns (see `leave_scope`).
+"""
+Base.@assume_effects :foldable _runtime_context_type_after_leaving(@nospecialize(RuntimeContextType), @nospecialize(WiringViewType)) =
+    RuntimeContextType <: ProcessContext ? Core.Compiler.return_type(_strip_returns, Tuple{RuntimeContextType, Val{node_resets(_view_node(WiringViewType))}}) : Any
+_view_node(::Type{<:PlanWiringView{Root, WiringType}}) where {Root, WiringType} = WiringType
+
+"""
     _children_writes_expr(PlanType, repeat_values)
 
 The body of `_writes` for a plan that steps its children in order (a composite, routine or threaded composite): the
@@ -252,15 +275,18 @@ function _children_writes_exprs!(exprs, PlanType::Type, repeat_values, plan, cur
         setup, child, child_cursor, child_wiring = _child_setup_exprs(algos, cursor, wiring, i)
         append!(exprs, setup)
         repeated = !isnothing(repeat_values) && !(repeat_values[i] isa Repeat && repeats(repeat_values[i]) == 1)
-        repeated && push!(exprs, :(runtime_context_type = @inline _runtime_context_type_over_repeats($child, $child_cursor, persistent_context, runtime_context_type, $child_wiring, $child_namespace, process, lifetime)))
         if _steps_inline(ChildType)
-            # The nested plan's writes, inline; its runtime context type afterwards is what its step returns.
+            # The nested plan's writes, inline, with the runtime context type passed through its children; when it
+            # ends its returns are removed, so the type afterwards is the one before it, also over repeats. Nothing
+            # here asks what a plan's `_step!` returns: that would be the self-call inference stops following.
             nested_repeats = ChildType <: Routine ? ChildType.parameters[2] : nothing
             _children_writes_exprs!(exprs, ChildType, nested_repeats, child, child_cursor, child_wiring)
+            push!(exprs, :(runtime_context_type = @inline _runtime_context_type_after_leaving(runtime_context_type, typeof($child_wiring))))
         else
+            repeated && push!(exprs, :(runtime_context_type = @inline _runtime_context_type_over_repeats($child, $child_cursor, persistent_context, runtime_context_type, $child_wiring, $child_namespace, process, lifetime)))
             push!(exprs, :(writes = @inline _union_writes(writes, (@inline _writes($child, $child_cursor, persistent_context, runtime_context_type, $child_wiring, $child_namespace, process, lifetime)))))
+            push!(exprs, :(runtime_context_type = @inline _runtime_context_type_after_node_step($child, $child_cursor, persistent_context, runtime_context_type, $child_wiring, $child_namespace, process, lifetime)))
         end
-        push!(exprs, :(runtime_context_type = @inline _runtime_context_type_after_node_step($child, $child_cursor, persistent_context, runtime_context_type, $child_wiring, $child_namespace, process, lifetime)))
     end
     return exprs
 end
