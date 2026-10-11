@@ -77,11 +77,12 @@ ru_true() = true
 
         seen = Float64[]
         @test_logs (:warn, r"`RUAddOne!` updates its argument `val`, so it changes `x` here") run(@CompositeAlgorithm(begin
-            local x = 0.0
+            local x
+            x = 0.0
             RUAddOne!(x)
             ru_record!(seen, x)
         end); repeats = 3)
-        @test seen == [1.0, 2.0, 3.0]
+        @test seen == [1.0, 1.0, 1.0]
 
         seen = Float64[]
         @test_logs (:warn, r"so it changes `y` here") run(@CompositeAlgorithm(begin
@@ -96,19 +97,20 @@ ru_true() = true
         seen = Float64[]
         @test_logs run(@CompositeAlgorithm(begin
             @mutable y = RUCounter()
-            @mutable local x = 0.0
+            @mutable local x
+            x = 0.0
             RUAddOne!(y)
             RUAddTwo!(x)
             ru_record_sum!(seen, y, x)
         end); repeats = 2)
-        @test seen == [5.0, 9.0]
+        @test seen == [5.0, 7.0]
     end
 
     @testset "One algorithm at two positions: shared state, each position its own arguments" begin
         seen = Any[]
         p = InlineProcess(@CompositeAlgorithm(begin
-            @mutable local y = 10.0
-            @mutable local x = 0.0
+            @mutable y = 10.0
+            @mutable x = 0.0
             RUAddOne!(y)
             RUAddOne!(x)
             c1 = RUCounter()
@@ -116,7 +118,7 @@ ru_true() = true
             ru_record!(seen, y, x, c1, c2)
         end); repeats = 2)
         run(p)
-        @test seen == [(11.0, 1.0, 2.0, 4.0), (12.0, 2.0, 6.0, 8.0)]
+        @test seen == [(11.0, 1.0, 2.0, 4.0), (11.0, 1.0, 6.0, 8.0)]
         @test SAru.getcontext(p)[RUCounter].count == 4   # one state, stepped twice per step
     end
 

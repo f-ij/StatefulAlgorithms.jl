@@ -162,15 +162,19 @@ a local while inference finds out what gets written to it.
 =#
 
 """Inference-only stand-in for an untyped local while its type is worked out; never constructed."""
-struct LocalProbe{T, Empty, Written} end   # T: the local's type so far; Written: the types actually written (for error messages)
+struct LocalProbe{T, Empty} end   # T: the local's type so far; Empty: `UndefInitializer` or `Nothing`, what it is before its first value
 @inline subcontext_view_value(::LocalProbe{T, UndefInitializer}, view::V) where {T, V<:SubContextView} =
     T === Union{} ? _throw_undef() : _probe_value(T)
 @inline subcontext_view_value(::LocalProbe{T, Nothing}, view::V) where {T, V<:SubContextView} = _probe_value(Union{Nothing, T})
 _probe_value(::Type{T}) where {T} = Base.inferencebarrier(nothing)::T
 
-"""Inference only: a write to a probe records the written type and keeps the field a probe."""
-@generated _probe_write(::LocalProbe{T, Empty, Written}, ::V) where {T, Empty, Written, V} =
-    :($(LocalProbe{_join_written(T, V, Empty), Empty, Union{Written, Empty === Nothing ? Base.typesplit(V, Nothing) : V}}()))
+"""
+Inference only: a write to a probe joins the written type into the local's type and keeps the field a probe. A write
+of a type the local already has leaves the probe's type as it is, so a step that may or may not write it (a child on
+a schedule) gives one type, not two.
+"""
+@generated _probe_write(::LocalProbe{T, Empty}, ::V) where {T, Empty, V} =
+    :($(LocalProbe{_join_written(T, V, Empty), Empty}()))
 function _join_written(T, V, Empty)
     Empty === Nothing && (V = Base.typesplit(V, Nothing))   # writing `nothing` to a `nothing` local is always allowed
     V === Union{} && return T
@@ -194,7 +198,7 @@ end
 """Runtime context type with every untyped local replaced by a probe that has seen no writes."""
 @generated function _probe_runtime_type(::Type{RC}) where {RC<:ProcessContext}
     return _replace_local_types(RC) do name, T
-        _is_untyped_local(T) ? LocalProbe{Union{}, T, Union{}} : T
+        _is_untyped_local(T) ? LocalProbe{Union{}, T} : T
     end
 end
 
@@ -210,7 +214,7 @@ function _probe_joined_type(::Type{RC}, returned) where {RC<:ProcessContext}
             W = fieldtype(_local_data_type(R), name)
             T = _join_written(T, W <: LocalProbe ? W.parameters[1] : W, Empty)
         end
-        return LocalProbe{T, Empty, Union{}}
+        return LocalProbe{T, Empty}
     end
 end
 
@@ -239,8 +243,8 @@ function _local_type_error(::Type{R}, checking::Bool, plan, cursor, persistent_c
     culprits = String[]
     _find_local_type_culprits!(culprits, R, checking, plan, cursor, persistent_context, wiring, process, lifetime)
     isempty(culprits) && push!(culprits, checking ?
-        "A local declared without a value (or as `nothing`) changes type after its first value, but no single step could be pinned down. For now this is not allowed: such a local takes the type of its first value and has to keep it. Declare the locals with a type (for example `Local(x = 0.0)`)." :
-        "The type of a local declared without a value (or as `nothing`) cannot be found: the plan's step cannot be inferred. Declare the locals with a type (for example `Local(x = 0.0)`).")
+        "A local declared without a value (or as `nothing`) changes type after its first value, but no single step could be pinned down. For now this is not allowed: such a local takes the type of its first value and has to keep it. Declare the locals with a type (`local x::Float64`)." :
+        "The type of a local declared without a value (or as `nothing`) cannot be found: the plan's step cannot be inferred. Declare the locals with a type (`local x::Float64`).")
     error(join(culprits, "\n\n"))
 end
 
@@ -299,7 +303,7 @@ function _local_type_problems(label, ::Type{R}, ::Type{Returned}, ::Type{W}, che
             push!(problems, string(label, " takes the local `", name, "` as input with type ", first_type,
                 " and emits it with a different type, ", emitted, ". For now this is not allowed for locals declared without a value (or as `nothing`): ",
                 "they take the type of their first value and have to keep it. Emit `", name, "` as ", first_type,
-                " in that step, or give `", name, "` an initial ", first_type, " value in its `Local` declaration."))
+                " in that step, or declare it with the type it should have (`local ", name, "::T`)."))
         end
     end
     return unique(problems)

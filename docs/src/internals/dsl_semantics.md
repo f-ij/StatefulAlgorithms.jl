@@ -68,7 +68,7 @@ Every bare name a statement reads is one of these. The kind decides where the va
 |---|---|---|---|---|
 | state field | `@state x = v`, `@state x`; an algorithm's `init` (its `@managed` fields) | persistent: the process | kept, and saved | persistent context, under the block's state (`_state_1`, `_state_2`, ...) or the algorithm's namespace |
 | input | `@input x`, `@input x::T`, `@input x = v` | the run, read-only | kept | runtime context, `_inputs` |
-| declared local | `local x`, `local x::T`, `local x = v`, `local x::T = v` | the run | kept | runtime context, `_declared_locals` |
+| declared local | `local x`, `local x::T` | the run | kept | runtime context, `_declared_locals` |
 | captured return | `y = f(…)` or `y = Algo(…)`: what a call or an algorithm returns, and `x = v` | one step of its block | dropped | runtime context, `_captured_returns` |
 | alias | `@alias a = Algo(…)` | build only | – | macro time: `a` names the algorithm in later statements |
 | context alias | `@context c = nested()` | build only | – | macro time: `c.sub.field` names fields of a nested plan |
@@ -107,13 +107,9 @@ its returns are reset on the same steps its readers run.
 | `@CompositeAlgorithm name(a, b::T = v) begin … end` | A header: assigns the plan to `name`, and each argument is an `@input` of the block (`a`, `b::T = v`). Keyword arguments too. |
 | `local x` | A declared local without a value: its type is the type of what is first assigned to it (decided before the run). Reading it before that is an `UndefRefError`. |
 | `local x::T` | A declared local of type `T` without a value. |
-| `local x = v` | A declared local starting at `v`, a literal or an outside name taken at build. |
-| `local x = f(…)` | A declared local, and the step `x = f(…)`: assigned every time the statement runs, as in a Julia loop body. |
-| `local x = nothing` | A declared local that reads `nothing` until something is assigned to it. |
-| `local x::T = v` | A declared local of type `T` starting at `convert(T, v)`. |
 | `@alias a = Algo(…)` | Names an algorithm for later statements: `a(…)` runs it, `a.field` reads its field. |
 | `(; a, b) = @state(X)` | From here on, `a` and `b` name the fields `a`, `b` of `X`'s state (`X` an alias or an algorithm of the block). `@state(X).a` reads one inline. |
-| `@mutable y = …`, `@mutable local x …` | The statement, and: an algorithm may update `y` (see [What a step's returns do](#What-a-step's-returns-do)). Changes nothing else; it silences the warning. |
+| `@mutable y = …`, `@mutable local x` | The statement, and: an algorithm may update `y` (see [What a step's returns do](#What-a-step's-returns-do)). Changes nothing else; it silences the warning. |
 | `@context c = nested()` | Runs `nested()` like any statement, and names it so later statements can write `c.sub.field`. |
 
 A declared local's starting value is taken from the plan at the start of every run. Starting values are literals
@@ -155,7 +151,7 @@ Which name a statement's arguments read:
 | Form | Meaning |
 |---|---|
 | (none) | In a composite, every step; in a routine, once per step. |
-| `y = @every n f(…)` / `@interval n` | In a composite: runs in the steps whose number is a multiple of `n`. |
+| `y = @every n f(…)` / `@interval n` | In a composite: runs in the steps whose number is a multiple of `n`. `y` has to be declared first (`local y`), unless `n` is 1. |
 | `y = @repeat n f(…)` | In a routine: runs `n` times in a row. Also `@repeat Until(cond, x) …` and the other lifetimes. |
 | `@repeat n begin … end` | A nested block, run `n` times in a row each time the parent runs it. |
 
@@ -209,8 +205,8 @@ Which values of the block an update may change:
 - Declaring a name the block already has (`@state x` then `local x`).
 - Assigning an `@input`.
 - `x = y` with `y` a block name: a bare name is not a step. Copy it with a call, `x = copy(y)`.
-- A captured return read in a step where it was not assigned: `y = @every 3 f()` read by a statement that runs every
-  step. Declare `y` (`local y`, `local y = nothing`) to keep it between steps.
+- A declaration with a value (`local x = 0.0`): declare `local x` and assign it, or make it state, `@state x = 0.0`.
+- An assignment on a schedule to a name the block does not have yet: `y = @every 3 f()` without `local y` before it.
 - `local x` inside `@include_if` or `@context`.
 - A schedule on the left (`@every 3 y = f()`), `@finally` in a nested block, a route that reads a local or return
   no block declares or captures.

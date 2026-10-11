@@ -31,6 +31,7 @@ n = 5
 composite = @CompositeAlgorithm begin
     @state seed = 3
     @alias source = ExampleSourceAlgo
+    local doubled, combined          # assigned every n steps, so declared first
 
     (; produced, passthrough) = source(seed = seed)
     doubled = @interval n scaled_double_example(produced; scale = 2)

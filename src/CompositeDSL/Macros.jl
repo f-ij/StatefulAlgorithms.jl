@@ -46,9 +46,6 @@ function _dsl_build_loopalgorithm(::Val{Name}, algos, specification, states, opt
         push!(kept_specification, specification[idx])
     end
     isempty(processalgos) && error("`@$Name` requires at least one algorithm entry.")
-    if iscomposite(laType)
-        _dsl_check_scheduled_reads(processalgos, kept_specification, Any[options...])
-    end
 
     processalgos_tuple = Tuple(processalgos)
     schedule_tuple = Tuple(kept_specification)
@@ -298,8 +295,9 @@ Assignments:
 - `state_field = captured_value`
 
 Declared locals (kept between steps; a value a statement assigns lives for one step):
-- `local x`, `local x::T`, `local x = value`, `local x = f(...)`
+- `local x`, `local x::T` (no value: `local x = v` is an error; a value kept between steps is `@state x = v`)
 - without `local`, `x = 0.0` assigns `x` every step, like `x = f(...)`
+- an assignment on a schedule (`y = @every 3 f()`) needs `y` to exist first: `local y`
 
 ProcessAlgorithm routes:
 - `x = Algo(input = produced)`
