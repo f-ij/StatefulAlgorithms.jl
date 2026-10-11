@@ -16,9 +16,9 @@ function exchange_stepper(algo, context)
     process = SA.LoopRunProcess(lifetime)
     plan = SA.getplan(algo)
     cursor = SA.loop_cursor(plan, Val(false))
-    runtimecontext = SA._empty_context()
+    runtime_context = SA._empty_context()
     wiring = SA.PlanWiringView(SA.getwiring(plan))
-    return ctx -> SA.getcontext(SA._step!(plan, cursor, SA.LoopContext(ctx, runtimecontext), wiring, SA.Namespace{nothing}(), process, lifetime))
+    return ctx -> SA.getpersistent(SA._step!(plan, cursor, SA.LoopContext(ctx, runtime_context), wiring, SA.Namespace{nothing}(), process, lifetime))
 end
 
 @testset "ContextExchange buffers interactive updates" begin

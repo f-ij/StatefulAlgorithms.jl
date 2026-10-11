@@ -73,31 +73,86 @@ function _with_parts(::Type{RC}, parts) where {RC<:ProcessContext}
     return ProcessContext{NamedTuple{Tuple(names), Tuple{types...}}, fieldtype(RC, :reg)}
 end
 
+#=
+Typing the runtime context before the loop: the functions below return types (their names say `type`), except
+`_runtime_context_typed_before_loop`, which returns the runtime context value the loop starts with.
+
+An algorithm (or call) in a plan is stepped with a `LoopContext`; inference says what `LoopContext` type its `_step!`
+returns, and so what it writes into the runtime context: its returns, and values for declared locals without a value.
+=#
+
 """
-The runtime context type after one step with the context type `RC`: its untyped locals widened by what was written
-(Locals.jl) and its output slots joined with what was returned. `RT` is what inference says one plan step returns;
-`Nothing` when it could not tell.
+The runtime context type after one step, given the type `RuntimeContextType` before it and `stepped`, what inference
+says one step returns (`LoopContext` types): declared locals without a value get the types written to them (Locals.jl),
+and every return gets a slot for the types written to it. `Nothing` when inference could not tell.
 """
-@generated function _next_runtime_type(::Type{RC}, ::Type{RT}) where {RC<:ProcessContext, RT}
-    returned = _inferred_contexts(RT)
+@generated function _runtime_context_type_with_step_writes(::Type{RuntimeContextType}, ::Type{Stepped}) where {RuntimeContextType<:ProcessContext, Stepped}
+    returned = _inferred_contexts(Stepped)
     returned === nothing && return :(Nothing)
-    return _with_output_slots(_probe_joined_type(RC, returned), returned)
+    return _with_output_slots(_probe_joined_type(RuntimeContextType, returned), returned)
 end
 
 """
-The runtime context type after the first plan step from `R`, inferred leaf by leaf (`_runtime_by_leaves`): the
-returns get their slots, and the untyped locals what is written to them. `Nothing` when inference cannot tell.
+The expressions that pass the runtime context type `runtime_context_type` through every algorithm (and call) under the
+plan of type `PlanType`, in the order they run, appended to `exprs`: one `_runtime_context_type_after_node_step` per
+algorithm, with the cursor and wiring view the plan's `_step!` would give it. Nested plans are walked here, while the
+code is generated, so inference never sees a plan's `_step!` calling itself.
 """
-@inline _first_runtime(::Type{R}, plan::PL, cursor::CU, context::C, wiring::W, process::P, lifetime::LT) where {R, PL, CU, C, W, P, LT} =
-    _next_runtime_type(R, _returned_loopcontexts(C, (@inline _runtime_by_leaves(plan, cursor, context, R, wiring, process, lifetime)), W))
+function _per_algorithm_inference_exprs!(exprs, PlanType::Type, plan, cursor, wiring)
+    children = fieldtype(PlanType, :funcs)
+    namespaces = PlanType.parameters[3]
+    for i in 1:fieldcount(children)
+        child, child_cursor, child_wiring = gensym(:child), gensym(:cursor), gensym(:wiring)
+        push!(exprs, :(local $child = getfield(getfield($plan, :funcs), $i)),
+                     :(local $child_cursor = @inline child_loop_cursor($cursor, Val($i))),
+                     :(local $child_wiring = @inline child_wiring_view($wiring, Val($i))))
+        if fieldtype(children, i) <: AbstractPlan
+            _per_algorithm_inference_exprs!(exprs, fieldtype(children, i), child, child_cursor, child_wiring)
+        else
+            push!(exprs, :(runtime_context_type = @inline _runtime_context_type_after_node_step($child, $child_cursor, persistent_context, runtime_context_type, $child_wiring, $(fieldtype(namespaces, i))(), process, lifetime)))
+        end
+    end
+    return exprs
+end
 
-"""The `LoopContext` types for the runtime type(s) `RC` (see `_inferred_contexts`); `Any` when `RC` is not known."""
-Base.@assume_effects :foldable _returned_loopcontexts(@nospecialize(C), @nospecialize(RC), @nospecialize(W)) =
-    all(T -> T isa DataType && T <: ProcessContext, Base.uniontypes(RC)) ? _loop_context_type(C, RC, W) : Any
+"""
+    _runtime_context_type_after_step_per_algorithm(plan, cursor, persistent_context, RuntimeContextType, wiring, process, lifetime)
 
-"""The runtime context type after one plan step from `R` (see `_next_runtime_type`)."""
-@inline _widen_runtime(::Type{R}, plan::PL, cursor::CU, context::C, wiring::W, process::P, lifetime::LT) where {R, PL, CU, C, W, P, LT} =
-    _next_runtime_type(R, Core.Compiler.return_type(_probe_step, Tuple{PL, CU, LoopContext{C, R, wiring_parent(W)}, W, P, LT}))
+The runtime context type after one step of `plan`, given the type `RuntimeContextType` before it, found by inferring
+each algorithm (and call) of the plan on its own, in the order they run (`_per_algorithm_inference_exprs!`). `Any` when
+inference cannot tell.
+
+Why not infer the plan's `_step!` as a whole: a nested plan's `_step!` is the same method, called with a runtime
+context type that has grown (every algorithm before it added its returns). Julia's inference stops following a method
+that calls itself with a growing argument type, and then answers `Any` for the whole step. Inferring one algorithm at a
+time, with the nested plans unrolled in one generated body, avoids that. Only the first round of typing needs it: once
+every return has a slot, the runtime context type no longer grows within a step (`_runtime_context_type_after_whole_step`).
+"""
+@inline @generated function _runtime_context_type_after_step_per_algorithm(plan::PlanType, cursor::CursorType, persistent_context::PersistentContextType, ::Type{RuntimeContextType}, wiring::WiringViewType, process::ProcessType, lifetime::LifetimeType) where {PlanType<:AbstractPlan, CursorType, PersistentContextType, RuntimeContextType, WiringViewType, ProcessType, LifetimeType}
+    exprs = Any[:(runtime_context_type = RuntimeContextType)]
+    _per_algorithm_inference_exprs!(exprs, PlanType, :plan, :cursor, :wiring)
+    push!(exprs, :(return runtime_context_type))
+    return Expr(:block, exprs...)
+end
+
+"""
+The runtime context type after the first step, from `RuntimeContextType` (its declared locals without a value as
+probes, see Locals.jl), inferred per algorithm (`_runtime_context_type_after_step_per_algorithm`): every return gets a
+slot, every declared local without a value the type written to it. `Nothing` when inference cannot tell.
+"""
+@inline _runtime_context_type_after_first_step(::Type{RuntimeContextType}, plan::PlanType, cursor::CursorType, persistent_context::PersistentContextType, wiring::WiringViewType, process::ProcessType, lifetime::LifetimeType) where {RuntimeContextType, PlanType, CursorType, PersistentContextType, WiringViewType, ProcessType, LifetimeType} =
+    _runtime_context_type_with_step_writes(RuntimeContextType, _returned_loopcontexts(PersistentContextType, (@inline _runtime_context_type_after_step_per_algorithm(plan, cursor, persistent_context, RuntimeContextType, wiring, process, lifetime)), WiringViewType))
+
+"""The `LoopContext` types for the runtime context type(s) `RuntimeContextType`; `Any` when those are not known."""
+Base.@assume_effects :foldable _returned_loopcontexts(@nospecialize(PersistentContextType), @nospecialize(RuntimeContextType), @nospecialize(WiringViewType)) =
+    all(T -> T isa DataType && T <: ProcessContext, Base.uniontypes(RuntimeContextType)) ? _loop_context_type(PersistentContextType, RuntimeContextType, WiringViewType) : Any
+
+"""
+The runtime context type after one step from `RuntimeContextType`, inferring the plan's step as a whole (see
+`_runtime_context_type_with_step_writes`). Used once every return has a slot.
+"""
+@inline _runtime_context_type_after_whole_step(::Type{RuntimeContextType}, plan::PlanType, cursor::CursorType, persistent_context::PersistentContextType, wiring::WiringViewType, process::ProcessType, lifetime::LifetimeType) where {RuntimeContextType, PlanType, CursorType, PersistentContextType, WiringViewType, ProcessType, LifetimeType} =
+    _runtime_context_type_with_step_writes(RuntimeContextType, Core.Compiler.return_type(_probe_step, Tuple{PlanType, CursorType, LoopContext{PersistentContextType, RuntimeContextType, wiring_parent(WiringViewType)}, WiringViewType, ProcessType, LifetimeType}))
 
 """Whether the declared locals of two runtime context types have the same types."""
 _same_locals(::Type{A}, ::Type{B}) where {A, B} = _local_data_type(A) === _local_data_type(B)
@@ -122,35 +177,37 @@ that could not be typed before the run) replaces the field as `merge` does.
 end
 
 """
-    _settle_runtime(plan, cursor, context, runtimecontext, wiring, process, lifetime)
+    _runtime_context_typed_before_loop(plan, cursor, persistent_context, runtime_context, wiring, process, lifetime)
 
-The runtime context the loop starts with, typed before the first step (see the note above). All of it is resolved while
-the run is compiled; nothing of it runs per step.
+The runtime context the loop starts with: `runtime_context` with its types decided before the first step, so it has
+the same type in every step. Every return gets a typed slot (unset), every declared local without a value the type of
+what is written to it. Returns a value; all of it is worked out while the run is compiled, nothing of it runs per step.
 
-1. Untyped declared locals become probes; inference runs one step, leaf by leaf (`_first_runtime`), and reads off
-   what is written to each local and what is returned. The locals get their types, the returns typed slots.
-2. A second round, with these types, checks the rule that a declared local keeps its type after its first value
-   (an error otherwise, naming the step). It can still widen a return slot: a return computed from a local
-   (`v = f(y)`) is only known once the local's type is. With every slot in place, the step is inferred as a whole.
-3. If it did, a third round must not change anything. If the returns do not settle, or inference cannot tell, the
-   returns get no slots and take their types as written; entering a scope then removes them.
+1. The declared locals without a value become probes, and one step is inferred per algorithm
+   (`_runtime_context_type_after_first_step`): what is written to each declared local and what is returned. The
+   declared locals get their types, the returns typed slots.
+2. A second round, with these types, inferring the step as a whole, checks the rule that a declared local keeps the
+   type of its first value (an error otherwise, naming the step). It can still widen a return slot: a return computed
+   from a declared local (`v = f(y)`) is only known once that local's type is.
+3. If the second round changed something, a third round must not. If the returns do not settle, or inference cannot
+   tell, the returns get no slots and take their types as written; entering a scope then removes them.
 """
-@inline function _settle_runtime(plan, cursor, context, runtimecontext::RC, wiring, process, lifetime) where {RC<:ProcessContext}
-    step = (plan, cursor, context, wiring, process, lifetime)
-    untyped = _has_untyped_locals(RC)
-    no_writes_seen = _probe_runtime_type(RC)
-    first_round = _first_runtime(no_writes_seen, step...)
+@inline function _runtime_context_typed_before_loop(plan, cursor, persistent_context, runtime_context::RuntimeContextType, wiring, process, lifetime) where {RuntimeContextType<:ProcessContext}
+    step = (plan, cursor, persistent_context, wiring, process, lifetime)
+    has_locals_without_value = _has_untyped_locals(RuntimeContextType)
+    no_writes_seen = _probe_runtime_type(RuntimeContextType)
+    first_round = _runtime_context_type_after_first_step(no_writes_seen, step...)
     if first_round === Nothing
-        untyped && _local_type_error(no_writes_seen, false, step...)
-        return runtimecontext
+        has_locals_without_value && _local_type_error(no_writes_seen, false, step...)
+        return runtime_context
     end
-    second_round = _widen_runtime(first_round, step...)
-    untyped && !_same_locals(first_round, second_round) && _local_type_error(first_round, true, step...)
+    second_round = _runtime_context_type_after_whole_step(first_round, step...)
+    has_locals_without_value && !_same_locals(first_round, second_round) && _local_type_error(first_round, true, step...)
     settled = second_round === first_round ? first_round :
         second_round === Nothing ? Nothing :
-        _widen_runtime(second_round, step...) === second_round ? second_round : Nothing
-    settled === Nothing && return untyped ? (@inline _settled_runtime(runtimecontext, _without_returns(first_round))) : runtimecontext
-    return @inline _settled_runtime(runtimecontext, settled)
+        _runtime_context_type_after_whole_step(second_round, step...) === second_round ? second_round : Nothing
+    settled === Nothing && return has_locals_without_value ? (@inline _runtime_context_with_types(runtime_context, _without_returns(first_round))) : runtime_context
+    return @inline _runtime_context_with_types(runtime_context, settled)
 end
 
 _without_returns(::Type{R}) where {R<:ProcessContext} = _drop_parts(R, (:_captured_returns, :_subcontext_returns))
@@ -164,18 +221,18 @@ end
 _empty_slots_expr(::Type{T}) where {T<:NamedTuple} =
     :($T(($((fieldtype(T, n) <: NamedTuple ? _empty_slots_expr(fieldtype(T, n)) : :($(fieldtype(T, n))()) for n in fieldnames(T))...),)))
 
-"""`runtimecontext` with the types of `R`: untyped locals as unset `Maybe`s of their type, and return slots unset."""
-@inline @generated function _settled_runtime(runtimecontext::RC, ::Type{R}) where {RC<:ProcessContext, R<:ProcessContext}
-    exprs = Any[:(rc = runtimecontext)]
-    if _has_untyped_locals(RC)
-        push!(exprs, :(rc = @inline with_subcontext(rc, Val(:_declared_locals), SubContext{:_declared_locals}(_settled_locals(get_declared_locals(rc), $R)))))
+"""`runtime_context` with the types of `TypedRuntimeContextType`: declared locals without a value as unset `Maybe`s of their type, and every return slot unset."""
+@inline @generated function _runtime_context_with_types(runtime_context::RuntimeContextType, ::Type{TypedRuntimeContextType}) where {RuntimeContextType<:ProcessContext, TypedRuntimeContextType<:ProcessContext}
+    exprs = Any[:(typed = runtime_context)]
+    if _has_untyped_locals(RuntimeContextType)
+        push!(exprs, :(typed = @inline with_subcontext(typed, Val(:_declared_locals), SubContext{:_declared_locals}(_settled_locals(get_declared_locals(typed), $TypedRuntimeContextType)))))
     end
-    D = fieldtype(R, :subcontexts)
+    subcontexts = fieldtype(TypedRuntimeContextType, :subcontexts)
     for part in (:_captured_returns, :_subcontext_returns)
-        part in fieldnames(D) || continue
-        push!(exprs, :(rc = @inline with_subcontext(rc, Val($(QuoteNode(part))), $(fieldtype(D, part))($(_empty_slots_expr(getdatatype(fieldtype(D, part))))))))
+        part in fieldnames(subcontexts) || continue
+        push!(exprs, :(typed = @inline with_subcontext(typed, Val($(QuoteNode(part))), $(fieldtype(subcontexts, part))($(_empty_slots_expr(getdatatype(fieldtype(subcontexts, part))))))))
     end
-    push!(exprs, :(return rc))
+    push!(exprs, :(return typed))
     return Expr(:block, exprs...)
 end
 
@@ -187,15 +244,15 @@ function _unset_expr(::Type{T}, names, source) where {T<:NamedTuple}
 end
 
 """
-    _unset_returns(runtimecontext, Val(resets))
+    _unset_returns(runtime_context, Val(resets))
 
-`runtimecontext` with the returns in `resets` unset (`(; returns, owners)`, see `enter_scope`): the captured returns
+`runtime_context` with the returns in `resets` unset (`(; returns, owners)`, see `enter_scope`): the captured returns
 named in `returns`, and every subcontext return of the namespaces in `owners`. A slot is made unset; a return without
 one (not typed before the run) is removed.
 """
-@inline @generated function _unset_returns(runtimecontext::RC, ::Val{Resets}) where {RC<:ProcessContext, Resets}
+@inline @generated function _unset_returns(runtime_context::RC, ::Val{Resets}) where {RC<:ProcessContext, Resets}
     D = fieldtype(RC, :subcontexts)
-    exprs = Any[:(rc = runtimecontext)]
+    exprs = Any[:(rc = runtime_context)]
     if :_captured_returns in fieldnames(D)
         T = getdatatype(fieldtype(D, :_captured_returns))
         if any(in(fieldnames(T)), Resets.returns)

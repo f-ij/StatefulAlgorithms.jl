@@ -21,13 +21,13 @@ function with_typed(n)
     a = Unique(Counter()); b = Unique(Counter())
     t1, plan = ms(() -> stable_composite_typed(a, b, Tally, (1, 1, 1)))
     la = run(SA.init(resolve(plan)); repeats = n)
-    return t1, SA.getstoredcontext(la)[Tally].n
+    return t1, SA.getpersistentcontext(la)[Tally].n
 end
 function with_erased(n)
     a = Unique(Counter()); b = Unique(Counter())
     t1, plan = ms(() -> stable_composite(a, b, Tally, (1, 1, 1)))
     la = run(SA.init(resolve(plan)); repeats = n)
-    return t1, SA.getstoredcontext(la)[Tally].n
+    return t1, SA.getpersistentcontext(la)[Tally].n
 end
 with_typed(10); with_erased(10)
 @printf("%-6s %34s %34s\n", "call", "type-stable (generated), entry ms", "type-erased (@nospecialize), entry ms")
@@ -49,7 +49,7 @@ end
 function with_today(n)
     a = Unique(Counter()); b = Unique(Counter())
     la = run(SA.init(resolve(CompositeAlgorithm(a, b, Tally, (1, 1, 1)))); repeats = n)
-    SA.getstoredcontext(la)[Tally].n
+    SA.getpersistentcontext(la)[Tally].n
 end
 with_today(10)
 println()

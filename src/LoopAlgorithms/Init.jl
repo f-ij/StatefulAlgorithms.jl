@@ -4,8 +4,8 @@ Inputargs are given as a NamedTuple of (;algo_name => (; inputname1 = value1, ..
 """
 @inline function init(sa::IA, ic::I) where {IA<:IdentifiableAlgo,I<:InitContext}
     name = getkey(sa)
-    inputcontext = merge_into_subcontexts(getcontext(ic), (;name => (;_instance = sa)))
-    inputview = @inline view(withstored(ic, inputcontext), sa)
+    inputcontext = merge_into_subcontexts(getpersistent(ic), (;name => (;_instance = sa)))
+    inputview = @inline view(withpersistent(ic, inputcontext), sa)
     prepared = @inline init(getalgo(sa), inputview)
     return @inline replace(inputcontext, (;name => prepared))
 end
@@ -17,29 +17,29 @@ end
 end
 
 @inline function init(algo::A, ic::I) where {A<:ProcessAlgorithm,I<:InitContext}
-    return @inline init(algo, getcontext(ic))
+    return @inline init(algo, getpersistent(ic))
 end
 
 @inline function cleanup(algo::A, lc::L) where {A<:ProcessAlgorithm,L<:LoopContext}
-    cleaned = @inline cleanup(algo, getcontext(lc))
-    return @inline withstored(lc, cleaned)
+    cleaned = @inline cleanup(algo, getpersistent(lc))
+    return @inline withpersistent(lc, cleaned)
 end
 
 function init(algos::LA, inputcontext::C) where {LA<:LoopSpec,C<:AbstractContext}
     return @inline init(algos, InitContext(inputcontext, algos, Indefinite()))
 end
 
-"""The stored context that init of every registered algorithm and state builds from `ic`'s stored context."""
+"""The persistent context that init of every registered algorithm and state builds from `ic`'s persistent context."""
 function init(algos::LA, ic::I) where {LA<:LoopSpec,I<:InitContext}
     named_algos = @inline all_algos(getregistry(ic))
     initialized = @inline unrollreplace(ic, named_algos) do ic, named_algo
-        @inline withstored(ic, init(named_algo, ic))
+        @inline withpersistent(ic, init(named_algo, ic))
     end
-    return @inline getcontext(initialized)
+    return @inline getpersistent(initialized)
 end
 
-function cleanup(algos::LA, context) where {LA<:LoopSpec}
-    return @inline getcontext(cleanup(algos, LoopContext(context, _empty_context())))
+function cleanup(algos::LA, persistent_context) where {LA<:LoopSpec}
+    return @inline getpersistent(cleanup(algos, LoopContext(persistent_context, _empty_context())))
 end
 
 function cleanup(algos::LA, lc::L) where {LA<:LoopSpec,L<:LoopContext}

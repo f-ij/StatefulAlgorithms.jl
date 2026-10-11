@@ -74,7 +74,7 @@ const H = Ref{Any}(nothing)                       # handles live in an untyped s
 function go(approach, layout)
     hs = H[]; a = hs[1]; b = hs[2]
     la = run(SA.init(resolve(build(approach, layout, a, b))); repeats = 1000)
-    return SA.getstoredcontext(la)
+    return SA.getpersistentcontext(la)
 end
 function measure(f)
     Base.cumulative_compile_timing(true); c0 = Base.cumulative_compile_time_ns()[1]; w0 = time_ns()

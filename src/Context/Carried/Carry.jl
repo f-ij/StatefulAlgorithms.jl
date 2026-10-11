@@ -1,68 +1,73 @@
 #=
-Carrying a context through a loop as only the fields its steps write.
+What a loop carries from one step to the next: only the fields of the persistent context that its steps can write.
 
-Why: a loop that reassigns its whole context every step makes every field a loop variable. A field no step writes
-is then a loop variable whose new value is its old one. For a context that holds both pointers and plain values,
-Julia keeps such a variable in a stack slot and copies it every step, and the compiler cannot keep the context in
-registers (the InteractiveIsing 3D graph example copied 600 + 624 bytes per step and ran at 206 updates/s/spin;
-carrying only the written fields: 509). A carrying loop never reassigns the context it started with: the fields no
-step writes are read from where they already are, and only the fields its steps can write cross from one step to
-the next:
+The loop keeps two contexts: the persistent context (`persistent_context`) and the runtime context
+(`runtime_context`). The runtime context is carried whole. Of the persistent context, the loop carries only the fields
+some step can write (`carried`, a named tuple `(; subcontext = (; field = value, ...), ...)`), and reads every other
+field from `persistent_context`, which it never reassigns inside the loop:
 
     carried = create_carried(...the _step! arguments...)
     for ...
-        stepped_lc = _step!(..., LoopContext(carried_context(context, carried), runtimecontext), ...)
-        stepped, runtimecontext = getcontext(stepped_lc), getruntimecontext(stepped_lc)
-        carried = next_carried(carried, stepped)
+        stepped_lc = _step!(..., LoopContext(with_carried(persistent_context, carried), runtime_context), ...)
+        stepped_persistent_context, runtime_context = getpersistent(stepped_lc), getruntime(stepped_lc)
+        carried = next_carried(carried, stepped_persistent_context)
     end
-    context = carried_context(context, carried)
+    persistent_context = with_carried(persistent_context, carried)
 
-`carried` is a named tuple `(; subcontext = (; field = value, ...), ...)`; its type says which fields it holds. How
-those fields are found is hidden in `create_carried` (Writes.jl).
+Why: if the loop reassigned the whole persistent context every step, every field would be a loop variable, also the
+ones no step writes (their new value is their old one). For a context that holds both pointers and plain values,
+Julia keeps such a variable in a stack slot and copies it every step, and cannot keep it in registers. The
+InteractiveIsing 3D graph example copied 600 + 624 bytes per step and ran at 206 updates/s/spin; carrying only the
+written fields: 509.
+
+Which fields a step can write is worked out from the plan's types in Writes.jl (`_writes`); `create_carried` asks it.
 =#
 
 """
-    create_carried(algo, cursor, loopcontext, wiring, namespace, process, lifetime)
+    create_carried(algo, cursor, lc, wiring, namespace, process, lifetime)
 
-What a loop that runs `_step!` with these arguments carries before its first step: the values in `context` of the
-fields the step can write, as `(; subcontext = (; field = value, ...), ...)` (all fields when those are not known).
+What a loop that runs `_step!` with these arguments carries before its first step: the values, in the persistent
+context of `lc`, of the fields the step can write, as `(; subcontext = (; field = value, ...), ...)` (every field when
+those are not known).
 """
-@inline function create_carried(algo::A, cursor::S, lc::LoopContext{C, RC}, wiring::W, namespace::N,
-                                process::P, lifetime::LT) where {A,S,C<:ProcessContext,RC,W,N,P,LT}
-    context = @inline getcontext(lc)
-    settled = @inline _runtime_fixed_point(algo, cursor, context, RC, wiring, namespace, process, lifetime)
-    return @inline _written_values(context, (@inline _writes(algo, cursor, context, settled, wiring, namespace, process, lifetime)))
+@inline function create_carried(algo::AlgoType, cursor::CursorType, lc::LoopContext{PersistentContextType, RuntimeContextType}, wiring::WiringViewType, namespace::NamespaceType,
+                                process::ProcessType, lifetime::LifetimeType) where {AlgoType, CursorType, PersistentContextType<:ProcessContext, RuntimeContextType, WiringViewType, NamespaceType, ProcessType, LifetimeType}
+    persistent_context = @inline getpersistent(lc)
+    # The runtime context type the repeated steps settle on: the views, and so the writes, depend on it.
+    settled_runtime_context_type = @inline _runtime_context_type_over_repeats(algo, cursor, persistent_context, RuntimeContextType, wiring, namespace, process, lifetime)
+    written = @inline _writes(algo, cursor, persistent_context, settled_runtime_context_type, wiring, namespace, process, lifetime)
+    return @inline _written_values(persistent_context, written)
 end
 
-"""The context with the carried values: what a step gets, and the context after the last step."""
-@inline carried_context(context::C, carried::T) where {C<:ProcessContext,T<:NamedTuple} =
-    @inline merge_into_subcontexts(context, carried)
+"""The persistent context with the carried values put in: what a step gets, and the persistent context after the last step."""
+@inline with_carried(persistent_context::PersistentContextType, carried::CarriedType) where {PersistentContextType<:ProcessContext, CarriedType<:NamedTuple} =
+    @inline merge_into_subcontexts(persistent_context, carried)
 
-"""What a loop carries after a step that returned `stepped`: the new values of the fields `carried` holds."""
-@inline next_carried(carried::T, stepped::C) where {T<:NamedTuple,C<:ProcessContext} =
-    @inline _written_values(stepped, _carried_fields(T))
+"""What a loop carries after a step: the values, in the persistent context the step returned, of the fields `carried` holds."""
+@inline next_carried(carried::CarriedType, stepped_persistent_context::PersistentContextType) where {CarriedType<:NamedTuple, PersistentContextType<:ProcessContext} =
+    @inline _written_values(stepped_persistent_context, _carried_fields(CarriedType))
 
-"""The `(subcontext, field)` pairs a carried named tuple type holds, as `Val(W)`."""
-@generated function _carried_fields(::Type{T}) where {T<:NamedTuple}
-    W = Tuple((s, f) for (s, S) in zip(fieldnames(T), fieldtypes(T)) for f in fieldnames(S))
-    return :(Val($W))
+"""The `(subcontext, field)` pairs a carried named tuple type holds, as `Val(written)`."""
+@generated function _carried_fields(::Type{CarriedType}) where {CarriedType<:NamedTuple}
+    written = Tuple((s, f) for (s, S) in zip(fieldnames(CarriedType), fieldtypes(CarriedType)) for f in fieldnames(S))
+    return :(Val($written))
 end
 
 """
-    _written_values(context, Val(W))
+    _written_values(persistent_context, Val(written))
 
-The values of the fields `W` in `context`, as `(; subcontext = (; field = value, ...), ...)`: the shape
-`merge_into_subcontexts` takes.
+The values of the fields `written` (`(subcontext, field)` pairs) in `persistent_context`, as
+`(; subcontext = (; field = value, ...), ...)`: the shape `merge_into_subcontexts` takes.
 """
-@inline @generated function _written_values(context::ProcessContext, ::Val{W}) where {W}
-    subs = Tuple(unique(first.(W)))
+@inline @generated function _written_values(persistent_context::ProcessContext, ::Val{written}) where {written}
+    subs = Tuple(unique(first.(written)))
     entries = map(subs) do s
-        fields = Tuple(f for (s2, f) in W if s2 === s)
+        fields = Tuple(f for (s2, f) in written if s2 === s)
         values = [:(getfield(getdata(getfield(subcontexts, $(QuoteNode(s)))), $(QuoteNode(f)))) for f in fields]
         :(NamedTuple{$fields}(($(values...),)))
     end
     return quote
-        subcontexts = @inline get_subcontexts(context)
+        subcontexts = @inline get_subcontexts(persistent_context)
         return NamedTuple{$subs}(($(entries...),))
     end
 end

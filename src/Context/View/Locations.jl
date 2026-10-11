@@ -7,7 +7,7 @@
 #=
 What a view sees, by name, and where each name is stored (a `VarLocation`). The kinds:
 
-- state: the view's namespace's own fields (stored context);
+- state: the view's namespace's own fields (persistent context);
 - wires: routes and shares written for this child (`Route`, `Share`, `WithWiring`, the DSL);
 - the scope its bundle is in (`Scope`): the declared locals, and for a call the captured returns;
 - injected values.
@@ -17,13 +17,13 @@ with the same name as a state field or a route is an error. The scope is implici
 whether it uses it or not, so an explicit name hides a name of the scope. Injected values hide everything.
 =#
 
-"""The view's namespace's state (its subcontext in the stored context), by name."""
+"""The view's namespace's state (its subcontext in the persistent context), by name."""
 get_state_locations(::Type{SCT}) where {SCT<:SubContextView{B, SubKey}} where {B<:ContextBundle, SubKey} = _state_locations(context_part(Val(SubKey)), SCT)
 
 """A call has no state: its namespace is the captured returns."""
 _state_locations(::CapturedReturns, ::Type) = (;)
 
-function _state_locations(::Stored, ::Type{SCT}) where {SCT<:SubContextView{B, SubKey}} where {B<:ContextBundle, SubKey}
+function _state_locations(::Persistent, ::Type{SCT}) where {SCT<:SubContextView{B, SubKey}} where {B<:ContextBundle, SubKey}
     _subcontext_type = subcontext_type(SCT)
     _data_type = getdatatype(_subcontext_type)
     state_names = keys(_subcontext_type)
@@ -36,7 +36,7 @@ end
 
 Overloadable storage-type hook for state fields in `SubContextView`.
 
-The default maps a state field to its location in the stored context. Storage
+The default maps a state field to its location in the persistent context. Storage
 marker types can overload this to redirect reads and writeback to another
 `VarLocation`; `ReplacedVar` uses this to make a state marker behave as a source
 field elsewhere in the persistent context.
@@ -56,7 +56,7 @@ function get_shared_locations(sct::Type{SCT}) where {SCT<:SubContextView{B, SubK
     shared_context_names = contextname.(_view_shared_types(view_sharedcontexts(SCT)))
 
     sharedvars = named_flat_collect_broadcast(shared_context_names) do name
-        shared_subcontext_type = subcontext_type(stored_type(B), name)
+        shared_subcontext_type = subcontext_type(persistent_type(B), name)
         shared_varnames = keys(shared_subcontext_type)
         pairs = (shared_varnames[i] => VarLocation{:subcontext}(name, shared_varnames[i]) for i in 1:length(shared_varnames))
         return NamedTuple(pairs)
@@ -161,22 +161,22 @@ end
 @inline Base.keys(scv::SCV) where SCV <: SubContextView = @inline propertynames(@inline get_all_locations(scv))
 @inline Base.propertynames(scv::SCV) where SCV <: SubContextView = @inline propertynames(@inline get_all_locations(scv))
 @inline Base.haskey(scv::SCV, name::Symbol) where SCV <: SubContextView = @inline haskey(get_all_locations(scv), name)
-@inline getregistry(scv::SCV) where SCV <: SubContextView = getregistry(getcontext(scv))
+@inline getregistry(scv::SCV) where SCV <: SubContextView = getregistry(getpersistent(scv))
 
 """The runtime values under `subcontextname`: a runtime part (`_captured_returns`, `_inputs`, ...), or a namespace's subcontext returns."""
-@inline function _runtime_values(runtimecontext::ProcessContext, ::Val{subcontextname}) where {subcontextname}
-    subcontexts = @inline get_subcontexts(runtimecontext)
+@inline function _runtime_values(runtime_context::ProcessContext, ::Val{subcontextname}) where {subcontextname}
+    subcontexts = @inline get_subcontexts(runtime_context)
     haskey(subcontexts, subcontextname) && return getdata(getproperty(subcontexts, subcontextname))
-    outputs = @inline get_subcontext_returns(runtimecontext)
+    outputs = @inline get_subcontext_returns(runtime_context)
     return haskey(outputs, subcontextname) ? getproperty(outputs, subcontextname) : (;)
 end
 
-@inline function _runtime_has_var(runtimecontext, ::Val{subcontextname}, ::Val{varname}) where {subcontextname,varname}
-    return haskey(_runtime_values(runtimecontext, Val(subcontextname)), varname)
+@inline function _runtime_has_var(runtime_context, ::Val{subcontextname}, ::Val{varname}) where {subcontextname,varname}
+    return haskey(_runtime_values(runtime_context, Val(subcontextname)), varname)
 end
 
-@inline function _runtime_get_var(runtimecontext, ::Val{subcontextname}, ::Val{varname}) where {subcontextname,varname}
-    return getproperty(_runtime_values(runtimecontext, Val(subcontextname)), varname)
+@inline function _runtime_get_var(runtime_context, ::Val{subcontextname}, ::Val{varname}) where {subcontextname,varname}
+    return getproperty(_runtime_values(runtime_context, Val(subcontextname)), varname)
 end
 
 """
@@ -220,10 +220,10 @@ end
     @inline subcontext_view_value(_runtime_get_var(getbundle(scv), Val(subcontextname), Val(varname)), scv)
 
 """A namespace's value: its state, or else one of its subcontext returns."""
-@inline function _read_part(::Stored, scv::SCV, ::Val{subcontextname}, ::Val{varname}) where {SCV<:SubContextView, subcontextname, varname}
+@inline function _read_part(::Persistent, scv::SCV, ::Val{subcontextname}, ::Val{varname}) where {SCV<:SubContextView, subcontextname, varname}
     bundle = @inline getbundle(scv)
-    context = @inline getcontext(scv)
-    subcontexts = @inline get_subcontexts(context)
+    persistent_context = @inline getpersistent(scv)
+    subcontexts = @inline get_subcontexts(persistent_context)
     if haskey(subcontexts, subcontextname)
         subcontext = @inline getproperty(subcontexts, subcontextname)
         if @inline haskey(getdata(subcontext), varname)
@@ -252,8 +252,8 @@ that are hidden from algorithm code during normal reads.
     ::Val{subcontextname},
     ::Val{varname},
 ) where {SCV<:SubContextView, subcontextname, varname}
-    context = @inline getcontext(scv)
-    subcontexts = @inline get_subcontexts(context)
+    persistent_context = @inline getpersistent(scv)
+    subcontexts = @inline get_subcontexts(persistent_context)
     if haskey(subcontexts, subcontextname)
         subcontext = @inline getproperty(subcontexts, subcontextname)
         if @inline haskey(getdata(subcontext), varname)
@@ -359,7 +359,7 @@ end
     return quote
         $(LineNumberNode(@__LINE__, @__FILE__))
         error("Variable ", $(QuoteNode(key)), $mapped, " requested from ", sct, " in View: ", $(QuoteNode(SubKey)),
-              ", but not supplied to context. Available names are: ", $available, " \n Context: ", getcontext(sct))
+              ", but not supplied to context. Available names are: ", $available, " \n Context: ", getpersistent(sct))
     end
 end
 

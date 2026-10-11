@@ -46,7 +46,7 @@ end
     algo = normalize_process_algo(func)
     lifetime = normalize_process_lifetime(algo, lifetime)
     algo = isnothing(context) ? init(algo, inputs_overrides...; lifetime) : _with_lifecycle(resolve(algo), context, (), ())
-    prepared_context = getstoredcontext(algo)
+    prepared_context = getpersistentcontext(algo)
     mode = _inline_process_mode(threaded)
 
     p = InlineProcess{typeof(algo), typeof(prepared_context), typeof(lifetime),mode}(uuid1(), algo, prepared_context, false, UInt(1), lifetime, nothing, nothing)
@@ -82,7 +82,7 @@ Validate the runtime inputs for one `InlineProcess` execution.
 
 `InlineProcess` has a fixed context type after construction. Per-run data is
 therefore limited to declared `@input` keywords; structural reinitialization
-stays on `reset!`, where the process can rebuild its stored context.
+stays on `reset!`, where the process can rebuild its persistent context.
 """
 @inline function _inline_runtime_inputs(algo::A, inputs_overrides::IO, kwargs::K) where {A<:AbstractLoopAlgorithm, IO<:Tuple, K<:NamedTuple}
     isempty(inputs_overrides) || error("InlineProcess run accepts runtime inputs as keywords only. Use reset!(p, specs...) to reinitialize the context.")

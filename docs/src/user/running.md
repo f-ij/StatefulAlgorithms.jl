@@ -112,7 +112,7 @@ count. For `Process`, use `repeats = 10_000` or `lifetime = Repeat(10_000)`.
 Unlike `Process`, `InlineProcess` stores a context that can be absorbed back
 into an algorithm, so runtime-only fields such as `:_inputs` and `process` are
 stripped after the loop.
-Like finished `Process` runs, this means the stored context is the persistent
+Like finished `Process` runs, this means the persistent context is the persistent
 context shape rather than the transient loop context.
 
 If you need buffered external updates to context variables, see

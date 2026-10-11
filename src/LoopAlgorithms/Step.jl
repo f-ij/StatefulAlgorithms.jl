@@ -28,7 +28,7 @@ Base.@constprop :aggressive @inline @generated function _step!(ca::CA, cursor::S
         schedule_value = schedule_values[i]
         child_namespace_type = fieldtype(child_namespace_tuple_type, i)
         push!(exprs, quote
-            if @inline should_run_schedule($schedule_value, this_inc, (@inline getcontext(lc)))
+            if @inline should_run_schedule($schedule_value, this_inc, (@inline getpersistent(lc)))
                 local algo = @inline getfield(algos, $i)
                 local child_cursor = @inline child_loop_cursor(cursor, Val($i))
                 local child_step_wiring = @inline child_wiring_view(wiring, Val($i))
@@ -44,7 +44,7 @@ Base.@constprop :aggressive @inline @generated function _step!(ca::CA, cursor::S
 end
 
 """
-    _children_writes_expr(Plan, repeat_values)
+    _children_writes_expr(PlanType, repeat_values)
 
 The body of `_writes` for a plan that steps its children in order (a composite, routine or threaded composite): the
 union of its children's writes, each at its own position (cursor, wiring view, namespace), with the runtime context
@@ -52,21 +52,21 @@ type threaded from child to child as `_step!` threads the runtime context. A chi
 more than one repeat) uses the runtime type it settles on. `repeat_values` is `nothing` for a plan whose children run
 once per step.
 """
-function _children_writes_expr(Plan::Type, repeat_values)
-    child_namespace_tuple_type = Plan.parameters[3]
-    exprs = Any[:(local algos = @inline getalgos(plan)), :(local writes = Val(())), :(local rc = RC)]
-    for i in 1:numalgos(Plan)
+function _children_writes_expr(PlanType::Type, repeat_values)
+    child_namespace_tuple_type = PlanType.parameters[3]
+    exprs = Any[:(local algos = @inline getalgos(plan)), :(local writes = Val(())), :(local runtime_context_type = RuntimeContextType)]
+    for i in 1:numalgos(PlanType)
         child_namespace_type = fieldtype(child_namespace_tuple_type, i)
         repeated = !isnothing(repeat_values) && !(repeat_values[i] isa Repeat && repeats(repeat_values[i]) == 1)
-        settle = repeated ? :(rc = @inline _runtime_fixed_point(child, child_cursor, context, rc, child_wiring, child_namespace, process, lifetime)) : nothing
+        settle = repeated ? :(runtime_context_type = @inline _runtime_context_type_over_repeats(child, child_cursor, persistent_context, runtime_context_type, child_wiring, child_namespace, process, lifetime)) : nothing
         push!(exprs, quote
             local child = @inline getfield(algos, $i)
             local child_cursor = @inline child_loop_cursor(cursor, Val($i))
             local child_wiring = @inline child_wiring_view(wiring, Val($i))
             local child_namespace = $child_namespace_type()
             $settle
-            writes = @inline _union_writes(writes, (@inline _writes(child, child_cursor, context, rc, child_wiring, child_namespace, process, lifetime)))
-            rc = @inline _runtime_after(child, child_cursor, context, rc, child_wiring, child_namespace, process, lifetime)
+            writes = @inline _union_writes(writes, (@inline _writes(child, child_cursor, persistent_context, runtime_context_type, child_wiring, child_namespace, process, lifetime)))
+            runtime_context_type = @inline _runtime_context_type_after_node_step(child, child_cursor, persistent_context, runtime_context_type, child_wiring, child_namespace, process, lifetime)
         end)
     end
     push!(exprs, :(return writes))
@@ -74,10 +74,10 @@ function _children_writes_expr(Plan::Type, repeat_values)
 end
 
 # The persistent fields a composite or routine writes (see src/Context/Carried/Writes.jl).
-@inline @generated _writes(plan::CA, cursor::S, context::C, ::Type{RC}, wiring::W, namespace::N, process::P, lifetime::LT) where {CA<:CompositeAlgorithm,S,C<:ProcessContext,RC,W,N,P,LT} =
-    _children_writes_expr(CA, nothing)
-@inline @generated _writes(plan::R, cursor::S, context::C, ::Type{RC}, wiring::W, namespace::N, process::P, lifetime::LT) where {R<:Routine,S,C<:ProcessContext,RC,W,N,P,LT} =
-    _children_writes_expr(R, R.parameters[2])
+@inline @generated _writes(plan::PlanType, cursor::CursorType, persistent_context::PersistentContextType, ::Type{RuntimeContextType}, wiring::WiringViewType, namespace::NamespaceType, process::ProcessType, lifetime::LifetimeType) where {PlanType<:CompositeAlgorithm, CursorType, PersistentContextType<:ProcessContext, RuntimeContextType, WiringViewType, NamespaceType, ProcessType, LifetimeType} =
+    _children_writes_expr(PlanType, nothing)
+@inline @generated _writes(plan::PlanType, cursor::CursorType, persistent_context::PersistentContextType, ::Type{RuntimeContextType}, wiring::WiringViewType, namespace::NamespaceType, process::ProcessType, lifetime::LifetimeType) where {PlanType<:Routine, CursorType, PersistentContextType<:ProcessContext, RuntimeContextType, WiringViewType, NamespaceType, ProcessType, LifetimeType} =
+    _children_writes_expr(PlanType, PlanType.parameters[2])
 
 """Step one lifetime-scheduled child inside a `Routine`."""
 @inline function _subroutine_step!(
@@ -95,14 +95,14 @@ end
 ) where {L<:LoopContext,F,FS<:AbstractLoopCursor,R<:Routine,RS<:Union{DirectRoutineCursor,PausableRoutineCursor},P<:AbstractProcess,LT<:Lifetime,SL<:Lifetime,W,N<:Namespace}
     resume_point = @inline get_resume_point(routine_cursor, idx)
     this_repeat_count = @inline routine_repeat_count(subroutine_lifetime)
-    context = @inline getcontext(lc)
-    runtimecontext = @inline getruntimecontext(lc)
+    persistent_context = @inline getpersistent(lc)
+    runtime_context = @inline getruntime(lc)
     if resume_point <= this_repeat_count
         # The repeats carry only the fields the child writes, as the loops do (see src/Context/Carried/Carry.jl); `context`
         # stays the routine's starting context.
         carried = @inline create_carried(func, func_cursor, lc, child_step_wiring, namespace, process, lifetime)
-        stepped_lc = @inline _step!(func, func_cursor, (@inline withcontexts(lc, (@inline carried_context(context, carried)), runtimecontext)), child_step_wiring, namespace, process, lifetime)
-        stepped, runtimecontext = (@inline getcontext(stepped_lc)), (@inline getruntimecontext(stepped_lc))
+        stepped_lc = @inline _step!(func, func_cursor, (@inline withcontexts(lc, (@inline with_carried(persistent_context, carried)), runtime_context)), child_step_wiring, namespace, process, lifetime)
+        stepped, runtime_context = (@inline getpersistent(stepped_lc)), (@inline getruntime(stepped_lc))
         carried = @inline next_carried(carried, stepped)
         @inline tick!(process)
 
@@ -111,24 +111,24 @@ end
             if !(@inline _routine_local_breakcondition(subroutine_lifetime, process, stepped, resume_point))
                 @inline set_resume_point!(routine_cursor, idx, next_idx)
             end
-            return (@inline withcontexts(lc, (@inline carried_context(context, carried)), runtimecontext))
+            return (@inline withcontexts(lc, (@inline with_carried(persistent_context, carried)), runtime_context))
         end
 
         for lidx in next_idx:this_repeat_count
             # Built fresh for the break checks: carrying `stepped` instead would make the whole context a loop variable.
-            current = @inline carried_context(context, carried)
+            current = @inline with_carried(persistent_context, carried)
             if @inline routine_breakcondition(subroutine_lifetime, lifetime, process, current, lidx)
                 if !(@inline _routine_local_breakcondition(subroutine_lifetime, process, current, lidx))
                     @inline set_resume_point!(routine_cursor, idx, lidx)
                 end
-                return @inline withcontexts(lc, current, runtimecontext)
+                return @inline withcontexts(lc, current, runtime_context)
             end
-            stepped_lc = @inline _step!(func, func_cursor, (@inline withcontexts(lc, (@inline carried_context(context, carried)), runtimecontext)), child_step_wiring, namespace, process, lifetime)
-            stepped, runtimecontext = (@inline getcontext(stepped_lc)), (@inline getruntimecontext(stepped_lc))
+            stepped_lc = @inline _step!(func, func_cursor, (@inline withcontexts(lc, (@inline with_carried(persistent_context, carried)), runtime_context)), child_step_wiring, namespace, process, lifetime)
+            stepped, runtime_context = (@inline getpersistent(stepped_lc)), (@inline getruntime(stepped_lc))
             carried = @inline next_carried(carried, stepped)
             @inline tick!(process)
         end
-        return (@inline withcontexts(lc, (@inline carried_context(context, carried)), runtimecontext))
+        return (@inline withcontexts(lc, (@inline with_carried(persistent_context, carried)), runtime_context))
     end
     return lc
 end
@@ -154,9 +154,9 @@ the loop, so the child's `_step!` is emitted once instead of twice.
     if resume_point <= 1
         lc = @inline _step!(func, func_cursor, lc, child_step_wiring, namespace, process, lifetime)
         @inline tick!(process)
-        context = @inline getcontext(lc)
-        if @inline routine_breakcondition(subroutine_lifetime, lifetime, process, context, resume_point)
-            if !(@inline _routine_local_breakcondition(subroutine_lifetime, process, context, resume_point))
+        persistent_context = @inline getpersistent(lc)
+        if @inline routine_breakcondition(subroutine_lifetime, lifetime, process, persistent_context, resume_point)
+            if !(@inline _routine_local_breakcondition(subroutine_lifetime, process, persistent_context, resume_point))
                 @inline set_resume_point!(routine_cursor, idx, resume_point + 1)
             end
         end

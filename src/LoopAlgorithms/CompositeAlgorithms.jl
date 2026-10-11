@@ -9,7 +9,7 @@ Execution plan that steps child algorithms on fixed intervals.
 schedule metadata, namespaces, its route/share wiring (`getwiring`), its own
 states (`getstates`: `@state`, `@input`) and its other options (`getoptions`,
 such as `RuntimeInputs` and `Replace`). What `resolve`,
-`init` and `run` add (the registry, stored context, inits, overrides and the
+`init` and `run` add (the registry, persistent context, inits, overrides and the
 interval cursor) belongs to the `LoopAlgorithm`/`AbstractLoopCursor` they create.
 """
 struct CompositeAlgorithm{T, Intervals, Namespaces, W, id, S, O} <: AbstractPlan

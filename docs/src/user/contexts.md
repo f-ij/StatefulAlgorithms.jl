@@ -63,7 +63,7 @@ ctx = context(p)
 `context(p)` and `getcontext(p)` both return the process's current stored
 context. `getcontext(p, key)` is shorthand for indexing that context by `key`.
 The running loop injects `process` only into the transient runtime context seen
-by lifecycle hooks; it is not present in the stored context after completion.
+by lifecycle hooks; it is not present in the persistent context after completion.
 
 From a context, index by:
 

@@ -184,7 +184,7 @@ end
 """
 Display one runtime loop wrapper through its public execution plan.
 
-`LoopAlgorithm` carries lifecycle data such as registry and stored context, but
+`LoopAlgorithm` carries lifecycle data such as registry and persistent context, but
 that data is internal noise for normal display. Showing the plan keeps process
 trees focused on the algorithms the user asked to run.
 """

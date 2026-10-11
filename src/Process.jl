@@ -159,7 +159,7 @@ function Process(func::Func, inputs_overrides::Vararg{Any,N}; context::C = nothi
 end
 
 @inline function _finish_process_constructor(algo::A, ::Nothing, lifetime::LT, timeout) where {A<:AbstractLoopAlgorithm, LT}
-    prepared_context = getstoredcontext(algo)
+    prepared_context = getpersistentcontext(algo)
     return _finish_process_constructor_with_context(algo, prepared_context, lifetime, timeout)
 end
 
@@ -183,7 +183,7 @@ function _finish_process_constructor_with_context(algo::A, prepared_context::PC,
 end
 
 @inline function _process_constructor_algo(algo::LA, ::Nothing, inputs_overrides::Tuple{}, lifetime::LT) where {LA<:LoopSpec, LT}
-    isnothing(getstoredcontext(algo)) || return algo
+    isnothing(getpersistentcontext(algo)) || return algo
     return init(algo; lifetime)
 end
 
@@ -193,7 +193,7 @@ end
 
 @inline function _process_constructor_algo(algo::LA, context::C, inputs_overrides::IO, lifetime::LT) where {LA<:LoopSpec, C, IO<:Tuple, LT}
     isempty(inputs_overrides) || error("Pass either an initialized `context` or init/override specs to `Process`, not both.")
-    isnothing(getstoredcontext(algo)) || return algo
+    isnothing(getpersistentcontext(algo)) || return algo
     return _with_lifecycle(resolve(algo), nothing, getstoredinits(algo), getstoredoverrides(algo))
 end
 
@@ -207,7 +207,7 @@ Base.:(==)(p1::Process, p2::Process) = p1.id == p2.id
 getalgo(p::P) where {P<:Process} = p.algo
 function context(p::P) where {P<:Process}
     runtime_context = p.runtime_context
-    return isnothing(runtime_context) ? getstoredcontext(getalgo(p)) : runtime_context
+    return isnothing(runtime_context) ? getpersistentcontext(getalgo(p)) : runtime_context
 end
 
 """
@@ -232,11 +232,11 @@ the typed fast path. Only genuine shape changes fall back to the dynamic
 """
 @inline function commit_context!(p::P, c::C) where {P<:Process, C}
     algo = getalgo(p)
-    stored_context = getstoredcontext(algo)
+    persistent_context = getpersistentcontext(algo)
 
     # Preserve the typed lifecycle path whenever finalization returns to the
     # stored concrete context shape.
-    if !isnothing(stored_context) && typeof(c) === typeof(stored_context)
+    if !isnothing(persistent_context) && typeof(c) === typeof(persistent_context)
         p.algo = _with_lifecycle(algo, c, getstoredinits(algo), getstoredoverrides(algo))
         p.runtime_context = nothing
     else
@@ -251,7 +251,7 @@ function context(p::P, c::C) where {P<:Process, C}
 end
 
 @inline _has_typed_runtime_context(p::P) where {P<:Process} = isnothing(p.runtime_context)
-@inline _typed_runtime_context(p::P) where {P<:Process} = getstoredcontext(getalgo(p))
+@inline _typed_runtime_context(p::P) where {P<:Process} = getpersistentcontext(getalgo(p))
 
 function getcontext(p::Process)
     return context(p)
