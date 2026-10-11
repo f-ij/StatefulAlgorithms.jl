@@ -98,7 +98,7 @@ and every return gets a slot for the types written to it. `Nothing` when inferen
 @generated function _add_step_write_types(::Type{RuntimeContextType}, ::Type{Stepped}) where {RuntimeContextType<:ProcessContext, Stepped}
     returned = _collect_returned_contexts(Stepped)
     returned === nothing && return :(Nothing)
-    return _add_return_slots(_widen_probes(RuntimeContextType, returned), returned)
+    return _widen_probes(RuntimeContextType, returned)
 end
 
 """
@@ -240,11 +240,6 @@ _build_empty_slots_expr(::Type{T}) where {T<:NamedTuple} =
     if _has_untyped_locals(RuntimeContextType)
         push!(exprs, :(typed = @inline with_subcontext(typed, Val(:_declared_locals), SubContext{:_declared_locals}(_settle_locals(get_declared_locals(typed), $TypedRuntimeContextType)))))
     end
-    subcontexts = fieldtype(TypedRuntimeContextType, :subcontexts)
-    for partition in (:_captured_returns, :_subcontext_returns)
-        partition in fieldnames(subcontexts) || continue
-        push!(exprs, :(typed = @inline with_subcontext(typed, Val($(QuoteNode(partition))), $(fieldtype(subcontexts, partition))($(_build_empty_slots_expr(getdatatype(fieldtype(subcontexts, partition))))))))
-    end
     push!(exprs, :(return typed))
     return Expr(:block, exprs...)
 end
@@ -254,6 +249,32 @@ function _build_unset_expr(::Type{T}, names, source) where {T<:NamedTuple}
     kept = Tuple(n for n in fieldnames(T) if !(n in names) || fieldtype(T, n) <: Maybe)
     values = map(n -> n in names ? :($(fieldtype(T, n))()) : :(getfield($source, $(QuoteNode(n)))), kept)
     return :(NamedTuple{$kept}(($(values...),)))
+end
+
+"""
+    _strip_returns(runtime_context, Val(resets))
+
+`runtime_context` without the returns in `resets` (`(; returns, owners)`, see `node_resets`): the captured returns named
+in `returns`, and every subcontext return of the namespaces in `owners`. What a plan node leaves behind when it ends.
+"""
+@inline @generated function _strip_returns(runtime_context::RuntimeContextType, ::Val{Resets}) where {RuntimeContextType<:ProcessContext, Resets}
+    Resets isa NamedTuple || return :runtime_context      # outside every node: nothing to strip
+    subcontexts = fieldtype(RuntimeContextType, :subcontexts)
+    names, values = Symbol[], Any[]
+    for (name, S) in zip(fieldnames(subcontexts), fieldtypes(subcontexts))
+        source = :(getfield(get_subcontexts(runtime_context), $(QuoteNode(name))))
+        removed = name === :_captured_returns ? Resets.returns : name === :_subcontext_returns ? Resets.owners : ()
+        data = getdatatype(S)
+        kept = Tuple(n for n in fieldnames(data) if !(n in removed))
+        if length(kept) == fieldcount(data)
+            push!(names, name); push!(values, source)
+        elseif !isempty(kept)          # a part left empty is removed, so the type is the one before the node
+            fields = [:(getfield(getdata($source), $(QuoteNode(n)))) for n in kept]
+            push!(names, name); push!(values, :(SubContext{$(QuoteNode(name))}(NamedTuple{$kept}(($(fields...),)))))
+        end
+    end
+    length(names) == fieldcount(subcontexts) && all(v -> v isa Expr && v.args[1] === :getfield, values) && return :runtime_context
+    return :(ProcessContext(NamedTuple{$(Tuple(names))}(($(values...),)), getfield(runtime_context, :reg)))
 end
 
 """

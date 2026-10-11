@@ -213,6 +213,7 @@ node_scope(::Type{Nothing}) = NoScope
 
 """The slots entering a plan node makes unset, `(; returns, owners)` (see `enter_scope`)."""
 node_resets(::Type{<:PlanWiring{G, C, L, Sc, Resets}}) where {G, C, L, Sc, Resets} = Resets
+node_resets(::Type{Nothing}) = nothing   # outside every node
 PlanWiring() = PlanWiring(Wiring(), ())
 
 """

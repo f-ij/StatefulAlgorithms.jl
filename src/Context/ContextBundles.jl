@@ -153,17 +153,16 @@ During init there is no runtime context, so the patch is always empty there.
 """
     enter_scope(lc, wiring)
 
-Moves `lc` into the scope of a plan node (the node `wiring` belongs to), at the start of a step of that node. The
-node's names become visible, and the returns it captures are cleared, along with the returns of the algorithms
-directly in it. A return with a typed slot (a `Maybe` field, Outputs.jl) is emptied; a return without one is
-removed.
+`lc` in the scope of the plan node whose wiring view is `wiring`: the node's names become visible. Nothing of the
+node's own is in the runtime context yet: its returns are added at the line that writes them (see `LoopContext`).
 """
 @inline enter_scope(lc::LoopContext, wiring::PlanWiringView{Root, WiringType}) where {Root, WiringType<:PlanWiring} =
-    LoopContext(getpersistent(lc), (@inline _unset_returns(getruntime(lc), Val(node_resets(WiringType)))), WiringType)
+    LoopContext(getpersistent(lc), getruntime(lc), WiringType)
 
 """
-Moves `inner` back into the scope of `outer`, after a node's steps are done. It keeps the values `inner` holds and
-only changes the scope.
+`inner` (a `LoopContext` after the steps of a scope) back in the scope of `outer`: the returns of the node (its
+captured returns, and the subcontext returns of the algorithms directly in it) are removed, so nothing after the node
+sees them, and the runtime context has the type it had before the node.
 """
-@inline leave_scope(inner::LoopContext, ::LoopContext{PersistentContextType, RuntimeContextType, Node}) where {PersistentContextType, RuntimeContextType, Node} =
-    LoopContext(getpersistent(inner), getruntime(inner), Node)
+@inline leave_scope(inner::LoopContext{PersistentContextType, InnerRuntimeContextType, InnerNode}, ::LoopContext{OuterPersistentContextType, RuntimeContextType, Node}) where {PersistentContextType, InnerRuntimeContextType, InnerNode, OuterPersistentContextType, RuntimeContextType, Node} =
+    LoopContext(getpersistent(inner), (@inline _strip_returns(getruntime(inner), Val(node_resets(InnerNode)))), Node)

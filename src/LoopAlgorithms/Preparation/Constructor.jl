@@ -245,7 +245,9 @@ function _node_scope(::Type{LA}, ::Type{Outer}, path::Tuple, keep_returns::Bool)
     Sc = Scope{locals, _scoped_names(scope_returns(Outer), captured, at)}
     owners = Tuple(unique(Symbol[namesymbol(fieldtype(NS, i)) for i in 1:fieldcount(F)
                                  if !(fieldtype(F, i) <: LoopSpec) && context_partition(Val(namesymbol(fieldtype(NS, i)))) isa NamespacePartition]))
-    return Sc, (; returns = map(name -> make_storage_name(name, at), captured), owners)
+    # The root of a plan with a final step keeps its returns when it ends: the final step reads them.
+    resets = keep_returns ? (; returns = (), owners = ()) : (; returns = map(name -> make_storage_name(name, at), captured), owners)
+    return Sc, resets
 end
 
 """

@@ -33,6 +33,7 @@ end
     @update produced = 2
     return (; produced, passthrough = seed)
 end
+record_returns_dsl_test!(seen, values...) = (push!(seen, values); nothing)
 
 # Keeps 11 in its state field `state`.
 @StepAlgorithm function DSLHeldStateAlgo(@managed(state = 11))
@@ -279,6 +280,7 @@ end
     @testset "CompositeAlgorithm DSL resolves and runs" begin
         @info "Composite DSL: CompositeAlgorithm DSL resolves and runs"
         n = 1
+        recorded = Any[]
         algo = @CompositeAlgorithm begin
             @state seed = 3
             @state doubled = 10
@@ -287,6 +289,7 @@ end
             doubled = @interval n scaled_double_dsl_test(produced; scale = 2)
             (; combined) = DSLCombineAlgo(left = passthrough, right = doubled)
             DSLSinkAlgo(value = combined)
+            record_returns_dsl_test!(recorded, produced, passthrough, doubled, combined)
         end
 
         resolved = resolve(algo)
@@ -299,7 +302,7 @@ end
         @test !isempty(StatefulAlgorithms.get_routes(algo))
         @test !isempty(StatefulAlgorithms.get_routes(StatefulAlgorithms.getplan(resolved)))
         # Each algorithm statement with names on the left is followed by the call that captures its return.
-        @test intervals(resolved) == ntuple(_ -> StatefulAlgorithms.Interval(1), 6)
+        @test intervals(resolved) == ntuple(_ -> StatefulAlgorithms.Interval(1), 7)
         @test StatefulAlgorithms.plan_child_namespace(resolved, 1) == :source
         @test length(StatefulAlgorithms.getstates(resolved)) == 1
         @test StatefulAlgorithms._composite_dsl_is_block_state(first(StatefulAlgorithms.getstates(resolved)))
@@ -325,12 +328,10 @@ end
 
         @test ctx[:_state_1].seed == 3
         @test ctx[:_state_1].doubled == 10
-        @test StatefulAlgorithms.get_captured_returns(ctx).doubled == 8
-        @test !haskey(StatefulAlgorithms.get_captured_returns(context(p)), :doubled)
-        # An algorithm's return is captured into the block's scope, as a call's is.
-        @test StatefulAlgorithms.get_captured_returns(ctx).produced == 2
-        @test StatefulAlgorithms.get_captured_returns(ctx).passthrough == 3
-        @test StatefulAlgorithms.get_captured_returns(ctx).combined == 11
+        # Returns live for one step of their block: read in the step (an algorithm's return is captured into the
+        # block's scope, as a call's is), gone after the run.
+        @test last(recorded) == (2, 3, 8, 11)
+        @test !haskey(StatefulAlgorithms.get_captured_returns(ctx), :doubled)
         @test isempty(ctx[:DSLSinkAlgo_1])
     end
 
