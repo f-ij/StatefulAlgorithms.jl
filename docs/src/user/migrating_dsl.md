@@ -56,11 +56,12 @@ Report(@state(Counter).count)   # inline
 
 | Before | After |
 |---|---|
-| `x = 0.0` (a local kept between steps) | `local x = 0.0`; `x = 0.0` alone assigns 0.0 every step |
-| `x = nothing` (`nothing` until written) | `local x = nothing` |
-| `x::Float32 = 1` | `local x::Float32 = 1` to keep it; `x::Float32 = 1` alone is `x = convert(Float32, 1)` every step |
+| `x = 0.0` (a value kept between steps) | `@state x = 0.0`; `x = 0.0` alone assigns 0.0 every step |
+| `x = nothing` (no value until written) | `local x`: kept between steps; reading it before its first assignment is an error |
+| `x::Float32 = 1` | `@state x = 1.0f0` to keep it; `x::Float32 = 1` alone is `x = convert(Float32, 1)` every step |
 | `buf = [0.0, 0.0]` (one buffer) | `@state buf = [0.0, 0.0]`; `buf = [0.0, 0.0]` is a new array every step |
-| `local buf = zeros(3)` (one buffer) | `@state buf = zeros(3)`; `local buf = zeros(3)` assigns a new array every step |
+| `local x = v`, `local x = f()` | an error: a declaration has no value. `local x`, then `x = f()`; or `@state x = v` |
+| `y = @every 3 f()` (`y` not declared) | an error: `local y` first, since the statement does not run every step |
 
 ## 4. Updates of the block's values
 
@@ -68,7 +69,7 @@ An algorithm that updates an argument changes whatever the block passed as that 
 
 - a state field: changed, as before;
 - a captured return or a `local`: changed too, and building the block warns. If that is intended, declare the name
-  with `@mutable` (`@mutable y = produce()`, `@mutable local x = 0.0`); it changes nothing else.
+  with `@mutable` (`@mutable y = produce()`, `@mutable local x`); it changes nothing else.
 - an `@input`, an outside value, or a value read through `@transform`: an error when the block is built.
 
 `updated_names(Algo)` lists what an algorithm updates.

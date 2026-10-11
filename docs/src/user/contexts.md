@@ -111,7 +111,7 @@ Besides the stored (persistent) state, a run has values that are not stored with
 | Kind | Lifetime | On pause |
 |---|---|---|
 | inputs (`@input`) | the run, read-only | kept |
-| declared locals (`local x`, `local x = nothing`; `Local`) | the run | kept |
+| declared locals (`local x`, `local x::T`; `Local`) | the run | kept |
 | captured returns (`y = f(x)`) | one step of the block that assigns it | dropped |
 | subcontext returns (what an algorithm returns that is not its state) | one step of the block the algorithm is in | dropped |
 
@@ -119,9 +119,9 @@ A step reads them by name like its own variables. Every block (a composite or ro
 as a `for` loop body is in Julia: its children see the declared locals and captured returns of the block and of the
 blocks around it, and a name declared in an inner block hides the same name of an outer one. Assigning a name that is
 already visible, in a block or a block inside it, updates it. A captured return is unset each time its block is
-entered, so reading it in a step before it is assigned (a call on an interval, read by one that runs every step) is
-an `UndefRefError`; declare a value that has to outlive the step with `Local`. (For now the DSL declares such a value
-for you, with a warning, when `y = @every 3 f()` is read every step.) The process and the lifetime are not visible to steps; `init`
+entered. A name assigned on a schedule (`y = @every 3 f()`) has to be declared first (`local y`, or `Local` outside
+the DSL): it then keeps its last value between steps, and reading it before its first assignment is an
+`UndefRefError`. The process and the lifetime are not visible to steps; `init`
 gets the lifetime for sizing (`processsizehint!`). For selector syntax, see [Vars (`Var` Selectors)](@ref vars_user).
 
 For immediate `InteractiveVar` storage and buffered external writes through

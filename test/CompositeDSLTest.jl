@@ -1108,9 +1108,10 @@ end
         include_block = true
         block_algo = @CompositeAlgorithm begin
             @state seed = 3
+            local produced, passthrough
             @include_if include_block begin
                 (; produced, passthrough) = @interval 2 DSLSourceAlgo(seed = seed)
-                @interval 2 DSLSinkAlgo(value = produced)   # `produced` exists only in the steps it is assigned
+                @interval 2 DSLSinkAlgo(value = produced)
             end
             DSLValueAlgo(value = seed)
         end
@@ -1262,35 +1263,25 @@ end
         close(p)
     end
 
-    @testset "Captured returns read on another schedule: an error, or declare them with local" begin
-        @info "Composite DSL: Captured returns read on another schedule"
+    @testset "An assignment on a schedule needs a declared name" begin
+        @info "Composite DSL: An assignment on a schedule needs a declared name"
         produced = Ref(0)
         produce_dsl_test() = (produced[] += 1; Float64(produced[]))
-        err = try
-            @eval @CompositeAlgorithm begin
-                @state seen = Any[]
-                y = @every 3 $produce_dsl_test()
-                v = keep_value_dsl_test(y)
-                seen = push_seen_dsl_test(seen, v)
+        # Not declared: an error when the block is built, whatever reads it.
+        for reader in (:(v = keep_value_dsl_test(y)), :(v = @every 3 keep_value_dsl_test(y)))
+            err = try
+                @eval @CompositeAlgorithm begin
+                    @state seen = Any[]
+                    y = @every 3 $produce_dsl_test()
+                    $reader
+                    seen = push_seen_dsl_test(seen, v)
+                end
+                nothing
+            catch e
+                e
             end
-            nothing
-        catch e
-            e
+            @test err isa LoadError && occursin("Declare it first: `local y`", sprint(showerror, err.error))
         end
-        @test err isa ErrorException && occursin("declare it at the top of the block: `local y`", sprint(showerror, err))
-
-        # `local y = nothing` declares it: `nothing` until its first assignment, then its last value.
-        algo = @CompositeAlgorithm begin
-            @state seen = Any[]
-            local y = nothing
-            y = @every 3 produce_dsl_test()
-            v = keep_value_dsl_test(y)
-            seen = push_seen_dsl_test(seen, v)
-        end
-        produced[] = 0
-        p = Process(resolve(algo), repeat = 7); run(p)
-        @test fetch(p)[:_state_1].seen == [nothing, nothing, 1.0, 1.0, 1.0, 2.0, 2.0]
-        close(p)
 
         # `local y` declares it without a value: reading it before its first assignment is an error.
         algo = @CompositeAlgorithm begin
@@ -1301,6 +1292,8 @@ end
         end
         produced[] = 0
         @test_throws UndefRefError run(InlineProcess(resolve(algo); repeats = 2))
+
+        # Read on the same schedule, or after its first assignment: its last value.
         algo = @CompositeAlgorithm begin
             @state seen = Any[]
             local y
@@ -1311,35 +1304,59 @@ end
         p = Process(resolve(algo), repeat = 7); run(p)
         @test fetch(p)[:_state_1].seen == [1.0, 2.0]
         close(p)
+
+        # `@every 1` runs in every step: no declaration needed.
+        algo = @CompositeAlgorithm begin
+            @state seen = Any[]
+            y = @every 1 produce_dsl_test()
+            seen = push_seen_dsl_test(seen, y)
+        end
+        produced[] = 0
+        p = Process(resolve(algo), repeat = 2); run(p)
+        @test fetch(p)[:_state_1].seen == [1.0, 2.0]
+        close(p)
     end
 
-    @testset "Declared locals: local x, local x::T, local x = value, local x::T = value" begin
+    @testset "Declared locals: local x, local x::T; a declaration has no value" begin
         @info "Composite DSL: Declared locals"
         start = 10.0
         algo = @CompositeAlgorithm begin
             @state seen = Any[]
-            local total = 0.0
             local count::Int
-            local offset = start
-            local scale::Float32 = 2
-            total = plus_one_dsl_test(total)
+            local offset
             count = length(seen)
-            seen = push_four_dsl_test(seen, total, count, offset, scale)
+            offset = keep_value_dsl_test(start)
+            seen = push_four_dsl_test(seen, count, offset, 2.0f0, 1)
         end
         p = Process(resolve(algo), repeat = 3); run(p)
-        @test fetch(p)[:_state_1].seen == [(1.0, 0, 10.0, 2.0f0), (2.0, 1, 10.0, 2.0f0), (3.0, 2, 10.0, 2.0f0)]
-        @test fetch(p)[:_state_1].seen[1][4] isa Float32
+        @test fetch(p)[:_state_1].seen == [(0, 10.0, 2.0f0, 1), (1, 10.0, 2.0f0, 1), (2, 10.0, 2.0f0, 1)]
         close(p)
+
+        # A value in a declaration is an error: a value kept between steps is state.
+        for decl in (:(local x = 0.0), :(local x::Float32 = 2), :(local x = keep_value_dsl_test(1.0)))
+            err = try
+                @eval @CompositeAlgorithm begin
+                    @state seen = Any[]
+                    $decl
+                    seen = push_seen_dsl_test(seen, x)
+                end
+                nothing
+            catch e
+                e
+            end
+            @test err isa LoadError && occursin("a local is declared without a value, `local x`", sprint(showerror, err.error))
+        end
 
         # An algorithm statement reads a local through its input; assigning its return writes the local.
         algo = @CompositeAlgorithm begin
             @state seen = Any[]
-            local x = 0.0
+            local x
+            x = keep_value_dsl_test(0.0)
             x = DSLLocalBump(x)
             seen = push_seen_dsl_test(seen, x)
         end
         p = Process(resolve(algo), repeat = 3); run(p)
-        @test fetch(p)[:_state_1].seen == [1.0, 2.0, 3.0]
+        @test fetch(p)[:_state_1].seen == [1.0, 1.0, 1.0]
         close(p)
 
         # Without `local`, `x = 0.0` assigns `x` every step, as in a Julia loop body.
@@ -1356,14 +1373,15 @@ end
         # A nested block reads and writes the locals of the blocks around it.
         algo = @CompositeAlgorithm begin
             @state seen = Any[]
-            local total = 0.0
+            local total
+            total = keep_value_dsl_test(0.0)
             @repeat 3 begin
                 total = plus_one_dsl_test(total)
             end
             seen = push_seen_dsl_test(seen, total)
         end
         p = Process(resolve(algo), repeat = 2); run(p)
-        @test fetch(p)[:_state_1].seen == [3.0, 6.0]
+        @test fetch(p)[:_state_1].seen == [3.0, 3.0]
         close(p)
 
         # `x = y` with `y` a value of the block is an error: a bare name is not a step.
@@ -1451,8 +1469,8 @@ end
         @test seen == repeat([2.0, 1.0], 4)
     end
 
-    @testset "An array literal and `local x = f()` are steps" begin
-        @info "Composite DSL: An array literal and `local x = f()` are steps"
+    @testset "An array literal is a step" begin
+        @info "Composite DSL: An array literal is a step"
         bump_literal_test!(b) = (b[1] += 1; b)
         record_copy_test!(v, x) = (push!(v, copy(x)); nothing)
         seen = Vector{Float64}[]
@@ -1468,7 +1486,8 @@ end
 
         seen_local = Vector{Float64}[]
         c = @CompositeAlgorithm begin
-            local acc = zeros(1)
+            local acc
+            acc = zeros(1)
             acc = bump_literal_test!(acc)
             record_copy_test!(seen_local, acc)
         end

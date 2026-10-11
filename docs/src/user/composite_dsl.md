@@ -12,6 +12,8 @@ algo = @CompositeAlgorithm begin
     @state seed = 3
     @alias source = SourceAlgo
 
+    local doubled                 # assigned every 10 steps: declared first
+
     produced, passthrough = source(seed = seed)
     doubled = @interval 10 double(produced)
     Sink(value = doubled)
@@ -556,16 +558,10 @@ end
 Inside `@CompositeAlgorithm`, use `@interval` or `@every` on the right-hand side
 of an entry.
 
-```julia
-algo = @CompositeAlgorithm begin
-    @state value = 1
-    sampled = @interval 10 Sample(value)
-end
-```
-
-A value a statement assigns (`sampled` above) lives for one step: statements later in the same step read it.
-Reading it in a step where it was not assigned is an error when the block is built. To keep a value between steps,
-declare it as a local at the top of the block, as in Julia:
+A value a statement assigns lives for one step: statements later in the same step read it. An assignment on a
+schedule does not run in every step, so the name it assigns has to exist first: declare it as a local at the top of
+the block, as in Julia. It then keeps its last value between steps. Without the declaration, building the block is an
+error.
 
 ```julia
 algo = @CompositeAlgorithm begin
@@ -576,12 +572,11 @@ algo = @CompositeAlgorithm begin
 end
 ```
 
-The forms are `local x`, `local x::T`, `local x = v` (`v` a literal or an outside name, taken where the block is
-built), `local x::T = v` and `local x = f(…)` (declares `x` and assigns it every time the statement runs). Without
-`local`, an assignment is a step, as in a Julia loop body: `x = 0.0` assigns 0.0 to `x` every step, like `x = f(…)`,
-and `x = [0, 0]` makes a new array every step. Use `@state` for a buffer kept between steps. A local lives for the run and is kept on a pause.
-Reading a local declared without a value before anything is assigned to it is an error; one declared as `nothing`
-reads `nothing` until then.
+The forms are `local x` and `local x::T`. A declaration has no value: `local x = 0.0` is an error, and a value
+that starts somewhere and is kept between steps is state, `@state x = 0.0`. Without `local`, an assignment is a step,
+as in a Julia loop body: `x = 0.0` assigns 0.0 to `x` every step, like `x = f(…)`, and `x = [0, 0]` makes a new
+array every step. Use `@state` for a buffer kept between steps. A local lives for the run and is kept on a pause.
+Reading a local before anything is assigned to it is an error.
 
 Inside `@Routine`, use `@repeat`.
 
