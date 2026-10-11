@@ -232,9 +232,9 @@ scope_record(x) = (push!(scope_seen, x); nothing)
     plan = CompositeAlgorithm(C(scope_produce, (), :y), inner(C(scope_double, (:y,), :y)), C(scope_record, (:y,), ()), (1, 2, 1))
     @test run_seen(plan, 4) == [1.0, 4.0, 3.0, 8.0]
 
-    # A return is unset each time its node is entered: read in a step before it is assigned, it is an error.
+    # A return lives for the step that assigns it: read in a step where it was not assigned, it is an error.
     plan = CompositeAlgorithm(C(scope_produce, (), :y), C(scope_record, (:y,), ()), (2, 1))
-    @test_throws UndefRefError run(InlineProcess(plan; repeats = 4))
+    @test_throws "`y` has no value in this step" run(InlineProcess(plan; repeats = 4))
 
     # An inner node's returns are not visible outside it.
     plan = CompositeAlgorithm(C(scope_produce, (), :y), inner(C(scope_double, (:y,), :z)), C(scope_record, (:z,), ()), (1, 2, 1))

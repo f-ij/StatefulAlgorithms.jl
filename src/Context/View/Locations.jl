@@ -176,6 +176,17 @@ that namespace's algorithm returned this step besides its state (empty if nothin
     return haskey(outputs, subcontextname) ? getproperty(outputs, subcontextname) : (;)
 end
 
+"""
+    _assigned_value(values, name)
+
+Return `values.name`, the runtime value `name` in one partition of the runtime context. An error when it is not
+there: a return read in a step where nothing assigned it (assigned by a child on a schedule, read in the other
+steps). Whether it is there is known from the type, so the check costs nothing.
+"""
+@inline _assigned_value(values::NamedTuple, name::Symbol) = haskey(values, name) ? getfield(values, name) : _throw_unassigned(name)
+
+@noinline _throw_unassigned(name::Symbol) = error("`$name` has no value in this step: it is assigned by a step that does not run in every step (on a schedule). Declare it first (`local $name` in a DSL block, `Local` in a plan) to keep its last value between steps.")
+
 """Resolve a replaced field through its stored backing location."""
 @inline function view_value(view::V, value::R) where {VL<:VarLocation, R<:ReplacedVar{VL}, V<:SubContextView}
     return @inline view_value(view, getproperty(view, getfield(value, :varlocation)))
@@ -204,7 +215,7 @@ function _read_partition end
 
 """`subcontextname` is a runtime context partition (`_inputs`, ...): read `varname` from that partition of the runtime context."""
 @inline _read_partition(::RuntimePartition, scv::SCV, ::Val{subcontextname}, ::Val{varname}) where {SCV<:SubContextView, subcontextname, varname} =
-    @inline view_value(scv, getfield(_runtime_values(getbundle(scv), Val(subcontextname)), varname))
+    @inline view_value(scv, _assigned_value(_runtime_values(getbundle(scv), Val(subcontextname)), varname))
 
 """`subcontextname` is a namespace: read `varname` from its state, or, if its state has no `varname`, from what its algorithm returned this step (see `storedproperty_fromsubcontext`)."""
 @inline _read_partition(::NamespacePartition, scv::SCV, ::Val{subcontextname}, ::Val{varname}) where {SCV<:SubContextView, subcontextname, varname} =
@@ -282,14 +293,14 @@ Read a routed runtime variable from the runtime context.
     target_variables = get_originalname(vl)
     if isnothing(getfunc(vl)) && target_variables isa Symbol
         return quote
-            return @inline view_value(sct, getfield(_runtime_values(getbundle(sct), Val($(QuoteNode(target_subcontext)))), $(QuoteNode(target_variables))))
+            return @inline view_value(sct, _assigned_value(_runtime_values(getbundle(sct), Val($(QuoteNode(target_subcontext)))), $(QuoteNode(target_variables))))
         end
     end
 
     varnames = target_variables isa Tuple ? target_variables : (target_variables,)
     varsymbols = ntuple(i -> gensym(:runtime_var), length(varnames))
     assign_exprs = [
-        :($(varsymbols[i]) = @inline view_value(sct, getfield(_runtime_values(getbundle(sct), Val($(QuoteNode(target_subcontext)))), $(QuoteNode(varnames[i])))))
+        :($(varsymbols[i]) = @inline view_value(sct, _assigned_value(_runtime_values(getbundle(sct), Val($(QuoteNode(target_subcontext)))), $(QuoteNode(varnames[i])))))
         for i in eachindex(varnames)
     ]
     fexpr = funcexpr(vl, varsymbols...)

@@ -14,8 +14,12 @@ plan node ends, see `leave_scope`), so a nested plan gets a larger `LoopContext`
 `_step!` is the same method as its parent's, and Julia's inference stops following a method that calls itself with a
 growing argument type: the call becomes dynamic. Written inline, nothing calls itself, and every line has its exact type.
 
-A child that runs on a schedule (`@every n`) may or may not add its returns in a step; `_conditional_step` gives both
-cases the same type (the returns it adds as `Maybe`s, unset when it did not run).
+Children on a schedule (`@every n`) run in a branch: consecutive children on the same schedule share one (an
+algorithm and the call that captures its return are such a pair). After the branch the runtime context has one type
+whether it ran or not (`_conditional_step`): the fields it had before, a field the branch assigned with another type
+as the union of both (`y = nothing`, then `y = @every 2 f()`), and nothing the branch added. The DSL only lets a
+scheduled statement assign a name that exists before it, so what the branch adds is internal (an algorithm's
+return, read by its capture in the same branch).
 =#
 
 """Whether a child is stepped inline (its body written into its parent's step) rather than by calling `_step!` for it."""
@@ -53,18 +57,28 @@ function _composite_step_exprs(PlanType::Type, plan, cursor, wiring, lc)
     algos, this_inc, outer = gensym(:algos), gensym(:inc), gensym(:outer)
     exprs = Any[:(local $algos = @inline getalgos($plan)), :(local $this_inc = @inline inc($cursor)),
                 :(local $outer = $lc), :($lc = @inline enter_scope($lc, $wiring))]
-    for i in 1:fieldcount(children)
-        ChildType = fieldtype(children, i)
+    i = 1
+    while i <= fieldcount(children)
         schedule_value = schedule_values[i]
-        namespace_expr = :($(fieldtype(namespace_types, i))())
-        setup, child, child_cursor, child_wiring = _child_setup_exprs(algos, cursor, wiring, i)
-        append!(exprs, setup)
         if _always_runs(schedule_value)
-            append!(exprs, _child_step_exprs(ChildType, child, child_cursor, child_wiring, namespace_expr, lc))
-        else
-            run = :(@inline should_run_schedule($schedule_value, $this_inc, (@inline getpersistent($lc))))
-            push!(exprs, :($lc = @inline _conditional_step($run, $child, $child_cursor, $lc, $child_wiring, $namespace_expr, process, lifetime)))
+            setup, child, child_cursor, child_wiring = _child_setup_exprs(algos, cursor, wiring, i)
+            append!(exprs, setup)
+            append!(exprs, _child_step_exprs(fieldtype(children, i), child, child_cursor, child_wiring, :($(fieldtype(namespace_types, i))()), lc))
+            i += 1
+            continue
         end
+        # The children from `i` on that have the same schedule: one branch.
+        last_in_group = i
+        while last_in_group < fieldcount(children) && isequal(schedule_values[last_in_group + 1], schedule_value)
+            last_in_group += 1
+        end
+        group = Any[_child_setup_exprs(algos, cursor, wiring, j) for j in i:last_in_group]
+        foreach(g -> append!(exprs, first(g)), group)
+        tuple_of(k) = Expr(:tuple, (g[k] for g in group)...)
+        namespaces = Expr(:tuple, (:($(fieldtype(namespace_types, j))()) for j in i:last_in_group)...)
+        run = :(@inline should_run_schedule($schedule_value, $this_inc, (@inline getpersistent($lc))))
+        push!(exprs, :($lc = @inline _conditional_step($run, $(tuple_of(2)), $(tuple_of(3)), $lc, $(tuple_of(4)), $namespaces, process, lifetime)))
+        i = last_in_group + 1
     end
     push!(exprs, :(@inline inc!($cursor, $plan)))
     push!(exprs, :($lc = @inline leave_scope($lc, $outer)))
@@ -158,84 +172,68 @@ Base.@constprop :aggressive @inline @generated function _step!(ca::PlanType, cur
 end
 
 """
-    _conditional_step(run, child, cursor, lc, wiring, namespace, process, lifetime)
+    _conditional_step(run, children, cursors, lc, wirings, namespaces, process, lifetime)
 
-`_step!(child, ...)` when `run`, else `lc` unchanged, with the same type either way: every return the step adds to the
-runtime context is a `Maybe`, unset when the child did not run. Reading it in a step where the child did not run is an
-`UndefRefError` (the DSL refuses such reads when the block is built). When inference cannot tell what the step returns,
-the two cases keep their own types.
+The children (tuples: their values, cursors, wiring views, namespaces) stepped in order when `run`, else `lc`
+unchanged, with one type either way (`_conditional_loopcontext_type`). When inference cannot tell what the steps
+return, the two cases keep their own types.
 """
-@inline function _conditional_step(run::Bool, child::ChildType, cursor::CursorType, lc::LoopContextType, wiring::WiringViewType, namespace::NamespaceType, process::ProcessType, lifetime::LifetimeType) where {ChildType, CursorType, LoopContextType<:LoopContext, WiringViewType, NamespaceType, ProcessType, LifetimeType}
-    Stepped = Core.Compiler.return_type(_step!, Tuple{ChildType, CursorType, LoopContextType, WiringViewType, NamespaceType, ProcessType, LifetimeType})
+@inline function _conditional_step(run::Bool, children::ChildrenType, cursors::CursorsType, lc::LoopContextType, wirings::WiringViewsType, namespaces::NamespacesType, process::ProcessType, lifetime::LifetimeType) where {ChildrenType<:Tuple, CursorsType<:Tuple, LoopContextType<:LoopContext, WiringViewsType<:Tuple, NamespacesType<:Tuple, ProcessType, LifetimeType}
+    Stepped = Core.Compiler.return_type(_step_children!, Tuple{LoopContextType, ChildrenType, CursorsType, WiringViewsType, NamespacesType, ProcessType, LifetimeType})
     Target = _conditional_loopcontext_type(LoopContextType, Stepped)
-    Target === Nothing && return run ? (@inline _step!(child, cursor, lc, wiring, namespace, process, lifetime)) : lc
-    run && return @inline _as_conditional((@inline _step!(child, cursor, lc, wiring, namespace, process, lifetime)), Target)
+    Target === Nothing && return run ? (@inline _step_children!(lc, children, cursors, wirings, namespaces, process, lifetime)) : lc
+    run && return @inline _as_conditional((@inline _step_children!(lc, children, cursors, wirings, namespaces, process, lifetime)), Target)
     return @inline _as_conditional(lc, Target)
 end
 
+"""`lc` after `_step!` of each child in turn (tuples of the children and their cursors, wiring views and namespaces)."""
+@inline @generated function _step_children!(lc::LoopContextType, children::ChildrenType, cursors, wirings, namespaces, process, lifetime) where {LoopContextType<:LoopContext, ChildrenType<:Tuple}
+    steps = (:(lc = @inline _step!(getfield(children, $k), getfield(cursors, $k), lc, getfield(wirings, $k), getfield(namespaces, $k), process, lifetime)) for k in 1:fieldcount(ChildrenType))
+    return Expr(:block, steps..., :(return lc))
+end
+
 """
-The `LoopContext` type both outcomes of a conditional step get, from the type before it and the type `_step!` returns:
-the returned type with every runtime field that is new as a `Maybe`. `Nothing` when `Stepped` is not one concrete
-`LoopContext` type.
+The `LoopContext` type both outcomes of a conditional step get, from the type before it (`Before`) and the type the
+steps return (`Stepped`): the runtime fields of `Before`, each with the union of its type before and after; the
+fields the steps added are left out. `Nothing` when `Stepped` is not one concrete `LoopContext` type.
 """
 Base.@assume_effects :foldable function _conditional_loopcontext_type(@nospecialize(Before), @nospecialize(Stepped))
     (Stepped isa DataType && Stepped <: LoopContext && isconcretetype(Stepped)) || return Nothing
-    before = getdatatype.(fieldtypes(fieldtype(runtime_type(Before), :subcontexts)))
-    before_names = fieldnames(fieldtype(runtime_type(Before), :subcontexts))
-    after_type = runtime_type(Stepped)
-    after = fieldtype(after_type, :subcontexts)
-    parts = Any[]
-    for (name, S) in zip(fieldnames(after), fieldtypes(after))
-        data = getdatatype(S)
-        old = name in before_names ? before[findfirst(==(name), before_names)] : NamedTuple{(), Tuple{}}
-        push!(parts, name => SubContext{name, _maybe_new_fields(data, old)})
+    before = fieldtype(runtime_type(Before), :subcontexts)
+    after = fieldtype(runtime_type(Stepped), :subcontexts)
+    parts = map(fieldnames(before), fieldtypes(before)) do name, S
+        SubContext{name, _joined_fields(getdatatype(S), getdatatype(fieldtype(after, name)))}
     end
-    runtime = ProcessContext{NamedTuple{Tuple(first.(parts)), Tuple{last.(parts)...}}, fieldtype(after_type, :reg)}
+    runtime = ProcessContext{NamedTuple{fieldnames(before), Tuple{parts...}}, fieldtype(runtime_type(Stepped), :reg)}
     return LoopContext{persistent_type(Stepped), runtime, Stepped.parameters[3]}
 end
 
-"""The named tuple type `data` with every field that `old` does not have as a `Maybe` (nested named tuples field by field)."""
-function _maybe_new_fields(@nospecialize(data), @nospecialize(old))
-    data <: NamedTuple || return data
-    types = map(fieldnames(data), fieldtypes(data)) do name, T
-        if name in fieldnames(old)
-            T <: NamedTuple && fieldtype(old, name) <: NamedTuple ? _maybe_new_fields(T, fieldtype(old, name)) : T
-        else
-            T <: NamedTuple ? _maybe_new_fields(T, NamedTuple{(), Tuple{}}) : (T <: Maybe ? T : make_maybe_type(T, UndefInitializer))
-        end
+"""The fields of the named tuple type `old`, each with the union of its type in `old` and in `new` (nested named tuples field by field)."""
+function _joined_fields(@nospecialize(old), @nospecialize(new))
+    types = map(fieldnames(old), fieldtypes(old)) do name, T
+        N = fieldtype(new, name)
+        T <: NamedTuple && N <: NamedTuple ? _joined_fields(T, N) : Union{T, N}
     end
-    return NamedTuple{fieldnames(data), Tuple{types...}}
+    return NamedTuple{fieldnames(old), Tuple{types...}}
 end
 
-"""`lc` as a value of type `Target` (see `_conditional_loopcontext_type`): new fields wrapped in a `Maybe`, missing ones unset."""
+"""`lc` as a value of type `Target` (see `_conditional_loopcontext_type`): only the fields `Target` has, converted to its field types."""
 @inline @generated function _as_conditional(lc::LoopContextType, ::Type{Target}) where {LoopContextType<:LoopContext, Target}
     LoopContextType === Target && return :lc
     target_runtime = runtime_type(Target)
     target_parts = fieldtype(target_runtime, :subcontexts)
-    have_parts = fieldtype(runtime_type(LoopContextType), :subcontexts)
     part_exprs = map(fieldnames(target_parts), fieldtypes(target_parts)) do name, S
-        source = name in fieldnames(have_parts) ? :(getdata(getfield(get_subcontexts(getruntime(lc)), $(QuoteNode(name))))) : nothing
-        source_type = name in fieldnames(have_parts) ? getdatatype(fieldtype(have_parts, name)) : nothing
-        :($S($(_conditional_value_expr(getdatatype(S), source, source_type))))
+        :($S($(_conditional_value_expr(getdatatype(S), :(getdata(getfield(get_subcontexts(getruntime(lc)), $(QuoteNode(name)))))))))
     end
     runtime = :($target_runtime(NamedTuple{$(fieldnames(target_parts))}(($(part_exprs...),)), getfield(getruntime(lc), :reg)))
     return :(LoopContext{$(persistent_type(Target)), $target_runtime, $(Target.parameters[3])}(getpersistent(lc), $runtime))
 end
 
-function _conditional_value_expr(Target::Type, source, SourceType)
+"""The value of type `Target` read from `source` (an expression): a named tuple field by field, anything else as it is."""
+function _conditional_value_expr(Target::Type, source)
     Target <: NamedTuple || return source
-    values = map(fieldnames(Target), fieldtypes(Target)) do name, T
-        has = SourceType !== nothing && name in fieldnames(SourceType)
-        value = has ? :(getfield($source, $(QuoteNode(name)))) : nothing
-        if T <: NamedTuple
-            _conditional_value_expr(T, value, has ? fieldtype(SourceType, name) : nothing)
-        elseif T <: Maybe
-            has ? (fieldtype(SourceType, name) <: Maybe ? value : :($T($value))) : :($T())
-        else
-            value
-        end
-    end
-    return :(NamedTuple{$(fieldnames(Target))}(($(values...),)))
+    values = (_conditional_value_expr(T, :(getfield($source, $(QuoteNode(name))))) for (name, T) in zip(fieldnames(Target), fieldtypes(Target)))
+    return :($Target(($(values...),)))
 end
 
 """
