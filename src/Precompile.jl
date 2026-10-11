@@ -182,7 +182,7 @@ _process_precompile_scale(x; scale = 1.0) = x * scale
         resolved_managed_algo = resolve(managed_algo)
         resolve_process_inputs_overrides(resolved_managed_algo, managed_specs)
         initialized_managed_algo = StatefulAlgorithms.init(managed_algo, managed_specs...; lifetime = Repeat(1))
-        getstoredcontext(initialized_managed_algo)
+        getpersistentcontext(initialized_managed_algo)
 
         managed_process = Process(managed_algo, managed_specs...; repeats = 1)
         run(managed_process)

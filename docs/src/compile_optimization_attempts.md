@@ -96,10 +96,10 @@ context only.
   `Any`, so resumed contexts are intentionally abstract only at the
   `ProcessContext` level.
 
-- Kept concrete stored contexts on initialized `LoopAlgorithm` values.
+- Kept concrete persistent contexts on initialized `LoopAlgorithm` values.
   `CompositeAlgorithm` and `Routine` both store `context::C`, where `C` is a
   type parameter. For an initialized algorithm,
-  `fieldtype(typeof(la), :context) === typeof(getstoredcontext(la))` holds, and
+  `fieldtype(typeof(la), :context) === typeof(getpersistentcontext(la))` holds, and
   the first-entry process path through `_typed_runtime_context(process)` infers
   the exact `ProcessContext{...}` type.
 
@@ -190,7 +190,7 @@ context only.
 - Adding the process context type as a second `Process{F,C}` parameter.
   This made first-entry context access infer, but it also made the process type
   larger and worsened direct time to first run. The retained version keeps
-  `Process{F}` and reads the typed context from `getstoredcontext(getalgo(p))`
+  `Process{F}` and reads the typed context from `getpersistentcontext(getalgo(p))`
   while `runtime_context` is empty.
 
 - Type-level replacement for `_global_context_type`.
@@ -268,9 +268,9 @@ context only.
 The initialized loop algorithm context is typed correctly. A small diagnostic
 using a one-step `CompositeAlgorithm` showed:
 
-- `typeof(la).parameters[6]` is the concrete stored context type.
-- `fieldtype(typeof(la), :context) === typeof(getstoredcontext(la))`.
-- `getstoredcontext(la)` infers the concrete `ProcessContext{...}`.
+- `typeof(la).parameters[6]` is the concrete persistent context type.
+- `fieldtype(typeof(la), :context) === typeof(getpersistentcontext(la))`.
+- `getpersistentcontext(la)` infers the concrete `ProcessContext{...}`.
 - `_typed_runtime_context(process)` infers the same concrete `ProcessContext{...}`
   before the process has stored a returned runtime context.
 

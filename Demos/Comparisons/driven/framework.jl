@@ -62,6 +62,6 @@ function framework_setup(drive)
 end
 framework_go!(s) = (s.out[] = run(s.la; lifetime = Until(t -> t >= TEND, Var(s.integ, :t))); nothing)
 function framework_result(s)
-    c = StatefulAlgorithms.getstoredcontext(s.out[])
+    c = StatefulAlgorithms.getpersistentcontext(s.out[])
     return (c[s.integ].u, c[s.integ].nacc, c[s.integ].nrej, length(c[s.ckpt].snaps))
 end

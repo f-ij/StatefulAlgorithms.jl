@@ -241,21 +241,21 @@ end
     process::P,
     lifetime::LT,
 ) where {E<:ContextExchange, L<:LoopContext, W<:PlanWiringView, Name, P<:AbstractProcess, LT<:Lifetime}
-    context = @inline getcontext(lc)
-    store = _context_exchange_store(context, Name)
+    persistent_context = @inline getpersistent(lc)
+    store = _context_exchange_store(persistent_context, Name)
     _context_exchange_due!(store) || return lc
-    return @inline withstored(lc, _step_context_exchange_store(context, store))
+    return @inline withpersistent(lc, _step_context_exchange_store(persistent_context, store))
 end
 
 # The persistent fields an exchange writes (see src/Context/Carried/Writes.jl): the targets it resolved at init.
-@inline _leaf_writes(exchange::ContextExchange, context::C, ::Type{RC}, wiring::W, ::Namespace{Name}) where {C<:ProcessContext,RC,W,Name} =
-    _exchange_writes(C, Val(Name))
+@inline _leaf_writes(exchange::ContextExchange, persistent_context::PersistentContextType, ::Type{RuntimeContextType}, wiring::WiringViewType, ::Namespace{Name}) where {PersistentContextType<:ProcessContext, RuntimeContextType, WiringViewType, Name} =
+    _exchange_writes(PersistentContextType, Val(Name))
 
-@generated function _exchange_writes(::Type{C}, ::Val{Name}) where {C<:ProcessContext,Name}
-    data = getdatatype(fieldtype(C.parameters[1], Name))
+@generated function _exchange_writes(::Type{PersistentContextType}, ::Val{Name}) where {PersistentContextType<:ProcessContext, Name}
+    data = getdatatype(fieldtype(PersistentContextType.parameters[1], Name))
     specs = fieldtype(data, :store).parameters[1].parameters
-    W = Tuple((_exchange_subcontext(spec), _exchange_varname(spec)) for spec in specs)
-    return :(Val($(_union_written((), W))))
+    written = Tuple((_exchange_subcontext(spec), _exchange_varname(spec)) for spec in specs)
+    return :(Val($(_union_written((), written))))
 end
 
 @inline function StatefulAlgorithms.step!(exchange::ContextExchange, context::C) where {C<:ProcessContext}

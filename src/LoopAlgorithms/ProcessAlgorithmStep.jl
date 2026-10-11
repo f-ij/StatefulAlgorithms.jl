@@ -56,12 +56,14 @@ end
     @inline view(lc, algo, namespace; sharedcontexts = (@inline shares(wiring)), sharedvars = (@inline routes(wiring)))
 
 # The persistent fields a leaf writes (see src/Context/Carried/Writes.jl).
-@inline _writes(algo::A, ::NoLoopCursor, context::C, ::Type{RC}, wiring::W, namespace::N, process::P, lifetime::LT) where {A<:ProcessAlgorithm,C<:ProcessContext,RC,W,N,P,LT} =
-    @inline _leaf_writes(algo, context, RC, wiring, namespace)
+@inline _writes(algo::AlgoType, ::NoLoopCursor, persistent_context::PersistentContextType, ::Type{RuntimeContextType}, wiring::WiringViewType, namespace::NamespaceType, process::ProcessType, lifetime::LifetimeType) where {AlgoType<:ProcessAlgorithm, PersistentContextType<:ProcessContext, RuntimeContextType, WiringViewType, NamespaceType, ProcessType, LifetimeType} =
+    @inline _leaf_writes(algo, persistent_context, RuntimeContextType, wiring, namespace)
 
-"""The persistent fields one step of a leaf can write: those of the payload its merge writes, read off its type."""
-@inline _leaf_writes(algo::A, context::C, ::Type{RC}, wiring::W, namespace::N) where {A,C<:ProcessContext,RC,W,N} =
-    RC <: ProcessContext ? _payload_writes(Core.Compiler.return_type(_leaf_payload, Tuple{A,_loop_context_type(C, RC, W),W,N}), C) : _every_field(C)
+"""The persistent fields one step of an algorithm can write: those of the payload its merge writes, read off its type."""
+@inline _leaf_writes(algo::AlgoType, persistent_context::PersistentContextType, ::Type{RuntimeContextType}, wiring::WiringViewType, namespace::NamespaceType) where {AlgoType, PersistentContextType<:ProcessContext, RuntimeContextType, WiringViewType, NamespaceType} =
+    RuntimeContextType <: ProcessContext ?
+        _payload_writes(Core.Compiler.return_type(_leaf_payload, Tuple{AlgoType, _loop_context_type(PersistentContextType, RuntimeContextType, WiringViewType), WiringViewType, NamespaceType}), PersistentContextType) :
+        _every_field(PersistentContextType)
 
 """
 What one step of a leaf writes into the persistent context (see `_merge_payload`), built from the same pieces as its
@@ -94,13 +96,13 @@ the current plan wiring.
     process::P,
     lifetime::LT,
 ) where {A<:ProcessAlgorithm,L<:LoopContext,W<:PlanWiringView,P<:AbstractProcess,LT<:Lifetime}
-    context = @inline getcontext(lc)
-    retval = @inline step_updates(@inline step!(algo, context))
-    runtimecontext = @inline merge_runtime_return(
-        (@inline getruntimecontext(lc)),
+    persistent_context = @inline getpersistent(lc)
+    retval = @inline step_updates(@inline step!(algo, persistent_context))
+    runtime_context = @inline merge_runtime_return(
+        (@inline getruntime(lc)),
         Val(:_captured_returns),
         retval,
         return_demand(wiring, Namespace{:_captured_returns}()),
     )
-    return @inline withcontexts(lc, context, runtimecontext)
+    return @inline withcontexts(lc, persistent_context, runtime_context)
 end

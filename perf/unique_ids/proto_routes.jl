@@ -47,12 +47,12 @@ wall(f) = (t0 = time_ns(); r = f(); ((time_ns() - t0) / 1e6, r))
 function today(n)
     a = Unique(Counter()); b = Unique(Counter())
     la = run(SA.init(resolve(CompositeAlgorithm(a, b, Reader, (1, 1, 1), Route(b => Reader, :x)))); repeats = n)
-    SA.getstoredcontext(la)[Reader].seen
+    SA.getpersistentcontext(la)[Reader].seen
 end
 function normalized(n)
     a = Unique(Counter()); b = Unique(Counter())
     la = run(SA.init(resolve(stable_composite(a, b, Reader, (1, 1, 1), Route(b => Reader, :x)))); repeats = n)
-    SA.getstoredcontext(la)[Reader].seen
+    SA.getpersistentcontext(la)[Reader].seen
 end
 today(10); normalized(10)
 @printf("%-6s %26s %30s\n", "call", "today: compile ms / wall ms", "normalizing entry: compile / wall")

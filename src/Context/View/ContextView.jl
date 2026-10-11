@@ -18,8 +18,8 @@ view_sharedvars(scv::Union{SubContextView{B, SubKey, T, NT, Aliases, SharedConte
 @inline get_captured_returns(scv::SubContextView, name::Symbol) = getproperty(get_captured_returns(scv), name)
 
 @inline getbundle(scv::SubContextView) = @inline getfield(scv, :bundle)
-@inline getcontext(scv::SubContextView) = @inline getcontext(getbundle(scv))
-@inline getsubcontext(scv::SubContextView{B, SubKey}) where {B<:ContextBundle, SubKey} = @inline getproperty(getcontext(scv), SubKey)
+@inline getpersistent(scv::SubContextView) = @inline getpersistent(getbundle(scv))
+@inline getsubcontext(scv::SubContextView{B, SubKey}) where {B<:ContextBundle, SubKey} = @inline getproperty(getpersistent(scv), SubKey)
 
 
 getinjected(scv::SubContextView) = getfield(scv, :injected)
@@ -115,7 +115,7 @@ end
     return @inline view(b, instance, inject, sharedcontexts, sharedvars)
 end
 
-# Views of a stored context on its own (looking at a context outside a loop): a bundle with no runtime values.
+# Views of a persistent context on its own (looking at a context outside a loop): a bundle with no runtime values.
 @inline Base.view(pc::ProcessContext, instance::A, namespace::Namespace; kwargs...) where {A<:ProcessAlgorithm} =
     @inline view(bundle_of(pc), instance, namespace; kwargs...)
 @inline Base.view(pc::ProcessContext, instance::SA; kwargs...) where {SA<:AbstractIdentifiableAlgo} =
@@ -145,7 +145,7 @@ end
 Regenerate a SubContextView from its type
 """
 @inline function Base.view(pc::PC, scv::CV; inject = (;)) where {PC <: ProcessContext, CV <: SubContextView}
-    @inline view(withstored(getbundle(scv), pc), this_instance(scv), inject(scv))
+    @inline view(withpersistent(getbundle(scv), pc), this_instance(scv), inject(scv))
 end
 
 """
@@ -166,7 +166,7 @@ end
 """
 Get the type of the original subcontext from the view
 """
-@inline subcontext_type(scv::Union{SubContextView{B, SubKey}, Type{<:SubContextView{B, SubKey}}}) where {B<:ContextBundle, SubKey} = subcontext_type(stored_type(B), SubKey)
+@inline subcontext_type(scv::Union{SubContextView{B, SubKey}, Type{<:SubContextView{B, SubKey}}}) where {B<:ContextBundle, SubKey} = subcontext_type(persistent_type(B), SubKey)
 
 
 

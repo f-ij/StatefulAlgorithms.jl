@@ -94,7 +94,7 @@ Runtime wrapper for a loop execution plan.
 The `plan` field is the block as written, a `CompositeAlgorithm`, `Routine` or
 `ThreadedCompositeAlgorithm`, holding its children, wiring and states. The remaining
 fields are what `resolve` and `init` add: the options collected from the whole plan
-tree, the registry, stored context, initializers, and overrides. Reinitialization
+tree, the registry, persistent context, initializers, and overrides. Reinitialization
 replaces these without changing the type of the wrapped plan.
 """
 struct LoopAlgorithm{Plan<:AbstractPlan, O, R, C, Inits, Overrides, id} <: AbstractLoopAlgorithm

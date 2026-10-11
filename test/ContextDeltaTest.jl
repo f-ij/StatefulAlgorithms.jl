@@ -46,7 +46,7 @@ function written_fields_of(plan)
         step_plan,
         StatefulAlgorithms._loop_cursor(process, step_plan, resume),
         StatefulAlgorithms.LoopContext(
-            StatefulAlgorithms._loop_state_context(stored, resume),
+            StatefulAlgorithms._loop_persistent_context(stored, resume),
             StatefulAlgorithms._loop_runtime_context(func, inputs, process, lifetime, stored, resume),
         ),
         StatefulAlgorithms._root_wiring_view(func, step_plan),

@@ -30,12 +30,12 @@ end
 function with_unique(n)                        # today
     a = Unique(Counter()); b = Unique(Counter())
     la = run(SA.init(resolve(CompositeAlgorithm(a, b, Tally, (1, 1, 1)))); repeats = n)
-    SA.getstoredcontext(la)[Tally].n
+    SA.getpersistentcontext(la)[Tally].n
 end
 function with_normalizing_entry(n)             # the same, through the type-erased entry
     a = Unique(Counter()); b = Unique(Counter())
     la = run(SA.init(resolve(stable_composite(a, b, Tally, (1, 1, 1)))); repeats = n)
-    SA.getstoredcontext(la)[Tally].n
+    SA.getpersistentcontext(la)[Tally].n
 end
 t(f) = (t0 = time_ns(); r = f(); ((time_ns() - t0) / 1e6, r))
 @printf("%-6s %22s %34s\n", "call", "Unique today, ms", "through the normalizing entry, ms")

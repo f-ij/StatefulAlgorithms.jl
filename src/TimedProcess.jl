@@ -8,7 +8,7 @@ end
 
 function TimedProcess(func::F; lifetime = Indefinite(), interval::Real = 0., context = nothing) where F
     algo = isnothing(context) ? init(normalize_process_algo(func)) : _with_lifecycle(resolve(normalize_process_algo(func)), context, (), ())
-    prepared_context = getstoredcontext(algo)
+    prepared_context = getpersistentcontext(algo)
 
     callback = let context = prepared_context
         timer -> @inline step!(algo, context)
@@ -19,7 +19,7 @@ end
 
 function init!(tp::TimedProcess)
     tp.algo = init(tp.algo)
-    tp.context = getstoredcontext(tp.algo)
+    tp.context = getpersistentcontext(tp.algo)
     tp.callback = let context = tp.context
         timer -> @inline step!(tp.algo, context)
     end

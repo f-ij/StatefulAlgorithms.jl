@@ -66,7 +66,7 @@ Every bare name a statement reads is one of these. The kind decides where the va
 
 | Kind | Made by | Lives | On pause | Where |
 |---|---|---|---|---|
-| state field | `@state x = v`, `@state x`; an algorithm's `init` (its `@managed` fields) | persistent: the process | kept, and saved | stored context, under the block's state (`_state_1`, `_state_2`, ...) or the algorithm's namespace |
+| state field | `@state x = v`, `@state x`; an algorithm's `init` (its `@managed` fields) | persistent: the process | kept, and saved | persistent context, under the block's state (`_state_1`, `_state_2`, ...) or the algorithm's namespace |
 | input | `@input x`, `@input x::T`, `@input x = v` | the run, read-only | kept | runtime context, `_inputs` |
 | declared local | `local x`, `local x::T`, `local x = v`, `local x::T = v` | the run | kept | runtime context, `_declared_locals` |
 | captured return | `y = f(…)` or `y = Algo(…)`: what a call or an algorithm returns, and `x = v` | one step of its block | dropped | runtime context, `_captured_returns` |

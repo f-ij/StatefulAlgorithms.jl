@@ -21,7 +21,7 @@ Build or rebuild a concrete `LoopAlgorithm` runtime wrapper.
 This constructor keeps the plan type stable and swaps only runtime/lifecycle
 fields such as states, registry, context, inputs, and overrides.
 """
-LoopAlgorithm(plan::LoopAlgorithm; options = getoptions(plan), registry = getregistry(plan), context = getstoredcontext(plan), inits = getstoredinits(plan), overrides = getstoredoverrides(plan), id = getid(plan)) =
+LoopAlgorithm(plan::LoopAlgorithm; options = getoptions(plan), registry = getregistry(plan), context = getpersistentcontext(plan), inits = getstoredinits(plan), overrides = getstoredoverrides(plan), id = getid(plan)) =
     LoopAlgorithm{typeof(getplan(plan)), typeof(options), typeof(registry), typeof(context), typeof(inits), typeof(overrides), id}(getplan(plan), options, registry, context, inits, overrides)
 
 LoopAlgorithm(plan::AbstractPlan; options = (), registry = nothing, context = nothing, inits = (), overrides = (), id = getid(plan)) =
@@ -43,10 +43,10 @@ Base.isempty(wiring::PlanWiring) =
 @inline getoptions(cla::LoopAlgorithm) = getfield(cla, :options)
 @inline getstates(cla::LoopAlgorithm) = getstates(getplan(cla))
 @inline getregistry(cla::LoopAlgorithm) = getfield(cla, :reg)
-@inline getstoredcontext(cla::LoopAlgorithm) = getfield(cla, :context)
+@inline getpersistentcontext(cla::LoopAlgorithm) = getfield(cla, :context)
 @inline getstoredinits(cla::LoopAlgorithm) = getfield(cla, :inits)
 @inline getstoredoverrides(cla::LoopAlgorithm) = getfield(cla, :overrides)
-@inline context(cla::LoopAlgorithm) = getstoredcontext(cla)
+@inline context(cla::LoopAlgorithm) = getpersistentcontext(cla)
 
 @inline getalgos(cla::LoopAlgorithm) = getalgos(getplan(cla))
 @inline getalgo(cla::LoopAlgorithm, idx) = getalgo(getplan(cla), idx)
@@ -82,7 +82,7 @@ setwiring(la::LoopAlgorithm, wiring) = setfield(la, :plan, setwiring(getplan(la)
 setstates(la::LoopAlgorithm, states) = setfield(la, :plan, setstates(getplan(la), states))
 
 function setoptions(la::LoopAlgorithm{Plan, O, R, C, Inits, Overrides, id}, options) where {Plan, O, R, C, Inits, Overrides, id}
-    LoopAlgorithm{Plan, typeof(options), R, C, Inits, Overrides, id}(getplan(la), options, getregistry(la), getstoredcontext(la), getstoredinits(la), getstoredoverrides(la))
+    LoopAlgorithm{Plan, typeof(options), R, C, Inits, Overrides, id}(getplan(la), options, getregistry(la), getpersistentcontext(la), getstoredinits(la), getstoredoverrides(la))
 end
 
 function _with_lifecycle(la::LoopAlgorithm{Plan, O, R, OldC, OldI, OldOv, id}, context::C, inits::I, overrides::Ov) where {Plan, O, R, OldC, OldI, OldOv, id, C, I, Ov}
@@ -90,7 +90,7 @@ function _with_lifecycle(la::LoopAlgorithm{Plan, O, R, OldC, OldI, OldOv, id}, c
 end
 
 @inline _attach_registry(la::LoopAlgorithm{Plan, O, OldR, C, Inits, Overrides, id}, registry::R) where {Plan, O, OldR, C, Inits, Overrides, id, R<:NameSpaceRegistry} =
-    LoopAlgorithm{Plan, O, R, C, Inits, Overrides, id}(getplan(la), getoptions(la), registry, getstoredcontext(la), getstoredinits(la), getstoredoverrides(la))
+    LoopAlgorithm{Plan, O, R, C, Inits, Overrides, id}(getplan(la), getoptions(la), registry, getpersistentcontext(la), getstoredinits(la), getstoredoverrides(la))
 
 @inline isresolved(la::LoopAlgorithm) = !isnothing(getregistry(la))
 @inline isresolved(::AbstractPlan) = false
@@ -151,23 +151,23 @@ Internal single-step entrypoint for tests and manual loop-plan driving.
 This builds the minimal process handle needed by routines and interval logic,
 then enters the same `_step!` chain used by `run`.
 """
-@inline function _step!(la::LA, context::C) where {LA<:LoopSpec, C<:AbstractContext}
+@inline function _step!(la::LA, persistent_context::C) where {LA<:LoopSpec, C<:AbstractContext}
     lifetime = Indefinite()
     process = LoopRunProcess(lifetime)
     plan = @inline getplan(la)
     cursor = @inline loop_cursor(plan, Val(false))
-    runtimecontext = @inline _empty_context()
-    stepped = @inline _step!(plan, cursor, LoopContext(context, runtimecontext), PlanWiringView(getwiring(plan)), Namespace{nothing}(), process, lifetime)
-    return @inline getcontext(stepped)
+    runtime_context = @inline _empty_context()
+    stepped_lc = @inline _step!(plan, cursor, LoopContext(persistent_context, runtime_context), PlanWiringView(getwiring(plan)), Namespace{nothing}(), process, lifetime)
+    return @inline getpersistent(stepped_lc)
 end
 
 """
-Return the public result for a loop after cleanup has produced the stored context.
+Return the public result for a loop after cleanup has produced the persistent context.
 """
 @inline function _loop_final_result(algo, cleaned_context)
     return cleaned_context
 end
 
-@inline function _loop_final_result(algo, cleaned_context, runtimecontext)
+@inline function _loop_final_result(algo, cleaned_context, runtime_context)
     return cleaned_context
 end

@@ -25,7 +25,7 @@ function package_growing()
     end
     la = StatefulAlgorithms.init(resolve(experiment), Init(integ; u0 = U0, par = PARAMS, rtol = RTOL))
     la = run(la; lifetime = Until(t -> t >= TEND, Var(integ, :t)))
-    c = StatefulAlgorithms.getstoredcontext(la)
+    c = StatefulAlgorithms.getpersistentcontext(la)
     return c[integ].u, c[integ].nacc, length(c[ckpt].snaps)
 end
 

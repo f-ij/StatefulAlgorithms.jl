@@ -153,7 +153,7 @@ end
 #=
 A local declared without a value or as `nothing` has no type of its own. As in Julia, its type
 is the type of every value written to it. That is found by inference before the first step
-(`_settle_runtime`, Outputs.jl), so the context has its final type from the start: a local without a value
+(`_runtime_context_typed_before_loop`, Outputs.jl), so the context has its final type from the start: a local without a value
 becomes `Maybe{T,F,UndefInitializer}`, a `nothing` local `Maybe{T,F,Nothing}`. Values written with
 different types are promoted to one type.
 
@@ -200,7 +200,7 @@ end
 
 """
 The probes in context type `RC`, each widened by the types the step wrote to it, given the runtime context types one
-plan step can return (`returned`). Used by `_next_runtime_type` (Outputs.jl).
+plan step can return (`returned`). Used by `_runtime_context_type_with_step_writes` (Outputs.jl).
 """
 function _probe_joined_type(::Type{RC}, returned) where {RC<:ProcessContext}
     return _replace_local_types(RC) do name, P
@@ -235,27 +235,27 @@ cause it: inference is repeated for each step on its own, with the locals as in 
 types; in either round, a step whose return cannot be inferred is reported. Only runs to build
 the error.
 """
-function _local_type_error(::Type{R}, checking::Bool, plan, cursor, context, wiring, process, lifetime) where {R<:ProcessContext}
+function _local_type_error(::Type{R}, checking::Bool, plan, cursor, persistent_context, wiring, process, lifetime) where {R<:ProcessContext}
     culprits = String[]
-    _find_local_type_culprits!(culprits, R, checking, plan, cursor, context, wiring, process, lifetime)
+    _find_local_type_culprits!(culprits, R, checking, plan, cursor, persistent_context, wiring, process, lifetime)
     isempty(culprits) && push!(culprits, checking ?
         "A local declared without a value (or as `nothing`) changes type after its first value, but no single step could be pinned down. For now this is not allowed: such a local takes the type of its first value and has to keep it. Declare the locals with a type (for example `Local(x = 0.0)`)." :
         "The type of a local declared without a value (or as `nothing`) cannot be found: the plan's step cannot be inferred. Declare the locals with a type (for example `Local(x = 0.0)`).")
     error(join(culprits, "\n\n"))
 end
 
-function _find_local_type_culprits!(culprits, ::Type{R}, checking, plan::AbstractPlan, cursor, context, wiring, process, lifetime) where {R}
+function _find_local_type_culprits!(culprits, ::Type{R}, checking, plan::AbstractPlan, cursor, persistent_context, wiring, process, lifetime) where {R}
     for i in 1:length(getalgos(plan))
         child = getalgo(plan, i)
         child_cursor = child_loop_cursor(cursor, Val(i))
         child_wiring = child_wiring_view(wiring, Val(i))
         if child isa AbstractPlan
-            _find_local_type_culprits!(culprits, R, checking, child, child_cursor, context, child_wiring, process, lifetime)
+            _find_local_type_culprits!(culprits, R, checking, child, child_cursor, persistent_context, child_wiring, process, lifetime)
             continue
         end
         namespace = getfield(getfield(plan, :namespaces), i)
         # What the step itself returns (before it is merged into the context), with the locals as in `R`.
-        returned = Core.Compiler.return_type(_step_return, Tuple{typeof(child), LoopContext{typeof(context), R, wiring_parent(typeof(child_wiring))}, typeof(child_wiring), typeof(namespace)})
+        returned = Core.Compiler.return_type(_step_return, Tuple{typeof(child), LoopContext{typeof(persistent_context), R, wiring_parent(typeof(child_wiring))}, typeof(child_wiring), typeof(namespace)})
         append!(culprits, _local_type_problems(_step_label(child, namespace), R, returned, typeof(child_wiring), checking))
     end
     return culprits

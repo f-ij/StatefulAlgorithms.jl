@@ -149,8 +149,8 @@ end
 # shared path. Plain plans report no stored lifecycle data.
 @inline getstoredinits(la::LA) where {LA<:LoopSpec} = hasfield(LA, :inits) ? getfield(la, :inits) : ()
 @inline getstoredoverrides(la::LA) where {LA<:LoopSpec} = hasfield(LA, :overrides) ? getfield(la, :overrides) : ()
-@inline getstoredcontext(la::LA) where {LA<:LoopSpec} = hasfield(LA, :context) ? getfield(la, :context) : nothing
-@inline context(la::LA) where {LA<:LoopSpec} = getstoredcontext(la)
+@inline getpersistentcontext(la::LA) where {LA<:LoopSpec} = hasfield(LA, :context) ? getfield(la, :context) : nothing
+@inline context(la::LA) where {LA<:LoopSpec} = getpersistentcontext(la)
 @inline _without_lifecycle(la::LA) where {LA<:LoopSpec} = _with_lifecycle(la, nothing, (), ())
 
 # Merge newly passed `Init`/`Override` specs over previously stored specs by
@@ -257,7 +257,7 @@ end
 Re-initialize only the targets named by the passed specs.
 """
 function partialinit(la::LA, specs::InputInterface...) where {LA<:AbstractLoopAlgorithm}
-    context = getstoredcontext(la)
+    context = getpersistentcontext(la)
     isnothing(context) && error("partialinit requires an initialized LoopAlgorithm.")
     resolved_specs = _resolve_lifecycle_specs(la, specs)
     inits, overrides, interactives = _split_lifecycle_specs(resolved_specs)
@@ -284,11 +284,11 @@ call, and removed before the returned loop algorithm stores its next persistent
 context.
 """
 function Base.run(la::LA; repeats = 1, lifetime = nothing, kwargs...) where {LA<:LoopSpec}
-    initialized = isnothing(getstoredcontext(la)) ? init(la) : la
-    stored_context = getstoredcontext(initialized)
+    initialized = isnothing(getpersistentcontext(la)) ? init(la) : la
+    persistent_context = getpersistentcontext(initialized)
     lt = isnothing(lifetime) ? normalize_process_lifetime(initialized, repeats) : normalize_process_lifetime(initialized, lifetime)
     inputs = _validate_runtime_inputs(initialized, (; kwargs...))
     process = LoopRunProcess(lt)
-    persistent_context = loop(process, initialized, stored_context, lt, inputs)
+    persistent_context = loop(process, initialized, persistent_context, lt, inputs)
     return _with_lifecycle(initialized, persistent_context, getstoredinits(initialized), getstoredoverrides(initialized))
 end

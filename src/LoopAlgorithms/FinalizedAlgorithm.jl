@@ -74,7 +74,7 @@ end
 
 @inline _with_lifecycle(fa::FinalizedAlgorithm, context, inits, overrides) =
     finalstep(_with_lifecycle(inneralgorithm(fa), context, inits, overrides), finalfunction(fa))
-@inline getstoredcontext(fa::FinalizedAlgorithm) = getstoredcontext(inneralgorithm(fa))
+@inline getpersistentcontext(fa::FinalizedAlgorithm) = getpersistentcontext(inneralgorithm(fa))
 @inline getstoredinits(fa::FinalizedAlgorithm) = getstoredinits(inneralgorithm(fa))
 @inline getstoredoverrides(fa::FinalizedAlgorithm) = getstoredoverrides(inneralgorithm(fa))
 
@@ -116,9 +116,9 @@ end
     return finalfunction(fa)(cleaned_context)
 end
 
-@inline function _loop_final_result(fa::FinalizedAlgorithm, cleaned_context, runtimecontext)
+@inline function _loop_final_result(fa::FinalizedAlgorithm, cleaned_context, runtime_context)
     final = finalfunction(fa)
-    return applicable(final, cleaned_context, runtimecontext) ? final(cleaned_context, runtimecontext) : final(cleaned_context)
+    return applicable(final, cleaned_context, runtime_context) ? final(cleaned_context, runtime_context) : final(cleaned_context)
 end
 
 function _strip_nested_finalized_algorithm(algo)

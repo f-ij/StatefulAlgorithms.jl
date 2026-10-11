@@ -164,7 +164,7 @@ What `merge(scv, args, demand)` writes into the persistent context, as `(; subco
 end
 
 """
-Merge a step/init/cleanup return into the view's bundle: state into the stored context, runtime values (declared locals,
+Merge a step/init/cleanup return into the view's bundle: state into the persistent context, runtime values (declared locals,
 outputs) into the runtime context. Returns the new bundle.
 """
 @inline @generated function Base.merge(scv::SubContextView{B, SubKey}, args::NamedTuple, demand::ReturnDemand{Names}) where {B<:ContextBundle, SubKey, Names}
@@ -174,8 +174,8 @@ outputs) into the runtime context. Returns the new bundle.
     return quote
         $(LineNumberNode(@__LINE__, @__FILE__))
         mergetuple = @inline _merge_payload(scv, args, demand)
-        newcontext = merge_into_subcontexts(getcontext(scv), mergetuple)
-        @assert typeof(newcontext) == typeof(getcontext(scv)) "A variable type in a subcontext was changed. This is prohibited for performance reasons.\nIf type mutation is needed, set the variable up as a Ref\n$(sprint(show, ContextTypeDiff(getcontext(scv), newcontext)))"
+        newcontext = merge_into_subcontexts(getpersistent(scv), mergetuple)
+        @assert typeof(newcontext) == typeof(getpersistent(scv)) "A variable type in a subcontext was changed. This is prohibited for performance reasons.\nIf type mutation is needed, set the variable up as a Ref\n$(sprint(show, ContextTypeDiff(getpersistent(scv), newcontext)))"
         runtimetuple = $runtimetuple_expr
         return @inline _rebundle(getbundle(scv), newcontext, runtimetuple)
     end
@@ -194,7 +194,7 @@ This is to be used during the init phase, where entire subcontexts are replaced
     end
 
     return quote
-        old_context = @inline getcontext(scv)
+        old_context = @inline getpersistent(scv)
         return replace(old_context, (; SubKey => getproperty(args, SubKey)))
     end
 end

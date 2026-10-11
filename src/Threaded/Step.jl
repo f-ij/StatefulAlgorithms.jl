@@ -32,7 +32,7 @@ Base.@constprop :aggressive function _threaded_run_child(base_context::C, tca::T
     sa = @inline getalgo(tca, idx)
     contextview = @inline view(base_context, sa)
     retval = @inline step!(getalgo(sa), contextview)
-    merged_context = @inline getcontext(merge(contextview, retval))
+    merged_context = @inline getpersistent(merge(contextview, retval))
     local_payload = @inline getdata(getproperty(merged_context, getkey(sa)))
     child_name = getkey(getalgotype(TCA, idx))
     return NamedTuple{(child_name,), Tuple{getdatatype(subcontext_type(C, child_name))}}((local_payload,))
@@ -52,7 +52,7 @@ Base.@constprop :aggressive function _threaded_merge_child_payload(merged::Named
     end
     sa, contextview, task = future
     retval = @inline fetch(task)
-    merged_context = @inline getcontext(merge(contextview, retval))
+    merged_context = @inline getpersistent(merge(contextview, retval))
     local_payload = @inline getdata(getproperty(merged_context, getkey(sa)))
     child_name = getkey(getalgotype(TCA, idx_val))
     payload = NamedTuple{(child_name,), Tuple{getdatatype(subcontext_type(C, child_name))}}((local_payload,))
@@ -114,7 +114,7 @@ Base.@constprop :aggressive @inline @generated function _step!(tca::TCA, cursor:
         schedule_value = schedule_values[i]
         child_namespace_type = fieldtype(child_namespace_tuple_type, i)
         push!(exprs, quote
-            if @inline should_run_schedule($schedule_value, this_inc, (@inline getcontext(lc)))
+            if @inline should_run_schedule($schedule_value, this_inc, (@inline getpersistent(lc)))
                 local algo = @inline getfield(algos, $i)
                 local child_cursor = @inline child_loop_cursor(cursor, Val($i))
                 local child_step_wiring = @inline child_wiring_view(wiring, Val($i))
@@ -130,5 +130,5 @@ Base.@constprop :aggressive @inline @generated function _step!(tca::TCA, cursor:
 end
 
 # The persistent fields a threaded composite writes (see src/Context/Carried/Writes.jl): as a composite's.
-@inline @generated _writes(plan::TCA, cursor::S, context::C, ::Type{RC}, wiring::W, namespace::N, process::P, lifetime::LT) where {TCA<:ThreadedCompositeAlgorithm,S,C<:ProcessContext,RC,W,N,P,LT} =
-    _children_writes_expr(TCA, nothing)
+@inline @generated _writes(plan::PlanType, cursor::CursorType, persistent_context::PersistentContextType, ::Type{RuntimeContextType}, wiring::WiringViewType, namespace::NamespaceType, process::ProcessType, lifetime::LifetimeType) where {PlanType<:ThreadedCompositeAlgorithm, CursorType, PersistentContextType<:ProcessContext, RuntimeContextType, WiringViewType, NamespaceType, ProcessType, LifetimeType} =
+    _children_writes_expr(PlanType, nothing)

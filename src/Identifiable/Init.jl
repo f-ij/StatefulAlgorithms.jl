@@ -12,6 +12,6 @@ Direct init running for debugging
     return (;getkey(sa) => init(getalgo(sa), input))
 end
 
-function cleanup(sa::IdentifiableAlgo, context::AbstractContext)
-    return @inline getcontext(cleanup(sa, LoopContext(context, _empty_context())))
+function cleanup(sa::IdentifiableAlgo, persistent_context::AbstractContext)
+    return @inline getpersistent(cleanup(sa, LoopContext(persistent_context, _empty_context())))
 end
