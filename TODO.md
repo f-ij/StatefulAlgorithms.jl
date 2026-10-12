@@ -5,6 +5,8 @@ the core (entities/identity, registry/routing/context, loop algorithms, loop ker
 Each was reproduced in the September 2026 code review unless marked *(unverified)*.
 
 ## Core: to look at
+- [ ] **Finalizers (`@finally`, `finalstep`): decide what they are for and what they see.** Intended use: a cleanup step that hides SA internals from the user, e.g. an algorithm logs events every step and the user only wants a binned frequency at the end. Proposal: a finalizer runs only at the end of the whole run, never at the end of a nested plan. Open: what a finalizer of a plan nested in another (repeated) plan means (its result has another shape than the plan's context; putting that into a runtime value is confusing, and it would compute things that may never be used), and what it may read (on `refactor/dsl-locals-rebased` the top-level block keeps its returns after each step so the finalizer can read the last step's returns; that makes the first step change the context's type). Noted 2026-10-12; until decided, finalizers only see what outlives the steps (state, declared locals, inputs).
+
 - [ ] **`FinalizedAlgorithm` (a block with `@finally`) is an `AbstractLoopAlgorithm`, but it can wrap an unresolved plan.** Since `fix/state-scoping`, a plan holds its own states and options and `LoopAlgorithm` only means "resolved", so `FinalizedAlgorithm` is the one wrapper that does not fit that split. Decide what it is (a plan option? a wrapper only after resolve?). Noted 2026-10-08.
 
 ## HIGH PRIORITY: performance
