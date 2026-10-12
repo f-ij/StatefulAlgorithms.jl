@@ -87,14 +87,15 @@ function _part_data_type(::Type{RC}, part::ContextPart) where {RC<:ProcessContex
 end
 
 """
-The names the view sees from the scope its bundle is in (see `Scope`), by name: the declared locals, and for a call
-(namespace `_captured_returns`) the captured returns too. A declared local hides a captured return: one declared in an
-inner node over one captured in an outer node.
+The names the view sees from the scope its bundle is in (see `Scope`), by name. Only a call (namespace
+`_captured_returns`) sees them: the declared locals and captured returns, which its arguments name and its assignment
+writes. A declared local hides a captured return: one declared in an inner node over one captured in an outer node. An
+algorithm sees none: it reads and writes the block's values only through its wires.
 """
 get_scope_locations(::Type{SCT}) where {SCT<:SubContextView{B, SubKey}} where {B<:ContextBundle, SubKey} =
     _scope_locations(context_part(Val(SubKey)), bundle_scope(B))
 
-_scope_locations(::ContextPart, ::Type{Sc}) where {Sc<:Scope} = _slot_locations(DeclaredLocals(), scope_locals(Sc))
+_scope_locations(::ContextPart, ::Type{Sc}) where {Sc<:Scope} = (;)
 _scope_locations(::CapturedReturns, ::Type{Sc}) where {Sc<:Scope} =
     (; _slot_locations(CapturedReturns(), scope_returns(Sc))..., _slot_locations(DeclaredLocals(), scope_locals(Sc))...)
 

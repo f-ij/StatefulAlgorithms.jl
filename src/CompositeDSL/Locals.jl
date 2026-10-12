@@ -127,15 +127,10 @@ read from the declared locals by the statements after it. `type` is `nothing` wh
 """
 function _composite_dsl_declare_local!(options::Vector{Any}, producers::Dict{Symbol, Any}, name::Symbol, type)
     @nospecialize type
-    push!(options, Local(NamedTuple{(name,), Tuple{_dsl_local_storage_type(type)}}((_dsl_local_initial(type),))))
+    push!(options, isnothing(type) ? Local(name) : Local(name => type))
     producers[name] = :_declared_locals
     return options
 end
-
-_dsl_local_storage_type(::Nothing) = UndefInitializer
-_dsl_local_storage_type(::Type{T}) where {T} = maybe_type(T, UndefInitializer)
-_dsl_local_initial(::Nothing) = undef
-_dsl_local_initial(::Type{T}) where {T} = maybe_type(T, UndefInitializer)()
 
 """Give a nested block the names of its enclosing blocks (`names`): each is read from the same producer as outside (`outer`)."""
 function _composite_dsl_inherit_names!(producers::Dict{Symbol, Any}, outer::Dict{Symbol, Any}, names::Tuple)

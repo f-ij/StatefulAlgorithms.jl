@@ -118,7 +118,7 @@ end
     StatefulAlgorithms.step!(::ClashTarget, context) = (; seen = context.factor)
 
     # A declared local of the same name as the target's state is hidden by the state (it is only visible implicitly).
-    hidden = CompositeAlgorithm(ClashSource, ClashTarget, (1, 1), Local(factor = 100.0))
+    hidden = CompositeAlgorithm(ClashSource, ClashTarget, (1, 1), Declaration(factor = 100.0))
     p = Process(hidden; repeats = 1); run(p); wait(p)
     @test context(p)[ClashTarget].seen == 1.0
 end

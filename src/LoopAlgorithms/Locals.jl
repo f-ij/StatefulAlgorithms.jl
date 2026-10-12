@@ -1,4 +1,4 @@
-export Local
+export Local, Declaration
 
 #=
 AI GENERATED
@@ -17,35 +17,50 @@ in the runtime context's `_declared_locals` subcontext, one slot per declaration
 ############################################################################################
 
 """
-    Local(; name = initial_value, ...)
+    Local(:x, :y => Float64, ...)
 
-Declare loop-local variables on a plan, like `local x = 0` before a Julia `for` loop. Pass it
-to `CompositeAlgorithm(...)` or `Routine(...)` like a route.
+Declare loop-local variables on a plan without a value, like `local x` (and `local y::Float64`) before a Julia `for`
+loop; what a DSL block's `local x` becomes. Pass it to `CompositeAlgorithm(...)` or `Routine(...)` like a route. A
+name alone gets the type of what is written to it, worked out before the run (section 4); `name => T` has type `T`.
+Reading a local before anything is written to it is an error. A local with a starting value is a
+[`Declaration`](@ref).
 
 - Scope: the declaring plan and everything below it; the nearest declaration of a name wins,
   and each copy of a plan has its own slot.
 - Lifetime: one run. Created when the run starts, kept across pause/resume, not saved.
-- Use: children read a local by name. A child writes it only through a wire into it,
-  `Route(:_declared_locals => Algo, :x => :x)`: what the child returns as `x` is written back
-  through the wire. Returning `x` without that wire does not write the local (it is one of the
-  child's own outputs). In a DSL block, an assignment (`x = f()`) writes it.
-- Type: the initial value's type; returned values are converted to it. A local declared
-  without a value (`undef` here, `local x` in the DSL) or as `nothing` gets its type from the
-  values written to it, worked out before the run (section 4).
+- Use: a child reads and writes a local only through a wire into it,
+  `Route(:_declared_locals => Algo, :x => :x)`: it reads the local as `x`, and what it returns as `x` is written back
+  through the wire. In a DSL block, a call reads the locals named in its arguments, and an assignment (`x = f()`)
+  writes one.
 
-Sharing a value between children or across steps means declaring it here; undeclared step
-returns are not meant to outlive the step that produced them.
+Sharing a value between children or across steps means declaring it; undeclared step returns are not meant to outlive
+the step that produced them.
 """
 struct Local{NT<:NamedTuple} <: AbstractOption
     values::NT
     Local{NT}(values::NT) where {NT<:NamedTuple} = new{NT}(values)
 end
 
-Local(; values...) = Local(NamedTuple(values))
+Local(names::Union{Symbol, Pair{Symbol, <:Type}}...) = _declared(NamedTuple(_unset_local(name) for name in names))
+_unset_local(name::Symbol) = name => undef
+_unset_local((name, T)::Pair{Symbol, <:Type}) = name => maybe_type(T, UndefInitializer)()
+Local(; values...) = error("`Local(", join(("$k = …" for k in keys(values)), ", "), ")`: a local is declared without a value, `Local(",
+                           join((repr(k) for k in keys(values)), ", "), ")`. A starting value is a `Declaration(", join(("$k = …" for k in keys(values)), ", "), ")`.")
+
+"""
+    Declaration(x = value, ...)
+
+Declare loop-local variables on a plan with a starting value: a [`Local`](@ref) whose slots hold `value` when the run
+starts, and the type of `value` (returned values are converted to it; `nothing` is a value until the first write, and
+then the type of what is written). For plans built with constructors; a DSL block declares locals without a value
+(`local x`) and keeps a starting value in `@state`.
+"""
+Declaration(; values...) = Declaration(NamedTuple(values))
+Declaration(values::NamedTuple) = _declared(values)
 
 # Declared values are stored with the field types the run will carry: a `Union{Nothing,T}`
 # becomes a `Maybe` (a Julia `Union` field in the carried context costs copies every step).
-Local(values::NT) where {NT<:NamedTuple} = Local{_local_storage_type(NT)}(_local_storage(values))
+_declared(values::NT) where {NT<:NamedTuple} = Local{_local_storage_type(NT)}(_local_storage(values))
 
 _storage_fieldtype(::Type{T}) where {T} = (T isa Union && Nothing <: T && T !== Nothing) ? maybe_type(Base.typesplit(T, Nothing), Nothing) : T
 @generated _local_storage_type(::Type{NT}) where {NT<:NamedTuple} =
@@ -287,7 +302,7 @@ view, whose visible locals map the names the step uses to the locals' `_declared
 function _local_type_problems(label, ::Type{R}, ::Type{Returned}, ::Type{W}, checking::Bool) where {R, Returned, W}
     returns = Returned === Union{} ? () : Base.uniontypes(Returned)
     if !all(T -> T === Nothing || T <: NamedTuple, returns)
-        return [string(label, ": the type it emits cannot be inferred (it returns ", Returned, "), so the type of the locals it writes cannot be found either. Make the step return one type, or declare those locals with a type (for example `Local(x = 0.0)`).")]
+        return [string(label, ": the type it emits cannot be inferred (it returns ", Returned, "), so the type of the locals it writes cannot be found either. Make the step return one type, or declare those locals with a type (`local x::Float64` in a DSL block).")]
     end
     checking || return String[]
     L = _local_data_type(R)
