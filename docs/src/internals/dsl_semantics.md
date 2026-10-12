@@ -191,8 +191,10 @@ A step returns a value, as a Julia function does, and separately writes back its
   `StepResult(value, StateUpdates(; x))` for the same, or a plain named tuple, which keeps the older meaning: every
   returned name is written back, and the named tuple is also its value.
 - **Where an update goes.** Through the wire the name was read through, else to the algorithm's own state field of
-  that name, else it is one of the algorithm's own outputs. An update never writes a block's local or captured
-  return just because the names match: only an assignment, or a wire into the algorithm, writes a block name.
+  that name, else it is one of the algorithm's own outputs. An algorithm reads and writes the block's values (state of
+  other algorithms, locals, captured returns) only through its wires, never because the names match: its view has its
+  own state, its wires and shares, nothing else. A call reads the names its arguments give and writes the names it is
+  assigned to.
 
 Which values of the block an update may change:
 

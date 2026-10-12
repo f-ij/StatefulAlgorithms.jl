@@ -6,14 +6,6 @@ value of the block an algorithm updates, see `@update`), or its own outputs. Inp
 _writable_runtime(::Union{DeclaredLocals, CapturedReturns}, target::Symbol, own::Symbol) = true
 _writable_runtime(::ContextPart, target::Symbol, own::Symbol) = target === own
 
-"""Whether the view `SCV` sees `name` only from the scope its bundle is in (a declared local or captured return by name), not through a route, a share, its state or an injected value."""
-function _seen_only_from_scope(SCV::Type, name::Symbol)
-    @nospecialize SCV
-    haskey(get_scope_locations(SCV), name) || return false
-    explicit = (; get_shared_locations(SCV)..., get_state_locations(SCV)..., get_routed_locations(SCV)..., get_injected_locations(SCV)...)
-    return !haskey(explicit, name)
-end
-
 """A step that returns `nothing` changes nothing: the view's bundle as it was."""
 @inline Base.merge(scv::SubContextView, ::Nothing) = @inline getbundle(scv)
 
@@ -35,10 +27,6 @@ function _subcontext_view_merge_exprs(SCV::Type, Args::Type, demanded_runtime_na
 
     for (var_idx, algo_varname) in enumerate(algo_varnames)
         target_location, subcontext_varname = _compute_location(SCV, algo_varname)
-        # A step writes a block's name (a declared local or a captured return) only through a wire, never because the
-        # names match: a field the algorithm only sees by name is one of its own outputs. A call (namespace
-        # `_captured_returns`) is the exception: it is the assignment, and writes the names it is assigned to.
-        SubKey === :_captured_returns || !_seen_only_from_scope(SCV, algo_varname) || (target_location = nothing)
         # First look if varname is in locations
         if target_location isa VarLocation{:runtime}  # a runtime location: declared locals and this step's own outputs are writable
             target_subcontext = get_subcontextname(target_location)

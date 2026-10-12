@@ -1,8 +1,8 @@
 using Test
 using StatefulAlgorithms
 
-# A step writes a declared local only through a wire into it (`Route(:_declared_locals => Algo, :name => :name)`):
-# what it returns under that name is written back through the wire. Reading a local by name needs no wire.
+# A step reads and writes a declared local only through a wire into it (`Route(:_declared_locals => Algo, :name => :name)`):
+# it reads the local under that name, and what it returns under that name is written back through the wire.
 @testset "Declared loop locals (Local)" begin
     struct LocalSensor <: ProcessAlgorithm end
     struct LocalReader <: ProcessAlgorithm end
@@ -12,7 +12,7 @@ using StatefulAlgorithms
     StatefulAlgorithms.step!(::LocalReader, context) = (; acc = context.acc + context.reading)
 
     # Producer first runs on step 10; the reader holds the last value (the declared 0.0 before that).
-    plan = CompositeAlgorithm(LocalSensor, LocalReader, (10, 1), Local(reading = 0.0), Route(:_declared_locals => LocalSensor, :reading => :reading))
+    plan = CompositeAlgorithm(LocalSensor, LocalReader, (10, 1), Declaration(reading = 0.0), Route(:_declared_locals => LocalSensor, :reading => :reading), Route(:_declared_locals => LocalReader, :reading => :reading))
     ip = InlineProcess(plan; repeats = 25); run(ip)
     @test context(ip)[LocalReader].acc == 9 * 0.0 + 10 * 1.0 + 6 * 2.0
 
@@ -27,6 +27,18 @@ using StatefulAlgorithms
     @test context(p)[LocalReader].acc isa Float64
 end
 
+@testset "Declaring: Local(:x), Local(:x => T), Declaration(x = v); only wired algorithms see a local" begin
+    @test StatefulAlgorithms.getvalues(Local(:x)).x === undef
+    @test StatefulAlgorithms.getvalues(Local(:x => Float64)).x isa StatefulAlgorithms.Maybe{Float64}
+    @test StatefulAlgorithms.getvalues(Declaration(x = 0.0)).x === 0.0
+    err = try; Local(x = 0.0); nothing; catch e; e; end
+    @test err isa ErrorException && occursin("A starting value is a `Declaration(x = …)`", sprint(showerror, err))
+
+    # A reader without a wire into the local does not see it: `context.reading` is not one of its names.
+    plan = CompositeAlgorithm(LocalSensor, LocalReader, (1, 1), Declaration(reading = 0.0), Route(:_declared_locals => LocalSensor, :reading => :reading))
+    @test_throws Exception run(InlineProcess(plan; repeats = 2))
+end
+
 @testset "Declared locals keep their declared field type" begin
     struct UnionSensor <: ProcessAlgorithm end
     struct UnionReader <: ProcessAlgorithm end
@@ -36,14 +48,14 @@ end
     StatefulAlgorithms.step!(::UnionReader, context) = (; acc = context.acc + (context.reading === nothing ? 0.0 : context.reading))
 
     declared = NamedTuple{(:reading,), Tuple{Union{Nothing, Float64}}}((nothing,))
-    plan = CompositeAlgorithm(UnionSensor, UnionReader, (10, 1), Local(declared), Route(:_declared_locals => UnionSensor, :reading => :reading))
+    plan = CompositeAlgorithm(UnionSensor, UnionReader, (10, 1), Declaration(declared), Route(:_declared_locals => UnionSensor, :reading => :reading), Route(:_declared_locals => UnionReader, :reading => :reading))
     final = run(InlineProcess(plan; repeats = 25))
     @test final[UnionReader].acc == 10 * 1.0 + 6 * 2.0
     @test fieldtype(typeof(StatefulAlgorithms.get_declared_locals(final)), :reading) <: StatefulAlgorithms.Maybe{Float64}
 
 
     # `reading = nothing` behaves the same: `nothing` until the first write, then a `Union{Nothing,Float64}`.
-    final = run(InlineProcess(CompositeAlgorithm(UnionSensor, UnionReader, (10, 1), Local(reading = nothing), Route(:_declared_locals => UnionSensor, :reading => :reading)); repeats = 25))
+    final = run(InlineProcess(CompositeAlgorithm(UnionSensor, UnionReader, (10, 1), Declaration(reading = nothing), Route(:_declared_locals => UnionSensor, :reading => :reading), Route(:_declared_locals => UnionReader, :reading => :reading)); repeats = 25))
     @test final[UnionReader].acc == 10 * 1.0 + 6 * 2.0
     @test fieldtype(typeof(StatefulAlgorithms.get_declared_locals(final)), :reading) <: StatefulAlgorithms.Maybe{Float64}
 
@@ -51,11 +63,11 @@ end
     struct Blinker <: ProcessAlgorithm end
     StatefulAlgorithms.init(::Blinker, context) = (; n = 0)
     StatefulAlgorithms.step!(::Blinker, context) = (; n = context.n + 1, reading = isodd(context.n) ? nothing : Float64(context.n))
-    final = run(InlineProcess(CompositeAlgorithm(Blinker, UnionReader, (1, 1), Local(declared), Route(:_declared_locals => Blinker, :reading => :reading)); repeats = 6))
+    final = run(InlineProcess(CompositeAlgorithm(Blinker, UnionReader, (1, 1), Declaration(declared), Route(:_declared_locals => Blinker, :reading => :reading), Route(:_declared_locals => UnionReader, :reading => :reading)); repeats = 6))
     @test final[UnionReader].acc == 0.0 + 2.0 + 4.0
     # `isodd(n) ? nothing : x` inside a returned named tuple does not infer to a concrete type,
     # so an untyped local cannot be typed from it: declare the type instead.
-    @test_throws ErrorException run(InlineProcess(CompositeAlgorithm(Blinker, UnionReader, (1, 1), Local(reading = nothing), Route(:_declared_locals => Blinker, :reading => :reading)); repeats = 6))
+    @test_throws ErrorException run(InlineProcess(CompositeAlgorithm(Blinker, UnionReader, (1, 1), Declaration(reading = nothing), Route(:_declared_locals => Blinker, :reading => :reading), Route(:_declared_locals => UnionReader, :reading => :reading)); repeats = 6))
 end
 
 @testset "undef locals take the type of their first value" begin
@@ -67,14 +79,14 @@ end
     StatefulAlgorithms.step!(::SlotReader, context) = (; acc = context.acc + context.reading)
 
     # Written in the first step.
-    final = run(InlineProcess(CompositeAlgorithm(SlotSensor, SlotReader, (1, 1), Local(reading = undef), Route(:_declared_locals => SlotSensor, :reading => :reading)); repeats = 10))
+    final = run(InlineProcess(CompositeAlgorithm(SlotSensor, SlotReader, (1, 1), Local(:reading), Route(:_declared_locals => SlotSensor, :reading => :reading), Route(:_declared_locals => SlotReader, :reading => :reading)); repeats = 10))
     @test final[SlotReader].acc == 55.0
     @test fieldtype(typeof(StatefulAlgorithms.get_declared_locals(final)), :reading) <: StatefulAlgorithms.Maybe{Float64}
     # First written at step 10 (scheduled later): the loop continues with the new type.
-    final = run(InlineProcess(CompositeAlgorithm(SlotSensor, SlotReader, (10, 10), Local(reading = undef), Route(:_declared_locals => SlotSensor, :reading => :reading)); repeats = 30))
+    final = run(InlineProcess(CompositeAlgorithm(SlotSensor, SlotReader, (10, 10), Local(:reading), Route(:_declared_locals => SlotSensor, :reading => :reading), Route(:_declared_locals => SlotReader, :reading => :reading)); repeats = 30))
     @test final[SlotReader].acc == 1.0 + 2.0 + 3.0
     # Reading before the first write throws.
-    @test_throws UndefRefError run(InlineProcess(CompositeAlgorithm(SlotSensor, SlotReader, (10, 1), Local(reading = undef), Route(:_declared_locals => SlotSensor, :reading => :reading)); repeats = 3))
+    @test_throws UndefRefError run(InlineProcess(CompositeAlgorithm(SlotSensor, SlotReader, (10, 1), Local(:reading), Route(:_declared_locals => SlotSensor, :reading => :reading), Route(:_declared_locals => SlotReader, :reading => :reading)); repeats = 3))
 end
 
 @testset "undef locals written conditionally" begin
@@ -87,7 +99,7 @@ end
     StatefulAlgorithms.init(::GuardedReader, context) = (; k = 0, acc = 0.0)
     StatefulAlgorithms.step!(::GuardedReader, context) = (; k = context.k + 1, acc = context.k >= 4 ? context.acc + context.reading : context.acc)
 
-    plan = CompositeAlgorithm(LateSensor, GuardedReader, (1, 1), Local(reading = undef), Route(:_declared_locals => LateSensor, :reading => :reading))
+    plan = CompositeAlgorithm(LateSensor, GuardedReader, (1, 1), Local(:reading), Route(:_declared_locals => LateSensor, :reading => :reading), Route(:_declared_locals => GuardedReader, :reading => :reading))
     final = run(InlineProcess(plan; repeats = 8))
     @test final[GuardedReader].acc == 5.0 + 6.0 + 7.0 + 8.0
     @test fieldtype(typeof(StatefulAlgorithms.get_declared_locals(final)), :reading) <: StatefulAlgorithms.Maybe{Float64}
@@ -99,7 +111,7 @@ end
     @test allocs_large - allocs_small < 1_000
 
     # A guarded read that never fires is fine when the local is never written.
-    final = run(InlineProcess(CompositeAlgorithm(LateSensor, GuardedReader, (1, 1), Local(reading = undef), Route(:_declared_locals => LateSensor, :reading => :reading)); repeats = 4))
+    final = run(InlineProcess(CompositeAlgorithm(LateSensor, GuardedReader, (1, 1), Local(:reading), Route(:_declared_locals => LateSensor, :reading => :reading), Route(:_declared_locals => GuardedReader, :reading => :reading)); repeats = 4))
     @test final[GuardedReader].acc == 0.0
 
     # Like a Julia variable, the type comes from every value written: here an `Int` and a
@@ -110,7 +122,7 @@ end
     StatefulAlgorithms.step!(::IntWriter, context) = (; reading = 1)
     StatefulAlgorithms.init(::FractionWriter, context) = (;)
     StatefulAlgorithms.step!(::FractionWriter, context) = (; reading = 2.5)
-    final = run(InlineProcess(CompositeAlgorithm(IntWriter, FractionWriter, (1, 2), Local(reading = undef), Route(:_declared_locals => IntWriter, :reading => :reading), Route(:_declared_locals => FractionWriter, :reading => :reading)); repeats = 3))
+    final = run(InlineProcess(CompositeAlgorithm(IntWriter, FractionWriter, (1, 2), Local(:reading), Route(:_declared_locals => IntWriter, :reading => :reading), Route(:_declared_locals => FractionWriter, :reading => :reading)); repeats = 3))
     @test fieldtype(typeof(StatefulAlgorithms.get_declared_locals(final)), :reading) <: StatefulAlgorithms.Maybe{Float64}
     @test StatefulAlgorithms.get_declared_locals(final).reading.value === 1.0
 end
@@ -125,7 +137,7 @@ end
     StatefulAlgorithms.step!(::ScopeOutside, context) = (; seen = context.counter)
     StatefulAlgorithms.init(::ScopePeek, context) = (; seen = -1)
     StatefulAlgorithms.step!(::ScopePeek, context) = (; seen = context.counter)
-    inner() = Routine(ScopeInc, (3,), Local(counter = 0), Route(:_declared_locals => ScopeInc, :counter => :counter))
+    inner() = Routine(ScopeInc, (3,), Declaration(counter = 0), Route(:_declared_locals => ScopeInc, :counter => :counter))
 
     # The declaration stays on its plan's wiring; it is not lifted to the root.
     plan = CompositeAlgorithm(inner(), ScopeOutside, (1, 1))
@@ -138,7 +150,7 @@ end
     @test values(StatefulAlgorithms.get_declared_locals(final)) == (6, 6)
 
     # The nearest declaration wins.
-    shadowing = CompositeAlgorithm(Routine(ScopeInc, ScopePeek, (3, 1), Local(counter = 0), Route(:_declared_locals => ScopeInc, :counter => :counter)), ScopeOutside, (1, 1), Local(counter = 100))
+    shadowing = CompositeAlgorithm(Routine(ScopeInc, ScopePeek, (3, 1), Declaration(counter = 0), Route(:_declared_locals => ScopeInc, :counter => :counter), Route(:_declared_locals => ScopePeek, :counter => :counter)), ScopeOutside, (1, 1), Declaration(counter = 100), Route(:_declared_locals => ScopeOutside, :counter => :counter))
     final = run(InlineProcess(shadowing; repeats = 2))
     @test final[ScopeOutside].seen == 100
     @test final[ScopePeek].seen == 6
@@ -150,7 +162,7 @@ end
     StatefulAlgorithms.init(::KeepLowest, context) = (; n = 0)
     StatefulAlgorithms.step!(::KeepLowest, context) =
         (; n = context.n + 1, best = context.best === nothing ? Float64(context.n) : min(context.best, Float64(context.n)))
-    final = run(InlineProcess(CompositeAlgorithm(KeepLowest, (1,), Local(best = nothing), Route(:_declared_locals => KeepLowest, :best => :best)); repeats = 5))
+    final = run(InlineProcess(CompositeAlgorithm(KeepLowest, (1,), Declaration(best = nothing), Route(:_declared_locals => KeepLowest, :best => :best)); repeats = 5))
     @test StatefulAlgorithms.get_declared_locals(final).best isa StatefulAlgorithms.Maybe{Float64}
 
     # Starts as a Float64, then written as a String: an error before the run, naming the local.
@@ -158,7 +170,7 @@ end
     StatefulAlgorithms.init(::ChangesType, context) = (;)
     StatefulAlgorithms.step!(::ChangesType, context) = (; x = context.x === nothing ? 1.0 : "changed")
     err = try
-        run(InlineProcess(CompositeAlgorithm(ChangesType, (1,), Local(x = nothing), Route(:_declared_locals => ChangesType, :x => :x)); repeats = 3)); nothing
+        run(InlineProcess(CompositeAlgorithm(ChangesType, (1,), Declaration(x = nothing), Route(:_declared_locals => ChangesType, :x => :x)); repeats = 3)); nothing
     catch e
         e
     end
@@ -178,7 +190,7 @@ end
     StatefulAlgorithms.init(::OutputCollector, context) = (; seen = Any[])
     StatefulAlgorithms.step!(::OutputCollector, context) = (push!(context.seen, context.v); (; seen = context.seen))
     plan = CompositeAlgorithm(StatefulAlgorithms.Callable(produce, (), :y), StatefulAlgorithms.Callable(pass_on, (:y,), :v), OutputCollector,
-        (3, 1, 1), Local(y = nothing), Route(:_captured_returns => OutputCollector, :v => :v))
+        (3, 1, 1), Declaration(y = nothing), Route(:_captured_returns => OutputCollector, :v => :v))
     p = Process(plan; repeats = 7); run(p); wait(p)
     @test context(p)[OutputCollector].seen == [nothing, nothing, 1.0, 1.0, 1.0, 2.0, 2.0]
 end
@@ -193,7 +205,7 @@ scope_record(x) = (push!(scope_seen, x); nothing)
     C = StatefulAlgorithms.Callable
     run_seen(plan, repeats) = (empty!(scope_seen); scope_count[] = 0; run(InlineProcess(plan; repeats)); copy(scope_seen))
     # A `Local` keeps the inner composites whole (an option-less one is flattened into its parent, and its scope with it).
-    inner(children...) = CompositeAlgorithm(children..., ntuple(_ -> 1, length(children)), Local(q = 0))
+    inner(children...) = CompositeAlgorithm(children..., ntuple(_ -> 1, length(children)), Declaration(q = 0))
 
     # An inner node sees the outer return `y` and captures its own `z`, stored as `z@2`.
     plan = CompositeAlgorithm(C(scope_produce, (), :y), inner(C(scope_double, (:y,), :z), C(scope_record, (:z,), ())), (1, 2))
