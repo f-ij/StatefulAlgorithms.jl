@@ -28,10 +28,24 @@ reverting one part at a time, never attributed by guess.
 - **Old bug: resume points are never reset to 1.** After a resume in the middle of a child's repeats, the child runs
   only the remaining repeats in every later step (`Routine(Counter, (5,))`, resume point 3: later steps run 3
   repeats, not 5). On this branch and `refactor/dsl-locals-rebased`; main has the same code (not run there).
-- **flat Routine (1, 1, 1), InlineProcess (open).** 0.03 ns/step slower than branch and hand loop: the compiled loop
-  does the three multiply-adds one at a time; branch and hand loop do two in one vector instruction. Ruled out:
-  order of carried values, the context given to stop checks, the registry `Ref` check after the loop (a hand loop
-  from memory with that check still vectorizes).
+- **flat Routine (1, 1, 1), InlineProcess (cause found, not fixed).** 0.03 ns/step slower than branch and hand loop:
+  the compiled loop does the three multiply-adds one at a time; branch and hand loop do two in one vector
+  instruction. Chain, each step reproduced in a hand-written loop (`scratchpad/hand_steps.jl`, v5-v11):
+  1. `ProcessContext` holds `reg::Base.RefValue{NameSpaceRegistry}`, a pointer, because a registry entry holds
+     construction-time data behind pointers (`RegistryTypeEntry.multipliers::Vector{Float64}`,
+     `dynamic_lookup::Dict{Any,Int}`), so the registry is not plain data.
+  2. Writing a context with a pointer into the process (`after_while`: `context(ip, persistent_context)`) needs the GC
+     write barrier, a branch.
+  3. After the loop the final values go to two store groups: into the process, and into `run`'s returned context
+     (the default result is the same context). The barrier puts them in different blocks; vectorizing one group
+     needs the values unpacked again for the other, and LLVM's SLP vectorizer judges that not worth it.
+  4. The branch's separately run first step added enough vector work to tip LLVM's estimate.
+  Hand loop: stored back and returned, struct with a pointer: 0 vector ops (v5); without the pointer: vectorized
+  (v11); either use alone: vectorized (v7, v9); v5 with the first step separate: vectorized (v6).
+  Not the cause (tested): order of carried values, the stop-check context, the registry check alone, LLVM's
+  `-slp-threshold` (the loop gets no vectorization attempt at all).
+  Fix options: registry out of the runtime context (on the algorithm/type only), or make it plain data (move
+  `multipliers`/`dynamic_lookup` to construction-time structures) and store it inline instead of in a `Ref`.
 
 ## Options for Process (owner to choose)
 
