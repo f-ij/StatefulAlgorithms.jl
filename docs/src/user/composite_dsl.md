@@ -161,7 +161,8 @@ end
 The names are values of the block for that step, like `y = f(x)`. A `@StepAlgorithm` writes back only what
 its definition marks with `@update` (see the algorithms page): its own state, or the argument it was given.
 (A hand-written `step!` that returns a named tuple keeps the older meaning: every returned name is written
-back where it lives.)
+back, to the variable wired to that name or the algorithm's own state field; never to a block's local of the same
+name that is not wired to it.)
 
 ```julia
 @StepAlgorithm function AddRand!(val, @managed(rng = Xoshiro(1)))

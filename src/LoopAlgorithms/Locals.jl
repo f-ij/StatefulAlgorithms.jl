@@ -25,7 +25,10 @@ to `CompositeAlgorithm(...)` or `Routine(...)` like a route.
 - Scope: the declaring plan and everything below it; the nearest declaration of a name wins,
   and each copy of a plan has its own slot.
 - Lifetime: one run. Created when the run starts, kept across pause/resume, not saved.
-- Use: children read a local by name and update it by returning that name.
+- Use: children read a local by name. A child writes it only through a wire into it,
+  `Route(:_declared_locals => Algo, :x => :x)`: what the child returns as `x` is written back
+  through the wire. Returning `x` without that wire does not write the local (it is one of the
+  child's own outputs). In a DSL block, an assignment (`x = f()`) writes it.
 - Type: the initial value's type; returned values are converted to it. A local declared
   without a value (`undef` here, `local x` in the DSL) or as `nothing` gets its type from the
   values written to it, worked out before the run (section 4).
