@@ -149,13 +149,16 @@ function _inline_routine_child_exprs(ChildType::Type, child, child_cursor, child
         # One loop for all repeats, the body written once. The stop condition is checked after the first repeat and
         # before every later one.
         push!(body, :(local $count = @inline routine_repeat_count($repeat_value)))
-        push!(body, :(for $lidx in $resume_point:$count
-            if $lidx > $resume_point
-                $(stop_after(lidx, lidx))
+        # One loop, one stop check per repeat (see `_subroutine_step!`).
+        push!(body, :(if $resume_point <= $count
+            for $lidx in $resume_point:$count
+                if $lidx > $resume_point
+                    $(stop_after(lidx, lidx))
+                end
+                $(repeat_once()...)
             end
-            $(repeat_once()...)
-            if $lidx == $resume_point
-                $(stop_after(lidx, :($lidx + 1)))
+            if $resume_point == $count
+                $(stop_after(resume_point, :($resume_point + 1)))
             end
         end))
     end
@@ -320,7 +323,9 @@ end
         # The repeats carry only the fields the child writes, as the loops do (see src/Context/Carried/Carry.jl); `context`
         # stays the routine's starting context.
         carried = @inline create_carried(func, func_cursor, lc, child_step_wiring, namespace, process, lifetime)
-        # One loop for all repeats. The stop condition is checked after the first repeat and before every later one.
+        # One loop, one stop check per repeat: before every repeat but the first. The check after the first repeat that
+        # came before is implied by the one before the second (same context; it holds whenever that one does), so it
+        # only runs when the first repeat is also the last.
         for lidx in resume_point:this_repeat_count
             if lidx > resume_point
                 # Built fresh for the break checks: carrying `stepped` instead would make the whole context a loop variable.
@@ -334,14 +339,15 @@ end
                 end
             end
             stepped_lc = @inline _step!(func, func_cursor, (@inline withcontexts(lc, (@inline with_carried(persistent_context, carried)), runtime_context)), child_step_wiring, namespace, process, lifetime)
-            stepped, runtime_context = (@inline getpersistent(stepped_lc)), (@inline getruntime(stepped_lc))
-            carried = @inline next_carried(carried, stepped)
+            runtime_context = @inline getruntime(stepped_lc)
+            carried = @inline next_carried(carried, (@inline getpersistent(stepped_lc)))
             @inline tick!(process)
-            if lidx == resume_point && (@inline routine_breakcondition(subroutine_lifetime, lifetime, process, (@inline final_context(LoopContext(stepped, runtime_context))), lidx))
-                if !(@inline _routine_local_breakcondition(subroutine_lifetime, process, (@inline final_context(LoopContext(stepped, runtime_context))), lidx))
-                    @inline set_resume_point!(routine_cursor, idx, lidx + 1)
-                end
-                return (@inline withcontexts(lc, (@inline with_carried(persistent_context, carried)), runtime_context))
+        end
+        if resume_point == this_repeat_count
+            current = @inline with_carried(persistent_context, carried)
+            seen = @inline final_context(LoopContext(current, runtime_context))
+            if (@inline routine_breakcondition(subroutine_lifetime, lifetime, process, seen, resume_point)) && !(@inline _routine_local_breakcondition(subroutine_lifetime, process, seen, resume_point))
+                @inline set_resume_point!(routine_cursor, idx, resume_point + 1)
             end
         end
         return (@inline withcontexts(lc, (@inline with_carried(persistent_context, carried)), runtime_context))
