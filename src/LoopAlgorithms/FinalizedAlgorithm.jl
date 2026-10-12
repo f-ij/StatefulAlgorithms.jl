@@ -52,8 +52,6 @@ end
 
 @inline inneralgorithm(fa::FinalizedAlgorithm) = getfield(fa, :inner)
 @inline finalfunction(fa::FinalizedAlgorithm) = getfield(fa, :final)
-@inline _finalstep_demands_all_returns(::FinalizedAlgorithm) = Val(true)
-@inline _finalstep_demands_all_returns(::Any) = Val(false)
 
 @inline getalgos(fa::FinalizedAlgorithm) = getalgos(inneralgorithm(fa))
 @inline getalgo(fa::FinalizedAlgorithm, idx) = getalgo(inneralgorithm(fa), idx)

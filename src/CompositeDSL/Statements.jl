@@ -776,6 +776,20 @@ function _dsl_collect_block(
             stmt = _dsl_mutable_inner(stmt)
         end
 
+        # In a routine, `x = @repeat spec f()` is the repeated block `@repeat spec begin x = f() end`, with `local x`
+        # before it when the block does not have `x` yet (see `_dsl_repeated_assignment`).
+        repeated = expected_schedule == :repeat ? _dsl_repeated_assignment(stmt, union(known_outputs, state_outputs)) : nothing
+        if !isnothing(repeated)
+            if !isempty(repeated.declare)
+                isnothing(current_line) || push!(step_exprs, current_line)
+                push!(step_exprs, _dsl_local_declaration_expr([(name, nothing) for name in repeated.declare]))
+                union!(known_outputs, repeated.declare)
+                union!(declared, repeated.declare)
+            end
+            pushfirst!(pending, repeated.block)
+            continue
+        end
+
         if stmt isa Expr && stmt.head == :macrocall && stmt.args[1] == Symbol("@state")
             # States are collected first and emitted once for the whole block.
             state_name = _dsl_merge_state_statement!(state_fields, state_name, stmt)

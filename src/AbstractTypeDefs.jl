@@ -118,15 +118,6 @@ struct CompositeLoopCursor{Children} <: AbstractLoopCursor
     children::Children
 end
 
-"""
-Cursor for the bootstrap step of a fresh run. Every composite counter is 1 on
-that step, so the tick is a compile-time constant and the scheduling checks
-fold away; the loop then starts from exactly the context type step 1 produced.
-"""
-struct FirstTickCursor{C<:CompositeLoopCursor} <: AbstractLoopCursor
-    cursor::C
-end
-
 """Non-pausable routine cursor that carries only nested child cursors."""
 struct DirectRoutineCursor{Children} <: AbstractLoopCursor
     children::Children
@@ -223,7 +214,7 @@ The view keeps the full root `PlanWiring` and a type-level child path. Incoming
 routes/shares are read at the current path, while return demand can be computed
 from the whole tree for the current namespace.
 """
-struct PlanWiringView{Root, W, DemandAll, Parent} <: AbstractWiring
+struct PlanWiringView{Root, W, Parent} <: AbstractWiring
     wiring::W   # wiring of the current plan node; child views hold the child's subtree
 end
 # `Parent` is the `PlanWiring` type of the plan node the current node is in (`Nothing` for the root): the current node
@@ -235,11 +226,10 @@ end
 # `Root` is the whole plan's wiring type (needed by `return_demand`); it is the same at
 # every level, while `W` shrinks. Keeping every type non-growing down the nested plan lets
 # inference follow nested `_step!` calls instead of cutting them as unbounded recursion.
-PlanWiringView(wiring::W, ::Val = Val(()), ::Val{DemandAll} = Val(false)) where {W<:PlanWiring,DemandAll} =
-    PlanWiringView{W,W,DemandAll,Nothing}(wiring)
+PlanWiringView(wiring::W) where {W<:PlanWiring} = PlanWiringView{W,W,Nothing}(wiring)
 
 """The plan node a plan node runs in, as its `PlanWiring` type, or `Nothing` (see `PlanWiringView`)."""
-wiring_parent(::Type{<:PlanWiringView{Root, W, DemandAll, Parent}}) where {Root, W, DemandAll, Parent} = Parent
+wiring_parent(::Type{<:PlanWiringView{Root, W, Parent}}) where {Root, W, Parent} = Parent
 
 Base.iterate(la::ALA) where {ALA<:LoopSpec} = iterate(getalgos(la))
 

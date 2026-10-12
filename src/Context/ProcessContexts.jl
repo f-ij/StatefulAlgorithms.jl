@@ -39,8 +39,8 @@ end
 @inline _unref(::Nothing) = nothing
 
 """
-Return the subcontext named `name`; for a runtime context, a captured return or an input named `name` when there is no
-such subcontext.
+Return the subcontext named `name`; when there is no such subcontext, the captured return, input or declared local
+named `name` (a declared local as its value).
 """
 @inline Base.@constprop :aggressive function Base.getproperty(pc::ProcessContext, name::Symbol)
     subcontexts = @inline get_subcontexts(pc)
@@ -54,6 +54,10 @@ such subcontext.
     input = @inline get_inputs(pc)
     if haskey(input, name)
         return @inline getproperty(input, name)
+    end
+    locals = @inline get_declared_locals(pc)
+    if haskey(locals, name)
+        return @inline context_value(pc, getproperty(locals, name))   # its value, not its storage
     end
     error("Context has no persistent subcontext named `$name`.")
 end

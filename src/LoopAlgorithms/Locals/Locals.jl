@@ -134,6 +134,11 @@ _throw_undef() = throw(UndefRefError())
     !iszero(getfield(m, :isset)) ? view_value(view, getfield(m, :value)) : nothing
 @inline view_value(view::V, m::Maybe{T, F, UndefInitializer}) where {T, F, V<:SubContextView} =
     !iszero(getfield(m, :isset)) ? view_value(view, getfield(m, :value)) : _throw_undef()
+# A declared local read from a `ProcessContext` (a `Var`, `context.x`): the same, its value or `nothing` / an error.
+@inline context_value(c::ProcessContext, m::Maybe{T, F, Nothing}) where {T, F} =
+    !iszero(getfield(m, :isset)) ? getfield(m, :value) : nothing
+@inline context_value(c::ProcessContext, m::Maybe{T, F, UndefInitializer}) where {T, F} =
+    !iszero(getfield(m, :isset)) ? getfield(m, :value) : _throw_undef()
 # A local declared without a value that no step ever writes keeps its `undef`.
 @inline view_value(view::V, ::UndefInitializer) where {V<:SubContextView} = _throw_undef()
 

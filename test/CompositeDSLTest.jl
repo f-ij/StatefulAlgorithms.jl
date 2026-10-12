@@ -549,28 +549,24 @@ end
         @test StatefulAlgorithms.getplan(resolved_routine) isa Routine
         @test repeats(resolved_routine) == (3,)
 
-        # The return of a repeated statement is not a value of the block: `x = @repeat …` is an error when the block
-        # is built; capture inside a repeated block instead.
-        err = try
-            @eval @Routine begin
-                @state produced = 5
-                tripled = @repeat 3 scaled_double_dsl_test(produced; scale = 3)
-            end
-            nothing
-        catch e
-            e
+        # `x = @repeat n f()` is the repeated block `@repeat n begin x = f() end`, with `local x` before it.
+        assigned_routine = @Routine begin
+            @state produced = 5
+            tripled = @repeat 3 scaled_double_dsl_test(produced; scale = 3)
         end
-        @test err isa ErrorException
-        @test occursin("`tripled = @repeat 3 scaled_double_dsl_test(produced; scale = 3)` does not capture anything", sprint(showerror, err))
-        @test occursin("local tripled; @repeat 3 begin tripled = scaled_double_dsl_test(produced; scale = 3) end", sprint(showerror, err))
-
-        seen = Int[]
-        run(@Routine(begin
+        block_routine = @Routine begin
             @state produced = 5
             local tripled
             @repeat 3 begin
                 tripled = scaled_double_dsl_test(produced; scale = 3)
             end
+        end
+        @test sprint(show, StatefulAlgorithms.getplan(resolve(assigned_routine))) == sprint(show, StatefulAlgorithms.getplan(resolve(block_routine)))
+
+        seen = Int[]
+        run(@Routine(begin
+            @state produced = 5
+            tripled = @repeat 3 scaled_double_dsl_test(produced; scale = 3)
             push!(seen, tripled)
         end); repeats = 1)
         @test seen == [30]
@@ -995,6 +991,7 @@ end
             @state b = 1
             @state x = 2
             @state y = 3
+            local result                                   # a final step sees what outlives the steps
             result = keyword_semicolon_dsl_test(a = b; x, y)
             @finally dsl_runtime_final_summary
         end
@@ -1253,8 +1250,9 @@ end
         @info "Composite DSL: @finally wraps only the outer DSL algorithm"
         algo = @CompositeAlgorithm begin
             @state seed = 8
-            DSLValueAlgo(value = seed)
-            @finally dsl_final_summary
+            local result                                   # a final step sees what outlives the steps
+            (; result) = DSLValueAlgo(value = seed)
+            @finally dsl_runtime_final_summary
         end
 
         @test algo isa StatefulAlgorithms.FinalizedAlgorithm
@@ -1299,6 +1297,7 @@ end
         @info "Composite DSL: Function call outputs are runtime-only and visible to finalstep"
         algo = @CompositeAlgorithm begin
             @state seed = 4
+            local result                                   # a final step sees what outlives the steps
             result = keyword_value_identity_dsl_test(value = seed)
             @finally dsl_runtime_final_summary
         end
@@ -1319,6 +1318,7 @@ end
         marker = :done
         algo = @CompositeAlgorithm begin
             @state seed = 4
+            local result                                   # a final step sees what outlives the steps
             result = literal_join_dsl_test(:start, seed, marker)
             @finally dsl_runtime_final_summary
         end

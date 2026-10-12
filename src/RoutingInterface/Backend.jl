@@ -18,9 +18,9 @@ shares(w::Wiring) = getfield(w, :shares)
 @inline current_wiring(pwv::PlanWiringView) = getfield(pwv, :wiring)
 
 """Return a child view holding the child's wiring subtree (same root type), running in the current node's scope."""
-@inline function child_wiring_view(pwv::PlanWiringView{Root,W,DemandAll}, ::Val{idx}) where {Root,W<:PlanWiring,DemandAll,idx}
+@inline function child_wiring_view(pwv::PlanWiringView{Root,W}, ::Val{idx}) where {Root,W<:PlanWiring,idx}
     child = getfield(child_wiring(current_wiring(pwv)), idx)
-    return PlanWiringView{Root,typeof(child),DemandAll,W}(child)
+    return PlanWiringView{Root,typeof(child),W}(child)
 end
 
 """The routes at the current plan node."""
@@ -97,8 +97,7 @@ function _return_demand_names(::Type{W}, owner::Symbol) where {W<:PlanWiring}
 end
 
 """Compute demanded owner-runtime return names from the full plan-wiring view."""
-@inline @generated function return_demand(::PlanWiringView{Root,W,DemandAll}, ::Namespace{Name}) where {Root<:PlanWiring,W,DemandAll,Name}
-    DemandAll === true && return :(ReturnDemand{:all}())
+@inline @generated function return_demand(::PlanWiringView{Root,W}, ::Namespace{Name}) where {Root<:PlanWiring,W,Name}
     names = _return_demand_names(Root, Name)
     return :(ReturnDemand{$names}())
 end

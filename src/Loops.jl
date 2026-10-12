@@ -22,8 +22,9 @@ there. Returns the persistent context and the result; the runtime values end wit
 end
 
 """
-Build the runtime context for one run: its inputs (`_inputs`) and declared locals (`_declared_locals`). The returns
-(`_captured_returns`, `_subcontext_returns`) get their slots before the first step (Outputs.jl).
+Build the runtime context for one run: its inputs (`_inputs`) and declared locals (`_declared_locals`). Returns
+(`_captured_returns`, `_subcontext_returns`) are not in it: a step adds them where they are assigned and removes them
+when their plan node ends (see `LoopContext`), so every step gets and returns a runtime context of this type.
 
 The process and the lifetime are not in it: no step read them (they were in `_captured_returns` until 2026-10). Init still gets
 the lifetime, for sizing (`InitContext`, `processsizehint!`). To give steps loop information again (step
@@ -71,7 +72,7 @@ end
 @inline _loop_ispaused(process::P) where {P<:Process} = ispaused(process)
 
 """Build the root wiring view for one loop execution."""
-@inline _root_wiring_view(algo, step_plan) = PlanWiringView(getwiring(step_plan), Val(()), _finalstep_demands_all_returns(algo))
+@inline _root_wiring_view(algo, step_plan) = PlanWiringView(getwiring(step_plan))
 
 """Build or recover the per-run loop cursor for one execution."""
 @inline _loop_cursor(process::AbstractProcess, plan, ::Resuming) = loop_cursor(plan, Val(false))
@@ -129,14 +130,7 @@ Run a single function in a loop indefinitely.
     runtime_context = @inline _loop_runtime_context(func, inputs, process, lifetime, start_persistent_context, resume)
     runtime_context = @inline _settle_runtime_context(step_plan, step_cursor, persistent_context, runtime_context, step_wiring, process, lifetime)
 
-    if isresuming
-        @atomic process.paused = false
-    else
-        first_lc = @inline _step!(step_plan, first_tick(step_cursor), LoopContext(persistent_context, runtime_context), step_wiring, Namespace{nothing}(), process, lifetime)
-        persistent_context, runtime_context = (@inline getpersistent(first_lc)), (@inline getruntime(first_lc))
-        @inline tick!(process)
-        @inline inc!(process)
-    end
+    isresuming && @atomic process.paused = false
 
     # Carry only the fields the steps write, not the whole context: fields left unchanged would otherwise be copied every
     # step (see src/Context/Carried/Carry.jl).
@@ -183,14 +177,7 @@ Base.@constprop :aggressive @inline function loop(process::P, algo::F, start_per
     runtime_context = @inline _loop_runtime_context(algo, inputs, process, lifetime, start_persistent_context, resume)
     runtime_context = @inline _settle_runtime_context(step_plan, step_cursor, persistent_context, runtime_context, step_wiring, process, lifetime)
 
-    if isresuming
-        @atomic process.paused = false
-    else
-        first_lc = @inline _step!(step_plan, first_tick(step_cursor), LoopContext(persistent_context, runtime_context), step_wiring, Namespace{nothing}(), process, lifetime)
-        persistent_context, runtime_context = (@inline getpersistent(first_lc)), (@inline getruntime(first_lc))
-        @inline tick!(process)
-        @inline inc!(process)
-    end
+    isresuming && @atomic process.paused = false
 
     # Carry only the fields the steps write, not the whole context: fields left unchanged would otherwise be copied every
     # step (see src/Context/Carried/Carry.jl).

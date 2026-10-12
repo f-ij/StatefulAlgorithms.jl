@@ -107,6 +107,7 @@ end
 @testset "DSL calls lower to Callables, wired with WithWiring" begin
     algo = @CompositeAlgorithm begin
         @alias sensor = ExSensor()
+        local y, z                                         # a final step sees what outlives the steps
         sensor()
         y = ex_twice(sensor.state)                       # an algorithm's field: a wire
         z = ex_twice(@transform(v -> v + 1, sensor.state)) # a transformed field: a wire with a transform
@@ -124,6 +125,7 @@ end
     # Plain names and values need no wires.
     algo = @CompositeAlgorithm begin
         @state seed = 1.0
+        local b                                            # a final step sees what outlives the steps
         a = ex_twice(seed)
         b = ex_kw(a; scale = 3.0)
         @finally context -> (; b = context.b)

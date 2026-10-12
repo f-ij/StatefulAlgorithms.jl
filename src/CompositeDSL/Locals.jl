@@ -83,6 +83,32 @@ function _dsl_reject_undeclared_scheduled_assignment(stmt, known::Set{Symbol}, l
 end
 
 """
+`x = @repeat spec f()` in a routine as `(; declare, block)`: the repeated block `@repeat spec begin x = f() end`, and
+the names it assigns that `known` (the names the block has) does not have yet, to declare before it (`local x`).
+`nothing` for any other statement.
+
+Why: the repeats run in a loop, and every name they assign has to exist before it, with its type (it is read after
+the repeats, and a stop condition may read it between them), as `x` would be declared before a Julia loop that
+assigns it. As a block, the statement's algorithm and the call that captures its return run together in each repeat,
+and the algorithm's return is removed when the block ends: every repeat leaves the runtime context with the type it
+started with.
+"""
+function _dsl_repeated_assignment(stmt, known::Set{Symbol})
+    stmt isa Expr && stmt.head == :(=) || return nothing
+    lhs, rhs = stmt.args
+    rhs isa Expr && rhs.head == :macrocall && rhs.args[1] == Symbol("@repeat") || return nothing
+    args = filter(a -> !(a isa LineNumberNode), rhs.args[2:end])
+    length(args) == 2 || return nothing
+    spec, body = args
+    body isa Expr && body.head == :block && return nothing          # `x = @repeat n begin ... end`: left as it is
+    names = _dsl_try_parse_output_symbols(lhs isa Expr && lhs.head == :(::) ? lhs.args[1] : lhs)
+    isnothing(names) && return nothing
+    declare = [name for name in names if !(name in known)]
+    block = Expr(:macrocall, Symbol("@repeat"), rhs.args[2], spec, Expr(:block, Expr(:(=), lhs, body)))
+    return (; declare, block)
+end
+
+"""
 An error for `x = y` where `y` is a value of the block (a state field, an input, a local or an earlier statement's
 result): a block's statements are steps, and a bare name is not one. Without this, `y` would be read as an algorithm
 entry. An `@alias` name on the right (`x = alias`) is an algorithm entry and stays allowed.
