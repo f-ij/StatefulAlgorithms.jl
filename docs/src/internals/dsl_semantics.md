@@ -189,7 +189,10 @@ A step returns a value, as a Julia function does, and separately writes back its
   them): `x`'s value at the `return` goes to where the algorithm read `x` from, its own `@managed` state or the
   variable of the block passed as `x` (through the wire of that argument, or a share). A hand-written `step!` returns
   `StepResult(value, StateUpdates(; x))` for the same, or a plain named tuple, which keeps the older meaning: every
-  returned name is written back where it lives, and the named tuple is also its value.
+  returned name is written back, and the named tuple is also its value.
+- **Where an update goes.** Through the wire the name was read through, else to the algorithm's own state field of
+  that name, else it is one of the algorithm's own outputs. An update never writes a block's local or captured
+  return just because the names match: only an assignment, or a wire into the algorithm, writes a block name.
 
 Which values of the block an update may change:
 
