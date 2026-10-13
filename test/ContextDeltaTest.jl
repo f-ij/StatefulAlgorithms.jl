@@ -5,18 +5,16 @@ using Random
 # results are right, and that the loop really takes the carrying path (it falls back silently otherwise).
 
 # Reads an array and an rng from its context and flips one entry; returns a value that is not state.
-struct DeltaReader <: ProcessAlgorithm end
-StatefulAlgorithms.init(::DeltaReader, context) = (; x = rand(Xoshiro(2), Float32, 100), rng = Xoshiro(1))
-function StatefulAlgorithms.step!(::DeltaReader, context)
-    i = rand(context.rng, 1:100)
-    context.x[i] = -context.x[i]
-    return (; proposal = i)
+@StepAlgorithm function DeltaReader(@managed(x = rand(Xoshiro(2), Float32, 100), rng = Xoshiro(1)))
+    i = rand(rng, 1:100)
+    x[i] = -x[i]
+    return i
 end
 
 # Writes its counter every step; its buffer is never written.
-struct DeltaCounter <: ProcessAlgorithm end
-StatefulAlgorithms.init(::DeltaCounter, context) = (; count = 0, buffer = zeros(10))
-StatefulAlgorithms.step!(::DeltaCounter, context) = (; count = context.count + 1)
+@StepAlgorithm function DeltaCounter(@managed(count = 0, buffer = zeros(10)))
+    @update count = count + 1
+end
 
 # An immutable struct of plain values and arrays, written as a whole.
 struct DeltaSparse
@@ -25,9 +23,9 @@ struct DeltaSparse
     colptr::Vector{Int}
     nzval::Vector{Float32}
 end
-struct DeltaWriter <: ProcessAlgorithm end
-StatefulAlgorithms.init(::DeltaWriter, context) = (; sp = DeltaSparse(10, 0, collect(1:11), ones(Float32, 10)))
-StatefulAlgorithms.step!(::DeltaWriter, context) = (sp = context.sp; (; sp = DeltaSparse(sp.m, sp.n + 1, sp.colptr, sp.nzval)))
+@StepAlgorithm function DeltaWriter(@managed(sp = DeltaSparse(10, 0, collect(1:11), ones(Float32, 10))))
+    @update sp = DeltaSparse(sp.m, sp.n + 1, sp.colptr, sp.nzval)
+end
 
 # Plain functions in DSL blocks: their returns write `@state` fields too.
 delta_plus_one(x) = x + 1.0

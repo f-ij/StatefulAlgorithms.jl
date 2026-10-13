@@ -9,25 +9,16 @@ StatefulAlgorithms.@StepAlgorithm function CaptureSeedForAnalyzerTest(
     return seed * scale
 end
 
-struct DirectContextReadForAnalyzerTest <: StatefulAlgorithms.ProcessAlgorithm end
-
-function StatefulAlgorithms.init(::DirectContextReadForAnalyzerTest, context::C) where {C <: StatefulAlgorithms.AbstractContext}
-    upstream = context.noise
-    mis = get(context, :missing_value, 99)
-    indexed = context[:capture_seed]
-    return (; upstream, mis, indexed)
+# The initializers read the init context directly: a field, a `get` with a default and an index
+StatefulAlgorithms.@StepAlgorithm function DirectContextReadForAnalyzerTest(
+    @managed(upstream = context.noise, mis = get(context, :missing_value, 99), indexed = context[:capture_seed]),
+)
+    return
 end
 
-struct StepReadForAnalyzerTest <: StatefulAlgorithms.StepAlgorithm end
-
-function StatefulAlgorithms.init(::StepReadForAnalyzerTest, context::C) where {C<:StatefulAlgorithms.AbstractContext}
-    return (; total = 0)
-end
-
-function StatefulAlgorithms.step!(::StepReadForAnalyzerTest, context::C) where {C<:StatefulAlgorithms.AbstractContext}
-    increment = context.increment
+StatefulAlgorithms.@StepAlgorithm function StepReadForAnalyzerTest(increment, @managed(total = 0))
     isnothing(increment) && return nothing
-    return (; total = context.total + increment)
+    @update total = total + increment
 end
 
 @testset "Context Analyzer" begin

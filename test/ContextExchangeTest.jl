@@ -22,14 +22,8 @@ function exchange_stepper(algo, context)
 end
 
 @testset "ContextExchange buffers interactive updates" begin
-    struct ExchangeTargetForTest <: ProcessAlgorithm end
-
-    function StatefulAlgorithms.init(::ExchangeTargetForTest, context)
-        return (; value = 1.0, count = 1)
-    end
-
-    function StatefulAlgorithms.step!(::ExchangeTargetForTest, context)
-        return (;)
+    @StepAlgorithm function ExchangeTargetForTest(@managed(value = 1.0, count = 1))
+        return
     end
 
     algo = resolve(CompositeAlgorithm(
@@ -60,14 +54,8 @@ end
 end
 
 @testset "InteractiveVar writes through ContextExchange" begin
-    struct InteractiveVarTargetForTest <: ProcessAlgorithm end
-
-    function StatefulAlgorithms.init(::InteractiveVarTargetForTest, context)
-        return (; value = 1.0)
-    end
-
-    function StatefulAlgorithms.step!(::InteractiveVarTargetForTest, context)
-        return (;)
+    @StepAlgorithm function InteractiveVarTargetForTest(@managed(value = 1.0))
+        return
     end
 
     algo = resolve(CompositeAlgorithm(
@@ -103,14 +91,8 @@ end
 end
 
 @testset "InteractiveVar polls ContextExchange state" begin
-    struct PollingInteractiveTargetForTest <: ProcessAlgorithm end
-
-    function StatefulAlgorithms.init(::PollingInteractiveTargetForTest, context)
-        return (; value = 1, seen = 0)
-    end
-
-    function StatefulAlgorithms.step!(::PollingInteractiveTargetForTest, context)
-        return (; seen = context.seen + 1)
+    @StepAlgorithm function PollingInteractiveTargetForTest(@managed(value = 1, seen = 0))
+        @update seen = seen + 1
     end
 
     algo = resolve(CompositeAlgorithm(
@@ -147,14 +129,8 @@ end
 end
 
 @testset "ContextExchange supports aliases and type selectors" begin
-    struct AliasedExchangeTargetForTest <: ProcessAlgorithm end
-
-    function StatefulAlgorithms.init(::AliasedExchangeTargetForTest, context)
-        return (; value = 1.0)
-    end
-
-    function StatefulAlgorithms.step!(::AliasedExchangeTargetForTest, context)
-        return (;)
+    @StepAlgorithm function AliasedExchangeTargetForTest(@managed(value = 1.0))
+        return
     end
 
     algo = resolve(CompositeAlgorithm(
@@ -178,10 +154,8 @@ end
 end
 
 @testset "InteractiveVar requires a ContextExchange" begin
-    struct NoExchangeTargetForTest <: ProcessAlgorithm end
-
-    function StatefulAlgorithms.init(::NoExchangeTargetForTest, context)
-        return (; value = 1.0)
+    @StepAlgorithm function NoExchangeTargetForTest(@managed(value = 1.0))
+        return
     end
 
     algo = resolve(CompositeAlgorithm(:target => NoExchangeTargetForTest(), (1,)))
@@ -191,14 +165,8 @@ end
 end
 
 @testset "ContextExchange timer skips reads and writes" begin
-    struct TimedExchangeTargetForTest <: ProcessAlgorithm end
-
-    function StatefulAlgorithms.init(::TimedExchangeTargetForTest, context)
-        return (; value = 1.0, seen = 0)
-    end
-
-    function StatefulAlgorithms.step!(::TimedExchangeTargetForTest, context)
-        return (; seen = context.seen + 1)
+    @StepAlgorithm function TimedExchangeTargetForTest(@managed(value = 1.0, seen = 0))
+        @update seen = seen + 1
     end
 
     algo = resolve(CompositeAlgorithm(
@@ -227,15 +195,9 @@ end
 end
 
 @testset "ContextExchange updates running process state" begin
-    struct SlowInteractiveTargetForTest <: ProcessAlgorithm end
-
-    function StatefulAlgorithms.init(::SlowInteractiveTargetForTest, context)
-        return (; value = 1, seen = 0)
-    end
-
-    function StatefulAlgorithms.step!(::SlowInteractiveTargetForTest, context)
+    @StepAlgorithm function SlowInteractiveTargetForTest(@managed(value = 1, seen = 0))
         sleep(0.01)
-        return (; seen = context.seen + 1)
+        @update seen = seen + 1
     end
 
     algo = resolve(CompositeAlgorithm(

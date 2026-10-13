@@ -1,16 +1,10 @@
 using Test
 using StatefulAlgorithms
 
-struct CopyManagedAccumulator <: StatefulAlgorithms.ProcessAlgorithm end
-
-function StatefulAlgorithms.init(::CopyManagedAccumulator, context)
-    (; start, sink) = context
-    return (; value = start, sink)
-end
-
-function StatefulAlgorithms.step!(::CopyManagedAccumulator, context)
-    push!(context.sink, context.value)
-    return (; value = context.value + context.delta)
+# Pushes `value` to `sink`, then adds `delta` to it; `value` starts at the input `start`.
+@StepAlgorithm function CopyManagedAccumulator(delta, @managed(value = start, sink); @inputs((; start)))
+    push!(sink, value)
+    @update value = value + delta
 end
 
 @testset "copyprocess rebuilds from task description" begin

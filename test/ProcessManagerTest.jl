@@ -371,28 +371,14 @@ end
     @test isempty(only(slots(manager)).worker.buffer)
 end
 
-struct ManagerProcessAccumulator <: StatefulAlgorithms.ProcessAlgorithm end
-
-function StatefulAlgorithms.init(::ManagerProcessAccumulator, context)
-    value = get(context, :start, 0)
-    return (; value = Ref(value), buffer = Int[])
+@StepAlgorithm function ManagerProcessAccumulator(@managed(value = Ref(start), buffer = Int[]); @inputs((; start = 0)))
+    push!(buffer, value[])
+    return
 end
 
-function StatefulAlgorithms.step!(::ManagerProcessAccumulator, context)
-    push!(context.buffer, context.value[])
-    return (;)
-end
-
-struct ManagerProcessMultiplier <: StatefulAlgorithms.ProcessAlgorithm end
-
-function StatefulAlgorithms.init(::ManagerProcessMultiplier, context::C) where {C}
-    value = get(context, :start, 0)
-    return (; value = Ref(value), buffer = Int[])
-end
-
-function StatefulAlgorithms.step!(::ManagerProcessMultiplier, context::C) where {C}
-    push!(context.buffer, 2 * context.value[])
-    return (;)
+@StepAlgorithm function ManagerProcessMultiplier(@managed(value = Ref(start), buffer = Int[]); @inputs((; start = 0)))
+    push!(buffer, 2 * value[])
+    return
 end
 
 function manager_process_context(worker)
@@ -990,15 +976,9 @@ end
     @test only(slots(manager)).error isa ArgumentError
 end
 
-struct ManagerInlineAccumulator <: StatefulAlgorithms.ProcessAlgorithm end
-
-function StatefulAlgorithms.init(::ManagerInlineAccumulator, context::C) where {C}
-    return (; value = Ref(0), total = Ref(0))
-end
-
-function StatefulAlgorithms.step!(::ManagerInlineAccumulator, context::C) where {C}
-    context.total[] += context.value[]
-    return (;)
+@StepAlgorithm function ManagerInlineAccumulator(@managed(value = Ref(0), total = Ref(0)))
+    total[] += value[]
+    return
 end
 
 function manager_inline_context(worker::W) where {W<:InlineChunkWorker}

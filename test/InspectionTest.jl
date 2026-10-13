@@ -102,8 +102,9 @@ end
 end
 
 @testset "LoopAlgorithm types show compactly, also with an unknown plan" begin
-    struct ShowStep <: ProcessAlgorithm end
-    StatefulAlgorithms.step!(::ShowStep, context) = nothing
+    @StepAlgorithm function ShowStep()
+        return
+    end
     @test sprint(show, StatefulAlgorithms.LoopAlgorithm) == "LoopAlgorithm"
     @test startswith(sprint(show, typeof(resolve(CompositeAlgorithm(ShowStep, (1,))))), "LoopAlgorithm{CompositeAlgorithm")
     # A method signature holds `LoopAlgorithm{Plan}` with `Plan` a type variable.

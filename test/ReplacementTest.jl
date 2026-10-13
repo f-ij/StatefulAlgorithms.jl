@@ -2,9 +2,6 @@ using Test
 using StatefulAlgorithms
 
 struct ReplacementSourceState <: AlgoState end
-struct ReplacementSourceAlgo <: ProcessAlgorithm end
-struct ReplacementTargetAlgo <: ProcessAlgorithm end
-struct ReplacementReadTargetAlgo <: ProcessAlgorithm end
 
 struct RecursiveViewWrapper{T}
     value::T
@@ -19,28 +16,17 @@ function StatefulAlgorithms.init(::ReplacementSourceState, context::C) where {C}
     return (; value = 3)
 end
 
-function StatefulAlgorithms.init(::ReplacementSourceAlgo, context::C) where {C}
-    return (; value = 3)
+@StepAlgorithm function ReplacementSourceAlgo(@managed(value = 3))
+    @update value
 end
 
-function StatefulAlgorithms.step!(::ReplacementSourceAlgo, context::C) where {C}
-    return (; value = context.value)
+@StepAlgorithm function ReplacementTargetAlgo(@managed(value = 100, seen = 0))
+    @update seen = value
+    @update value = value + 1
 end
 
-function StatefulAlgorithms.init(::ReplacementTargetAlgo, context::C) where {C}
-    return (; value = 100, seen = 0)
-end
-
-function StatefulAlgorithms.step!(::ReplacementTargetAlgo, context::C) where {C}
-    return (; value = context.value + 1, seen = context.value)
-end
-
-function StatefulAlgorithms.init(::ReplacementReadTargetAlgo, context::C) where {C}
-    return (; value = 100, seen = 0)
-end
-
-function StatefulAlgorithms.step!(::ReplacementReadTargetAlgo, context::C) where {C}
-    return (; seen = context.value)
+@StepAlgorithm function ReplacementReadTargetAlgo(@managed(value = 100, seen = 0))
+    @update seen = value
 end
 
 @testset "Replacement variables" begin
@@ -116,12 +102,12 @@ end
 end
 
 @testset "update_keys updates the keys of a plan's Replace, route and children" begin
-    struct UKSource <: ProcessAlgorithm end
-    StatefulAlgorithms.init(::UKSource, context) = (; x = 1.0)
-    StatefulAlgorithms.step!(::UKSource, context) = (; x = context.x + 1)
-    struct UKSink <: ProcessAlgorithm end
-    StatefulAlgorithms.init(::UKSink, context) = (; seen = 0.0, y = 0.0)
-    StatefulAlgorithms.step!(::UKSink, context) = (; seen = context.x)
+    @StepAlgorithm function UKSource(@managed(x = 1.0))
+        @update x += 1
+    end
+    @StepAlgorithm function UKSink(x, @managed(seen = 0.0, y = 0.0))
+        @update seen = x
+    end
 
     plan = CompositeAlgorithm(UKSource, UKSink, (1, 1),
         StatefulAlgorithms.LocalPlanOption(UKSink, Route(UKSource => UKSink, :x)),
@@ -137,15 +123,15 @@ end
 end
 
 @testset "A Replace declared in a nested plan applies to the whole run" begin
-    struct NRSource <: ProcessAlgorithm end
-    StatefulAlgorithms.init(::NRSource, context) = (; x = 1.0)
-    StatefulAlgorithms.step!(::NRSource, context) = (; x = context.x + 1)
-    struct NRSink <: ProcessAlgorithm end
-    StatefulAlgorithms.init(::NRSink, context) = (; seen = 0.0, y = 0.0)
-    StatefulAlgorithms.step!(::NRSink, context) = (; seen = context.y)
-    struct NROther <: ProcessAlgorithm end
-    StatefulAlgorithms.init(::NROther, context) = (;)
-    StatefulAlgorithms.step!(::NROther, context) = (;)
+    @StepAlgorithm function NRSource(@managed(x = 1.0))
+        @update x += 1
+    end
+    @StepAlgorithm function NRSink(@managed(seen = 0.0, y = 0.0))
+        @update seen = y
+    end
+    @StepAlgorithm function NROther()
+        return
+    end
 
     inner = CompositeAlgorithm(NRSource, NRSink, (1, 1), Replace(NRSource => NRSink, :x => :y))
     outer = CompositeAlgorithm(inner, NROther, (1, 1))

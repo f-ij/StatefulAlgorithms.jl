@@ -2,15 +2,13 @@ using Test
 using StatefulAlgorithms
 
 @testset "Symbol indexing and targeted initcontext" begin
-    struct SymbolInitAlgo <: ProcessAlgorithm end
-    struct SymbolOtherAlgo <: ProcessAlgorithm end
-
-    function StatefulAlgorithms.init(::SymbolInitAlgo, context)
-        (; value = context.seed)
+    # `value` is initialised from the init-time input `seed`
+    @StepAlgorithm function SymbolInitAlgo(@managed(value = context.seed))
+        return
     end
-    StatefulAlgorithms.init(::SymbolOtherAlgo, context) = (;)
-    StatefulAlgorithms.step!(::SymbolInitAlgo, context) = (;)
-    StatefulAlgorithms.step!(::SymbolOtherAlgo, context) = (;)
+    @StepAlgorithm function SymbolOtherAlgo()
+        return
+    end
 
     resolved = resolve(CompositeAlgorithm(SymbolInitAlgo, SymbolOtherAlgo, (1, 1)))
     reg = getregistry(resolved)
@@ -52,10 +50,9 @@ end
 end
 
 @testset "SubContextView aliases can be replaced from alias type" begin
-    struct ViewAliasAlgo <: ProcessAlgorithm end
-
-    StatefulAlgorithms.init(::ViewAliasAlgo, context) = (; foo = 1)
-    StatefulAlgorithms.step!(::ViewAliasAlgo, context) = (;)
+    @StepAlgorithm function ViewAliasAlgo(@managed(foo = 1))
+        return
+    end
 
     resolved = resolve(CompositeAlgorithm(:view_alias => ViewAliasAlgo(), (1,)))
     ctx = initcontext(resolved; lifetime = Repeat(1))

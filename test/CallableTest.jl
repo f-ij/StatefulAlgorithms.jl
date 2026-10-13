@@ -2,9 +2,9 @@ using Test
 using StatefulAlgorithms
 using StatefulAlgorithms: Callable, Literal, Splat   # internal: tests build calls directly
 
-struct ExSensor <: ProcessAlgorithm end
-StatefulAlgorithms.init(::ExSensor, context) = (; state = 0.0)
-StatefulAlgorithms.step!(::ExSensor, context) = (; state = context.state + 1.0)
+@StepAlgorithm function ExSensor(@managed(state = 0.0))
+    @update state += 1.0
+end
 
 struct ExScale                       # a callable struct
     factor::Float64
@@ -85,9 +85,9 @@ end
     @test values(run_locals(plan)) == (4.0, 5.0)
 
     # On an algorithm child: rename what it reads.
-    struct ExReader <: ProcessAlgorithm end
-    StatefulAlgorithms.init(::ExReader, context) = (; seen = 0.0)
-    StatefulAlgorithms.step!(::ExReader, context) = (; seen = context.reading)
+    @StepAlgorithm function ExReader(reading, @managed(seen = 0.0))
+        @update seen = reading
+    end
     plan = CompositeAlgorithm(ExSensor, WithWiring(ExReader, From(Var(ExSensor, :state) => :reading)), (1, 1))
     @test run(InlineProcess(plan; repeats = 3))[ExReader].seen == 3.0
 end
@@ -136,14 +136,13 @@ end
 
 end
 
-struct VarPlain <: ProcessAlgorithm end
-StatefulAlgorithms.init(::VarPlain, c) = (; x = 0.0)
-StatefulAlgorithms.step!(::VarPlain, c) = (; x = c.x + 1.0)
-struct VarBuffered <: ProcessAlgorithm      # holds a Vector, so not plain data
-    buf::Vector{Float64}
+@StepAlgorithm function VarPlain(@managed(x = 0.0))
+    @update x += 1.0
 end
-StatefulAlgorithms.init(::VarBuffered, c) = (; x = 0.0)
-StatefulAlgorithms.step!(::VarBuffered, c) = (; x = c.x + 2.0)
+# Holds a Vector, so not plain data.
+@StepAlgorithm @config buf::Vector{Float64} = zeros(3) function VarBuffered(@managed(x = 0.0))
+    @update x += 2.0
+end
 
 @testset "Var reads from contexts, by type, instance, key and transform" begin
     b = VarBuffered(zeros(3))

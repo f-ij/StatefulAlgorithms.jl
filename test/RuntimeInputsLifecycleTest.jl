@@ -1,29 +1,18 @@
 using Test
 using StatefulAlgorithms
 
-struct LifecycleInitA <: StatefulAlgorithms.ProcessAlgorithm end
-struct LifecycleInitB <: StatefulAlgorithms.ProcessAlgorithm end
 mutable struct RuntimeShapeChanger <: StatefulAlgorithms.ProcessAlgorithm
     count::Int
 end
-struct PauseRuntimeInputConsumer <: StatefulAlgorithms.ProcessAlgorithm end
 
-function StatefulAlgorithms.init(::LifecycleInitA, context)
-    return (; x = Ref(get(context, :x, 0)), z = get(context, :z, 0))
+@StepAlgorithm function LifecycleInitA(@managed(x = Ref(x), z = z); @inputs((; x = 0, z = 0)))
+    x[] += 1
+    return
 end
 
-function StatefulAlgorithms.init(::LifecycleInitB, context)
-    return (; y = Ref(get(context, :y, 0)))
-end
-
-function StatefulAlgorithms.step!(::LifecycleInitA, context)
-    context.x[] += 1
-    return (;)
-end
-
-function StatefulAlgorithms.step!(::LifecycleInitB, context)
-    context.y[] += 1
-    return (;)
+@StepAlgorithm function LifecycleInitB(@managed(y = Ref(y)); @inputs((; y = 0)))
+    y[] += 1
+    return
 end
 
 function StatefulAlgorithms.step!(algo::RuntimeShapeChanger, context)
@@ -31,11 +20,9 @@ function StatefulAlgorithms.step!(algo::RuntimeShapeChanger, context)
     return algo.count == 1 ? (; added = 1) : (; added = 1, extra = 1)
 end
 
-StatefulAlgorithms.init(::PauseRuntimeInputConsumer, context) = (; total = 0)
-
-function StatefulAlgorithms.step!(::PauseRuntimeInputConsumer, context)
+@StepAlgorithm function PauseRuntimeInputConsumer(delta, @managed(total = 0))
     sleep(0.005)
-    return (; total = context.total + context.delta)
+    @update total += delta
 end
 
 runtime_inputs_lifecycle_value(seed, temp, scale; bias = 0) = seed + temp * scale + bias

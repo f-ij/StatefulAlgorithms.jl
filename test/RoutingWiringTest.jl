@@ -88,13 +88,13 @@ using StatefulAlgorithms
 end
 
 @testset "A route wins over a field of the same name in the target's state" begin
-    struct RoutePrecedenceSource <: ProcessAlgorithm end
-    StatefulAlgorithms.init(::RoutePrecedenceSource, context) = (; level = 5)
-    StatefulAlgorithms.step!(::RoutePrecedenceSource, context) = (; level = context.level + 1)
+    @StepAlgorithm function RoutePrecedenceSource(@managed(level = 5))
+        @update level += 1
+    end
 
-    struct RoutePrecedenceTarget <: ProcessAlgorithm end
-    StatefulAlgorithms.init(::RoutePrecedenceTarget, context) = (; level = 100, seen = 0)
-    StatefulAlgorithms.step!(::RoutePrecedenceTarget, context) = (; seen = context.level)
+    @StepAlgorithm function RoutePrecedenceTarget(@managed(level = 100, seen = 0))
+        @update seen = level
+    end
 
     plan = CompositeAlgorithm(
         RoutePrecedenceSource,
@@ -110,12 +110,12 @@ end
 end
 
 @testset "A view's names: explicit hides implicit" begin
-    struct ClashSource <: ProcessAlgorithm end
-    struct ClashTarget <: ProcessAlgorithm end
-    StatefulAlgorithms.init(::ClashSource, context) = (; total = 5.0)
-    StatefulAlgorithms.step!(::ClashSource, context) = (; total = context.total + 1.0)
-    StatefulAlgorithms.init(::ClashTarget, context) = (; factor = 1.0, seen = 0.0)
-    StatefulAlgorithms.step!(::ClashTarget, context) = (; seen = context.factor)
+    @StepAlgorithm function ClashSource(@managed(total = 5.0))
+        @update total += 1.0
+    end
+    @StepAlgorithm function ClashTarget(@managed(factor = 1.0, seen = 0.0))
+        @update seen = factor
+    end
 
     # A declared local of the same name as the target's state is hidden by the state (it is only visible implicitly).
     hidden = CompositeAlgorithm(ClashSource, ClashTarget, (1, 1), Declaration(factor = 100.0))
