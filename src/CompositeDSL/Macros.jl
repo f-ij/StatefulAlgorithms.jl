@@ -367,7 +367,7 @@ Scheduling:
 - `x = @interval n Algo(...)`
 - `x = @every n Algo(...)`
 - `x = @interval n f(produced)`
-- `x = @repeat n begin ... end`
+- `@repeat n begin ... end` (a nested plan has no return value: `local x` before it, and assign `x` inside it)
 
 Constructor-time conditional inclusion:
 - `@include_if condition Algo(...)`
@@ -437,7 +437,7 @@ the scheduling wrapper expected inside the block is `@repeat n expr` instead of
 Examples:
 - `x = Algo(input = value)`
 - `@repeat 10 Algo(input = value)` (`x = @repeat …` is an error: a repeated statement's return is not a value of the block)
-- `y = @repeat 5 begin ... end`
+- `@repeat 5 begin ... end`
 - `@include_if enabled x = Algo(input = value)`
 - `z = f(value; scale = 2)`
 - `@context c = @repeat 2 algo()`

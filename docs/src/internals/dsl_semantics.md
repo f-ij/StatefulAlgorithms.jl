@@ -130,7 +130,7 @@ in `@state`.
 | `x = v` with `x` a state field, `v` an outside value | Writes `v` (taken at build) into the state field every step (`ContextWrite`). |
 | `owner.field = f(…)` | Calls `f` every step and writes the return into the algorithm's or nested plan's field. |
 | `buf[i] = v`, `buf .= v`, `buf[i] .= v` | Mutates the state buffer in place (`setindex!`, broadcast through a view). |
-| `nested()`, `c = nested()` | Runs the nested plan's step. |
+| `nested()` | Runs the nested plan's step. `c = nested()` is an error: a plan has no return value (declare `local c` before it and assign `c` inside the plan; or `@context c = nested()` and read its state, `c.field`). |
 
 Which name a statement's arguments read:
 
@@ -153,7 +153,7 @@ Which name a statement's arguments read:
 | (none) | In a composite, every step; in a routine, once per step. |
 | `y = @every n f(…)` / `@interval n` | In a composite: runs in the steps whose number is a multiple of `n`. `y` has to be declared first (`local y`), unless `n` is 1. |
 | `@repeat n f(…)` | In a routine: runs `n` times in a row. Also `@repeat Until(cond, x) …` and the other lifetimes: `x` is a `Var(…)`, or a block value (a `local`, a state field or an earlier result), never the repeated algorithm's state. `y = @repeat n f(…)` is an error: the return of a repeated statement is not a value of the block (capture inside a repeated block, `local y; @repeat n begin y = f(…) end`). |
-| `@repeat n begin … end` | A nested block, run `n` times in a row each time the parent runs it. |
+| `@repeat n begin … end` | A nested block, run `n` times in a row each time the parent runs it. `y = @repeat n begin … end` is an error: a plan has no return value (`local y` before it, and assign `y` inside the block). |
 
 The schedule goes on the right-hand side: `@every 3 y = f()` is an error.
 

@@ -1290,7 +1290,8 @@ end
 
         @test_throws ErrorException macroexpand(@__MODULE__, quote
             @CompositeAlgorithm begin
-                result = @repeat 2 begin
+                local result
+                @repeat 2 begin
                     DSLValueAlgo(value = 1)
                     @finally dsl_final_summary
                 end
@@ -1517,6 +1518,61 @@ end
         run(p; t = 1.0)
         wait(p)
         @test seen_routine == [10.0]
+    end
+
+    @testset "A nested plan has no return value" begin
+        @info "Composite DSL: A nested plan has no return value"
+        plan_value_test() = 3
+        plan_inc_test(x) = x + 1
+        nested_plan = @Routine begin
+            @state s = 0
+            s = plan_inc_test(s)
+        end
+        plan_capture_error(f) = try
+            f()
+            nothing
+        catch e
+            e
+        end
+
+        # `x = nested()` with `nested` a plan, and `x = @repeat n begin … end`: errors when the block is built.
+        err = plan_capture_error(() -> @eval @CompositeAlgorithm begin
+            s = $nested_plan()
+        end)
+        @test err isa ErrorException
+        @test occursin("a plan has no return value: declare `local s` before it and assign `s` inside the plan", sprint(showerror, err))
+
+        err = plan_capture_error(() -> @eval @CompositeAlgorithm begin
+            result = @repeat 2 begin
+                result = plan_value_test()
+            end
+        end)
+        @test err isa ErrorException
+        @test occursin("a plan has no return value: declare `local result` before it and assign `result` inside the plan", sprint(showerror, err))
+
+        # The explicit form: a local declared before the plan, assigned inside it.
+        seen = Int[]
+        run(@CompositeAlgorithm(begin
+            local result
+            @repeat 2 begin
+                result = plan_value_test()
+            end
+            push!(seen, result)
+        end); repeats = 2)
+        @test seen == [3, 3]
+
+        # A plan written elsewhere: read its state.
+        seen = Int[]
+        run(@CompositeAlgorithm(begin
+            @context c = nested_plan()
+            push!(seen, c.s)
+        end); repeats = 2)
+        @test seen == [1, 2]
+
+        # The legacy macros keep binding the names by field.
+        @test StatefulAlgorithms.getplan(resolve(@eval @CompositeAlgorithm_legacy begin
+            s = $nested_plan()
+        end)) isa CompositeAlgorithm
     end
 
     @testset "A nested block reads the names of the blocks around it" begin

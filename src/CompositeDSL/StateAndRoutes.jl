@@ -184,6 +184,24 @@ _dsl_check_repeat_capture(::CurrentDSL, lhs::String, spec::String, stmt::String)
           "Repeat the statement without `$lhs =`, or capture inside a repeated block: " *
           "`local $lhs; @repeat $spec begin $lhs = $stmt end` (without `local $lhs` when `$lhs` is already a name of the block).")
 
+"""
+Error for `x = nested()` with `nested` a plan, or `x = @repeat n begin … end` (`outputs` the names on the left), under
+`CurrentDSL`: a plan has no return value. The legacy rules bind the names to the plan's fields of those names.
+"""
+_dsl_check_plan_capture(::DSLRules, outputs::Tuple{Vararg{Symbol}}) = nothing
+function _dsl_check_plan_capture(::CurrentDSL, outputs::Tuple{Vararg{Symbol}})
+    isempty(outputs) && return nothing
+    names = join(("`$o`" for o in outputs), ", ")
+    locals = join(("local $o" for o in outputs), "; ")
+    error("Assigning $names to a nested plan: a plan has no return value: declare `$locals` before it and assign " *
+          "$names inside the plan.")
+end
+
+"""Whether a DSL entity is a plan (`@CompositeAlgorithm` / `@Routine` block), which has no return value."""
+_dsl_is_plan(entity) = false
+_dsl_is_plan(entity::AbstractIdentifiableAlgo) = _dsl_is_plan(getalgo(entity))
+_dsl_is_plan(::Union{AbstractPlan, AbstractLoopAlgorithm}) = true
+
 """The name the capture of an algorithm's return reads that return under (see `_composite_dsl_bind_returns!`)."""
 const _DSL_RETURNED = :_returned
 
@@ -203,10 +221,12 @@ Bind the names on the left of a statement (`outputs`, taken from the value as `r
 A call (`Callable`) captures its own return. For an algorithm, the return value is captured by a call of `identity`
 added right after it, on the same schedule, that reads the algorithm's return (`RETURN_NAME`) through a route: the
 names become captured returns of the block, as for a call; a name that is a state field of the block is written there
-(the call is wired to it), one that is a declared local writes the local. Anything else (a nested plan) binds by name.
+(the call is wired to it), one that is a declared local writes the local. A nested plan has no return value: names on
+the left of one are an error (`_dsl_check_plan_capture`).
 """
 function _composite_dsl_bind_returns!(::CurrentDSL, algos::Vector{Any}, specification::Vector{Any}, options::Vector{Any}, producers::Dict{Symbol, Any}, state_owners::Dict{Symbol, Any}, entity, owner, returns, outputs::Tuple{Vararg{Symbol}}, schedule)
     @nospecialize entity owner returns outputs schedule
+    _dsl_is_plan(entity) && _dsl_check_plan_capture(CurrentDSL(), outputs)
     (_dsl_captures_return(entity) && !isempty(outputs)) || return _composite_dsl_bind_outputs!(options, producers, state_owners, owner, outputs)
     to_state = Tuple(o for o in outputs if haskey(state_owners, o) && !_dsl_is_declared(get(producers, o, nothing)))
     wires = (Route(owner => ThisChild(), RETURN_NAME => _DSL_RETURNED), (Route(state_owners[o] => ThisChild(), o => o) for o in to_state)...)

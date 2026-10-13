@@ -403,11 +403,12 @@ end
 
 """
 The code that checks, when the block is built, that a statement `x = …` does not capture what has no value for the
-block: the return of a repeated statement, `x = @repeat spec stmt` (see `_dsl_check_repeat_capture`). `nothing` when
-there is nothing to check.
+block: the return of a repeated statement, `x = @repeat spec stmt` (see `_dsl_check_repeat_capture`), or a repeated
+block, `x = @repeat n begin … end` (see `_dsl_check_plan_capture`). `nothing` when there is nothing to check.
 """
 function _dsl_capture_check_expr(stmt, outputs::Tuple, parsed)
     isempty(outputs) && return nothing
+    parsed.kind == :resolved_expr && return :(StatefulAlgorithms._dsl_check_plan_capture(_dsl_rules, $(Expr(:tuple, QuoteNode.(outputs)...))))
     parsed.kind != :resolved_expr && parsed.schedule_kind == :repeat || return nothing
     lhs = stmt.args[1]
     _, spec, inner = _dsl_parse_schedule(stmt.args[2])

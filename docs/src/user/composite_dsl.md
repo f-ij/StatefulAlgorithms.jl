@@ -628,6 +628,20 @@ Repeated sub-blocks are nested plans. They see every name of the blocks around t
 assigning a `local` of an outer block updates it. To route persistent state across
 a named plan boundary, define that plan separately and insert it with `@context`.
 
+A nested plan has no return value: `y = @repeat 3 begin … end` and `y = nested()` (with `nested` a
+`@CompositeAlgorithm` or `@Routine`) are errors when the block is built. Declare `local y` before the plan and
+assign `y` inside it:
+
+```julia
+algo = @CompositeAlgorithm begin
+    local y
+    @repeat 3 begin
+        y = next_value(1)
+    end
+    Report(y)
+end
+```
+
 Write schedules on the right-hand side:
 
 ```julia
