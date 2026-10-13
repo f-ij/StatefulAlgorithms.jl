@@ -8,7 +8,6 @@ struct DSLSinkAlgo <: StatefulAlgorithms.ProcessAlgorithm end
 struct DSLValueAlgo <: StatefulAlgorithms.ProcessAlgorithm end
 struct DSLNestedSourceAlgo <: StatefulAlgorithms.ProcessAlgorithm end
 struct DSLHeldStateAlgo <: StatefulAlgorithms.ProcessAlgorithm end
-struct DSLRepeatLifetimeCounter <: StatefulAlgorithms.ProcessAlgorithm end
 
 function StatefulAlgorithms.step!(::DSLSourceAlgo, context)
     return (; produced = 2, passthrough = context.seed)
@@ -38,12 +37,10 @@ function StatefulAlgorithms.step!(::DSLHeldStateAlgo, context)
     return (; state = context.state)
 end
 
-function StatefulAlgorithms.init(::A, context::C) where {A<:DSLRepeatLifetimeCounter,C}
-    return (; count = get(context, :count, 0))
-end
-
-function StatefulAlgorithms.step!(::A, context::C) where {A<:DSLRepeatLifetimeCounter,C}
-    return (; count = context.count + 1)
+# Counts its steps in its state field `count` and returns the new count.
+@StepAlgorithm function DSLRepeatLifetimeCounter(@managed(count = 0))
+    @update count = count + 1
+    return count
 end
 
 scaled_double_dsl_test(x; scale = 1) = scale * (2x)
@@ -552,47 +549,68 @@ end
 
     @testset "Routine repeat supports lifetime syntax with DSL selectors" begin
         @info "Composite DSL: Routine repeat supports lifetime syntax with DSL selectors"
-        until_routine = @Routine begin
-            count = @repeat Until(x -> x >= 3, count) DSLRepeatLifetimeCounter
+        # The condition reads the counter's state explicitly (`Var(Algo, :field)`); `n = …` captures the return of the
+        # last repeat, which `seen` records.
+        counter_state(result) = StatefulAlgorithms.context(result)[DSLRepeatLifetimeCounter].count
+
+        seen = Int[]
+        until_result = run(@Routine(begin
+            n = @repeat Until(x -> x >= 3, Var(DSLRepeatLifetimeCounter, :count)) DSLRepeatLifetimeCounter()
+            push!(seen, n)
+        end); repeats = 1)
+        @test counter_state(until_result) == 3
+        @test seen == [3]
+
+        seen = Int[]
+        until_ten_result = run(@Routine(begin
+            n = @repeat Until(x -> x >= 10, Var(DSLRepeatLifetimeCounter, :count)) DSLRepeatLifetimeCounter()
+            push!(seen, n)
+        end); repeats = 1)
+        @test counter_state(until_ten_result) == 10
+        @test seen == [10]
+
+        seen = Int[]
+        capped_result = run(@Routine(begin
+            n = @repeat RepeatOrUntil(x -> x >= 10, 4, Var(DSLRepeatLifetimeCounter, :count)) DSLRepeatLifetimeCounter()
+            push!(seen, n)
+        end); repeats = 1)
+        @test counter_state(capped_result) == 4
+        @test seen == [4]
+
+        seen = Int[]
+        repeat_result = run(@Routine(begin
+            n = @repeat Repeat(2) DSLRepeatLifetimeCounter()
+            push!(seen, n)
+        end); repeats = 1)
+        @test counter_state(repeat_result) == 2
+        @test seen == [2]
+
+        seen = Int[]
+        atleast_result = run(@Routine(begin
+            n = @repeat AtLeast(x -> x >= 1, 4, Var(DSLRepeatLifetimeCounter, :count)) DSLRepeatLifetimeCounter()
+            push!(seen, n)
+        end); repeats = 1)
+        @test counter_state(atleast_result) == 4
+        @test seen == [4]
+
+        seen = Int[]
+        atleast_atmost_result = run(@Routine(begin
+            n = @repeat AtLeastAtMost(x -> x >= 10, 2, 5, Var(DSLRepeatLifetimeCounter, :count)) DSLRepeatLifetimeCounter()
+            push!(seen, n)
+        end); repeats = 1)
+        @test counter_state(atleast_atmost_result) == 5
+        @test seen == [5]
+
+        # A name in the condition is a block value, never the repeated algorithm's state field of that name.
+        err = try
+            @eval @Routine begin
+                count = @repeat Until(x -> x >= 3, count) DSLRepeatLifetimeCounter()
+            end
+            nothing
+        catch e
+            e
         end
-
-        until_result = run(until_routine; repeats = 1)
-        @test StatefulAlgorithms.context(until_result)[DSLRepeatLifetimeCounter].count == 3
-
-        until_ten_routine = @Routine begin
-            count = @repeat Until(x -> x >= 10, count) DSLRepeatLifetimeCounter
-        end
-
-        until_ten_result = run(until_ten_routine; repeats = 1)
-        @test StatefulAlgorithms.context(until_ten_result)[DSLRepeatLifetimeCounter].count == 10
-
-        capped_routine = @Routine begin
-            count = @repeat RepeatOrUntil(x -> x >= 10, 4, count) DSLRepeatLifetimeCounter
-        end
-
-        capped_result = run(capped_routine; repeats = 1)
-        @test StatefulAlgorithms.context(capped_result)[DSLRepeatLifetimeCounter].count == 4
-
-        repeat_routine = @Routine begin
-            count = @repeat Repeat(2) DSLRepeatLifetimeCounter
-        end
-
-        repeat_result = run(repeat_routine; repeats = 1)
-        @test StatefulAlgorithms.context(repeat_result)[DSLRepeatLifetimeCounter].count == 2
-
-        atleast_routine = @Routine begin
-            count = @repeat AtLeast(x -> x >= 1, 4, count) DSLRepeatLifetimeCounter
-        end
-
-        atleast_result = run(atleast_routine; repeats = 1)
-        @test StatefulAlgorithms.context(atleast_result)[DSLRepeatLifetimeCounter].count == 4
-
-        atleast_atmost_routine = @Routine begin
-            count = @repeat AtLeastAtMost(x -> x >= 10, 2, 5, count) DSLRepeatLifetimeCounter
-        end
-
-        atleast_atmost_result = run(atleast_atmost_routine; repeats = 1)
-        @test StatefulAlgorithms.context(atleast_atmost_result)[DSLRepeatLifetimeCounter].count == 5
+        @test !isnothing(err) && occursin("Lifetime selector `count` is not a block value", sprint(showerror, err))
     end
 
     @testset "Nested DSL state writeback resolves through keyed _state" begin

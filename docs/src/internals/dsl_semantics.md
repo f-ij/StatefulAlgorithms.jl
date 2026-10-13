@@ -152,7 +152,7 @@ Which name a statement's arguments read:
 |---|---|
 | (none) | In a composite, every step; in a routine, once per step. |
 | `y = @every n f(…)` / `@interval n` | In a composite: runs in the steps whose number is a multiple of `n`. `y` has to be declared first (`local y`), unless `n` is 1. |
-| `y = @repeat n f(…)` | In a routine: runs `n` times in a row. Also `@repeat Until(cond, x) …` and the other lifetimes. |
+| `y = @repeat n f(…)` | In a routine: runs `n` times in a row; `y` holds the last repeat's return. Also `@repeat Until(cond, x) …` and the other lifetimes: `x` is a `Var(…)`, or a block value (a `local`, a state field or an earlier result), never the repeated algorithm's state. |
 | `@repeat n begin … end` | A nested block, run `n` times in a row each time the parent runs it. |
 
 The schedule goes on the right-hand side: `@every 3 y = f()` is an error.
