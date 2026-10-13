@@ -26,6 +26,13 @@ reverting one part at a time, never attributed by guess.
   separate first step put a second copy of the arithmetic into that pass and tipped the estimate (its IR builds the
   vector with 32 `insertelement`s, then runs the first step and the loop as `<32 x double>`). Not an inference
   problem: all values concrete, 0 allocations, before and after. 0.205 -> 0.058 inline, 0.176 -> 0.058 Process.
+  Mechanism (2026-10-13): the SLP vectorizer starts from the loop's 32 phis and follows their inputs. Without the
+  first step those are 32 spaced loads: total cost 0 ("List vectorization was possible but not beneficial with
+  cost 0 >= 0"), so nothing. With the first step they are its multiply-adds, which also vectorize: cost < 0.
+  Confirmed with -print-changed: the <32 x double> appears after SLPVectorizerPass. `@simd` tried: no effect on a
+  hand-written reproduction, and rejected on the package's step loop (it contains a `break`).
+  The field removal is now on main (b30f4a5, pushed); this branch's commit "a SubContext stores no name; one stop
+  check per routine repeat" only holds the routine part after the rebase.
 - **Process routines (cause found 2026-10-13).** `tick!(p::Process)` does `p.tickidx += 1` on every routine repeat.
   In the code `run(p)` actually runs (the closure `Threads.@spawn loopfunc(p, ...)` in `_makeloop_prepared!`), LLVM
   writes `tickidx` to memory and reads it back on every repeat (`ldr/add/str [p, #tickidx]`); in a direct call of the
@@ -39,6 +46,13 @@ reverting one part at a time, never attributed by guess.
   every routine stop check stops early and the run does less work. Set `@atomic p.shouldrun = true` first, or time
   `run(p); wait(p)` on a new Process as the perf suite does. Equal final values are no proof of equal work when the
   values converge (`x = 0.999x + k`).
+  Why (2026-10-13): LLVM keeps `p.tickidx` in a register only if it may read it before the loop (pointer known
+  dereferenceable) or an access is guaranteed before any exit. Direct call: `p` is an argument marked
+  `nonnull dereferenceable(192)`, so yes. In `run(p)`'s task closure `p` is loaded from the closure without that
+  information, so it needs a guaranteed access: the branch's separate first repeat always does `tick!`; the single
+  loop's stop check can exit before the first `tick!` (LLVM does not see that the first pass skips it). Fix tested:
+  the task calls `loop` as a `@noinline` function (`_loop_as_function`), so `p` is an argument: 4.86 ns/step with
+  the single loop and the resume point unchanged.
   Earlier explanation "the compiler builds a loop per child" was wrong: valid direct timings show that costs ~2-10%.
 - **Old bug: resume points are never reset to 1.** After a resume in the middle of a child's repeats, the child runs
   only the remaining repeats in every later step (`Routine(Counter, (5,))`, resume point 3: later steps run 3
