@@ -1,7 +1,7 @@
 using StatefulAlgorithms, Printf, UUIDs
 const SA = StatefulAlgorithms
-@StepAlgorithm function Counter(@managed(x = 0.0)); return (; x = x + 1.0); end
-@StepAlgorithm function Reader(x, @managed(seen = 0.0)); return (; seen = x); end
+@StepAlgorithm function Counter(@managed(x = 0.0)); @update x = x + 1.0; return x; end
+@StepAlgorithm function Reader(x, @managed(seen = 0.0)); @update seen = x; return seen; end
 
 # ---- erased normalizer that also rewrites Routes ----
 ordinal(seen::Dict{UUID,Int}, uuid::UUID) = get!(seen, uuid, length(seen) + 1)

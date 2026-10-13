@@ -1,9 +1,9 @@
 # A plan without Unique handles: does a caller know resolve's result type, and what do the first and repeated calls cost?
 using StatefulAlgorithms, Statistics
 const SA = StatefulAlgorithms
-@StepAlgorithm function Counter(@managed(x = 0.0)); return (; x = x + 1.0); end
-@StepAlgorithm function Adder(a, b, @managed(sum = 0.0)); return (; sum = a + b); end
-@StepAlgorithm function Reader(x, @managed(seen = 0.0)); return (; seen = x); end
+@StepAlgorithm function Counter(@managed(x = 0.0)); @update x = x + 1.0; return x; end
+@StepAlgorithm function Adder(a, b, @managed(sum = 0.0)); @update sum = a + b; return sum; end
+@StepAlgorithm function Reader(x, @managed(seen = 0.0)); @update seen = x; return seen; end
 inner = @Routine begin
     @alias c = Counter
     x = c()

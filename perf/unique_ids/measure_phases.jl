@@ -4,9 +4,9 @@
 # Output: microseconds of compile time and of wall time per phase, for the cold call, calls with the same handles, and calls with new handles.
 using StatefulAlgorithms, Printf, UUIDs, Statistics
 const SA = StatefulAlgorithms
-@StepAlgorithm function Counter(@managed(x = 0.0)); return (; x = x + 1.0); end
-@StepAlgorithm function Tally(@managed(n = 0.0)); return (; n = n + 1.0); end
-@StepAlgorithm function Reader(x, @managed(seen = 0.0)); return (; seen = x); end
+@StepAlgorithm function Counter(@managed(x = 0.0)); @update x = x + 1.0; return x; end
+@StepAlgorithm function Tally(@managed(n = 0.0)); @update n = n + 1.0; return n; end
+@StepAlgorithm function Reader(x, @managed(seen = 0.0)); @update seen = x; return seen; end
 struct RouteSpec; from::Any; to::Any; names::Tuple; end
 
 const TEMPLATE = raw"""

@@ -3,9 +3,9 @@
 # One fresh process per (approach, layout), so the first run is a true cold compile.
 using StatefulAlgorithms, Printf, UUIDs
 const SA = StatefulAlgorithms
-@StepAlgorithm function Counter(@managed(x = 0.0)); return (; x = x + 1.0); end
-@StepAlgorithm function Tally(@managed(n = 0.0)); return (; n = n + 1.0); end
-@StepAlgorithm function Reader(x, @managed(seen = 0.0)); return (; seen = x); end
+@StepAlgorithm function Counter(@managed(x = 0.0)); @update x = x + 1.0; return x; end
+@StepAlgorithm function Tally(@managed(n = 0.0)); @update n = n + 1.0; return n; end
+@StepAlgorithm function Reader(x, @managed(seen = 0.0)); @update seen = x; return seen; end
 
 #### erased normalizer: renames random ids to 1..N in order of first appearance ####
 struct RouteSpec; from::Any; to::Any; names::Tuple; end                      # an untyped description of a Route

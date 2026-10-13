@@ -1,8 +1,8 @@
 using StatefulAlgorithms, UUIDs, JET
 const SA = StatefulAlgorithms
-@StepAlgorithm function Counter(@managed(x = 0.0)); return (; x = x + 1.0); end
-@StepAlgorithm function Tally(@managed(n = 0.0)); return (; n = n + 1.0); end
-@StepAlgorithm function Reader(x, @managed(seen = 0.0)); return (; seen = x); end
+@StepAlgorithm function Counter(@managed(x = 0.0)); @update x = x + 1.0; return x; end
+@StepAlgorithm function Tally(@managed(n = 0.0)); @update n = n + 1.0; return n; end
+@StepAlgorithm function Reader(x, @managed(seen = 0.0)); @update seen = x; return seen; end
 su(f, n) = IdentifiableAlgo(f; id = SA.SimpleId(UUID(UInt128(n))))
 a = su(Counter(), 1); b = su(Counter(), 2)
 shapes = [
