@@ -174,6 +174,16 @@ The rules a DSL block is built with. `CurrentDSL` for `@CompositeAlgorithm` and 
 abstract type DSLRules end
 struct CurrentDSL <: DSLRules end
 
+"""
+Error for `x = @repeat spec stmt` (`lhs`, `spec`, `stmt` as written) under `CurrentDSL`: the return of a repeated
+statement is not a value of the block. The legacy rules keep `x` as the last repeat's return.
+"""
+_dsl_check_repeat_capture(::DSLRules, lhs::String, spec::String, stmt::String) = nothing
+_dsl_check_repeat_capture(::CurrentDSL, lhs::String, spec::String, stmt::String) =
+    error("`$lhs = @repeat $spec $stmt` does not capture anything: the return of a repeated statement is not a value of the block. " *
+          "Repeat the statement without `$lhs =`, or capture inside a repeated block: " *
+          "`local $lhs; @repeat $spec begin $lhs = $stmt end` (without `local $lhs` when `$lhs` is already a name of the block).")
+
 """The name the capture of an algorithm's return reads that return under (see `_composite_dsl_bind_returns!`)."""
 const _DSL_RETURNED = :_returned
 

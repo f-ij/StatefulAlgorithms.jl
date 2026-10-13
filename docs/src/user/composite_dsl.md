@@ -583,16 +583,22 @@ Inside `@Routine`, use `@repeat`.
 ```julia
 routine = @Routine begin
     @state value = 1
-    value = @repeat 5 next_value(value)   # each repeat assigns next_value's return to the state field `value`
+    @repeat 5 begin
+        value = next_value(value)   # each repeat assigns next_value's return to the state field `value`
+    end
 end
 ```
+
+The return of a repeated statement is not a value of the block: `x = @repeat 5 f()` is an error when the block is
+built. Repeat the statement without `x =` (`@repeat 5 f()`), or capture inside a repeated block, as above
+(`local x` first when `x` is not yet a name of the block).
 
 `@repeat` also accepts the normal lifetime constructors. The selector says what the condition reads. A `Var(...)`
 is used as it is; to stop on an algorithm's state, read that state explicitly:
 
 ```julia
 routine = @Routine begin
-    n = @repeat Until(x -> x >= 100, Var(Counter, :count)) Counter()   # until Counter's state field `count` is 100
+    @repeat Until(x -> x >= 100, Var(Counter, :count)) Counter()   # until Counter's state field `count` is 100
 end
 ```
 

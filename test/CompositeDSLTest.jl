@@ -545,24 +545,53 @@ end
         @info "Composite DSL: Routine repeat form expands correctly"
         routine = @Routine begin
             @state produced = 5
-            tripled = @repeat 3 scaled_double_dsl_test(produced; scale = 3)
+            @repeat 3 scaled_double_dsl_test(produced; scale = 3)
         end
 
         resolved_routine = resolve(routine)
         @test resolved_routine isa StatefulAlgorithms.LoopAlgorithm
         @test StatefulAlgorithms.getplan(resolved_routine) isa Routine
         @test repeats(resolved_routine) == (3,)
+
+        # The return of a repeated statement is not a value of the block: `x = @repeat …` is an error when the block
+        # is built; capture inside a repeated block instead.
+        err = try
+            @eval @Routine begin
+                @state produced = 5
+                tripled = @repeat 3 scaled_double_dsl_test(produced; scale = 3)
+            end
+            nothing
+        catch e
+            e
+        end
+        @test err isa ErrorException
+        @test occursin("`tripled = @repeat 3 scaled_double_dsl_test(produced; scale = 3)` does not capture anything", sprint(showerror, err))
+        @test occursin("local tripled; @repeat 3 begin tripled = scaled_double_dsl_test(produced; scale = 3) end", sprint(showerror, err))
+
+        seen = Int[]
+        run(@Routine(begin
+            @state produced = 5
+            local tripled
+            @repeat 3 begin
+                tripled = scaled_double_dsl_test(produced; scale = 3)
+            end
+            push!(seen, tripled)
+        end); repeats = 1)
+        @test seen == [30]
     end
 
     @testset "Routine repeat supports lifetime syntax with DSL selectors" begin
         @info "Composite DSL: Routine repeat supports lifetime syntax with DSL selectors"
-        # The condition reads the counter's state explicitly (`Var(Algo, :field)`); `n = …` captures the return of the
-        # last repeat, which `seen` records.
+        # The condition reads the counter's state explicitly (`Var(Algo, :field)`); `n = …` inside the repeated block
+        # captures the return of the last repeat into the local `n`, which `seen` records.
         counter_state(result) = StatefulAlgorithms.context(result)[DSLRepeatLifetimeCounter].count
 
         seen = Int[]
         until_result = run(@Routine(begin
-            n = @repeat Until(x -> x >= 3, Var(DSLRepeatLifetimeCounter, :count)) DSLRepeatLifetimeCounter()
+            local n
+            @repeat Until(x -> x >= 3, Var(DSLRepeatLifetimeCounter, :count)) begin
+                n = DSLRepeatLifetimeCounter()
+            end
             push!(seen, n)
         end); repeats = 1)
         @test counter_state(until_result) == 3
@@ -570,7 +599,10 @@ end
 
         seen = Int[]
         until_ten_result = run(@Routine(begin
-            n = @repeat Until(x -> x >= 10, Var(DSLRepeatLifetimeCounter, :count)) DSLRepeatLifetimeCounter()
+            local n
+            @repeat Until(x -> x >= 10, Var(DSLRepeatLifetimeCounter, :count)) begin
+                n = DSLRepeatLifetimeCounter()
+            end
             push!(seen, n)
         end); repeats = 1)
         @test counter_state(until_ten_result) == 10
@@ -578,7 +610,10 @@ end
 
         seen = Int[]
         capped_result = run(@Routine(begin
-            n = @repeat RepeatOrUntil(x -> x >= 10, 4, Var(DSLRepeatLifetimeCounter, :count)) DSLRepeatLifetimeCounter()
+            local n
+            @repeat RepeatOrUntil(x -> x >= 10, 4, Var(DSLRepeatLifetimeCounter, :count)) begin
+                n = DSLRepeatLifetimeCounter()
+            end
             push!(seen, n)
         end); repeats = 1)
         @test counter_state(capped_result) == 4
@@ -586,7 +621,10 @@ end
 
         seen = Int[]
         repeat_result = run(@Routine(begin
-            n = @repeat Repeat(2) DSLRepeatLifetimeCounter()
+            local n
+            @repeat Repeat(2) begin
+                n = DSLRepeatLifetimeCounter()
+            end
             push!(seen, n)
         end); repeats = 1)
         @test counter_state(repeat_result) == 2
@@ -594,7 +632,10 @@ end
 
         seen = Int[]
         atleast_result = run(@Routine(begin
-            n = @repeat AtLeast(x -> x >= 1, 4, Var(DSLRepeatLifetimeCounter, :count)) DSLRepeatLifetimeCounter()
+            local n
+            @repeat AtLeast(x -> x >= 1, 4, Var(DSLRepeatLifetimeCounter, :count)) begin
+                n = DSLRepeatLifetimeCounter()
+            end
             push!(seen, n)
         end); repeats = 1)
         @test counter_state(atleast_result) == 4
@@ -602,7 +643,10 @@ end
 
         seen = Int[]
         atleast_atmost_result = run(@Routine(begin
-            n = @repeat AtLeastAtMost(x -> x >= 10, 2, 5, Var(DSLRepeatLifetimeCounter, :count)) DSLRepeatLifetimeCounter()
+            local n
+            @repeat AtLeastAtMost(x -> x >= 10, 2, 5, Var(DSLRepeatLifetimeCounter, :count)) begin
+                n = DSLRepeatLifetimeCounter()
+            end
             push!(seen, n)
         end); repeats = 1)
         @test counter_state(atleast_atmost_result) == 5
@@ -611,7 +655,7 @@ end
         # A name in the condition is a block value, never the repeated algorithm's state field of that name.
         err = try
             @eval @Routine begin
-                count = @repeat Until(x -> x >= 3, count) DSLRepeatLifetimeCounter()
+                @repeat Until(x -> x >= 3, count) DSLRepeatLifetimeCounter()
             end
             nothing
         catch e
@@ -1154,7 +1198,7 @@ end
         include_block = false
         routine = @Routine begin
             @state produced = 5
-            @include_if include_block tripled = @repeat 3 scaled_double_dsl_test(produced; scale = 3)
+            @include_if include_block @repeat 3 scaled_double_dsl_test(produced; scale = 3)
             DSLValueAlgo(value = produced)
         end
 

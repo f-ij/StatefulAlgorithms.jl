@@ -299,4 +299,14 @@ end
         count = @repeat Until(x -> x >= 3, count) RULegacyCounter()
     end
     @test SAru.context(run(ru_legacy_routine; repeats = 1))[RULegacyCounter].count == 3
+
+    # `x = @repeat spec Algo()` keeps its legacy meaning (an error with `@Routine`): `x` binds the returned field `x`
+    # of the last repeat.
+    global ru_legacy_repeat_seen = Any[]
+    @eval ru_legacy_repeat = @Routine_legacy begin
+        doubled = @repeat 2 RULegacyCounter()
+        ru_record!(ru_legacy_repeat_seen, doubled)
+    end
+    run(ru_legacy_repeat; repeats = 2)
+    @test ru_legacy_repeat_seen == [4, 8]
 end

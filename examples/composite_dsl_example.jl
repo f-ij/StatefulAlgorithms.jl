@@ -76,7 +76,11 @@ routine = @Routine begin
     @state seed = 2
     @alias source = ExampleSourceAlgo
 
-    (; produced, passthrough) = @repeat 3 source(seed = seed)
+    local produced
+    local passthrough
+    @repeat 3 begin
+        (; produced, passthrough) = source(seed = seed)
+    end
     doubled = scaled_double_example(produced; scale = 4)
     value = +(doubled, passthrough)
     ExampleSinkAlgo(value = value)
@@ -86,7 +90,7 @@ resolved_routine = resolve(routine)
 routine_process = Process(resolved_routine; repeats = 1)
 run(routine_process)
 
-println("@Routine with @repeat on one statement")
+println("@Routine with a repeated block that captures a return")
 println(fetch(routine_process))
 println()
 

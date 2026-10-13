@@ -402,6 +402,19 @@ function _dsl_build_owned_call_write_statement(owned_route, rhs, alias_map, cont
 end
 
 """
+The code that checks, when the block is built, that a statement `x = …` does not capture what has no value for the
+block: the return of a repeated statement, `x = @repeat spec stmt` (see `_dsl_check_repeat_capture`). `nothing` when
+there is nothing to check.
+"""
+function _dsl_capture_check_expr(stmt, outputs::Tuple, parsed)
+    isempty(outputs) && return nothing
+    parsed.kind != :resolved_expr && parsed.schedule_kind == :repeat || return nothing
+    lhs = stmt.args[1]
+    _, spec, inner = _dsl_parse_schedule(stmt.args[2])
+    return :(StatefulAlgorithms._dsl_check_repeat_capture(_dsl_rules, $(string(lhs)), $(string(spec)), $(string(inner))))
+end
+
+"""
 Build one executable DSL statement inside a composite or routine block.
 
 Accepted top-level statements inside the block:
@@ -481,6 +494,7 @@ function _dsl_build_statement(stmt, alias_map, context_map, known_outputs::Set{S
 
     context_write = _dsl_parse_context_write_assignment(alias_map, context_map, outputs, rhs, known_outputs, state_outputs)
     parsed = isnothing(context_write) ? _dsl_parse_invocation(alias_map, context_map, rhs, known_outputs; outer_locals) : context_write
+    capture_check = _dsl_capture_check_expr(stmt, outputs, parsed)
     outputs_expr = Expr(:tuple, [QuoteNode(sym) for sym in outputs]...)
     schedule_expr = _dsl_schedule_expr(parsed.schedule_kind, parsed.schedule_value, expected_schedule, owner_name)
     entity_expr = _dsl_contextual_entity_expr(context_alias)
@@ -499,6 +513,7 @@ function _dsl_build_statement(stmt, alias_map, context_map, known_outputs::Set{S
             $(_dsl_bind_returns_expr())
         end
         return quote
+            $capture_check
             local _dsl_outputs = $outputs_expr
             local _dsl_returns = $returns_expr
             # Resolve the user-facing DSL entity into a normal algorithm/state
@@ -534,6 +549,7 @@ function _dsl_build_statement(stmt, alias_map, context_map, known_outputs::Set{S
             StatefulAlgorithms._composite_dsl_bind_outputs!(_dsl_options, _dsl_producers, _dsl_state_owners, _dsl_owner, _dsl_outputs)
         end
         return quote
+            $capture_check
             local _dsl_outputs = $outputs_expr
             # Repeated inner blocks already expand to one resolved entity, so the
             # outer builder only has to wire and register them.
@@ -570,6 +586,7 @@ function _dsl_build_statement(stmt, alias_map, context_map, known_outputs::Set{S
             $(_dsl_bind_returns_expr())
         end
         return quote
+            $capture_check
             local _dsl_outputs = $outputs_expr
             local _dsl_returns = $returns_expr
             local _dsl_resolved = StatefulAlgorithms._resolve_composite_dsl_keyword_call(
@@ -596,6 +613,7 @@ function _dsl_build_statement(stmt, alias_map, context_map, known_outputs::Set{S
         $(_dsl_bind_returns_expr())
     end
     return quote
+        $capture_check
         local _dsl_outputs = $outputs_expr
         local _dsl_returns = $returns_expr
         # Function-call syntax stays on a dedicated path so we can recover
