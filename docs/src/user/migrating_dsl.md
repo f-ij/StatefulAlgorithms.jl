@@ -9,7 +9,9 @@ and move one definition at a time.
 
 ## 1. `@StepAlgorithm`: write back with `@update`, return values
 
-A `@StepAlgorithm` no longer updates a name by returning it. A returned named tuple is the step's return value.
+A `@StepAlgorithm` no longer updates a name by returning it. A step's return is a normal Julia return value: a returned
+named tuple is one value, which the block may destructure like any named tuple (`(; a, b) = Algo()` by name,
+`a, b = Algo()` by position). A return never writes state; only `@update` does.
 
 | Before | After |
 |---|---|
@@ -26,9 +28,22 @@ A `@StepAlgorithm` no longer updates a name by returning it. A returned named tu
 - The macro warns when a body returns a named tuple with a name that is also an argument
   (``"`Algo` returns `x`, which is also an argument"``): that is almost always an update written the old way.
 
-A hand-written `step!(algo, context)` needs no change: a returned named tuple still writes every name back where it
-lives, and it is also the step's value. To return a value and write back separately, return
-`StepResult(value, StateUpdates(; x))`.
+Hand-written `init(algo, context)` / `step!(algo, context)` methods are **deprecated**: define the algorithm with
+`@StepAlgorithm` (`@managed(...)` state, `@update`, `return`). Until they are removed they keep working: a returned
+named tuple writes every name back where it lives and is also the step's value, and
+`StepResult(value, StateUpdates(; x))` returns a value and writes back separately.
+
+```julia
+# Deprecated
+struct Counter <: ProcessAlgorithm end
+StatefulAlgorithms.init(::Counter, context) = (; count = 0)
+StatefulAlgorithms.step!(::Counter, context) = (; count = context.count + 1)
+
+# Instead
+@StepAlgorithm function Counter(@managed(count = 0))
+    @update count += 1
+end
+```
 
 ## 2. Taking what an algorithm returns
 
@@ -74,7 +89,18 @@ An algorithm that updates an argument changes whatever the block passed as that 
 
 `updated_names(Algo)` lists what an algorithm updates.
 
-## 5. New, optional
+## 5. Repeated statements and nested plans have no return value
+
+| Before | After |
+|---|---|
+| `x = @repeat n Algo()` (`x` the last repeat's return) | an error when the block is built. `@repeat n Algo()` without `x =`; or `local x`, then `@repeat n begin x = Algo() end` |
+| `x = @repeat n f(x)` (`x` a state field, updated `n` times) | `@repeat n begin x = f(x) end` |
+| `x = nested()`, `nested` a `@CompositeAlgorithm` / `@Routine` | an error when the block is built: a plan has no return value. `local x` before it, and assign `x` inside the plan; or read the plan's state, `@context c = nested()` and `c.field` |
+| `x = @repeat n begin … end` | an error when the block is built: `local x`, then `@repeat n begin … x = … end` |
+
+Plain `@repeat n Algo()` and `nested()` are unchanged.
+
+## 6. New, optional
 
 - `@CompositeAlgorithm mc(spins, n = 3) begin … end` assigns the plan to `mc` and declares `@input spins` and
   `@input n = 3`.

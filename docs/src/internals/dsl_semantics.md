@@ -178,7 +178,15 @@ Nothing runs; these decide where values go.
 
 ## What a step's returns do
 
-A step returns a value, as a Julia function does, and separately writes back its updates.
+A step returns a value, as a Julia function does, and separately writes back its updates. A return is a normal Julia
+return value: a named tuple is one value, destructured like any named tuple (`(; a, b) = Algo()`, or `a, b = Algo()`
+by position), and a return never writes state. State is written only by `@update` in a `@StepAlgorithm`.
+
+Hand-written `init(algo, context)` / `step!(algo, context)` methods are deprecated; algorithms are defined with
+`@StepAlgorithm`. What they do while they still exist is described under *The updates* below.
+
+A repeated statement and a nested plan have no return value for the block: `x = @repeat n Algo()`, `x = nested()`
+with `nested` a plan, and `x = @repeat n begin … end` are errors (see [Errors](#Errors-when-the-block-is-built)).
 
 - **The value.** `y = f(x)` and `y = Algo(x)` capture it into the block's scope under the names on the left of `=`
   (`a, b = …` unpacks a tuple, `(; a, b) = …` takes properties). Names nothing reads are dropped. For an algorithm,
@@ -217,6 +225,12 @@ Which values of the block an update may change:
   no block declares or captures.
 - An algorithm that updates an argument given an `@input`, an outside value or a `@transform` (see above).
 - `y = @state(X)`: take fields by name, `(; a, b) = @state(X)`.
+- `x = @repeat spec Algo()` (or a repeated call): the return of a repeated statement is not a value of the block.
+  Repeat it without `x =`, or capture inside a repeated block: `local x; @repeat spec begin x = Algo() end`.
+- `x = nested()` with `nested` a plan, and `x = @repeat n begin … end`: a plan has no return value. Declare `local x`
+  before it and assign `x` inside the plan.
+
+The legacy macros (`@CompositeAlgorithm_legacy`, `@Routine_legacy`) keep their older meaning for the last two.
 
 ## Known gaps
 
