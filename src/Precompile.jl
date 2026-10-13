@@ -1,71 +1,40 @@
-struct _ProcessPrecompileCounter <: ProcessAlgorithm end
-struct _ProcessPrecompileScaler <: ProcessAlgorithm end
-struct _ProcessPrecompileSink <: ProcessAlgorithm end
-struct _ProcessPrecompileNoop <: ProcessAlgorithm end
-struct _ProcessPrecompileVectorPush <: ProcessAlgorithm end
-struct _ProcessPrecompileSharedReader <: ProcessAlgorithm end
-
 mutable struct _ProcessPrecompileFakeWorker
     idx::Int
     value::Int
     done::Bool
 end
 
-function init(::_ProcessPrecompileCounter, context)
-    value = get(context, :value, 0)
-    total = get(context, :total, 0)
-    return (; value, total)
-end
-
-function step!(::_ProcessPrecompileCounter, context)
-    value = context.value + 1
-    return (; value, total = context.total + value)
+# `value` and `total` start from the init context when given there (`Input`), else 0.
+@StepAlgorithm function _ProcessPrecompileCounter(@managed(value = get(context, :value, 0), total = get(context, :total, 0)))
+    @update value += 1
+    @update total += value
 end
 
 function cleanup(::_ProcessPrecompileCounter, context)
     return (; total = context.total)
 end
 
-function init(::_ProcessPrecompileScaler, context)
-    factor = get(context, :factor, 2)
-    scaled = get(context, :scaled, 0)
-    return (; factor, scaled)
+# `offset` when routed in.
+@StepAlgorithm function _ProcessPrecompileScaler(@managed(factor = get(context, :factor, 2), scaled = get(context, :scaled, 0)); offset = 0)
+    @update scaled += factor + offset
 end
 
-function step!(::_ProcessPrecompileScaler, context)
-    return (; scaled = context.scaled + context.factor + get(context, :offset, 0))   # `offset` when routed in
+@StepAlgorithm function _ProcessPrecompileSink(value, @managed(seen = get(context, :seen, 0.0)))
+    @update seen += value
 end
 
-function init(::_ProcessPrecompileSink, context)
-    seen = get(context, :seen, 0.0)
-    return (; seen)
+@StepAlgorithm function _ProcessPrecompileNoop()
+    return
 end
-
-function step!(::_ProcessPrecompileSink, context)
-    return (; seen = context.seen + context.value)
-end
-
-init(::_ProcessPrecompileNoop, context) = (;)
-step!(::_ProcessPrecompileNoop, context) = nothing
 cleanup(::_ProcessPrecompileNoop, context) = (;)
 
-function init(::_ProcessPrecompileVectorPush, context)
-    values = Float64[]
-    processsizehint!(values, context)
-    return (; values, source = get(context, :source, 0.0))
+@StepAlgorithm function _ProcessPrecompileVectorPush(@managed(values = (v = Float64[]; processsizehint!(v, context); v), source = get(context, :source, 0.0)))
+    push!(values, source)
+    return
 end
 
-function step!(::_ProcessPrecompileVectorPush, context)
-    push!(context.values, context.source)
-    return (;)
-end
-
-function init(::_ProcessPrecompileSharedReader, context)
-    return (; total = 0.0)
-end
-
-function step!(::_ProcessPrecompileSharedReader, context)
-    return (; total = context.total + context.source)
+@StepAlgorithm function _ProcessPrecompileSharedReader(source, @managed(total = 0.0))
+    @update total += source
 end
 
 _process_precompile_add(x, y; bias = 0.0) = x + y + bias
