@@ -16,6 +16,18 @@ struct LegacyDSL <: DSLRules end
 _composite_dsl_bind_returns!(::LegacyDSL, algos::Vector{Any}, specification::Vector{Any}, options::Vector{Any}, producers::Dict{Symbol, Any}, state_owners::Dict{Symbol, Any}, entity, owner, returns, outputs::Tuple{Vararg{Symbol}}, schedule) =
     _composite_dsl_bind_outputs!(options, producers, state_owners, owner, outputs)
 
+"""
+The legacy lifetime selector: a name the statement itself assigns reads the repeated algorithm's field of that name
+(`count = @repeat Until(c, count) Counter`); any other name resolves as in `@Routine`.
+"""
+function _composite_dsl_var_selector(rules::LegacyDSL, producers::Dict{Symbol, Any}, current_owner, current_outputs::Tuple, name::Symbol)
+    if name in current_outputs
+        isnothing(current_owner) && error("Cannot use current output `$name` as a lifetime selector here.")
+        return Var(_composite_dsl_var_owner(current_owner), name)
+    end
+    return invoke(_composite_dsl_var_selector, Tuple{DSLRules, Dict{Symbol, Any}, Any, Tuple, Symbol}, rules, producers, current_owner, current_outputs, name)
+end
+
 function _legacy_warn(name::Symbol, replacement::Symbol)
     @warn "`@$name` is deprecated and will be removed: move to `@$replacement` (see docs/src/user/migrating_dsl.md)." _id = name maxlog = 1
 end

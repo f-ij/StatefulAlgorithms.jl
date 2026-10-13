@@ -19,6 +19,12 @@ end
     return (count, 10 * count)
 end
 
+# State field `x`; returns a different value, `-x`.
+@StepAlgorithm function RUFieldX(@managed(x = 100))
+    @update x = x + 1
+    return -x
+end
+
 @StepAlgorithm function RUAddOne!(val)
     @update val = val + 1
 end
@@ -183,6 +189,16 @@ ru_true() = true
         @test err isa ErrorException && occursin("`RUAddOne!` updates its argument `val`, which is `t` here: an `@input`", sprint(showerror, err))
     end
 
+    @testset "`x = Algo()` captures the return even when Algo has a state field `x`" begin
+        seen = Any[]
+        result = run(@CompositeAlgorithm(begin
+            x = RUFieldX()
+            ru_record!(seen, x)
+        end); repeats = 2)
+        @test seen == [-101, -102]                          # the return, not the field
+        @test SAru.context(result)[RUFieldX].x == 102       # the field changes only through `@update`
+    end
+
     @testset "`(; a) = @state(X)` and `@state(X).a` read an algorithm's state" begin
         seen = Any[]
         run(@CompositeAlgorithm(begin
@@ -277,4 +293,10 @@ end
     # `doubled = Algo()` binds the returned field `doubled`; returning `count` updates it.
     @test ru_legacy_seen == [2, 4, 6]
     @test SAru.getcontext(p)[:RULegacyCounter_1].count == 3
+
+    # In a legacy routine, a lifetime selector the statement assigns reads the repeated algorithm's field.
+    @eval ru_legacy_routine = @Routine_legacy begin
+        count = @repeat Until(x -> x >= 3, count) RULegacyCounter()
+    end
+    @test SAru.context(run(ru_legacy_routine; repeats = 1))[RULegacyCounter].count == 3
 end

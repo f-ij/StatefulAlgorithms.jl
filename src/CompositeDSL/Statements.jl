@@ -24,7 +24,7 @@ end
 """Rewrite a name in a lifetime condition into the `Var` selector of that block value (see `_composite_dsl_var_selector`)."""
 function _dsl_repeat_lifetime_selector_expr(selector::S) where {S}
     if selector isa Symbol
-        return :(StatefulAlgorithms._composite_dsl_var_selector(_dsl_producers, $(QuoteNode(selector))))
+        return :(StatefulAlgorithms._composite_dsl_var_selector(_dsl_rules, _dsl_producers, _dsl_owner, _dsl_outputs, $(QuoteNode(selector))))
     end
     return esc(selector)
 end

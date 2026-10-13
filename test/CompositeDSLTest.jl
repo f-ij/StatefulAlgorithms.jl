@@ -6,7 +6,6 @@ struct DSLSourceAlgo <: StatefulAlgorithms.ProcessAlgorithm end
 struct DSLCombineAlgo <: StatefulAlgorithms.ProcessAlgorithm end
 struct DSLSinkAlgo <: StatefulAlgorithms.ProcessAlgorithm end
 struct DSLValueAlgo <: StatefulAlgorithms.ProcessAlgorithm end
-struct DSLNestedSourceAlgo <: StatefulAlgorithms.ProcessAlgorithm end
 struct DSLHeldStateAlgo <: StatefulAlgorithms.ProcessAlgorithm end
 
 function StatefulAlgorithms.step!(::DSLSourceAlgo, context)
@@ -25,8 +24,16 @@ function StatefulAlgorithms.step!(::DSLValueAlgo, context)
     return (; result = context.value)
 end
 
-function StatefulAlgorithms.step!(::DSLNestedSourceAlgo, context)
-    return (; captured = 4)
+# Keeps 4 in its state field `captured`.
+@StepAlgorithm function DSLNestedSourceAlgo(@managed(captured = 0))
+    @update captured = 4
+end
+
+# Keeps 2 in its state field `produced`, for routes that read it (`@route source.produced => …`); returns
+# `(; produced, passthrough = seed)`.
+@StepAlgorithm function DSLRouteSourceAlgo(seed, @managed(produced = 0))
+    @update produced = 2
+    return (; produced, passthrough = seed)
 end
 
 function StatefulAlgorithms.init(::DSLHeldStateAlgo, context)
@@ -374,7 +381,7 @@ end
         @info "Composite DSL: @route statements are top-level plan routes"
         algo = @CompositeAlgorithm begin
             @state seed = 2
-            @alias source = DSLSourceAlgo
+            @alias source = DSLRouteSourceAlgo
             @alias sink = DSLSinkAlgo
             source(seed = seed)
             sink()
@@ -411,7 +418,7 @@ end
         @info "Composite DSL: Local routes occlude top-level @route aliases"
         algo = @CompositeAlgorithm begin
             @state seed = 7
-            @alias source = DSLSourceAlgo
+            @alias source = DSLRouteSourceAlgo
             @alias sink = DSLSinkAlgo
             (; produced, passthrough) = source(seed = seed)
             sink(value = passthrough)
@@ -468,7 +475,7 @@ end
         one_var_transform = @CompositeAlgorithm begin
             @state seed = 3
             @alias source = DSLSourceAlgo
-            produced, passthrough = source(seed = seed)
+            (; produced, passthrough) = source(seed = seed)
             DSLSinkAlgo(value = @transform(x -> 3x, produced))
         end
 
@@ -487,7 +494,7 @@ end
         two_var_transform = @CompositeAlgorithm begin
             @state seed = 3
             @alias source = DSLSourceAlgo
-            produced, passthrough = source(seed = seed)
+            (; produced, passthrough) = source(seed = seed)
             DSLValueAlgo(value = @transform(x -> x + bias, produced))
         end
 
@@ -509,7 +516,7 @@ end
             @CompositeAlgorithm begin
                 @state seed = 3
                 @alias source = DSLSourceAlgo
-                produced, passthrough = source(seed = seed)
+                (; produced, passthrough) = source(seed = seed)
                 DSLSinkAlgo(value = produced * 3)
             end
         end)
@@ -966,12 +973,12 @@ end
         close(p)
     end
 
-    @testset "Alias field routes work before later output bindings" begin
-        @info "Composite DSL: Alias field routes work before later output bindings"
+    @testset "An alias field route builds before a later statement of that alias" begin
+        @info "Composite DSL: An alias field route builds before a later statement of that alias"
         algo = @Routine begin
             @alias dynamics = DSLHeldStateAlgo()
             DSLValueAlgo(value = dynamics.state)
-            state = dynamics()
+            dynamics()
         end
 
         resolved = resolve(algo)
@@ -1049,7 +1056,7 @@ end
         algo = @Routine begin
             @alias dynamics = DSLHeldStateAlgo()
             DSLPositionalCallAlgo(dynamics.state)
-            state = dynamics()
+            dynamics()
         end
 
         resolved = resolve(algo)
@@ -1072,7 +1079,7 @@ end
             @alias dynamics = DSLHeldStateAlgo()
             state = dynamics.state
             DSLValueAlgo(value = state)
-            state = dynamics()
+            dynamics()
         end
 
         resolved = resolve(algo)

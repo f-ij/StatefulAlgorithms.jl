@@ -6,7 +6,7 @@ StatefulAlgorithms.@StepAlgorithm function CaptureSeedForAnalyzerTest(
     @inputs((; seed::Int, scale::Float64 = 1.0))
 )
     push!(history, seed)
-    return (; noise = seed * scale)
+    return seed * scale
 end
 
 struct DirectContextReadForAnalyzerTest <: StatefulAlgorithms.ProcessAlgorithm end
