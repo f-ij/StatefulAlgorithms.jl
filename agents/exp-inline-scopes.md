@@ -31,8 +31,11 @@ reverting one part at a time, never attributed by guess.
   cost 0 >= 0"), so nothing. With the first step they are its multiply-adds, which also vectorize: cost < 0.
   Confirmed with -print-changed: the <32 x double> appears after SLPVectorizerPass. Tested in the package with the
   field put back (2026-10-13): before the loop, `0.0 + x` or `x * one + zero` (values read at run time) leave it
-  scalar; `x * 0.999 + 1.0` (constants) or one full step make it vectorize (6.59 -> ~1.95 ns/step). So it is not
-  about the loop starting from a prepared variable, but about enough constant arithmetic before it. `@simd` tried: no effect on a
+  scalar; `x * 0.999 + 1.0` (constants) or one full step make it vectorize (6.59 -> ~1.95 ns/step).
+  Hand-written reproduction (scratch spaced2.jl/spaced3.jl): spaced values, all in the loop: not vectorized (5.39);
+  first step inside `if n >= 1`: not vectorized (5.36); first step without the `if`: `<32 x double>` (1.97). What
+  matters: the loads and the first step's multiply-adds in the same straight-line block (LLVM's SLP vectorizer then
+  vectorizes that block, and the loop takes the vector). The package's first step had no guard. `@simd` tried: no effect on a
   hand-written reproduction, and rejected on the package's step loop (it contains a `break`).
   The field removal is now on main (b30f4a5, pushed); this branch's commit "a SubContext stores no name; one stop
   check per routine repeat" only holds the routine part after the rebase.
@@ -62,7 +65,13 @@ reverting one part at a time, never attributed by guess.
   alternating rounds each): Process "3-level Routine" 1.35 -> 0.49 ns, "Routine in composite" 3.90 -> 1.82, every
   other row (Process and inline) within 0.97-1.02x. II under Process (`run(p); wait(p)`, Metropolis and LocalLangevin,
   top loop and `@repeat` routine, ~30 ns/step): within 1-3%, no clear change. SA tests pass with it. Not committed.
-  "composite in Routine" under Process (7.1 vs 4.8 ns inline) is not fixed by either: a separate cause, not looked at.
+  Committed as `@noinline` at the spawn call (dbd6265), no wrapper function.
+- **"composite in Routine" under Process (old; same ratio 1.37 in perf/baseline.toml).** 7.29 ns/step vs 4.97
+  InlineProcess, hand 5.2. Cause: the routine stop check before every repeat reads `shouldrun` (`@atomic :monotonic`,
+  re-read each time) and each read is a possible exit, so the 4 composite repeats stay a loop with branches instead of
+  being unrolled (InlineProcess: `shouldrun` is the constant `true`, check removed, repeats unrolled, `Lin{2}`'s
+  every-2 schedule resolved at compile time). Proven: check made to never stop -> 4.70; resume point fixed to 1 ->
+  no change (7.31). Counters are in registers here (no store/reload). No fix chosen.
   Earlier explanation "the compiler builds a loop per child" was wrong: valid direct timings show that costs ~2-10%.
 - **Old bug: resume points are never reset to 1.** After a resume in the middle of a child's repeats, the child runs
   only the remaining repeats in every later step (`Routine(Counter, (5,))`, resume point 3: later steps run 3
