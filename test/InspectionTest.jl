@@ -6,11 +6,11 @@ StatefulAlgorithms.@StepAlgorithm function InspectionProducerForTest(
     @inputs((; seed::Int = 1))
 )
     push!(history, seed)
-    return (; value = seed + 1)
+    return seed + 1
 end
 
 StatefulAlgorithms.@StepAlgorithm function InspectionConsumerForTest(value)
-    return (; doubled = 2value)
+    return 2value
 end
 
 @testset "Inspection" begin
@@ -39,7 +39,7 @@ end
         InspectionProducerForTest(),
         InspectionConsumerForTest(),
         (1, 1),
-        Route(InspectionProducerForTest => InspectionConsumerForTest, :value),
+        Route(InspectionProducerForTest => InspectionConsumerForTest, :history => :value),   # its state field `history`
     )
     raw_plan_report = StatefulAlgorithms.inspect(raw_plan; steps = false)
     @test isnothing(getfield(raw_plan_report, :resolve_error))

@@ -297,9 +297,10 @@ Return the `Var` selector for a name in a lifetime condition (`x` in `@repeat Un
 `x` is none of these.
 
 It is never a field of the repeated algorithm's state: `x = f()` captures `f`'s return into the block value `x`, it
-does not name `f`'s state, even when `f`'s state has a field `x`.
+does not name `f`'s state, even when `f`'s state has a field `x`. The statement's owner and outputs are used only by
+the legacy rules (`src/Legacy`).
 """
-function _composite_dsl_var_selector(producers::D, name::Symbol) where {D<:Dict{Symbol,Any}}
+function _composite_dsl_var_selector(::DSLRules, producers::D, current_owner, current_outputs::Tuple, name::Symbol) where {D<:Dict{Symbol,Any}}
     haskey(producers, name) && return Var(_composite_dsl_var_owner(producers[name]), name)
     error("Lifetime selector `$name` is not a block value at this point: declare it before the statement (`local $name`, `@state $name = …`) or read an earlier result.")
 end
