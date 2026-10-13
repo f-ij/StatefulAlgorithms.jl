@@ -52,7 +52,10 @@ statetypes(::Union{Routine{T,R,NS,W,id,S}, Type{<:Routine{T,R,NS,W,id,S}}}) wher
 @inline routine_repeat_count(spec::RL) where {RL<:RepeatLifetime} = repeats(spec)
 @inline routine_repeat_count(spec::IL) where {IL<:IndefiniteLifetime} = typemax(Int)
 
-"""Return whether a routine-local child schedule has stopped the current child."""
+"""
+Return whether a routine-local child schedule has stopped the current child. Checked after each repeat; `lidx` is the
+number of repeats the child has done (in this step).
+"""
 @inline _routine_local_breakcondition(spec::R, process::P, context::C, lidx::LI) where {R<:Repeat,P<:AbstractProcess,C,LI<:Integer} = false
 @inline _routine_local_breakcondition(spec::IL, process::P, context::C, lidx::LI) where {IL<:Indefinite,P<:AbstractProcess,C,LI<:Integer} = false
 @inline _routine_local_breakcondition(spec::U, process::P, context::C, lidx::LI) where {Vars,U<:Until{Vars},P<:AbstractProcess,C,LI<:Integer} =
@@ -60,9 +63,9 @@ statetypes(::Union{Routine{T,R,NS,W,id,S}, Type{<:Routine{T,R,NS,W,id,S}}}) wher
 @inline _routine_local_breakcondition(spec::ROU, process::P, context::C, lidx::LI) where {Vars,ROU<:RepeatOrUntil{Vars},P<:AbstractProcess,C,LI<:Integer} =
     spec.cond(getindex(context, Vars...))
 @inline _routine_local_breakcondition(spec::AL, process::P, context::C, lidx::LI) where {Vars,AL<:AtLeast{Vars},P<:AbstractProcess,C,LI<:Integer} =
-    lidx > spec.atleast && spec.cond(getindex(context, Vars...))
+    lidx >= spec.atleast && spec.cond(getindex(context, Vars...))
 @inline _routine_local_breakcondition(spec::AAM, process::P, context::C, lidx::LI) where {Vars,AAM<:AtLeastAtMost{Vars},P<:AbstractProcess,C,LI<:Integer} =
-    lidx > spec.atleast && spec.cond(getindex(context, Vars...))
+    lidx >= spec.atleast && spec.cond(getindex(context, Vars...))
 
 """
 Return whether a routine child should stop.
