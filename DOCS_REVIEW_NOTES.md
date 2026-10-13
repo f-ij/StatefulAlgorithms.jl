@@ -61,7 +61,8 @@ than user-facing pages.
 - Needs a plain explanation of `ProcessContext`, `SubContext`, and
   `SubContextView` before using those names.
 - "Existing names update mapped targets" is not plain enough. Need explain that
-  returning a routed name may update another algorithm's stored value.
+  updating a routed name (`@update`, or a hand-written `step!` returning it) may update another algorithm's stored
+  value.
 - "Type changes are rejected" needs an example.
 - Need verify indexing forms, `initcontext` forms, and globals.
 

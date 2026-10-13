@@ -11,8 +11,8 @@ process context. That named part is its **subcontext**.
 
 User methods receive a view of the current subcontext, plus any routed or shared
 values that were made visible to it. In normal code, treat that view like a
-read-only input object. A step writes values back by returning them (see
-[Returns and updates](#Returns-and-updates)).
+read-only input object. A `@StepAlgorithm` writes values back with `@update`; a hand-written `step!` writes them
+back by returning a named tuple or a `StepResult` (see [Returns and updates](#Returns-and-updates)).
 
 ## Lifecycle Hooks
 

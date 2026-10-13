@@ -324,7 +324,7 @@ Context aliases:
 - `consumer(input = dynamics.state)`
 - `value = f(dynamics.state)`
 - `consumer(input = c1.plus_capture.captured)`
-- `state = dynamics.state`
+- `(; state) = @state(dynamics)`, `@state(dynamics).state`
 
 `@context` is only a macro-time alias for later references. The executable DSL
 statement is still built from the original right-hand side expression, so
@@ -343,10 +343,10 @@ State composition (each construction of a block has its own `@state`):
   `source.x` for the whole run.
 
 Direct owned-field access like `dynamics.state` is also accepted in route
-positions. It routes directly from the known `:dynamics` owner with source
-`:state`, even if no earlier statement bound `state = dynamics()`. The special
-binding form `state = dynamics.state` exposes that same owned field under the
-plain DSL output name `state` for later statements.
+positions: it reads the field `state` of `dynamics`'s state, routed from the
+known `:dynamics` owner. To name that field for later statements, write
+`(; state) = @state(dynamics)`. `state = dynamics()` does not: it captures what
+`dynamics` returns into the block value `state`, and never names its state.
 
 Full-context shares:
 - `Algo(@all(source))`
@@ -394,9 +394,9 @@ route writeback should update the backing source field.
 State rebinding
 ===============
 
-If an output name already belongs to the inline DSL state, assigning to that name
-does not replace the state owner. Instead, the produced value is routed back into
-that state slot.
+If a name on the left of `=` is a field of the block's `@state`, the statement
+writes its value (the return of the call or algorithm) into that field; the name
+stays the state field.
 
 Plain captured state writes
 ===========================

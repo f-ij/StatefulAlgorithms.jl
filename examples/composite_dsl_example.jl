@@ -1,19 +1,17 @@
 using StatefulAlgorithms
 
-struct ExampleSourceAlgo <: StatefulAlgorithms.StepAlgorithm end
-struct ExampleCombineAlgo <: StatefulAlgorithms.StepAlgorithm end
-struct ExampleSinkAlgo <: StatefulAlgorithms.StepAlgorithm end
-
-function StatefulAlgorithms.step!(::ExampleSourceAlgo, context)
-    return (; produced = 2, passthrough = context.seed)
+# Returns two values; the block takes them with `(; produced, passthrough) = …`.
+@StepAlgorithm function ExampleSourceAlgo(seed)
+    return (; produced = 2, passthrough = seed)
 end
 
-function StatefulAlgorithms.step!(::ExampleCombineAlgo, context)
-    return (; combined = context.left + context.right)
+@StepAlgorithm function ExampleCombineAlgo(left, right)
+    return (; combined = left + right)
 end
 
-function StatefulAlgorithms.step!(::ExampleSinkAlgo, context)
-    return (; seen = context.value)
+# Keeps the last value it was given in its state field `seen`.
+@StepAlgorithm function ExampleSinkAlgo(value, @managed(seen = 0))
+    @update seen = value
 end
 
 scaled_double_example(x; scale = 1) = scale * (2x)

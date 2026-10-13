@@ -32,8 +32,9 @@ end
 
 ## Writing Variables
 
-Return a `NamedTuple` from each lifecycle hook, but note that the phase changes
-what that return means.
+A `@StepAlgorithm` writes a name back with `@update name = …`; its return is a value, not a write. This section
+is about hand-written hooks (`init`, `step!`, `cleanup` methods), which return a `NamedTuple`. The phase changes what
+that return means.
 
 1. `init` defines the persistent fields owned by the entity and replaces its
    initially empty subcontext with those fields.
@@ -47,10 +48,10 @@ Changing the type of an existing persistent field is rejected. If a value must
 change without changing context shape, initialize a suitably typed `Ref` or
 mutable buffer and update its contents.
 
-If `Target` sees `source_value` through a route and returns
-`(; source_value = 2.0)`, the stored value in the source subcontext is updated.
+If `Target` sees `source_value` through a route and updates it (`@update source_value = 2.0`, or a hand-written
+`step!` returning `(; source_value = 2.0)`), the stored value in the source subcontext is updated.
 If a value must persist, create its field during `init`, with `@managed`, or
-with `@state`, then return that existing name from `step!`.
+with `@state`, then update that existing name from `step!`.
 
 ## Top-Level Context Access
 
@@ -113,7 +114,7 @@ Besides the stored (persistent) state, a run has values that are not stored with
 | inputs (`@input`) | the run, read-only | kept |
 | declared locals (`local x`, `local x::T`; `Local`) | the run | kept |
 | captured returns (`y = f(x)`) | one step of the block that assigns it | dropped |
-| subcontext returns (what an algorithm returns that is not its state) | one step of the block the algorithm is in | dropped |
+| subcontext returns (an algorithm's return value, `_return`; for a hand-written `step!`, the returned names that are not its state) | one step of the block the algorithm is in | dropped |
 
 A step reads them by name like its own variables. Every block (a composite or routine, nested ones too) is a scope,
 as a `for` loop body is in Julia: its children see the declared locals and captured returns of the block and of the

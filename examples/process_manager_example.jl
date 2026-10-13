@@ -1,15 +1,10 @@
 using StatefulAlgorithms
 
-struct ManagedAccumulator <: StatefulAlgorithms.StepAlgorithm end
-
-function StatefulAlgorithms.init(::ManagedAccumulator, context)
-    return (; value = Ref(0), delta = Ref(1), local_buffer = Int[])
-end
-
-function StatefulAlgorithms.step!(::ManagedAccumulator, context)
-    push!(context.local_buffer, context.value[])
-    context.value[] += context.delta[]
-    return (;)
+# Appends its value to `local_buffer`, then adds `delta` to it.
+@StepAlgorithm function ManagedAccumulator(@managed(value = Ref(0), delta = Ref(1), local_buffer = Int[]))
+    push!(local_buffer, value[])
+    value[] += delta[]
+    return
 end
 
 template = Process(ManagedAccumulator; repeats = 3)
