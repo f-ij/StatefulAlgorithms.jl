@@ -89,7 +89,9 @@ end
     end)
     repeats_write_state = resolve(@Routine begin
         @state x = 0.0
-        x = @repeat 3 delta_plus_one(x)
+        @repeat 3 begin
+            x = delta_plus_one(x)
+        end
     end)
 
     @test written_fields_of(writes_state) === Val(((:_state_1, :x),))

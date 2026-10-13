@@ -96,7 +96,10 @@ inner_relaxation = @Routine begin
     @state seed = 3
     @state factor = 2
 
-    value = @repeat 2 InspectSource(seed = seed)
+    local value
+    @repeat 2 begin
+        value = InspectSource(seed = seed)
+    end
     scaled = InspectScale(value, factor)
     InspectSink(value = scaled)
 end
