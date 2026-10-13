@@ -364,10 +364,12 @@ end
 
 function _makeloop_prepared!(p::P, func::F, runtime_context::C, lt::LT, inputs::I; threaded::Bool = true, loopfunc::LF = loop, resume::R = Resuming{false}()) where {P<:Process, F, C, LT, I<:NamedTuple, LF, R<:Resuming}
     wait_loop_precompile!(p, func, runtime_context, lt, inputs, resume; loopfunc)
+    # `@noinline`: the loop is compiled as its own function with `p` as an argument, so LLVM knows `p` can be read and
+    # keeps counters such as `p.tickidx` in a register (inlined into the task closure, it wrote them to memory every repeat).
     if threaded
-        p.task = Threads.@spawn loopfunc(p, func, runtime_context, lt, inputs, resume)
+        p.task = Threads.@spawn @noinline loopfunc(p, func, runtime_context, lt, inputs, resume)
     else
-        p.task = @async loopfunc(p, func, runtime_context, lt, inputs, resume)
+        p.task = @async @noinline loopfunc(p, func, runtime_context, lt, inputs, resume)
     end
     return p
 end
