@@ -26,8 +26,20 @@ reverting one part at a time, never attributed by guess.
   separate first step put a second copy of the arithmetic into that pass and tipped the estimate (its IR builds the
   vector with 32 `insertelement`s, then runs the first step and the loop as `<32 x double>`). Not an inference
   problem: all values concrete, 0 allocations, before and after. 0.205 -> 0.058 inline, 0.176 -> 0.058 Process.
-- **Process routines (open).** Cause proven: with `get_resume_point(::PausableRoutineCursor, i) = 1` (temporary
-  test) Process is at the branch's speed (0.48-0.49; 1.82). With the first repeat separate again: 0.49-0.50; 2.12-2.15.
+- **Process routines (cause found 2026-10-13).** `tick!(p::Process)` does `p.tickidx += 1` on every routine repeat.
+  In the code `run(p)` actually runs (the closure `Threads.@spawn loopfunc(p, ...)` in `_makeloop_prepared!`), LLVM
+  writes `tickidx` to memory and reads it back on every repeat (`ldr/add/str [p, #tickidx]`); in a direct call of the
+  same `loop` with the same arguments it keeps the counter in a register. A store followed by a reload of the same
+  address on every repeat is the slow pattern (as `SINK[] += v`): 13.5 vs 4.9 ns/step (3-level Routine, Process).
+  Proven: `tick!` as a no-op -> 5.1 ns/step through `run(p)`. Happens only with the resume point read from the
+  cursor's box; with it fixed to 1 the counter stays in a register. Fully inferred: the closure's only non-concrete
+  values are `p.task` and the `return`, outside the loop. Why LLVM promotes the counter in the direct call and not
+  in the closure is not established.
+  **Measuring mistake to not repeat:** calling `loop` directly on a finished Process leaves `shouldrun == false`, so
+  every routine stop check stops early and the run does less work. Set `@atomic p.shouldrun = true` first, or time
+  `run(p); wait(p)` on a new Process as the perf suite does. Equal final values are no proof of equal work when the
+  values converge (`x = 0.999x + k`).
+  Earlier explanation "the compiler builds a loop per child" was wrong: valid direct timings show that costs ~2-10%.
 - **Old bug: resume points are never reset to 1.** After a resume in the middle of a child's repeats, the child runs
   only the remaining repeats in every later step (`Routine(Counter, (5,))`, resume point 3: later steps run 3
   repeats, not 5). On this branch and `refactor/dsl-locals-rebased`; main has the same code (not run there).
