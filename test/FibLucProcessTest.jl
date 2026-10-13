@@ -1,31 +1,14 @@
 using Test
 using StatefulAlgorithms
 
-struct RunFib <: StatefulAlgorithms.ProcessAlgorithm end
-struct RunLuc <: StatefulAlgorithms.ProcessAlgorithm end
-
-function StatefulAlgorithms.step!(::RunFib, context)
-    fiblist = context.fiblist
+@StepAlgorithm function RunFib(@managed(fiblist = (l = Int[0, 1]; processsizehint!(l, context); l)))
     push!(fiblist, fiblist[end] + fiblist[end - 1])
-    return (;)
+    return
 end
 
-function StatefulAlgorithms.init(::RunFib, context)
-    fiblist = Int[0, 1]
-    processsizehint!(fiblist, context)
-    return (;fiblist)
-end
-
-function StatefulAlgorithms.step!(::RunLuc, context)
-    luclist = context.luclist
+@StepAlgorithm function RunLuc(@managed(luclist = (l = Int[2, 1]; processsizehint!(l, context); l)))
     push!(luclist, luclist[end] + luclist[end - 1])
-    return (;)
-end
-
-function StatefulAlgorithms.init(::RunLuc, context)
-    luclist = Int[2, 1]
-    processsizehint!(luclist, context)
-    return (;luclist)
+    return
 end
 
 @testset "Process run fills context" begin

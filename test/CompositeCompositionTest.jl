@@ -3,14 +3,8 @@ using StatefulAlgorithms
 
 struct Fib <: StatefulAlgorithms.ProcessAlgorithm end
 struct Luc <: StatefulAlgorithms.ProcessAlgorithm end
-struct FinalCounter <: StatefulAlgorithms.ProcessAlgorithm end
-
-function StatefulAlgorithms.init(::FinalCounter, context)
-    return (; count = 0, cleaned = false)
-end
-
-function StatefulAlgorithms.step!(::FinalCounter, context)
-    return (; count = context.count + 1)
+@StepAlgorithm function FinalCounter(@managed(count = 0, cleaned = false))
+    @update count = count + 1
 end
 
 function StatefulAlgorithms.cleanup(::FinalCounter, context)

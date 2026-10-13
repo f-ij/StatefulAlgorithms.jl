@@ -2,17 +2,10 @@ using Test
 using StatefulAlgorithms
 
 @testset "Interactive lifecycle variables" begin
-    struct InitTimeInteractiveTarget <: ProcessAlgorithm end
-
-    function StatefulAlgorithms.init(::InitTimeInteractiveTarget, context::C) where {C}
-        return (; value = 1.0, seen = 0.0)
-    end
-
-    function StatefulAlgorithms.step!(::InitTimeInteractiveTarget, context::C) where {C}
-        # `value` is stored as an InteractiveVar, but algorithms see its value.
-        value = context.value
-        indexed_value = context[:value]
-        return (; value = value + 1, seen = indexed_value + 2)
+    # `value` is stored as an InteractiveVar, but the algorithm sees its value.
+    @StepAlgorithm function InitTimeInteractiveTarget(@managed(value = 1.0, seen = 0.0))
+        @update seen = value + 2
+        @update value = value + 1
     end
 
     algo = resolve(CompositeAlgorithm(

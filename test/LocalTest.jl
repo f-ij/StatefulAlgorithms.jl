@@ -2,15 +2,58 @@ using Test
 using StatefulAlgorithms
 
 # A step reads and writes a declared local only through a wire into it (`Route(:_declared_locals => Algo, :name => :name)`):
-# it reads the local under that name, and what it returns under that name is written back through the wire.
-@testset "Declared loop locals (Local)" begin
-    struct LocalSensor <: ProcessAlgorithm end
-    struct LocalReader <: ProcessAlgorithm end
-    StatefulAlgorithms.init(::LocalSensor, context) = (; n = 0)
-    StatefulAlgorithms.step!(::LocalSensor, context) = (; n = context.n + 1, reading = context.n + 1)   # Int, declared Float64
-    StatefulAlgorithms.init(::LocalReader, context) = (; acc = 0.0)
-    StatefulAlgorithms.step!(::LocalReader, context) = (; acc = context.acc + context.reading)
+# it reads the local under that name, and what it `@update`s under that name is written back through the wire.
+# Algorithms of this file, defined at top level (defined inside a `@testset`, a plan allocates per step).
+# A writer takes the local as a keyword and `@update`s it; a reader takes it as a positional argument.
+@StepAlgorithm function LocalSensor(@managed(n = 0); reading = nothing)
+    @update n += 1
+    @update reading = n   # Int, declared Float64
+end
+@StepAlgorithm function LocalReader(reading, @managed(acc = 0.0))
+    @update acc += reading
+end
 
+@StepAlgorithm function UnionSensor(@managed(n = 0); reading = nothing)
+    @update n += 1
+    @update reading = Float64(n)
+end
+@StepAlgorithm function UnionReader(reading, @managed(acc = 0.0))
+    @update acc += reading === nothing ? 0.0 : reading
+end
+@StepAlgorithm function Blinker(@managed(n = 0); reading = nothing)
+    @update reading = isodd(n) ? nothing : Float64(n)
+    @update n += 1
+end
+
+@StepAlgorithm function SlotReader(reading, @managed(acc = 0.0))
+    @update acc += reading
+end
+
+@StepAlgorithm function ScopeInc(counter)
+    @update counter += 1
+end
+@StepAlgorithm function ScopeOutside(counter, @managed(seen = -1))
+    @update seen = counter
+end
+@StepAlgorithm function ScopePeek(counter, @managed(seen = -1))
+    @update seen = counter
+end
+
+# Reads its own local: starts as `nothing`, then is written back with the same type.
+@StepAlgorithm function KeepLowest(best, @managed(n = 0))
+    @update best = best === nothing ? Float64(n) : min(best, Float64(n))
+    @update n += 1
+end
+@StepAlgorithm function ChangesType(x)
+    @update x = x === nothing ? 1.0 : "changed"
+end
+
+@StepAlgorithm function OutputCollector(v, @managed(seen = Any[]))
+    push!(seen, v)
+    return
+end
+
+@testset "Declared loop locals (Local)" begin
     # Producer first runs on step 10; the reader holds the last value (the declared 0.0 before that).
     plan = CompositeAlgorithm(LocalSensor, LocalReader, (10, 1), Declaration(reading = 0.0), Route(:_declared_locals => LocalSensor, :reading => :reading), Route(:_declared_locals => LocalReader, :reading => :reading))
     ip = InlineProcess(plan; repeats = 25); run(ip)
@@ -40,13 +83,6 @@ end
 end
 
 @testset "Declared locals keep their declared field type" begin
-    struct UnionSensor <: ProcessAlgorithm end
-    struct UnionReader <: ProcessAlgorithm end
-    StatefulAlgorithms.init(::UnionSensor, context) = (; n = 0)
-    StatefulAlgorithms.step!(::UnionSensor, context) = (; n = context.n + 1, reading = Float64(context.n + 1))
-    StatefulAlgorithms.init(::UnionReader, context) = (; acc = 0.0)
-    StatefulAlgorithms.step!(::UnionReader, context) = (; acc = context.acc + (context.reading === nothing ? 0.0 : context.reading))
-
     declared = NamedTuple{(:reading,), Tuple{Union{Nothing, Float64}}}((nothing,))
     plan = CompositeAlgorithm(UnionSensor, UnionReader, (10, 1), Declaration(declared), Route(:_declared_locals => UnionSensor, :reading => :reading), Route(:_declared_locals => UnionReader, :reading => :reading))
     final = run(InlineProcess(plan; repeats = 25))
@@ -60,24 +96,19 @@ end
     @test fieldtype(typeof(StatefulAlgorithms.get_declared_locals(final)), :reading) <: StatefulAlgorithms.Maybe{Float64}
 
     # Writing `nothing` again after a value is allowed, like in a Julia loop.
-    struct Blinker <: ProcessAlgorithm end
-    StatefulAlgorithms.init(::Blinker, context) = (; n = 0)
-    StatefulAlgorithms.step!(::Blinker, context) = (; n = context.n + 1, reading = isodd(context.n) ? nothing : Float64(context.n))
     final = run(InlineProcess(CompositeAlgorithm(Blinker, UnionReader, (1, 1), Declaration(declared), Route(:_declared_locals => Blinker, :reading => :reading), Route(:_declared_locals => UnionReader, :reading => :reading)); repeats = 6))
     @test final[UnionReader].acc == 0.0 + 2.0 + 4.0
-    # `isodd(n) ? nothing : x` inside a returned named tuple does not infer to a concrete type,
+    # `@update reading = isodd(n) ? nothing : x` does not infer to a concrete type,
     # so an untyped local cannot be typed from it: declare the type instead.
     @test_throws ErrorException run(InlineProcess(CompositeAlgorithm(Blinker, UnionReader, (1, 1), Declaration(reading = nothing), Route(:_declared_locals => Blinker, :reading => :reading), Route(:_declared_locals => UnionReader, :reading => :reading)); repeats = 6))
 end
 
 @testset "undef locals take the type of their first value" begin
+    # Hand-written (deprecated interface): a `@StepAlgorithm` reads every argument each step, so it cannot write
+    # an undef local without reading it, nor read one only under a condition.
     struct SlotSensor <: ProcessAlgorithm end
-    struct SlotReader <: ProcessAlgorithm end
     StatefulAlgorithms.init(::SlotSensor, context) = (; n = 0)
     StatefulAlgorithms.step!(::SlotSensor, context) = (; n = context.n + 1, reading = context.n + 1.0)
-    StatefulAlgorithms.init(::SlotReader, context) = (; acc = 0.0)
-    StatefulAlgorithms.step!(::SlotReader, context) = (; acc = context.acc + context.reading)
-
     # Written in the first step.
     final = run(InlineProcess(CompositeAlgorithm(SlotSensor, SlotReader, (1, 1), Local(:reading), Route(:_declared_locals => SlotSensor, :reading => :reading), Route(:_declared_locals => SlotReader, :reading => :reading)); repeats = 10))
     @test final[SlotReader].acc == 55.0
@@ -90,6 +121,8 @@ end
 end
 
 @testset "undef locals written conditionally" begin
+    # Hand-written (deprecated interface): a `@StepAlgorithm` reads every argument each step, so it cannot write
+    # an undef local without reading it, nor read one only under a condition.
     # The writer only returns the local once a runtime condition holds.
     struct LateSensor <: ProcessAlgorithm end
     struct GuardedReader <: ProcessAlgorithm end
@@ -128,15 +161,6 @@ end
 end
 
 @testset "Locals are scoped to the plan that declares them" begin
-    struct ScopeInc <: ProcessAlgorithm end
-    struct ScopeOutside <: ProcessAlgorithm end
-    struct ScopePeek <: ProcessAlgorithm end
-    StatefulAlgorithms.init(::ScopeInc, context) = (;)
-    StatefulAlgorithms.step!(::ScopeInc, context) = (; counter = context.counter + 1)
-    StatefulAlgorithms.init(::ScopeOutside, context) = (; seen = -1)
-    StatefulAlgorithms.step!(::ScopeOutside, context) = (; seen = context.counter)
-    StatefulAlgorithms.init(::ScopePeek, context) = (; seen = -1)
-    StatefulAlgorithms.step!(::ScopePeek, context) = (; seen = context.counter)
     inner() = Routine(ScopeInc, (3,), Declaration(counter = 0), Route(:_declared_locals => ScopeInc, :counter => :counter))
 
     # The declaration stays on its plan's wiring; it is not lifted to the root.
@@ -158,17 +182,10 @@ end
 
 @testset "A local keeps its type after its first value" begin
     # Reads its own local: starts as `nothing`, then is written back with the same type. Fine.
-    struct KeepLowest <: ProcessAlgorithm end
-    StatefulAlgorithms.init(::KeepLowest, context) = (; n = 0)
-    StatefulAlgorithms.step!(::KeepLowest, context) =
-        (; n = context.n + 1, best = context.best === nothing ? Float64(context.n) : min(context.best, Float64(context.n)))
     final = run(InlineProcess(CompositeAlgorithm(KeepLowest, (1,), Declaration(best = nothing), Route(:_declared_locals => KeepLowest, :best => :best)); repeats = 5))
     @test StatefulAlgorithms.get_declared_locals(final).best isa StatefulAlgorithms.Maybe{Float64}
 
     # Starts as a Float64, then written as a String: an error before the run, naming the local.
-    struct ChangesType <: ProcessAlgorithm end
-    StatefulAlgorithms.init(::ChangesType, context) = (;)
-    StatefulAlgorithms.step!(::ChangesType, context) = (; x = context.x === nothing ? 1.0 : "changed")
     err = try
         run(InlineProcess(CompositeAlgorithm(ChangesType, (1,), Declaration(x = nothing), Route(:_declared_locals => ChangesType, :x => :x)); repeats = 3)); nothing
     catch e
@@ -186,9 +203,6 @@ end
     produced = Ref(0)
     produce() = (produced[] += 1; Float64(produced[]))
     pass_on(x) = x
-    struct OutputCollector <: ProcessAlgorithm end
-    StatefulAlgorithms.init(::OutputCollector, context) = (; seen = Any[])
-    StatefulAlgorithms.step!(::OutputCollector, context) = (push!(context.seen, context.v); (; seen = context.seen))
     plan = CompositeAlgorithm(StatefulAlgorithms.Callable(produce, (), :y), StatefulAlgorithms.Callable(pass_on, (:y,), :v), OutputCollector,
         (3, 1, 1), Declaration(y = nothing), Route(:_captured_returns => OutputCollector, :v => :v))
     p = Process(plan; repeats = 7); run(p); wait(p)

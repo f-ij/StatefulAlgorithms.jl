@@ -2,31 +2,14 @@ using Test
 using Statistics
 using StatefulAlgorithms
 
-struct InlineFib <: StatefulAlgorithms.ProcessAlgorithm end
-struct InlineLuc <: StatefulAlgorithms.ProcessAlgorithm end
-
-function StatefulAlgorithms.step!(::InlineFib, context::C) where C
-    fiblist = context.fiblist
+@StepAlgorithm function InlineFib(@managed(fiblist = (l = Int[0, 1]; processsizehint!(l, context); l)))
     push!(fiblist, fiblist[end] + fiblist[end - 1])
-    return nothing
+    return
 end
 
-function StatefulAlgorithms.init(::InlineFib, context::C) where C
-    fiblist = Int[0, 1]
-    processsizehint!(fiblist, context)
-    return (;fiblist)
-end
-
-function StatefulAlgorithms.step!(::InlineLuc, context::C) where C
-    luclist = context.luclist
+@StepAlgorithm function InlineLuc(@managed(luclist = (l = Int[2, 1]; processsizehint!(l, context); l)))
     push!(luclist, luclist[end] + luclist[end - 1])
-    return nothing
-end
-
-function StatefulAlgorithms.init(::InlineLuc, context::C) where C
-    luclist = Int[2, 1]
-    processsizehint!(luclist, context)
-    return (;luclist)
+    return
 end
 
 function naive_fibluc(n)

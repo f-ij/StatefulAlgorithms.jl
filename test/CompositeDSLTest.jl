@@ -2,26 +2,24 @@ using Test
 using StatefulAlgorithms
 using StatefulAlgorithms: Callable   # internal: tests build calls directly
 
-struct DSLSourceAlgo <: StatefulAlgorithms.ProcessAlgorithm end
-struct DSLCombineAlgo <: StatefulAlgorithms.ProcessAlgorithm end
-struct DSLSinkAlgo <: StatefulAlgorithms.ProcessAlgorithm end
-struct DSLValueAlgo <: StatefulAlgorithms.ProcessAlgorithm end
-struct DSLHeldStateAlgo <: StatefulAlgorithms.ProcessAlgorithm end
-
-function StatefulAlgorithms.step!(::DSLSourceAlgo, context)
-    return (; produced = 2, passthrough = context.seed)
+# Returns `(; produced = 2, passthrough = seed)`; no state.
+@StepAlgorithm function DSLSourceAlgo(seed)
+    return (; produced = 2, passthrough = seed)
 end
 
-function StatefulAlgorithms.step!(::DSLCombineAlgo, context)
-    return (; combined = context.left + context.right)
+# Returns `(; combined = left + right)`; no state.
+@StepAlgorithm function DSLCombineAlgo(left, right)
+    return (; combined = left + right)
 end
 
-function StatefulAlgorithms.step!(::DSLSinkAlgo, context)
-    return (; seen = context.value)
+# Returns `(; seen = value)`; no state.
+@StepAlgorithm function DSLSinkAlgo(value)
+    return (; seen = value)
 end
 
-function StatefulAlgorithms.step!(::DSLValueAlgo, context)
-    return (; result = context.value)
+# Writes `value` to the runtime name `result` (visible to `@finally`, not state).
+@StepAlgorithm function DSLValueAlgo(value; result = nothing)
+    @update result = value
 end
 
 # Keeps 4 in its state field `captured`.
@@ -36,12 +34,9 @@ end
     return (; produced, passthrough = seed)
 end
 
-function StatefulAlgorithms.init(::DSLHeldStateAlgo, context)
-    return (; state = 11)
-end
-
-function StatefulAlgorithms.step!(::DSLHeldStateAlgo, context)
-    return (; state = context.state)
+# Keeps 11 in its state field `state`.
+@StepAlgorithm function DSLHeldStateAlgo(@managed(state = 11))
+    @update state
 end
 
 # Counts its steps in its state field `count` and returns the new count.
@@ -73,12 +68,12 @@ dsl_final_summary(context) = (; result = context[DSLValueAlgo].result)
 dsl_runtime_final_summary(context) = (; result = context.result)
 dsl_state_push_writer!(buffers) = (push!(buffers, :writer); buffers)
 dsl_state_push_reader!(buffers) = (push!(buffers, :reader); buffers)
-struct DSLReplaceSourceAlgo <: ProcessAlgorithm end
-StatefulAlgorithms.init(::DSLReplaceSourceAlgo, context) = (; x = 1.0)
-StatefulAlgorithms.step!(::DSLReplaceSourceAlgo, context) = (; x = context.x + 1)
-struct DSLReplaceSinkAlgo <: ProcessAlgorithm end
-StatefulAlgorithms.init(::DSLReplaceSinkAlgo, context) = (; y = 0.0, seen = 0.0)
-StatefulAlgorithms.step!(::DSLReplaceSinkAlgo, context) = (; seen = context.y)
+@StepAlgorithm function DSLReplaceSourceAlgo(@managed(x = 1.0))
+    @update x = x + 1
+end
+@StepAlgorithm function DSLReplaceSinkAlgo(@managed(y = 0.0, seen = 0.0))
+    @update seen = y
+end
 
 @StepAlgorithm function DSLPositionalCallAlgo(value)
     return (; seen = value)
@@ -441,13 +436,13 @@ end
 
     @testset "@route statements support reverse transforms" begin
         @info "Composite DSL: @route statements support reverse transforms"
-        struct DSLReverseRouteSource <: StatefulAlgorithms.ProcessAlgorithm end
-        struct DSLReverseRouteTarget <: StatefulAlgorithms.ProcessAlgorithm end
-
-        StatefulAlgorithms.init(::DSLReverseRouteSource, context) = (; value = 1.0)
-        StatefulAlgorithms.step!(::DSLReverseRouteSource, context) = (;)
-        StatefulAlgorithms.init(::DSLReverseRouteTarget, context) = (;)
-        StatefulAlgorithms.step!(::DSLReverseRouteTarget, context) = (; input = context.input + 2.0)
+        @StepAlgorithm function DSLReverseRouteSource(@managed(value = 1.0))
+            return
+        end
+        # Writes `input + 2.0` back through the route to `source.value`.
+        @StepAlgorithm function DSLReverseRouteTarget(input)
+            @update input = input + 2.0
+        end
 
         algo = @CompositeAlgorithm begin
             @alias source = DSLReverseRouteSource

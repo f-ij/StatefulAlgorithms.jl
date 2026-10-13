@@ -2,14 +2,8 @@ using Test
 using StatefulAlgorithms
 
 @testset "Additional lifetime variants" begin
-    struct LifetimeCounter <: ProcessAlgorithm end
-
-    function StatefulAlgorithms.init(::LifetimeCounter, context)
-        return (; count = 0)
-    end
-
-    function StatefulAlgorithms.step!(::LifetimeCounter, context)
-        return (; count = context.count + 1)
+    @StepAlgorithm function LifetimeCounter(@managed(count = 0))
+        @update count += 1
     end
 
     atleast_process = InlineProcess(
@@ -36,14 +30,8 @@ using StatefulAlgorithms
 end
 
 @testset "Condition lifetimes run cleanup on natural completion" begin
-    struct LifetimeCleanupCounter <: ProcessAlgorithm end
-
-    function StatefulAlgorithms.init(::LifetimeCleanupCounter, context)
-        return (; count = 0, cleaned = false)
-    end
-
-    function StatefulAlgorithms.step!(::LifetimeCleanupCounter, context)
-        return (; count = context.count + 1)
+    @StepAlgorithm function LifetimeCleanupCounter(@managed(count = 0, cleaned = false))
+        @update count += 1
     end
 
     function StatefulAlgorithms.cleanup(::LifetimeCleanupCounter, context)
@@ -63,15 +51,9 @@ end
 end
 
 @testset "Indefinite close cleans up and pause preserves live context" begin
-    struct LifetimeIndefiniteCleanupCounter <: ProcessAlgorithm end
-
-    function StatefulAlgorithms.init(::LifetimeIndefiniteCleanupCounter, context)
-        return (; count = 0, cleaned = false)
-    end
-
-    function StatefulAlgorithms.step!(::LifetimeIndefiniteCleanupCounter, context)
+    @StepAlgorithm function LifetimeIndefiniteCleanupCounter(@managed(count = 0, cleaned = false))
         sleep(0.001)
-        return (; count = context.count + 1)
+        @update count += 1
     end
 
     function StatefulAlgorithms.cleanup(::LifetimeIndefiniteCleanupCounter, context)

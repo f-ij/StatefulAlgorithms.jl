@@ -1,14 +1,21 @@
 using Test
 using StatefulAlgorithms
 
-@testset "Loop cursors and conditional schedules" begin
-    struct LoopCursorIntervalCounter <: ProcessAlgorithm end
-    struct LoopCursorYieldCounter <: ProcessAlgorithm end
+# NestLin1..NestLin4 add 1..4 to `x` each step.
+for k in 1:4
+    @eval @StepAlgorithm function $(Symbol(:NestLin, k))(@managed(x = 0.0))
+        @update x += $k
+    end
+end
 
-    StatefulAlgorithms.init(::LoopCursorIntervalCounter, context) = (; count = 0)
-    StatefulAlgorithms.step!(::LoopCursorIntervalCounter, context) = (; count = context.count + 1)
-    StatefulAlgorithms.init(::LoopCursorYieldCounter, context) = (; count = 0)
-    StatefulAlgorithms.step!(::LoopCursorYieldCounter, context) = (sleep(0.001); (; count = context.count + 1))
+@testset "Loop cursors and conditional schedules" begin
+    @StepAlgorithm function LoopCursorIntervalCounter(@managed(count = 0))
+        @update count += 1
+    end
+    @StepAlgorithm function LoopCursorYieldCounter(@managed(count = 0))
+        sleep(0.001)
+        @update count += 1
+    end
 
     composite = CompositeAlgorithm(LoopCursorIntervalCounter, (2,))
     routine = Routine(LoopCursorIntervalCounter, (3,))
@@ -66,11 +73,10 @@ using StatefulAlgorithms
     @test_throws TypeError StatefulAlgorithms.getloopcursor(paused)
 
     struct LoopRunIfFlag <: AlgoState end
-    struct LoopRunIfCounter <: ProcessAlgorithm end
-
     StatefulAlgorithms.init(::LoopRunIfFlag, context) = (; enabled = false)
-    StatefulAlgorithms.init(::LoopRunIfCounter, context) = (; count = 0)
-    StatefulAlgorithms.step!(::LoopRunIfCounter, context) = (; count = context.count + 1)
+    @StepAlgorithm function LoopRunIfCounter(@managed(count = 0))
+        @update count += 1
+    end
 
     false_plan = CompositeAlgorithm(
         LoopRunIfCounter,
@@ -101,13 +107,16 @@ using StatefulAlgorithms
     @test context(nested_result)[LoopRunIfCounter].count == 2
 end
 
+# Defined at top level: defined inside a `@testset`, the plan allocates per step.
+@StepAlgorithm function BootSensor(@managed(n = 0); reading = nothing)
+    @update n += 1
+    @update reading = Float64(n)
+end
+@StepAlgorithm function BootReader(reading, @managed(acc = 0.0))
+    @update acc += reading
+end
+
 @testset "Bootstrap step keeps routed transients concretely typed" begin
-    struct BootSensor <: ProcessAlgorithm end
-    struct BootReader <: ProcessAlgorithm end
-    StatefulAlgorithms.init(::BootSensor, context) = (; n = 0)
-    StatefulAlgorithms.step!(::BootSensor, context) = (; n = context.n + 1, reading = Float64(context.n + 1))
-    StatefulAlgorithms.init(::BootReader, context) = (; acc = 0.0)
-    StatefulAlgorithms.step!(::BootReader, context) = (; acc = context.acc + context.reading)
 
     # Producer and consumer both run on step 1 and every 10 steps after it.
     plan = CompositeAlgorithm(BootSensor, BootReader, (Interval(10, :start), Interval(10, :start)), Route(BootSensor => BootReader, :reading))
@@ -121,19 +130,15 @@ end
 end
 
 @testset "Nested routines stay specialized (no per-step allocation)" begin
-    struct NestLin{K} <: ProcessAlgorithm end
-    StatefulAlgorithms.init(::NestLin, context) = (; x = 0.0)
-    StatefulAlgorithms.step!(::NestLin{K}, context) where {K} = (; x = context.x + K)
-
-    for plan in (Routine(Routine(NestLin{1}, NestLin{2}, (1, 1)), NestLin{3}, (1, 1)),
-                 Routine(Routine(Routine(NestLin{1}, NestLin{2}, (1, 1)), NestLin{3}, (1, 1)), NestLin{4}, (1, 1)),
-                 Routine(CompositeAlgorithm(Routine(NestLin{1}, NestLin{2}, (1, 1)), NestLin{3}, (1, 1)), NestLin{4}, (1, 1)))
+    for plan in (Routine(Routine(NestLin1, NestLin2, (1, 1)), NestLin3, (1, 1)),
+                 Routine(Routine(Routine(NestLin1, NestLin2, (1, 1)), NestLin3, (1, 1)), NestLin4, (1, 1)),
+                 Routine(CompositeAlgorithm(Routine(NestLin1, NestLin2, (1, 1)), NestLin3, (1, 1)), NestLin4, (1, 1)))
         run(InlineProcess(plan; repeats = 100))
         small = InlineProcess(plan; repeats = 1_000)
         large = InlineProcess(plan; repeats = 101_000)
         allocs_small = @allocated run(small)
         allocs_large = @allocated run(large)
         @test allocs_large - allocs_small < 1_000
-        @test context(large)[NestLin{1}].x == 101_000
+        @test context(large)[NestLin1].x == 101_000
     end
 end

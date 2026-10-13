@@ -3,9 +3,10 @@ using StatefulAlgorithms
 using JLD2
 
 @testset "savecontext / loadcontext via the JLD2 extension" begin
-    struct SaveCounter <: ProcessAlgorithm end
-    StatefulAlgorithms.init(::SaveCounter, context) = (; count = 0, history = Float64[])
-    StatefulAlgorithms.step!(::SaveCounter, context) = (push!(context.history, context.count); (; count = context.count + 1))
+    @StepAlgorithm function SaveCounter(@managed(count = 0, history = Float64[]))
+        push!(history, count)
+        @update count += 1
+    end
 
     @test !isnothing(Base.get_extension(StatefulAlgorithms, :StatefulAlgorithmsJLD2Ext))
 

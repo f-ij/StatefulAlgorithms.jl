@@ -8,41 +8,19 @@ using StatefulAlgorithms
 @testset "Routes: Walker->InsertNoise updates Walker momentum" begin
     # Minimal reproduction of `manual tests/WalkerTest.jl` without print spam.
 
-    struct Walker <: ProcessAlgorithm end
-
-    function StatefulAlgorithms.init(::Walker, input)
-            (; dt) = input
-            state = Float64[1.0]
-            momentum = 1.0
-            StatefulAlgorithms.processsizehint!(state, input)
-            return (; state, momentum, dt)
-        end
-
-    function StatefulAlgorithms.step!(::Walker, context)
-        (; state, momentum, dt) = context
+    # `dt` is read from the init-time inputs
+    @StepAlgorithm function Walker(
+        @managed(state = (s = Float64[1.0]; StatefulAlgorithms.processsizehint!(s, context); s), momentum = 1.0, dt),
+    )
         push!(state, state[end] + momentum * dt)
-        return (; momentum)
+        return
     end
 
-    
-
-    struct InsertNoise <: ProcessAlgorithm
-        seed::Int64
-    end
-
-    InsertNoise(seed::Integer = 1234) = InsertNoise(Int64(seed))
-
-    function StatefulAlgorithms.step!(::InsertNoise, context)
-        (; targetnum, scale, rng) = context
+    # Adds noise to the routed `targetnum` (the walker's momentum)
+    @StepAlgorithm @config seed::Int64 = 1234 function InsertNoise(targetnum, scale, @managed(rng = MersenneTwister(1234)))
         T = typeof(targetnum)
         rand_num = (rand(rng, T) - T(0.5)) * T(2) * scale
-        targetnum = targetnum + rand_num
-        return (; targetnum)
-    end
-
-    function StatefulAlgorithms.init(::InsertNoise, _inputs)
-        rng = MersenneTwister(1234)
-        return (; rng)
+        @update targetnum = targetnum + rand_num
     end
 
     algo = CompositeAlgorithm(
@@ -78,17 +56,10 @@ using StatefulAlgorithms
 
 
     # Route functions test
-    struct RouteLogger{T} <: ProcessAlgorithm end
-    RouteLogger(name::Symbol) = RouteLogger{name}()
-
-    function StatefulAlgorithms.init(::RouteLogger{T}, _inputs) where {T}
-        log = Vector{Any}()
-        return (;log)
-    end
-    function StatefulAlgorithms.step!(::RouteLogger{T}, context) where {T}
-        (;log, targetnum) = context
+    # Two loggers told apart by their `name`
+    @StepAlgorithm @config name::Symbol = :normal function RouteLogger(targetnum, @managed(log = Any[]))
         push!(log, targetnum)
-        return (;)
+        return
     end
 
     Logger1 = RouteLogger(:normal)
@@ -112,13 +83,12 @@ using StatefulAlgorithms
 
     # Reverse transforms let algorithm-facing route aliases write back through
     # the inverse mapping to their backing source fields.
-    struct ReverseRouteSource <: ProcessAlgorithm end
-    struct ReverseRouteTarget <: ProcessAlgorithm end
-
-    StatefulAlgorithms.init(::ReverseRouteSource, context) = (; value = 1.0)
-    StatefulAlgorithms.step!(::ReverseRouteSource, context) = (;)
-    StatefulAlgorithms.init(::ReverseRouteTarget, context) = (;)
-    StatefulAlgorithms.step!(::ReverseRouteTarget, context) = (; input = context.input + 2.0)
+    @StepAlgorithm function ReverseRouteSource(@managed(value = 1.0))
+        return
+    end
+    @StepAlgorithm function ReverseRouteTarget(input)
+        @update input = input + 2.0
+    end
 
     reverse_algo = CompositeAlgorithm(
         ReverseRouteSource,
@@ -137,13 +107,12 @@ using StatefulAlgorithms
     reverse_context = fetch(reverse_process)
     @test reverse_context[ReverseRouteSource].value == 2.0
 
-    struct ReverseTupleRouteSource <: ProcessAlgorithm end
-    struct ReverseTupleRouteTarget <: ProcessAlgorithm end
-
-    StatefulAlgorithms.init(::ReverseTupleRouteSource, context) = (; x = 1, y = 2)
-    StatefulAlgorithms.step!(::ReverseTupleRouteSource, context) = (;)
-    StatefulAlgorithms.init(::ReverseTupleRouteTarget, context) = (;)
-    StatefulAlgorithms.step!(::ReverseTupleRouteTarget, context) = (; total = context.total + 5)
+    @StepAlgorithm function ReverseTupleRouteSource(@managed(x = 1, y = 2))
+        return
+    end
+    @StepAlgorithm function ReverseTupleRouteTarget(total)
+        @update total = total + 5
+    end
 
     reverse_tuple_algo = CompositeAlgorithm(
         ReverseTupleRouteSource,

@@ -1,48 +1,48 @@
 using Test
 using StatefulAlgorithms
 
-struct PackFib <: StatefulAlgorithms.ProcessAlgorithm end
-struct PackLuc <: StatefulAlgorithms.ProcessAlgorithm end
-
-function StatefulAlgorithms.step!(::PackFib, context)
-    fiblist = context.fiblist
+@StepAlgorithm function PackFib(@managed(fiblist = (l = Int[0, 1]; processsizehint!(l, context); l)))
     push!(fiblist, fiblist[end] + fiblist[end - 1])
-    return (;)
+    return
 end
 
-struct NewPackSource <: StatefulAlgorithms.ProcessAlgorithm end
-struct NewPackTarget <: StatefulAlgorithms.ProcessAlgorithm end
-struct NewPackOuterSource <: StatefulAlgorithms.ProcessAlgorithm end
-struct NewPackNeedsRoute <: StatefulAlgorithms.ProcessAlgorithm end
-struct NewPackCounter <: StatefulAlgorithms.ProcessAlgorithm end
-
-StatefulAlgorithms.init(::NewPackSource, context) = (; value = 0)
-StatefulAlgorithms.init(::NewPackOuterSource, context) = (; delta = 0)
-
-function StatefulAlgorithms.step!(::NewPackSource, context)
-    return (; value = context.value + 1)
+@StepAlgorithm function PackLuc(@managed(luclist = (l = Int[2, 1]; processsizehint!(l, context); l)))
+    push!(luclist, luclist[end] + luclist[end - 1])
+    return
 end
 
-function StatefulAlgorithms.step!(::NewPackOuterSource, context)
-    return (; delta = context.delta + 1)
+@StepAlgorithm function NewPackSource(@managed(value = 0))
+    @update value += 1
 end
 
-function StatefulAlgorithms.init(::NewPackTarget, context)
-    log = Int[]
-    processsizehint!(log, context)
-    return (; log, expected_calls = StatefulAlgorithms.num_calls(context))
+@StepAlgorithm function NewPackOuterSource(@managed(delta = 0))
+    @update delta += 1
 end
 
-StatefulAlgorithms.init(::NewPackCounter, context) = (; expected_calls = StatefulAlgorithms.num_calls(context))
-StatefulAlgorithms.step!(::NewPackCounter, context) = (;)
-
-function StatefulAlgorithms.step!(::NewPackTarget, context)
-    push!(context.log, context.input)
-    return (;)
+@StepAlgorithm function NewPackTarget(
+    input,
+    @managed(log = (l = Int[]; processsizehint!(l, context); l), expected_calls = StatefulAlgorithms.num_calls(context)),
+)
+    push!(log, input)
+    return
 end
 
-StatefulAlgorithms.init(::NewPackNeedsRoute, context) = (; seen = 0)
-StatefulAlgorithms.step!(::NewPackNeedsRoute, context) = (; seen = context.delta)
+@StepAlgorithm function NewPackCounter(@managed(expected_calls = StatefulAlgorithms.num_calls(context)))
+    return
+end
+
+@StepAlgorithm function NewPackNeedsRoute(delta, @managed(seen = 0))
+    @update seen = delta
+end
+
+# Logs the routed `targetnum`; `name` tells loggers apart.
+@StepAlgorithm @config name::Symbol = :logger function PackLogger(
+    targetnum,
+    @managed(log = (l = Vector{Any}(); processsizehint!(l, context); l)),
+)
+    push!(log, targetnum)
+    return
+end
 
 @testset "Package runs as a ProcessAlgorithm" begin
     comp = CompositeAlgorithm(
@@ -120,24 +120,6 @@ StatefulAlgorithms.step!(::NewPackNeedsRoute, context) = (; seen = context.delta
     @test routed_ctx[routed_into_package].seen == 4
 end
 
-function StatefulAlgorithms.init(::PackFib, context)
-    fiblist = Int[0, 1]
-    processsizehint!(fiblist, context)
-    return (;fiblist)
-end
-
-function StatefulAlgorithms.step!(::PackLuc, context)
-    luclist = context.luclist
-    push!(luclist, luclist[end] + luclist[end - 1])
-    return (;)
-end
-
-function StatefulAlgorithms.init(::PackLuc, context)
-    luclist = Int[2, 1]
-    processsizehint!(luclist, context)
-    return (;luclist)
-end
-
 @testset "Registry findall by algorithm type" begin
     fib1 = StatefulAlgorithms.Unique(PackFib)
     fib2 = StatefulAlgorithms.Unique(PackFib)
@@ -194,21 +176,7 @@ end
 
     # Test routes to package
      # Route functions test
-    struct PackLogger{T} <: ProcessAlgorithm end
-    PackLogger(name::Symbol) = PackLogger{name}()
-
-    function StatefulAlgorithms.init(::PackLogger{T}, _inputs) where {T}
-        log = Vector{Any}()
-        processsizehint!(log, _inputs)
-        return (;log)
-    end
-    function StatefulAlgorithms.step!(::PackLogger{T}, context) where {T}
-        (;log, targetnum) = context
-        push!(log, targetnum)
-        return (;)
-    end
-
-    Logger1 = PackLogger(:fibidiboo)
+    Logger1 = PackLogger(name = :fibidiboo)
     Logging = CompositeAlgorithm( pack, Logger1, (1, 100), 
         Route(pack => Logger1, :fiblist => :targetnum, transform = x -> x[end]))
     p = Process(Logging; repeats = 1000)

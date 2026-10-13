@@ -2,15 +2,8 @@ using Test
 using StatefulAlgorithms
 
 @testset "InlineProcess constructor matches Process inputs and overrides" begin
-    struct InlineAccumulator <: ProcessAlgorithm end
-
-    function StatefulAlgorithms.init(::InlineAccumulator, context)
-        (; start) = context
-        return (; value = start, delta = 0)
-    end
-
-    function StatefulAlgorithms.step!(::InlineAccumulator, context)
-        return (; value = context.value + context.delta)
+    @StepAlgorithm function InlineAccumulator(@managed(value = start, delta = 0); @inputs((; start)))
+        @update value += delta
     end
 
     ip = InlineProcess(
@@ -28,14 +21,8 @@ using StatefulAlgorithms
 end
 
 @testset "Process constructor resolves inputs for algorithm types" begin
-    struct TypeInputAccumulator <: ProcessAlgorithm end
-
-    function StatefulAlgorithms.init(::TypeInputAccumulator, context)
-        return (; value = context.start)
-    end
-
-    function StatefulAlgorithms.step!(::TypeInputAccumulator, context)
-        return (; value = context.value + 1)
+    @StepAlgorithm function TypeInputAccumulator(@managed(value = start); @inputs((; start)))
+        @update value += 1
     end
 
     p = Process(
