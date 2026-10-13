@@ -588,15 +588,19 @@ routine = @Routine begin
 end
 ```
 
-`@repeat` also accepts the normal lifetime constructors. When a lifetime selector
-is written as a DSL variable, the DSL resolves it to the corresponding `Var(...)`
-selector:
+`@repeat` also accepts the normal lifetime constructors. The selector says what the condition reads. A `Var(...)`
+is used as it is; to stop on an algorithm's state, read that state explicitly:
 
 ```julia
 routine = @Routine begin
-    count = @repeat Until(x -> x >= 100, count) Counter()
+    n = @repeat Until(x -> x >= 100, Var(Counter, :count)) Counter()   # until Counter's state field `count` is 100
 end
 ```
+
+A plain name as the selector is a block value: a `local`, a `@state` field or an earlier statement's result. It is
+never a field of the repeated algorithm's state: `count = Counter()` captures `Counter`'s return into the block
+value `count`, it does not name `Counter`'s state, even when that state has a field `count`. A name that is not a
+block value before the statement is an error when the block is built.
 
 Supported forms are `Repeat(n)`, `Indefinite()`, `Until(condition, selector)`,
 `RepeatOrUntil(condition, n, selector)`, `AtLeast(condition, n, selector)`, and

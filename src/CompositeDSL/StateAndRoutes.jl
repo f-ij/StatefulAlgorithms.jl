@@ -291,15 +291,17 @@ function _composite_dsl_var_owner(owner::O) where {O}
     return owner
 end
 
-"""Resolve a DSL variable name to the `Var` selector for its current producer."""
-function _composite_dsl_var_selector(producers::D, current_owner::O, current_outputs::CO, name::Symbol) where {D<:Dict{Symbol,Any},O,CO<:Tuple}
-    if name in current_outputs
-        isnothing(current_owner) && error("Cannot use current output `$name` as a lifetime selector here.")
-        return Var(_composite_dsl_var_owner(current_owner), name)
-    elseif haskey(producers, name)
-        return Var(_composite_dsl_var_owner(producers[name]), name)
-    end
-    error("Lifetime selector `$name` is not a known DSL variable at this point.")
+"""
+Return the `Var` selector for a name in a lifetime condition (`x` in `@repeat Until(cond, x) …`): the block value
+`x` as it is at this point, i.e. a `local`, a `@state` field or an earlier statement's captured result. Errors when
+`x` is none of these.
+
+It is never a field of the repeated algorithm's state: `x = f()` captures `f`'s return into the block value `x`, it
+does not name `f`'s state, even when `f`'s state has a field `x`.
+"""
+function _composite_dsl_var_selector(producers::D, name::Symbol) where {D<:Dict{Symbol,Any}}
+    haskey(producers, name) && return Var(_composite_dsl_var_owner(producers[name]), name)
+    error("Lifetime selector `$name` is not a block value at this point: declare it before the statement (`local $name`, `@state $name = …`) or read an earlier result.")
 end
 
 """Return the route target used for `owner.field = value` DSL writes.
