@@ -331,15 +331,6 @@ _process_precompile_scale(x; scale = 1.0) = x * scale
         composite_inline = InlineProcess(composite; repeats = 2)
         run(composite_inline)
         run_nogen(composite_inline)
-        loop(
-            composite_inline,
-            getalgo(composite_inline),
-            context(composite_inline),
-            lifetime(composite_inline),
-            (;),
-            Resuming{false}(),
-            Generated(),
-        )
         reset!(composite_inline)
 
         edited_composite = composite |>

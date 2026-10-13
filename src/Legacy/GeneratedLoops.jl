@@ -1,3 +1,6 @@
+# LEGACY, not loaded (not included by the package). The generated loop mode: `loop(..., ::Generated)` only forwarded to
+# `NonGenerated`, and `step!_expr` was only called from commented-out code. `sys_looptype` is `NonGenerated()`.
+
 """
 Generated process loop that inlines the step! expression when available.
 """
