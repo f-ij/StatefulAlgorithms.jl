@@ -107,5 +107,5 @@ end
     @test sprint(show, StatefulAlgorithms.LoopAlgorithm) == "LoopAlgorithm"
     @test startswith(sprint(show, typeof(resolve(CompositeAlgorithm(ShowStep, (1,))))), "LoopAlgorithm{CompositeAlgorithm")
     # A method signature holds `LoopAlgorithm{Plan}` with `Plan` a type variable.
-    @test all(m -> !isempty(sprint(show, m)), methods(StatefulAlgorithms.step!_expr))
+    @test all(m -> !isempty(sprint(show, m)), methods(StatefulAlgorithms.getplan))
 end
