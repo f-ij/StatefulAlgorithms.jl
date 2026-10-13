@@ -18,34 +18,28 @@ reverting one part at a time, never attributed by guess.
 
 ## Findings
 
-- **Stored `SubContext` name (old, fixed here in 589d7f0).** `SubContext` stored `name::Symbol` next to its data,
-  so a context's values were 16 bytes apart with a pointer between each. With the separate first step gone, the
-  loop starts from values loaded from the context and LLVM stopped vectorizing independent updates (wide
-  composite 0.058 -> 0.205 inline). Removing the field: 0.058 inline and under Process (branch Process 0.110).
-  Same field on main and the branch; worth moving there.
+- **Stored `SubContext` name (old, fixed here in 589d7f0).** `SubContext` had a field `name::Symbol` (filled from
+  the type parameter), so each subcontext was 16 bytes and the 32 values of the wide composite were 16 bytes apart.
+  It is the spacing, not the pointer: with the field replaced by an `Int` the loop still did not vectorize. LLVM
+  vectorizes the loop only if packing the starting values into vector registers is cheap enough; its estimate covers
+  one pass through the code, not the iterations. Spaced values need one load and insert each. On the branch the
+  separate first step put a second copy of the arithmetic into that pass and tipped the estimate (its IR builds the
+  vector with 32 `insertelement`s, then runs the first step and the loop as `<32 x double>`). Not an inference
+  problem: all values concrete, 0 allocations, before and after. 0.205 -> 0.058 inline, 0.176 -> 0.058 Process.
 - **Process routines (open).** Cause proven: with `get_resume_point(::PausableRoutineCursor, i) = 1` (temporary
   test) Process is at the branch's speed (0.48-0.49; 1.82). With the first repeat separate again: 0.49-0.50; 2.12-2.15.
 - **Old bug: resume points are never reset to 1.** After a resume in the middle of a child's repeats, the child runs
   only the remaining repeats in every later step (`Routine(Counter, (5,))`, resume point 3: later steps run 3
   repeats, not 5). On this branch and `refactor/dsl-locals-rebased`; main has the same code (not run there).
-- **flat Routine (1, 1, 1), InlineProcess (cause found, not fixed).** 0.03 ns/step slower than branch and hand loop:
-  the compiled loop does the three multiply-adds one at a time; branch and hand loop do two in one vector
-  instruction. Chain, each step reproduced in a hand-written loop (`scratchpad/hand_steps.jl`, v5-v11):
-  1. `ProcessContext` holds `reg::Base.RefValue{NameSpaceRegistry}`, a pointer, because a registry entry holds
-     construction-time data behind pointers (`RegistryTypeEntry.multipliers::Vector{Float64}`,
-     `dynamic_lookup::Dict{Any,Int}`), so the registry is not plain data.
-  2. Writing a context with a pointer into the process (`after_while`: `context(ip, persistent_context)`) needs the GC
-     write barrier, a branch.
-  3. After the loop the final values go to two store groups: into the process, and into `run`'s returned context
-     (the default result is the same context). The barrier puts them in different blocks; vectorizing one group
-     needs the values unpacked again for the other, and LLVM's SLP vectorizer judges that not worth it.
-  4. The branch's separately run first step added enough vector work to tip LLVM's estimate.
-  Hand loop: stored back and returned, struct with a pointer: 0 vector ops (v5); without the pointer: vectorized
-  (v11); either use alone: vectorized (v7, v9); v5 with the first step separate: vectorized (v6).
-  Not the cause (tested): order of carried values, the stop-check context, the registry check alone, LLVM's
-  `-slp-threshold` (the loop gets no vectorization attempt at all).
-  Fix options: registry out of the runtime context (on the algorithm/type only), or make it plain data (move
-  `multipliers`/`dynamic_lookup` to construction-time structures) and store it inline instead of in a `Ref`.
+- **flat Routine (1, 1, 1), InlineProcess (explained, left as is).** 0.03 ns/step: the loop is not vectorized because
+  its values must survive the clock calls around it (`set_starttime!` after `run` read the context, `set_endtime!`
+  before the write-back). On this AArch64 hardware only the low 64 bits of a few vector registers survive a call, so
+  a vector would be saved and reloaded; LLVM counts that. Proven: removing both clock calls vectorizes it (1.00-1.01x
+  hand); a hand loop with one clock call after it stops vectorizing. Taking the start time before the context is
+  read fixes it, but makes LLVM vectorize "Routine in composite" too, which gets slower there (1.80 -> 2.2 ns: two
+  dependent update chains of different length paired in one vector), so that change was not kept.
+  **Correction:** an earlier note blamed the registry pointer and the write barrier; wrong (removing the write-back
+  changed nothing).
 
 ## Options for Process (owner to choose)
 
