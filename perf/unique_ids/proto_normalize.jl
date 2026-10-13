@@ -2,8 +2,8 @@
 # first appearance, then dynamically calls the normal constructor, so the pipeline only ever sees SimpleId(1..N).
 using StatefulAlgorithms, Printf, UUIDs
 const SA = StatefulAlgorithms
-@StepAlgorithm function Counter(@managed(x = 0.0)); return (; x = x + 1.0); end
-@StepAlgorithm function Tally(@managed(n = 0.0)); return (; n = n + 1.0); end
+@StepAlgorithm function Counter(@managed(x = 0.0)); @update x = x + 1.0; return x; end
+@StepAlgorithm function Tally(@managed(n = 0.0)); @update n = n + 1.0; return n; end
 
 function normalize_ids(@nospecialize(args...))
     seen = Dict{UUID,Int}()

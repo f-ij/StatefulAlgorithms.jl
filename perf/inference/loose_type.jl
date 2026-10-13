@@ -1,7 +1,7 @@
 using StatefulAlgorithms, UUIDs
 const SA = StatefulAlgorithms
-@StepAlgorithm function Counter(@managed(x = 0.0)); return (; x = x + 1.0); end
-@StepAlgorithm function Tally(@managed(n = 0.0)); return (; n = n + 1.0); end
+@StepAlgorithm function Counter(@managed(x = 0.0)); @update x = x + 1.0; return x; end
+@StepAlgorithm function Tally(@managed(n = 0.0)); @update n = n + 1.0; return n; end
 su(f, n) = IdentifiableAlgo(f; id = SA.SimpleId(UUID(UInt128(n))))
 a = su(Counter(), 1); b = su(Counter(), 2)
 plan = CompositeAlgorithm(a, b, Tally, (1, 1, 1))

@@ -2,10 +2,10 @@
 # Times each phase of bench_block.jl: compile time and wall time in microseconds.
 using StatefulAlgorithms
 const SA = StatefulAlgorithms
-@StepAlgorithm function Counter(@managed(x = 0.0)); return (; x = x + 1.0); end
-@StepAlgorithm function Adder(a, b, @managed(sum = 0.0)); return (; sum = a + b); end
-@StepAlgorithm function Reader(x, @managed(seen = 0.0)); return (; seen = x); end
-@StepAlgorithm function Watch(x, @managed(n = 0.0)); return (; n = n + x); end
+@StepAlgorithm function Counter(@managed(x = 0.0)); @update x = x + 1.0; return x; end
+@StepAlgorithm function Adder(a, b, @managed(sum = 0.0)); @update sum = a + b; return sum; end
+@StepAlgorithm function Reader(x, @managed(seen = 0.0)); @update seen = x; return seen; end
+@StepAlgorithm function Watch(x, @managed(n = 0.0)); @update n = n + x; return n; end
 
 const LABEL = ARGS[1]; const PROC = ARGS[2]
 src = read(joinpath(@__DIR__, "bench_block.jl"), String)
