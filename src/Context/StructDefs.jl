@@ -30,11 +30,10 @@ applied through `SubContextView` at step time so context shape stays independent
 from execution-plan wiring.
 """
 struct SubContext{Name,T<:NamedTuple} <: AbstractSubContext
-    name::Symbol
-    data::T
+    data::T   # the name is only in the type: a stored `Symbol` would put 8 bytes between neighbouring subcontexts' data
 
     function SubContext{Name,T}(data::T) where {Name,T<:NamedTuple}
-        new{Name,T}(Name, data)
+        new{Name,T}(data)
     end
 end
 

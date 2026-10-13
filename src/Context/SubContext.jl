@@ -16,15 +16,14 @@ end
 
 @inline Base.isempty(sc::SubContext) = isempty(getdata(sc))
 @inline getdatatype(sct::Type{<:SubContext{Name,T}}) where {Name,T} = T
-@inline Base.getkey(sc::SubContext) = getfield(sc, :name)
+@inline Base.getkey(::SubContext{Name}) where {Name} = Name
 @inline Base.getkey(::Type{<:SubContext{Name}}) where {Name} = Name
 @inline getdatatype(sc::SubContext) = getdatatype(typeof(sc))
 
 @inline Base.pairs(sc::SubContext) = pairs(getdata(sc))
 @inline function Base.getproperty(sc::SubContext, name::Symbol)
-    if name === :name || name === :data
-        return getfield(sc, name)
-    end
+    name === :name && return getkey(sc)
+    name === :data && return getfield(sc, :data)
     if !haskey(getdata(sc), name)
         error("Key $name not found in SubContext $(sc) \n with keys $(keys(getdata(sc)))")
     end
