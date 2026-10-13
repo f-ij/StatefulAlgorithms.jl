@@ -69,6 +69,9 @@ Return whether a routine child should stop.
 
 Routine-local lifetimes are checked before the top-level process lifetime so
 child completion does not get treated as a process interruption.
+
+Called before every repeat of a routine child (not once per child): repeats can run for a very long time, and a
+pause or close of a `Process` must be seen between any two of them. See `shouldrun(::Process)`.
 """
 @inline function routine_breakcondition(subroutine_lifetime::SL, lifetime::LT, process::P, context::C, lidx::LI) where {SL,LT<:Lifetime,P<:AbstractProcess,C,LI<:Integer}
     if @inline _routine_local_breakcondition(subroutine_lifetime, process, context, lidx)

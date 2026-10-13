@@ -5,6 +5,16 @@
 using StatefulAlgorithms
 const SA = StatefulAlgorithms
 
+"""
+`NoStopRepeat(n)`: `n` repeats like `Repeat(n)`, but its stop check is always `false`, so a `Process` running it never
+reads `shouldrun` (not before routine repeats, not after steps) and cannot be paused or closed early. Perf only: the
+`process, no stop checks` runner uses it to measure what the stop checks cost, which a hand-written loop does not pay.
+"""
+struct NoStopRepeat <: SA.RepeatLifetime
+    repeats::Int
+end
+SA.breakcondition(::NoStopRepeat, process, context) = false
+
 #################
 ### Algorithms ###
 #################

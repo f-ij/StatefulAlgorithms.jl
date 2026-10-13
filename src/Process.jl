@@ -35,6 +35,11 @@ Throws a `TypeError` when no cursor is stored.
 
 """
 Get value of run of a process, denoting wether it should run or not
+
+Read by the stop checks after every step and before every routine repeat. Routine repeats can run for a very long
+time, so the check must stay per repeat: checking only once per routine child (or every n repeats) would make a
+pause or close wait for the child's remaining repeats and kill interactivity. The check costs a little per repeat
+and keeps the compiler from writing a routine's repeats out one after another (perf/README.md shows the cost).
 """
 shouldrun(p::Process) = @atomic :monotonic p.shouldrun   # atomic (no ordering barrier): re-read every step, so pause/close are seen
 """

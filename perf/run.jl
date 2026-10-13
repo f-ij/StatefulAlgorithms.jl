@@ -15,8 +15,14 @@
 # For every case the package plan and a hand-written loop computing the same
 # results are timed alternately in the same process (minimum over rounds), so the
 # reported ratio package / hand-written is mostly independent of machine and load.
+#
+# Runners: `inline` (InlineProcess), `process` (Process) and `process, no stop checks` (Process with a lifetime whose
+# stop check is always false, see `NoStopRepeat` in cases.jl). A Process checks `shouldrun` before every routine
+# repeat and after every step, so it can be paused or closed while a long repeat runs; a hand-written loop does not.
+# That cost is real work, not overhead: the `process` row shows it as `stop ns` (its ns per step minus the
+# no-stop-checks row's) and is not held to the target; the no-stop-checks row is.
 # Warnings:
-#   TARGET   ratio above the case's target
+#   TARGET   ratio above the case's target (inline and no-stop-checks rows)
 #   ALLOC    allocates more per step than the case allows
 #   REGRESS  ratio got worse than the baseline by more than the tolerance
 #   WRONG    results differ from the hand-written loop
@@ -27,7 +33,8 @@ include(joinpath(@__DIR__, "cases.jl"))
 const ROUNDS = 7
 const TOLERANCE = 0.15            # allowed ratio increase vs baseline before REGRESS
 const BASELINE = joinpath(@__DIR__, "baseline.toml")
-const RUNNERS = (:inline, :process)
+const RUNNERS = (:inline, :process_nostop, :process)
+const RUNNER_LABELS = Dict(:inline => "inline", :process => "process", :process_nostop => "process, no stop checks")
 
 function run_package(case, runner, N)
     if runner === :inline
@@ -36,7 +43,7 @@ function run_package(case, runner, N)
         t = @elapsed run(ip)
         return t, context(ip)
     else
-        p = Process(case.plan(); repeats = N)
+        p = runner === :process_nostop ? Process(case.plan(); lifetime = NoStopRepeat(N)) : Process(case.plan(); repeats = N)
         GC.gc(false)
         t = @elapsed (run(p); wait(p))
         return t, context(p)
@@ -47,7 +54,8 @@ function bytes_per_step(case, runner)
     run_package(case, runner, 100)
     measure(N) = runner === :inline ?
         (ip = InlineProcess(case.plan(); repeats = N); @allocated run(ip)) :
-        (p = Process(case.plan(); repeats = N); @allocated (run(p); wait(p)))
+        (p = runner === :process_nostop ? Process(case.plan(); lifetime = NoStopRepeat(N)) : Process(case.plan(); repeats = N);
+         @allocated (run(p); wait(p)))
     small, large = 10_000, 110_000
     measure(small); measure(large)
     return max(0.0, (measure(large) - measure(small)) / (large - small))
@@ -124,7 +132,8 @@ function main(args)
     results = Dict{String,Any}()
     warnings = String[]
 
-    runtime && @printf("%-38s %-8s %9s %9s %7s %7s %9s %8s  %s\n", "case", "runner", "pkg ns", "hand ns", "ratio", "target", "B/step", "baseline", "status")
+    runtime && @printf("%-38s %-24s %9s %9s %7s %7s %8s %9s %8s  %s\n", "case", "runner", "pkg ns", "hand ns", "ratio", "target", "stop ns", "B/step", "baseline", "status")
+    nostop_ns = Dict{String,Float64}()
     for case in CASES, runner in RUNNERS
         runtime || break
         only !== nothing && !occursin(only, case.name) && continue
@@ -133,13 +142,17 @@ function main(args)
         base = get(get(baseline, "cases", Dict()), key, nothing)
         status = String[]
         r.correct || push!(status, "WRONG")
-        r.ratio > case.target && push!(status, "TARGET")
+        runner === :process || r.ratio > case.target && push!(status, "TARGET")   # the process row pays for stop checks
+        runner === :process_nostop && (nostop_ns[case.name] = r.ns_package)
+        stop_ns = runner === :process && haskey(nostop_ns, case.name) ? r.ns_package - nostop_ns[case.name] : nothing
         r.bytes > case.max_bytes && push!(status, "ALLOC")
         base !== nothing && r.ratio > base["ratio"] * (1 + TOLERANCE) && push!(status, "REGRESS")
-        @printf("%-38s %-8s %9.3f %9.3f %7.2f %7.2f %9.1f %8s  %s\n", case.name, runner, r.ns_package, r.ns_hand, r.ratio, case.target, r.bytes,
+        @printf("%-38s %-24s %9.3f %9.3f %7.2f %7s %8s %9.1f %8s  %s\n", case.name, RUNNER_LABELS[runner], r.ns_package, r.ns_hand, r.ratio,
+            runner === :process ? "-" : @sprintf("%.2f", case.target), stop_ns === nothing ? "-" : @sprintf("%.3f", stop_ns), r.bytes,
             base === nothing ? "-" : @sprintf("%.2f", base["ratio"]), isempty(status) ? "ok" : join(status, ","))
         isempty(status) || push!(warnings, "$key: $(join(status, ", "))" * (isempty(case.note) ? "" : "  ($(case.note))"))
         results[key] = Dict("ratio" => r.ratio, "ns_package" => r.ns_package, "ns_hand" => r.ns_hand, "bytes_per_step" => r.bytes)
+        stop_ns === nothing || (results[key]["stop_ns"] = stop_ns)
     end
 
     compile_results = compile ? run_compile(baseline, only, warnings) : Dict{String,Any}()
