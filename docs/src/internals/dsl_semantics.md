@@ -163,7 +163,7 @@ Nothing runs; these decide where values go.
 
 | Statement | Meaning |
 |---|---|
-| `@route a.x => b.y` (`transform = f`, `reverse_transform = g`) | `b` sees `a`'s `x` as `y`; returning `y` writes back through `g`. |
+| `@route a.x => b.y` (`transform = f`, `reverse_transform = g`) | `b` sees `a`'s `x` as `y`; an update of `y` (`@update y = …`) writes back through `g`. |
 | `@replace a.x => b.y` | `b`'s field `y` is `a`'s field `x` after init. |
 | `@bind x => c.x` | This block's state field `x` and the nested block's `x` are the same field. |
 | `@merge c1.x, c2.x` | Two nested blocks' fields `x` are the same field. |

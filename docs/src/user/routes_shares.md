@@ -41,7 +41,7 @@ You can provide `transform = f` (single mapping route) to expose transformed sou
 Route(Source => Target, :series => :latest, transform = x -> x[end])
 ```
 
-If the target may return the routed alias and you want that return written back
+If the target may update the routed alias and you want that update written back
 through the transformed route, provide `reverse_transform = g`:
 
 ```julia
@@ -54,8 +54,8 @@ Route(
 ```
 
 In this example, `Target` reads `context.input == 2 * Source.value`. If `Target`
-returns `(; input = new_input)`, `Source.value` is updated with
-`new_input / 2`.
+updates `input` (`@update input = new_input` in a `@StepAlgorithm`, or a hand-written `step!` returning
+`(; input = new_input)`), `Source.value` is updated with `new_input / 2`.
 
 ### Transform From Multiple Source Variables
 
@@ -128,15 +128,16 @@ Constraints:
 
 ## Read and Write Semantics
 
-Routed and shared names point back to stored values. If the target returns one
-of those names from `step!`, the source subcontext can be updated.
+Routed and shared names point back to stored values. If the target updates one
+of those names (`@update` in a `@StepAlgorithm`, or a hand-written `step!` returning it in a named tuple), the
+source subcontext is updated.
 
 This enables coupling patterns like:
 
-- algorithm B reading and damping algorithm A's `velocity`, then returning updated `velocity`.
+- algorithm B reading and damping algorithm A's `velocity`, then updating `velocity`.
 
 Replacement-backed fields behave the same way from the target algorithm's point
-of view: returning the replaced local name writes through to the source field
+of view: updating the replaced local name writes through to the source field
 while preserving the target's persistent replacement marker.
 
 ## Plan-Wide and Child-Local Routes

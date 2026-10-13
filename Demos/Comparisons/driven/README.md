@@ -23,7 +23,7 @@ as the reference for correctness and cost.
    reusable because they refer to variables by name; a SciML callback is written against the problem's structure (`i.p.par`,
    `i.opts.reltol`, `u_modified!`).
 4. **Nothing has to be decided in advance in the package, and in SciML the choice does cost something in some loops.** An
-   integrator can return all its state and parameters as variables from the start; twelve extra unread variables cost 0.4 to
+   integrator can keep all its state and parameters as managed variables from the start; twelve extra unread variables cost 0.4 to
    1.1% (noise level). SciML needs everything a later experiment may change to be a field of a mutable parameter struct,
    decided up front. Parameters that are only read cost little (0 to 9%). State that is written and read on every iteration
    in a mutable container costs 2.1 to 2.4 nanoseconds per iteration, 1.25 to 2.9 times the loop time, as soon as the loop
@@ -170,7 +170,7 @@ callback-based force needs `F` writable and `par` sits in the same struct), so t
 right-hand side with an immutable `p` would have had to turn it into a mutable struct holding every field that might later change.
 
 **StatefulAlgorithms.** The first integrator (`ChainDP5`) happened to have the parameters and the tolerance as constants, so
-adding the modifiers meant rewriting it as `ChainDP5M` with `par`, `rtol` and `stale` as managed variables (28 more tokens, 205 to 233). That was a choice, not a requirement: an integrator can return all its state and parameters as variables from the
+adding the modifiers meant rewriting it as `ChainDP5M` with `par`, `rtol` and `stale` as managed variables (28 more tokens, 205 to 233). That was a choice, not a requirement: an integrator can keep all its state and parameters as managed variables from the
 start, and variables that nothing reads cost nothing at run time. `unread_variables.jl` checks this: the same integrator with
 twelve extra variables of mixed types (scalars, arrays, a NamedTuple) that nothing reads runs at 1.011, 1.004 and 1.006 times
 the loop time of the minimal one (3 to 7 nanoseconds per attempt, the noise level of these runs) with identical results.

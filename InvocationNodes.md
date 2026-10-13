@@ -74,6 +74,10 @@ from in this particular graph.
 
 ## Return Policy
 
+(Historical design note. The DSL settled this differently: a step's return is only a value, and a `@StepAlgorithm`
+changes state only through `@update`; see docs/src/user/migrating_dsl.md. Only a hand-written `step!` returning a
+named tuple still writes the returned names back.)
+
 The main semantic change should be:
 
 > A returned field is a produced value, not automatically persistent state.

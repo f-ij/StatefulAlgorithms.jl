@@ -14,7 +14,7 @@ algo = @CompositeAlgorithm begin
 
     local doubled                 # assigned every 10 steps: declared first
 
-    produced, passthrough = source(seed = seed)
+    (; produced, passthrough) = source(seed = seed)   # properties of source's returned named tuple
     doubled = @interval 10 double(produced)
     Sink(value = doubled)
 end
@@ -241,9 +241,8 @@ algo = @CompositeAlgorithm begin
 end
 ```
 
-Here `target` reads `input` through the forward transform. If it returns
-`(; input = new_input)`, the source field `value` is updated through
-`reverse_transform`.
+Here `target` reads `input` through the forward transform. If it updates `input` (`@update input = new_input`
+in a `@StepAlgorithm`), the source field `value` is written through `reverse_transform`.
 
 `@transform(f, source)` is read-transform syntax for call arguments. Reverse
 writeback uses `@route ... reverse_transform = g`.
@@ -584,7 +583,7 @@ Inside `@Routine`, use `@repeat`.
 ```julia
 routine = @Routine begin
     @state value = 1
-    value = @repeat 5 Step(value = value)
+    value = @repeat 5 next_value(value)   # each repeat assigns next_value's return to the state field `value`
 end
 ```
 
@@ -612,8 +611,8 @@ For repeated sub-blocks:
 algo = @CompositeAlgorithm begin
     @repeat 3 begin
         @state value = 1
-        value = Step(value = value)
-        value = Step(value = value)
+        Step!(value)                # a `@StepAlgorithm` that updates its argument: `@update value = value + 1`
+        Step!(value)
     end
 end
 ```
@@ -626,13 +625,13 @@ a named plan boundary, define that plan separately and insert it with `@context`
 Write schedules on the right-hand side:
 
 ```julia
-value = @interval 10 Step(value = value)
+value = @interval 10 next_value(value)
 ```
 
 not:
 
 ```julia
-@interval 10 value = Step(value = value)
+@interval 10 value = next_value(value)
 ```
 
 ## Conditional Entries
