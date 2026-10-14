@@ -169,10 +169,14 @@ Base.@nospecializeinfer function with_autokey(@nospecialize(algo), i::Int)
     return KnownByType(KT, Expr(:call, KT, func.expr, reconstructor.expr), Any[func, reconstructor])
 end
 
-# The key of an algorithm, of the value or, for a `KnownByType` (a handle), from its type.
+# Keys of an algorithm: of the value, or, for a `KnownByType` (always a handle), from its type.
+"""The key of the algorithm `x` (`getkey`)."""
 key_of(@nospecialize(x)) = x isa KnownByType ? getkey(x.type) : getkey(x)
+"""Whether the algorithm `x` has a key (`haskey`)."""
 has_key(@nospecialize(x)) = x isa KnownByType ? getkey(x.type) != Symbol() : haskey(x)
+"""Whether the algorithm `x` has an automatic key (`hasautokey`, `is_autokey`)."""
 has_autokey(@nospecialize(x)) = x isa KnownByType ? is_autokey(algotype(x.type), getkey(x.type)) : hasautokey(x)
+"""Whether the algorithm `x` has a key given to it, not an automatic one."""
 has_given_key(@nospecialize(x)) = has_key(x) && !has_autokey(x)
 
 """
