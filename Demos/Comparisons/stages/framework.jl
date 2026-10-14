@@ -35,14 +35,16 @@ end
     end
 end
 
-# a second protocol: a linear ramp of the damping inside the dynamics' parameters
+# a second protocol: a linear ramp of the damping inside the dynamics' parameters; sets the dynamics' `stale` flag, so
+# it recomputes its first stage with the new parameters
 @StepAlgorithm begin
     @config start::Float64 = 1.0
     @config stop::Float64 = 0.6
     @config n::Int = 1
-    function GammaRamp(par, @managed(k = 0))
+    function GammaRamp(par, stale, @managed(k = 0))
         @update k += 1
         @update par = ChainParams(par.N, par.a, par.b, par.c, start + (stop - start) * (k / n))
+        @update stale = true
     end
 end
 
