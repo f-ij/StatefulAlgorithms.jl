@@ -45,8 +45,25 @@ says one step returns (`LoopContext` types): declared locals without a value get
 end
 
 """
+The runtime context type after `_step!(node, ...)` has run, given the type `RuntimeContextType` before it: the type the
+step returns (`RuntimeContextType` when the step cannot return, `Any` when inference cannot tell).
+
+For the first round of typing only. Unlike `_runtime_context_type_after_node_step` it does not keep the type before
+the step as an alternative (for a node that may not run): with that union, the node after it is inferred once per
+earlier node, so the first round grows with the square of the number of nodes. A step that reads a return of a node
+that did not run fails, so the alternative adds no written types; the later rounds, with every return in a slot that
+may be unset, check the result.
+"""
+@inline function _runtime_context_type_after_node_run(node::NodeType, cursor::CursorType, persistent_context::PersistentContextType, ::Type{RuntimeContextType}, wiring::WiringViewType, namespace::NamespaceType, process::ProcessType, lifetime::LifetimeType) where {NodeType, CursorType, PersistentContextType, RuntimeContextType, WiringViewType, NamespaceType, ProcessType, LifetimeType}
+    RuntimeContextType <: ProcessContext || return Any
+    stepped = Core.Compiler.return_type(_step!, Tuple{NodeType, CursorType, _loop_context_type(PersistentContextType, RuntimeContextType, WiringViewType), WiringViewType, NamespaceType, ProcessType, LifetimeType})
+    after = _runtime_context_types_of(stepped)
+    return after === Union{} ? RuntimeContextType : after
+end
+
+"""
 The expressions that pass the runtime context type `runtime_context_type` through every algorithm (and call) under the
-plan of type `PlanType`, in the order they run, appended to `exprs`: one `_runtime_context_type_after_node_step` per
+plan of type `PlanType`, in the order they run, appended to `exprs`: one `_runtime_context_type_after_node_run` per
 algorithm, with the cursor and wiring view the plan's `_step!` would give it. Nested plans are walked here, while the
 code is generated, so inference never sees a plan's `_step!` calling itself.
 """
@@ -61,7 +78,7 @@ function _push_per_algorithm_inference_exprs!(exprs, PlanType::Type, plan, curso
         if fieldtype(children, i) <: AbstractPlan
             _push_per_algorithm_inference_exprs!(exprs, fieldtype(children, i), child, child_cursor, child_wiring)
         else
-            push!(exprs, :(runtime_context_type = @inline _runtime_context_type_after_node_step($child, $child_cursor, persistent_context, runtime_context_type, $child_wiring, $(fieldtype(namespaces, i))(), process, lifetime)))
+            push!(exprs, :(runtime_context_type = @inline _runtime_context_type_after_node_run($child, $child_cursor, persistent_context, runtime_context_type, $child_wiring, $(fieldtype(namespaces, i))(), process, lifetime)))
         end
     end
     return exprs
@@ -116,23 +133,32 @@ The runtime context type after one step from `RuntimeContextType`, inferring the
 _has_same_locals(::Type{A}, ::Type{B}) where {A, B} = _get_locals_type(A) === _get_locals_type(B)
 _has_same_locals(::Type{A}, ::Type{Nothing}) where {A} = false
 
+"""The body of `_merge_slots` for named tuple types `NT` and `A`."""
+# Loops, not closures: a closure over a type is compiled again for every type.
+function _merge_slots_expr(@nospecialize(NT::Type), @nospecialize(A::Type))
+    names = Symbol[fieldnames(NT)...]
+    for n in fieldnames(A)
+        n in fieldnames(NT) || push!(names, n)
+    end
+    values = Any[]
+    for name in names
+        if !(name in fieldnames(A))
+            push!(values, :(getfield(old, $(QuoteNode(name)))))
+        elseif name in fieldnames(NT) && fieldtype(NT, name) <: Maybe && fieldtype(A, name) <: _unwrap_slot_type(fieldtype(NT, name))
+            push!(values, :($(fieldtype(NT, name))(getfield(args, $(QuoteNode(name))))))
+        else
+            push!(values, :(getfield(args, $(QuoteNode(name)))))
+        end
+    end
+    return :(NamedTuple{$(Tuple(names))}(($(values...),)))
+end
+
 """
 `merge(old, args)`, except that a value written to a declared local held in a `Maybe` (see the note at the top) is
 put into it, so the field keeps its type and the runtime context has the same type in every step. A value that does
 not fit replaces the field as `merge` does.
 """
-@inline @generated function _merge_slots(old::NT, args::A) where {NT<:NamedTuple, A<:NamedTuple}
-    names = Symbol[fieldnames(NT)...]
-    append!(names, (n for n in fieldnames(A) if !(n in fieldnames(NT))))
-    values = map(names) do name
-        name in fieldnames(A) || return :(getfield(old, $(QuoteNode(name))))
-        if name in fieldnames(NT) && fieldtype(NT, name) <: Maybe && fieldtype(A, name) <: _unwrap_slot_type(fieldtype(NT, name))
-            return :($(fieldtype(NT, name))(getfield(args, $(QuoteNode(name)))))
-        end
-        return :(getfield(args, $(QuoteNode(name))))
-    end
-    return :(NamedTuple{$(Tuple(names))}(($(values...),)))
-end
+@inline @generated _merge_slots(old::NT, args::A) where {NT<:NamedTuple, A<:NamedTuple} = _merge_slots_expr(NT, A)
 
 """
     _settle_runtime_context(plan, cursor, persistent_context, runtime_context, wiring, process, lifetime)

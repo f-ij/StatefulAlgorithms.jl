@@ -52,7 +52,13 @@ The return names of a `Callable` (the field names of `R`) that its view (`SCV`) 
 wired to, or its slot in the scope (a captured return that something in the scope reads, see `_resolve_scopes`).
 The others are read by nothing and dropped.
 """
-_call_return_names(SCV::Type, R::Type) = Tuple(name for name in fieldnames(R) if !isnothing(first(_compute_location(SCV, name))))
+function _call_return_names(@nospecialize(SCV::Type), @nospecialize(R::Type))
+    names = Symbol[]
+    for name in fieldnames(R)
+        isnothing(first(_compute_location(SCV, name))) || push!(names, name)
+    end
+    return Tuple(names)
+end
 
 """The returned values `retval` keeps for the view, as a named tuple expression."""
 _kept_returns_expr(names) = Expr(:tuple, Expr(:parameters, (Expr(:kw, name, :(getproperty(retval, $(QuoteNode(name))))) for name in names)...))

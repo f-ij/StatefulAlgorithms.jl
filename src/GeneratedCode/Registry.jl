@@ -1,6 +1,13 @@
 @generated function _find_typeidx(reg::Type{NSR}, typ::Type{T}) where {NSR <: NameSpaceRegistry, T}
-    it = entrytypes_iterator(NSR)
-    index = findfirst(t -> T <: t, it)
+    # A loop over the entry types, not `findfirst` with a closure: the closure captures `T` and compiles for every type.
+    index = nothing
+    entries = NSR.parameters[1].parameters
+    for i in 1:length(entries)
+        if T <: gettype(entries[i])
+            index = i
+            break
+        end
+    end
     return quote
         $(LineNumberNode(@__LINE__, @__FILE__))
         idx = $index
@@ -9,6 +16,14 @@
 end
 
 @inline @generated function static_findfirst_match(rte::RegistryTypeEntry{T,S}, v::Val{value}) where {T,S,value}
-    idx = findfirst(x -> match(value, x), entry_types(rte))
+    # A loop, not `findfirst` with a closure: the closure captures `value` and compiles for every value.
+    idx = nothing
+    entries = entry_types(rte)
+    for i in 1:length(entries)
+        if match(value, entries[i])
+            idx = i
+            break
+        end
+    end
     return :($idx)
 end

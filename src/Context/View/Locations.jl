@@ -17,18 +17,29 @@ with the same name as a state field or a route is an error. The scope is implici
 whether it uses it or not, so an explicit name hides a name of the scope. Injected values hide everything.
 =#
 
+#=
+The kinds are computed as lists of `name => VarLocation` pairs (`Vector{Pair{Symbol, Any}}`) with plain loops, and only
+`_compute_all_locations` turns the merged list into a named tuple. All of this runs while generating code, once per
+view type; named tuples of locations, `ntuple`/`map` with closures or splatting merges would be compiled anew for every
+view type.
+=#
+const _Locations = Vector{Pair{Symbol, Any}}
+
 """The view's namespace's state (its subcontext in the persistent context), by name."""
-get_state_locations(::Type{SCT}) where {SCT<:SubContextView{B, SubKey}} where {B<:ContextBundle, SubKey} = _state_locations(context_partition(Val(SubKey)), SCT)
+get_state_locations(@nospecialize(SCT::Type{<:SubContextView})) = _state_locations(context_partition(Val(SCT.parameters[2])), SCT)
 
 """A call has no state: its namespace is the captured returns."""
-_state_locations(::CapturedReturns, ::Type) = (;)
+_state_locations(::CapturedReturns, @nospecialize(SCT::Type)) = _Locations()
 
-function _state_locations(::NamespacePartition, ::Type{SCT}) where {SCT<:SubContextView{B, SubKey}} where {B<:ContextBundle, SubKey}
-    _subcontext_type = get_subcontext_type(SCT)
-    _data_type = getdatatype(_subcontext_type)
-    state_names = keys(_subcontext_type)
-    locations = ntuple(i -> _redirected_varlocation(fieldtype(_data_type, state_names[i]), Val(SubKey), Val(state_names[i])), length(state_names))
-    return NamedTuple{(state_names...,)}(locations)
+function _state_locations(::NamespacePartition, @nospecialize(SCT::Type))
+    SubKey = SCT.parameters[2]
+    data_type = getdatatype(get_subcontext_type(SCT))
+    locations = _Locations()
+    for i in 1:fieldcount(data_type)
+        name = fieldname(data_type, i)
+        push!(locations, name => _redirected_varlocation(fieldtype(data_type, i), Val(SubKey), Val(name)))
+    end
+    return locations
 end
 
 """
@@ -52,32 +63,42 @@ Shared subcontexts => VarLocations
 """
 @inline _view_shared_types(shared) = shared isa Tuple ? shared : (shared,)
 
-function get_shared_locations(sct::Type{SCT}) where {SCT<:SubContextView{B, SubKey}} where {B<:ContextBundle, SubKey}
-    shared_context_names = contextname.(_view_shared_types(view_sharedcontexts(SCT)))
-
-    sharedvars = named_flat_collect_broadcast(shared_context_names) do name
-        shared_subcontext_type = get_subcontext_type(persistent_type(B), name)
-        shared_varnames = keys(shared_subcontext_type)
-        pairs = (shared_varnames[i] => VarLocation{:state}(name, shared_varnames[i]) for i in 1:length(shared_varnames))
-        return NamedTuple(pairs)
+function get_shared_locations(@nospecialize(SCT::Type{<:SubContextView}))
+    persistent = persistent_type(SCT.parameters[1])
+    shared = _view_shared_types(view_sharedcontexts(SCT))
+    locations = _Locations()
+    for k in 1:length(shared)
+        name = contextname(shared[k])
+        shared_data_type = getdatatype(get_subcontext_type(persistent, name))
+        for i in 1:fieldcount(shared_data_type)
+            varname = fieldname(shared_data_type, i)
+            push!(locations, varname => VarLocation{:state}(name, varname))
+        end
     end
-    return sharedvars
+    return locations
 end
 
 """Routes supplied to the view => VarLocations."""
-function get_routed_locations(::Type{SCT}) where {SCT<:SubContextView}
-    return named_flat_collect_broadcast(_view_shared_types(view_sharedvars(SCT))) do route
-        return _routed_locations(context_partition(Val(get_fromname(route))), route)
+function get_routed_locations(@nospecialize(SCT::Type{<:SubContextView}))
+    routes = _view_shared_types(view_sharedvars(SCT))
+    locations = _Locations()
+    for k in 1:length(routes)
+        route = routes[k]
+        append!(locations, _routed_locations(context_partition(Val(get_fromname(route))), route))
     end
+    return locations
 end
 
 """The locations a route gives the view, read from where its source lives (`location_kind`)."""
-function _routed_locations(partition::ContextPartition, sv)
+function _routed_locations(partition::ContextPartition, @nospecialize(sv))
     fromname = get_fromname(sv)
     _localnames = localnames(sv)
     _subvarcontextnames = subvarcontextnames(sv)
-    pairs = (_localnames[i] => VarLocation{location_kind(partition)}(fromname, _subvarcontextnames[i], gettransform(sv), getreverse_transform(sv)) for i in 1:length(_localnames))
-    return NamedTuple(pairs)
+    locations = _Locations()
+    for i in 1:length(_localnames)
+        push!(locations, _localnames[i] => VarLocation{location_kind(partition)}(fromname, _subvarcontextnames[i], gettransform(sv), getreverse_transform(sv)))
+    end
+    return locations
 end
 
 """
@@ -86,36 +107,52 @@ The names the view sees from the scope its bundle is in (see `Scope`), by name. 
 writes. A declared local hides a captured return: one declared in an inner node over one captured in an outer node. An
 algorithm sees none: it reads and writes the block's values only through its wires.
 """
-get_scope_locations(::Type{SCT}) where {SCT<:SubContextView{B, SubKey}} where {B<:ContextBundle, SubKey} =
-    _scope_locations(context_partition(Val(SubKey)), bundle_scope(B))
+get_scope_locations(@nospecialize(SCT::Type{<:SubContextView})) =
+    _scope_locations(context_partition(Val(SCT.parameters[2])), bundle_scope(SCT.parameters[1]))
 
-_scope_locations(::ContextPartition, ::Type{Sc}) where {Sc<:Scope} = (;)
-_scope_locations(::CapturedReturns, ::Type{Sc}) where {Sc<:Scope} =
-    (; _runtime_partition_locations(CapturedReturns(), scope_returns(Sc))..., _runtime_partition_locations(DeclaredLocals(), scope_locals(Sc))...)
+_scope_locations(::ContextPartition, @nospecialize(Sc::Type)) = _Locations()
+_scope_locations(::CapturedReturns, @nospecialize(Sc::Type)) =
+    _merged_locations(_runtime_partition_locations(CapturedReturns(), scope_returns(Sc)), _runtime_partition_locations(DeclaredLocals(), scope_locals(Sc)))
 
 """
 Return the locations of the names in `slots` within one runtime context partition. `slots` maps each name to the name
 it is stored under there: `(; name = storage_name, ...)`.
 """
-_runtime_partition_locations(partition::RuntimePartition, slots::NamedTuple) =
-    map(storage -> VarLocation{:runtime}(runtime_partition_name(partition), storage), slots)
+function _runtime_partition_locations(partition::RuntimePartition, @nospecialize(slots::NamedTuple))
+    locations = _Locations()
+    for i in 1:nfields(slots)
+        push!(locations, fieldname(typeof(slots), i) => VarLocation{:runtime}(runtime_partition_name(partition), getfield(slots, i)))
+    end
+    return locations
+end
 
-function get_injected_locations(sct::Type{SCT}) where {SCT<:SubContextView{B, SubKey}} where {B<:ContextBundle, SubKey}
-    injected_vars = injectedfieldnames(SCT)
-    injst = ntuple(i ->VarLocation{:injected}(SubKey, injected_vars[i]), length(injected_vars))
-    return NamedTuple{(injected_vars...,)}(injst)
+function get_injected_locations(@nospecialize(SCT::Type{<:SubContextView}))
+    SubKey = SCT.parameters[2]
+    locations = _Locations()
+    for name in injectedfieldnames(SCT)
+        push!(locations, name => VarLocation{:injected}(SubKey, name))
+    end
+    return locations
 end
 
 """
-Throws an error when a share gives the view a name that its state or one of its routes also gives it; returns
-`nothing` otherwise. A route and a state field may share a name (the route wins), a share may not: the share would be
-silently hidden.
+The lists `kinds` as one: a name keeps the place it first appears at and the location it last has, as in
+`(; kind1..., kind2..., ...)`.
 """
-function _check_share_clashes(::Type{SCT}, state, routes, shares) where {SCT<:SubContextView{B, SubKey}} where {B<:ContextBundle, SubKey}
-    for name in keys(shares)
-        other = haskey(state, name) ? "state" : haskey(routes, name) ? "routes" : nothing
-        isnothing(other) && continue
-        error("`$(SubKey)` ($(this_instance_type(SCT))) gets `$(name)` both from its $(other) and from its shares. Give one of them another name.")
+function _merged_locations(kinds::_Locations...)
+    merged = _Locations()
+    for kind in kinds, (name, location) in kind
+        k = findfirst(pair -> first(pair) === name, merged)
+        k === nothing ? push!(merged, name => location) : (merged[k] = name => location)
+    end
+    return merged
+end
+
+"""An error for two explicit kinds that give the view the same name."""
+function _check_explicit_clashes(@nospecialize(SCT::Type{<:SubContextView}), (name_i, locations_i)::Pair{String, _Locations}, (name_j, locations_j)::Pair{String, _Locations})
+    SubKey = SCT.parameters[2]
+    for name in intersect(first.(locations_i), first.(locations_j))
+        error("`$(SubKey)` ($(this_instance_type(SCT))) gets `$(name)` both from its $(name_i) and from its $(name_j). Give one of them another name.")
     end
     return nothing
 end
@@ -126,15 +163,24 @@ this_instance_type(::Type{<:SubContextView{B, SubKey, T}}) where {B, SubKey, T} 
 ########## All locations of a view #######
 ##########################################
 
-"""
-Everything the view sees, as `(; name => VarLocation)`: see the note above for the kinds and which name wins.
-"""
-function _compute_all_locations(::Type{SCT}) where {SCT<:SubContextView}
+"""Everything the view sees, as a list of `name => VarLocation`: see the note above for the kinds and which name wins."""
+function _all_location_list(@nospecialize(SCT::Type{<:SubContextView}))
     state = get_state_locations(SCT)
     routes = get_routed_locations(SCT)
     shares = get_shared_locations(SCT)
-    _check_share_clashes(SCT, state, routes, shares)
-    return (; get_scope_locations(SCT)..., shares..., state..., routes..., get_injected_locations(SCT)...)
+    # A route wins over a state field of the same name (the route is written for this child); shares may not clash
+    # with either.
+    _check_explicit_clashes(SCT, "state" => state, "shares" => shares)
+    _check_explicit_clashes(SCT, "routes" => routes, "shares" => shares)
+    return _merged_locations(get_scope_locations(SCT), shares, state, routes, get_injected_locations(SCT))
+end
+
+"""
+Everything the view sees, as `(; name => VarLocation)`: see the note above for the kinds and which name wins.
+"""
+function _compute_all_locations(@nospecialize(SCT::Type{<:SubContextView}))
+    list = _all_location_list(SCT)
+    return NamedTuple{Tuple(Symbol[first(pair) for pair in list])}(Tuple(Any[last(pair) for pair in list]))
 end
 
 @inline @generated function _generated_all_locations(::Type{SCT}) where {SCT<:SubContextView}
@@ -149,11 +195,12 @@ end
 Where the name `name` (as the algorithm uses it) is stored, and the name it has there: the location and the name, or
 `nothing` and the name when the view does not see it. An alias of the view maps the algorithm's name to its own first.
 """
-function _compute_location(::Type{SCT}, name::Symbol) where {SCT<:SubContextView}
+function _compute_location(@nospecialize(SCT::Type{<:SubContextView}), name::Symbol)
     subcontext_name = algo_to_subcontext_names(SCT, name)
-    locations = _compute_all_locations(SCT)
-    hasproperty(locations, subcontext_name) && return getproperty(locations, subcontext_name), subcontext_name
-    hasproperty(locations, name) && return getproperty(locations, name), name
+    list = _all_location_list(SCT)
+    for wanted in (subcontext_name, name), (seen, location) in list
+        seen === wanted && return location, wanted
+    end
     return nothing, subcontext_name
 end
 

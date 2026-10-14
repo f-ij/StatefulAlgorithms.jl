@@ -50,8 +50,11 @@ end
 
 """The `(subcontext, field)` pairs a carried named tuple type holds, as `Val(written)`."""
 @generated function _carried_fields(::Type{CarriedType}) where {CarriedType<:NamedTuple}
-    written = Tuple((s, f) for (s, S) in zip(fieldnames(CarriedType), fieldtypes(CarriedType)) for f in fieldnames(S))
-    return :(Val($written))
+    written = Tuple{Symbol, Symbol}[]
+    for (s, S) in zip(fieldnames(CarriedType), fieldtypes(CarriedType)), f in fieldnames(S)
+        push!(written, (s, f))
+    end
+    return :(Val($(Tuple(written))))
 end
 
 """
@@ -61,14 +64,20 @@ The values of the fields `written` (`(subcontext, field)` pairs) in `persistent_
 `(; subcontext = (; field = value, ...), ...)`: the shape `merge_into_subcontexts` takes.
 """
 @inline @generated function _written_values(persistent_context::ProcessContext, ::Val{written}) where {written}
-    subs = Tuple(unique(first.(written)))
-    entries = map(subs) do s
-        fields = Tuple(f for (s2, f) in written if s2 === s)
+    # Loops over a vector, not `map` or broadcasting over the tuple `written`: those compile once per plan.
+    pairs = Any[written...]
+    subs = Symbol[]
+    for pair in pairs
+        pair[1] in subs || push!(subs, pair[1])
+    end
+    entries = Expr[]
+    for s in subs
+        fields = Symbol[pair[2] for pair in pairs if pair[1] === s]
         values = [:(getfield(getdata(getfield(subcontexts, $(QuoteNode(s)))), $(QuoteNode(f)))) for f in fields]
-        :(NamedTuple{$fields}(($(values...),)))
+        push!(entries, :(NamedTuple{$(Tuple(fields))}(($(values...),))))
     end
     return quote
         subcontexts = @inline get_subcontexts(persistent_context)
-        return NamedTuple{$subs}(($(entries...),))
+        return NamedTuple{$(Tuple(subs))}(($(entries...),))
     end
 end

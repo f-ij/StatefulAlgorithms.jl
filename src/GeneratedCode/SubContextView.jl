@@ -97,7 +97,7 @@ interpreted in route-source order; named-tuple results are read by backing name.
 Build preamble and named-tuple field expressions that write one returned view
 field back into its backing subcontext location.
 """
-function _subcontext_view_writeback_exprs(target_location::VL, target_subcontext::Symbol, algo_varname::Symbol) where {VL<:VarLocation}
+function _subcontext_view_writeback_exprs(@nospecialize(target_location::VarLocation), target_subcontext::Symbol, algo_varname::Symbol)
     targetname = get_originalname(target_location)
     forward_func = getfunc(target_location)
     reverse_func = getreversefunc(target_location)

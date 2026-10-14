@@ -996,14 +996,9 @@ Base.@constprop :aggressive @inline @generated function tuple_setindex(t::T, val
         error("Index out of bounds for tuple_setindex. Tuple has length $(length(T.parameters)), but index is $i.")
     end
 
-    params = T.parameters
-    newparams = ntuple(length(params)) do j
-        if j == i
-            V
-        else
-            params[j]
-        end
-    end
+    # A plain vector, not `ntuple` with a closure: a closure capturing `V` compiles once per value type.
+    newparams = Any[T.parameters...]
+    newparams[i] = V
 
     getfields = Any[:(getindex(t, $i)) for i in 1:length(T.parameters)]
     getfields[i] = :(val)

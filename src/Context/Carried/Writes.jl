@@ -32,8 +32,11 @@ _union_written(written::Tuple, new::Tuple) = Tuple(sort!(unique!(Any[written...,
 """Every `(subcontext, field)` pair of the persistent context type, as `Val(written)`."""
 @generated function _every_field(::Type{PersistentContextType}) where {PersistentContextType<:ProcessContext}
     subcontexts = PersistentContextType.parameters[1]
-    written = Tuple((s, f) for s in fieldnames(subcontexts) for f in fieldnames(getdatatype(fieldtype(subcontexts, s))))
-    return :(Val($(_union_written((), written))))
+    written = Tuple{Symbol, Symbol}[]
+    for s in fieldnames(subcontexts), f in fieldnames(getdatatype(fieldtype(subcontexts, s)))
+        push!(written, (s, f))
+    end
+    return :(Val($(_union_written((), Tuple(written)))))
 end
 
 """The union of two write sets."""

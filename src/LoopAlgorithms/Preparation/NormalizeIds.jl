@@ -6,7 +6,7 @@ gives a plan of a new type, and the whole typed `resolve` compiles again. For a 
 
     normalized = normalize_ids(la)        # SimpleId{uuid} -> NormalizedId{k, R}, k = order of first appearance;
                                           # a handle keeps its original id in its `reconstructor` field
-    resolved = _resolve_typed(normalized) # typed resolve, compiled once per plan shape
+    resolved = _resolve_untyped(normalized) # compiled once per plan shape
     restore_original_ids(resolved)        # every normalized handle back to the original one
 
 While `resolve` runs, the registry holds the normalized handles, so its type is the same for every uuid, and their
@@ -16,10 +16,6 @@ last step puts the original ones back there, so a handle the user still holds is
 
 All of this runs on values held as `Any`, with `@nospecialize`, so it does not compile per uuid.
 =#
-
-"""Whether a plan holds `Unique` handles (handles with a random id), as a value to dispatch on."""
-struct _HasUniqueHandles end
-struct _NoUniqueHandles end
 
 """
     _has_unique_handles(x) -> Bool
@@ -53,14 +49,6 @@ Base.@nospecializeinfer function _has_unique_handles(@nospecialize(x))::Bool
     end
     return false
 end
-
-Base.@nospecializeinfer _unique_handles_trait(@nospecialize(la)) =
-    _has_unique_handles(la) ? _HasUniqueHandles() : _NoUniqueHandles()
-
-# Without `Unique` handles: the typed body, compiled once per plan type.
-@inline _resolve_by_trait(::_NoUniqueHandles, la::LA) where {LA<:LoopSpec} = _resolve_typed(la)
-# With `Unique` handles: the untyped normalizing path (below), compiled once.
-Base.@nospecializeinfer _resolve_by_trait(::_HasUniqueHandles, @nospecialize(la)) = _resolve_normalized(la)
 
 ############################
 ###### NORMALIZING ######
@@ -209,11 +197,3 @@ Put the original handles back wherever `resolve` left normalized ones, which is 
 tables need no change: their keys are those of the original ids already.
 """
 Base.@nospecializeinfer restore_original_ids(@nospecialize(resolved)) = _restore_value(resolved, IdDict{Any, Bool}())
-
-"""
-`resolve` for plans with `Unique` handles: normalize, resolve the normalized type, then put the original handles back
-(see the top of this file). Untyped, so it is compiled once, not per set of uuids.
-"""
-@noinline Base.@nospecializeinfer function _resolve_normalized(@nospecialize(la))
-    return restore_original_ids(_resolve_typed(normalize_ids(la)))
-end

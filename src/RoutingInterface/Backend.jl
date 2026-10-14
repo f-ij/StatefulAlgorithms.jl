@@ -47,16 +47,18 @@ shares_type(::Type{<:Wiring{Routes, Shares}}) where {Routes, Shares} = Shares
 _tuple_field_types(::Type{Tuple{}}) = ()
 _tuple_field_types(::Type{T}) where {T<:Tuple} = tuple(T.parameters...)
 
+#= These run while generating code (`return_demand`), once per plan: `@nospecialize` compiles them once instead. =#
 """Flatten route types from a wiring tree type."""
-_route_types_from_wiring_type(::Type{<:Wiring{Routes}}) where {Routes} = _tuple_field_types(Routes)
-function _route_types_from_wiring_type(::Type{<:PlanWiring{GlobalWiring, ChildWiring}}) where {GlobalWiring, ChildWiring}
+_route_types_from_wiring_type(@nospecialize(W::Type{<:Wiring})) = _tuple_field_types(routes_type(W))
+function _route_types_from_wiring_type(@nospecialize(W::Type{<:PlanWiring}))
+    GlobalWiring, ChildWiring = W.parameters[1], W.parameters[2]
     global_routes = _route_types_from_grouped_wiring_type(GlobalWiring)
     child_routes = _route_types_from_child_wiring_type(ChildWiring)
     return (global_routes..., child_routes...)
 end
 
 """Flatten route types from target-grouped global wiring."""
-function _route_types_from_grouped_wiring_type(::Type{Grouped}) where {Grouped<:NamedTuple}
+function _route_types_from_grouped_wiring_type(@nospecialize(Grouped::Type{<:NamedTuple}))
     names = fieldnames(Grouped)
     routes = ()
     for name in names
@@ -66,7 +68,7 @@ function _route_types_from_grouped_wiring_type(::Type{Grouped}) where {Grouped<:
 end
 
 """Flatten route types from child-indexed wiring."""
-function _route_types_from_child_wiring_type(::Type{Children}) where {Children<:Tuple}
+function _route_types_from_child_wiring_type(@nospecialize(Children::Type{<:Tuple}))
     routes = ()
     for i in 1:fieldcount(Children)
         routes = (routes..., _route_types_from_wiring_type(fieldtype(Children, i))...)
@@ -85,7 +87,7 @@ function _append_route_demand_names(names::Tuple, route_varnames::Tuple)
 end
 
 """Compute demanded owner-runtime return names from the full plan wiring type."""
-function _return_demand_names(::Type{W}, owner::Symbol) where {W<:PlanWiring}
+function _return_demand_names(@nospecialize(W::Type{<:PlanWiring}), owner::Symbol)
     names = ()
     for route_type in _route_types_from_wiring_type(W)
         get_fromname(route_type) === owner || continue

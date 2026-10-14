@@ -78,7 +78,7 @@ memory for all of them is allocated in `_declared_locals` when a run starts.
 @generated function collect_tree_locals(plan::P) where {P<:AbstractPlan}
     names = Symbol[]
     values = Any[]
-    function collect!(::Type{T}, expr, path) where {T}
+    function collect!(@nospecialize(T::Type), @nospecialize(expr), @nospecialize(path))   # compiled once, not per plan node type or depth
         for name in fieldnames(fieldtype(fieldtype(T, :wiring), :locals))
             push!(names, make_storage_name(name, join(path, ".")))
             push!(values, :(getfield(getfield(getfield($expr, :wiring), :locals), $(QuoteNode(name)))))
