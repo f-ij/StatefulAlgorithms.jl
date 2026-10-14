@@ -8,7 +8,8 @@ functions below, and only by them.
 All rules are defined on TYPES: the layout of a plan's registry is worked out from the plan's type when that plan type
 is first prepared, and the code that builds it is compiled once (`setup_registry_and_keyed_algos`). Changing a method
 of one of these rules (also with Revise) makes that code be generated again for every plan type that asked it (see
-`ask_rule`).
+`ask_rule`). A method added after this package was loaded is not seen while generating code (Julia runs generators in
+the world they were defined in): a plan whose layout asks it is set up from its values at run time.
 
 These are internal rules of the package: an algorithm type changes them by adding methods to the functions marked
 "Extended by", as the package does for its own types.

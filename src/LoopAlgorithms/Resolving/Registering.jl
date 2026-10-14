@@ -17,7 +17,7 @@ The registry of the whole tree of `la`, and `la` with every child replaced by it
 its plan's `namespaces`, worked out on the values (`add_tree!`, then `registry`). Compiled once, not per plan. Used
 when the layout cannot be worked out from the plan's type (see `setup_registry_code`).
 """
-Base.@nospecializeinfer function setup_registry_from_values(@nospecialize(la::LoopAlgorithm))
+@noinline Base.@nospecializeinfer function setup_registry_from_values(@nospecialize(la::LoopAlgorithm))
     builder = RegistryBuilder()
     keyed_la = add_tree!(builder, la)
     return registry(builder), keyed_la
