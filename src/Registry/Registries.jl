@@ -8,20 +8,6 @@ getentries(reg::NameSpaceRegistry{T}) where {T} = getfield(reg, :entries)
 Base.getindex(reg::NameSpaceRegistry, idx::Int) = getentries(reg)[idx]
 Base.length(reg::NameSpaceRegistry) = length(getentries(reg))
 
-@inline function Base.setindex(reg::NameSpaceRegistry{T}, newentry, idx::Int) where {T}
-    old_entries = getentries(reg)
-    new_entries = @inline tuple_setindex(old_entries, newentry, idx)
-    return NameSpaceRegistry{typeof(new_entries)}(new_entries)
-end
-
-@inline function Base.setindex(reg::NameSpaceRegistry, newentry, T::Type)
-    fidx = find_typeidx(reg, T)
-    if isnothing(fidx)
-        error("Type $T not found in registry")
-    end
-    return Base.setindex(reg, newentry, fidx)
-end
-
 """
 Get the actual types of the typeentries
 """
@@ -71,104 +57,6 @@ Find the index in the entries for a given type T
 @inline find_typeidx(reg::NameSpaceRegistry, obj) = find_typeidx(typeof(reg), obj)
 
 ### _find_typeidx in generated functions folder ###
-
-# """
-# Non-generated helper of find_typeidx for use in other generated functions
-# """
-# function nongen_find_typeidx(reg::Type{<:NameSpaceRegistry}, typ::Type{T}) where {T}
-#     it = entrytypes_iterator(reg)
-#     index = findfirst(t -> T <: t, it)
-#     return index
-# end
-
-
-
-# registry_entrytype(tt::Type{Type{T}}) where T = match_by(T) # For generated function compatibility
-
-
-
-
-########################################
-############## Interface ###############
-########################################
-
-
-
-#########################
-######### ADDING ########
-#########################
-"""
-Add an instance and get new registry and a named instance back
-"""
-function add(reg::NameSpaceRegistry{T}, obj, multiplier = 1.; withkey = nothing) where {T}
-    if obj isa NameSpaceRegistry
-        error("Cannot add a NameSpaceRegistry to another NameSpaceRegistry")
-    end
-
-    @DebugMode "Adding object: $obj to registry: $reg with multiplier: $multiplier and name: $withkey"
-    entry_t = assign_entrytype(obj)
-    fidx = find_typeidx(reg, entry_t)
-    if isnothing(fidx) # New Entry
-        newentry = RegistryTypeEntry{entry_t}()
-        newentry, keyed_obj = add(newentry, obj, multiplier; withkey)
-        if entry_t <: AlgoState # States go first
-            new_entries = (newentry, getentries(reg)...)
-        else
-            new_entries = (getentries(reg)..., newentry)
-        end
-        return NameSpaceRegistry{typeof(new_entries)}(new_entries), keyed_obj
-    else # Type was found
-        entry = getentries(reg)[fidx]
-        
-        newentry, keyed_obj = add(entry, obj, multiplier; withkey)
-        # return newentry
-        return Base.setindex(reg, newentry, fidx), keyed_obj
-    end
-end
-
-"""
-Add multiple objects to the registry with the same multiplier
-"""
-function addall(reg::NSR, objs::O, mults::M) where {NSR<:NameSpaceRegistry,O<:Tuple,M<:Tuple}
-    reg = unrollreplace(reg, (zip(objs, mults)...,)) do r, obj_mult
-        obj, mult = obj_mult
-        newreg, _ = add(r, obj, mult)
-        return newreg
-    end
-end
-
-function scale_multipliers!(reg::NameSpaceRegistry{T}, factor::Number) where {T}
-    map(entry -> scale_multipliers!(entry, factor), getentries(reg))
-    reg
-end
-
-inherit(reg::NameSpaceRegistry, other...; multipliers = repeat([1.], length(other))) = inherit(inherit(reg, other[1], multipliers[1]), other[2:end]...; multipliers = multipliers[2:end])
-"""
-One registry inherits from another, scaling the multipliers by the given factor
-    The multiplier is usually the multiplier of a LoopAlgorithm in it's parent LoopAlgorithm
-"""
-function inherit(registry1::NameSpaceRegistry, registry2::NameSpaceRegistry, multiplier = 1.)
-    entries2 = deepcopy(getentries(registry2)) # Deepcopy in order to not change multipliers of original registry
-    scale_multipliers!.(entries2, multiplier)
-    @DebugMode "Reg1: $registry1 inheriting entries: $entries2"
-
-    
-
-    for entry in entries2
-        for (identifiable, mult) in entry
-            @DebugMode "Inheriting identifiable: $identifiable with multiplier: $mult"
-            registry1, identifiable = add(registry1, identifiable, mult)
-        end
-    end
-    return registry1
-end
-inherit(e1::NameSpaceRegistry; kwargs...) = e1
-
-##########################
-##### UPDATING NAMES #####
-##########################
-
-
 
 ########################
     ### ACCESSORS ###

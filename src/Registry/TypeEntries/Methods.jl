@@ -9,31 +9,10 @@ end
 end
 
 @inline getentries(rte::RegistryTypeEntry) = getfield(rte, :entries)
-@inline getdynamic(rte::RegistryTypeEntry) = getfield(rte, :dynamic)
 @inline getdynamiclookup(rte::RegistryTypeEntry) = getfield(rte, :dynamic_lookup)
 @inline getmultipliers(rte::RegistryTypeEntry) = getfield(rte, :multipliers)
 @inline getmultiplier(rte::RegistryTypeEntry, idx::Int) = getmultipliers(rte)[idx]
 @inline getentries(rtetype::Type{<:RegistryTypeEntry{T,S}}) where {T,S} = tuple(S.parameters...)
-
-setentries(rte::RegistryTypeEntry{T}, newentries) where {T} = RegistryTypeEntry{T,typeof(getdefault(rte)),typeof(newentries), typeof(getdynamic(rte))}(getdefault(rte), newentries, getdynamic(rte), getdynamiclookup(rte))
-setdynamic(rte::RegistryTypeEntry{T}, newdynamic) where {T} = RegistryTypeEntry{T,typeof(getdefault(rte)),typeof(getentries(rte)), typeof(newdynamic)}(getdefault(rte), getentries(rte), newdynamic, getdynamiclookup(rte))
-
-function add_dynamic_link!(obj, location::Symbol, idx::Int, rte::RegistryTypeEntry)
-    getdynamiclookup(rte)[dynamic_lookup_key(obj)] = idx
-    return nothing
-end
-
-function remove_dynamic_link!(obj, rte::RegistryTypeEntry)
-    delete!(getdynamiclookup(rte), dynamic_lookup_key(obj))
-    return nothing
-end
-
-function Base.replace(rte::RegistryTypeEntry{T}, idx::Int, newobj) where {T}
-    oldobj = getentries(rte)[idx]
-    remove_dynamic_link!(oldobj, rte)
-    add_dynamic_link!(newobj, :entries, idx, rte)
-    return setindex(rte, newobj, idx)
-end
 
 ###############################
 ##### TYPE INFO ##############
@@ -46,24 +25,6 @@ entry_types(rte::Type{<:RegistryTypeEntry{T,E}}) where {T,E} = E.parameters
 
 gettype(rte::Type{<:RegistryTypeEntry{T}}) where T = T
 gettype(rte::RegistryTypeEntry) = gettype(typeof(rte))
-
-###############################
-##### CHANGING MULTIPLIER #####
-###############################
-
-function scale_multipliers!(rte::RegistryTypeEntry{T}, factor) where {T}
-    getmultipliers(rte) .*= factor
-    return rte
-end
-
-function add_multiplier!(rte::RegistryTypeEntry{T}, idx::Int, num::Number) where {T}
-    getmultipliers(rte)[idx] += num
-    return rte
-end
-function scale_multiplier!(rte::RegistryTypeEntry{T}, idx::Int, factor::Number) where {T}
-    getmultipliers(rte)[idx] *= factor
-    return rte
-end
 
 ############################
 ######### Finding ##########
@@ -110,18 +71,6 @@ Match Exact with value
     return getentries(rte)[idx]
 end
 
-
-###########################
-##### MERGING ENTRIES #####
-###########################
-
-@inline function Base.merge(entry1::RegistryTypeEntry{T}, entry2::RegistryTypeEntry{T}) where {T}
-    for (identifiable, multiplier) in getentries(entry2)
-        entry1, _ = @inline add(entry1, identifiable, multiplier)
-    end
-
-    return entry1
-end
 
 #############################
 ##### VALUE LOOKUPS #########
@@ -226,21 +175,6 @@ wrappers. For identifiable entries, matching uses the wrapped algorithm type.
 """
 @inline Base.findall(::Type{T}, te::RegistryTypeEntry) where {T} =
     _registry_findall_type_entries(T, getentries(te))
-
-###################################
-########## REBUILDING #############
-###################################
-
-function rebuild(f, rte::RegistryTypeEntry)
-    @DebugMode println("Rebuilding RegistryTypeEntry for type ", gettype(rte))
- 
-    new_entries = f.(getentries(rte))
-    @DebugMode "New Entries: $(new_entries)"
-
-    return setfield(rte, :default, new_default) |> x -> setfield(x, :entries, new_entries)
-end
-
-
 
 ###############################
 ##### SHOWING ENTRIES ##########

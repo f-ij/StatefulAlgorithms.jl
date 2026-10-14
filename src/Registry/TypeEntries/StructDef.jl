@@ -26,12 +26,5 @@ struct RegistryTypeEntry{T,E}
     dynamic_lookup::Dict{LookupKey,Int} # lookup key of each entry (`dynamic_lookup_key`) => its index
 end
 
-function RegistryTypeEntry(obj::T) where T
-    entrytype = contained_type(obj)
-    @DebugMode "Creating RegistryTypeEntry for obj: $obj and type: $entrytype"
-    return RegistryTypeEntry{entrytype}(nothing, (), Dict{LookupKey,Int}())
-end
-
 RegistryTypeEntry{T}() where {T} = RegistryTypeEntry{T,Tuple{}}((), Float64[], Dict{LookupKey,Int}())
 RegistryTypeEntry{T}(entries::E, multipliers, lookup) where {T,E,} = RegistryTypeEntry{T,E}(entries, multipliers, lookup)
-RegistryTypeEntry(rte::RegistryTypeEntry{T}, entries) where T = RegistryTypeEntry{T, typeof(getentries(rte))}(entries, get_multipliers(rte), getdynamiclookup(rte))

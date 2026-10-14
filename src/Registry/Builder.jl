@@ -201,6 +201,17 @@ Base.@nospecializeinfer function lookup_key(@nospecialize(algo))
     return LookupKey(_lowered_matcher(entry_matcher(T)))
 end
 
+"""
+    add(registry, algo, multiplier = 1.0) -> (new registry, keyed algo)
+
+`registry` with `algo` added, and `algo` as the registry stores it; as `add!` on a builder holding `registry`.
+"""
+Base.@nospecializeinfer function add(reg::NameSpaceRegistry, @nospecialize(algo), @nospecialize(multiplier = 1.0))
+    b = RegistryBuilder(reg)
+    keyed = add!(b, algo, multiplier)
+    return registry(b), keyed
+end
+
 ###############################################################################
 # The registry
 ###############################################################################

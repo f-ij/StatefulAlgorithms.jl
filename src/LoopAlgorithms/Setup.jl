@@ -220,24 +220,21 @@ end
 
 
 """
-Add all algos and states in one or more loop algorithms to a shared registry with
-their corresponding multipliers/intervals.
+    setup_registry(las...) -> NameSpaceRegistry
+
+The registry of all algorithms and states in the loop algorithms `las`: per loop algorithm its states (`flat_states`,
+each with multiplier 1), then its algorithms (`flat_funcs`) with their multipliers (`flat_multipliers`), added to one
+`RegistryBuilder`.
 """
-setup_registry(las...) = _setup_registry(las)
-
-function _setup_registry(las::LAS) where {LAS<:Tuple}
-    registry = NameSpaceRegistry()
+function setup_registry(las...)
+    builder = RegistryBuilder()
     for la in las
-        # First add states with multiplier 1
-        states = flat_states(la)
-        multipliers = ntuple(i -> 1, length(states))
-        registry = addall(registry, states, multipliers)
-
-        # Then add algos with their corresponding multipliers
-        all_funcs = @inline flat_funcs(la)
-        multipliers = @inline flat_multipliers(la)
-        registry = @inline addall(registry, all_funcs, multipliers)
+        for state in flat_states(la)
+            add!(builder, state, 1)
+        end
+        for (algo, multiplier) in zip(flat_funcs(la), flat_multipliers(la))
+            add!(builder, algo, multiplier)
+        end
     end
-
-    return registry
+    return registry(builder)
 end

@@ -259,7 +259,6 @@ all_algos(r::AbstractRegistry) = error("all_algos not implemented for $(typeof(r
 static_get(r::AbstractRegistry, key) = error("static_get not implemented for $(typeof(r))")
 static_get_multiplier(r::AbstractRegistry, key) = error("static_get_multiplier not implemented for $(typeof(r))")
 add(r::AbstractRegistry, obj, multiplier = 1.; withkey = nothing) = error("add not implemented for $(typeof(r))")
-inherit(parent::AbstractRegistry, child::AbstractRegistry) = error("inherit not implemented for $(typeof(parent)) and $(typeof(child))")
 static_findfirst_match(r::AbstractRegistry, val) = error("static_findfirst_match not implemented for $(typeof(r))")
 
 """
