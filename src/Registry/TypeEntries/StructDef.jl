@@ -23,15 +23,15 @@ I'm not super happy about the name, since it's easy to confuse with the ScopedVa
 struct RegistryTypeEntry{T,E}
     entries::E   # isbits(x) == true, 
     multipliers::Vector{Float64}
-    dynamic_lookup::Dict{Any,Int} # Map from object to (location, index)
+    dynamic_lookup::Dict{LookupKey,Int} # lookup key of each entry (`dynamic_lookup_key`) => its index
 end
 
 function RegistryTypeEntry(obj::T) where T
     entrytype = contained_type(obj)
     @DebugMode "Creating RegistryTypeEntry for obj: $obj and type: $entrytype"
-    return RegistryTypeEntry{entrytype}(nothing, (), Dict{Any,Int}())
+    return RegistryTypeEntry{entrytype}(nothing, (), Dict{LookupKey,Int}())
 end
 
-RegistryTypeEntry{T}() where {T} = RegistryTypeEntry{T,Tuple{}}((), Float64[], Dict{Any,Int}())
+RegistryTypeEntry{T}() where {T} = RegistryTypeEntry{T,Tuple{}}((), Float64[], Dict{LookupKey,Int}())
 RegistryTypeEntry{T}(entries::E, multipliers, lookup) where {T,E,} = RegistryTypeEntry{T,E}(entries, multipliers, lookup)
 RegistryTypeEntry(rte::RegistryTypeEntry{T}, entries) where T = RegistryTypeEntry{T, typeof(getentries(rte))}(entries, get_multipliers(rte), getdynamiclookup(rte))

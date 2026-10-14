@@ -77,17 +77,22 @@ only the children change (step 1 of `resolve`, the DSL).
 Return `s` with the fields `names` set to `values`, built by `s`'s type's constructor called with all fields in order;
 the type parameter that a replaced field is declared as (`_field_parameter_index`) becomes the type of the new value.
 Used by the defaults above; works on types as values, so it is compiled once, not once per plan type.
+
+`s` can be a `_GenItem` (with `values` `_GenItem`s, see `RegistryDraft`): the result is then a `_GenItem` of the new
+type, whose expression calls its constructor on `s`'s other fields and the new values.
 """
 Base.@nospecializeinfer function _with_fields(@nospecialize(s), names::Tuple{Vararg{Symbol}}, @nospecialize(values::Tuple))
-    T = typeof(s)
+    T = _itemtype(s)
     params = Any[T.parameters...]
-    fields = Any[getfield(s, i) for i in 1:nfields(s)]
+    fields = Any[_ifield(s, i) for i in 1:_infields(s)]
     for k in 1:length(names)
         i = Base.fieldindex(T, names[k])
         new = getfield(values, k)
         j = _field_parameter_index(T, i)
-        isnothing(j) || (params[j] = typeof(new))
+        isnothing(j) || (params[j] = _itemtype(new))
         fields[i] = new
     end
-    return Core.apply_type(T.name.wrapper, params...)(fields...)
+    NT = Core.apply_type(T.name.wrapper, params...)
+    s isa _GenItem || return NT(fields...)
+    return _GenItem(NT, Expr(:call, NT, Any[f.ex for f in fields]...), fields)
 end
