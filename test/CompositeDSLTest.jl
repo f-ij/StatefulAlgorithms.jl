@@ -1248,10 +1248,11 @@ end
 
     @testset "@finally wraps only the outer DSL algorithm" begin
         @info "Composite DSL: @finally wraps only the outer DSL algorithm"
+        # A final step sees what outlives the steps (state, declared locals, inputs): here the declared local `result`.
         algo = @CompositeAlgorithm begin
             @state seed = 8
-            local result                                   # a final step sees what outlives the steps
-            (; result) = DSLValueAlgo(value = seed)
+            local result
+            result = keep_value_dsl_test(seed)
             @finally dsl_runtime_final_summary
         end
 
@@ -1260,7 +1261,6 @@ end
         p = Process(resolved, repeat = 1)
         run(p)
         @test fetch(p) == (; result = 8)
-        @test isempty(context(p)[DSLValueAlgo])
 
         close(p)
         @test fetch(p) == (; result = 8)

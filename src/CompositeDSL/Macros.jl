@@ -72,9 +72,10 @@ function _dsl_build_loopalgorithm(::Val{Name}, algos, specification, states, opt
 end
 
 """Expand a top-level DSL block into either a `CompositeAlgorithm` or a `Routine`."""
-function _dsl_expand_loopalgorithm(block, constructor_name::Symbol, expected_schedule::Symbol; print_constructor::Bool = false, rules = :(StatefulAlgorithms.CurrentDSL()))
+function _dsl_expand_loopalgorithm(block, constructor_name::Symbol, expected_schedule::Symbol; print_constructor::Bool = false, rules = :(StatefulAlgorithms.CurrentDSL()),
+                                   repeat_assignments_as_blocks::Bool = true)
     statements = block isa Expr && block.head == :block ? block.args : Any[block]
-    collected = _dsl_collect_block(statements, expected_schedule, constructor_name; allow_final = true)
+    collected = _dsl_collect_block(statements, expected_schedule, constructor_name; allow_final = true, repeat_assignments_as_blocks)
 
     state_setup_expr = _dsl_state_setup_expr(collected.state_fields, collected.state_name)
     input_setup_expr = _dsl_runtime_input_setup_expr(collected.input_fields)

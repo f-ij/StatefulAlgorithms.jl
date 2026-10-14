@@ -41,7 +41,8 @@ Deprecated: `@CompositeAlgorithm` with the older rules (`y = Algo()` binds the r
 macro CompositeAlgorithm_legacy(args...)
     _legacy_warn(:CompositeAlgorithm_legacy, :CompositeAlgorithm)
     parsed = _dsl_parse_loopalgorithm_macro_args(args, :CompositeAlgorithm)
-    expanded = _dsl_expand_loopalgorithm(parsed.block, :CompositeAlgorithm, :every; print_constructor = parsed.print_constructor, rules = :(StatefulAlgorithms.LegacyDSL()))
+    expanded = _dsl_expand_loopalgorithm(parsed.block, :CompositeAlgorithm, :every; print_constructor = parsed.print_constructor, rules = :(StatefulAlgorithms.LegacyDSL()),
+                                         repeat_assignments_as_blocks = false)   # legacy: `x = @repeat spec f()` keeps its old meaning
     return _dsl_assign_header(expanded, parsed.name)
 end
 
@@ -54,7 +55,8 @@ Deprecated: `@Routine` with the older rules (`y = Algo()` binds the returned fie
 macro Routine_legacy(args...)
     _legacy_warn(:Routine_legacy, :Routine)
     parsed = _dsl_parse_loopalgorithm_macro_args(args, :Routine)
-    expanded = _dsl_expand_loopalgorithm(parsed.block, :Routine, :repeat; print_constructor = parsed.print_constructor, rules = :(StatefulAlgorithms.LegacyDSL()))
+    expanded = _dsl_expand_loopalgorithm(parsed.block, :Routine, :repeat; print_constructor = parsed.print_constructor, rules = :(StatefulAlgorithms.LegacyDSL()),
+                                         repeat_assignments_as_blocks = false)   # legacy: `x = @repeat spec f()` keeps its old meaning
     return _dsl_assign_header(expanded, parsed.name)
 end
 

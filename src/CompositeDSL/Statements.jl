@@ -745,6 +745,7 @@ function _dsl_collect_block(
     initial_alias_map::Dict{Symbol, Any} = Dict{Symbol, Any}(),
     initial_context_map::Dict{Symbol, Any} = Dict{Symbol, Any}(),
     outer_locals::Set{Symbol} = Set{Symbol}(),
+    repeat_assignments_as_blocks::Bool = true,
 )
     alias_map = copy(initial_alias_map)
     context_map = copy(initial_context_map)
@@ -778,7 +779,7 @@ function _dsl_collect_block(
 
         # In a routine, `x = @repeat spec f()` is the repeated block `@repeat spec begin x = f() end`, with `local x`
         # before it when the block does not have `x` yet (see `_dsl_repeated_assignment`).
-        repeated = expected_schedule == :repeat ? _dsl_repeated_assignment(stmt, union(known_outputs, state_outputs)) : nothing
+        repeated = expected_schedule == :repeat && repeat_assignments_as_blocks ? _dsl_repeated_assignment(stmt, union(known_outputs, state_outputs)) : nothing
         if !isnothing(repeated)
             if !isempty(repeated.declare)
                 isnothing(current_line) || push!(step_exprs, current_line)
