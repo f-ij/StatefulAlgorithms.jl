@@ -1,4 +1,4 @@
-export getregistry, add, add, find_typeidx, registry_allowmerge
+export getregistry, add, find_typeidx, registry_allowmerge
 ## BUILDS ON THINCONTAINERS
 include("Utils.jl")
 include("PreferStrongKeyDict.jl")

@@ -1,22 +1,4 @@
 """
-Rebuild by applying func to all entries in the registry
-"""
-function rebuild(func::F, registry::NameSpaceRegistry) where {F}
-    type_entries = getentries(registry)
-    new_entries = func.(type_entries)
-    setfield(registry, :entries, new_entries)
-end
-
-"""
-Rebuild all entries by applying a func to the ScopedValueEntry
-"""
-function rebuild_type_entries(func::F, registry::NameSpaceRegistry) where {F}
-    rebuild(registry) do entry
-        rebuild(func, entry)
-    end
-end
-
-"""
 Scoped Algorithms or thin_wrapped scoped algorithms that need an updated name
     Can be matched with a new registry and rebuilt accordingly
 """
@@ -64,22 +46,3 @@ function update_keys(target_reg::NameSpaceRegistry,  ground_reg::NameSpaceRegist
 end
 
 
-##################################
-###### REPLACING ALL NAMES #######
-##################################
-
-# """
-# Replace 
-# """
-# function replace_all_keys(reg::NameSpaceRegistry, name::Symbol)
-#     func = valentry -> setcontextkey(valentry, name)
-#     rebuild_type_entries(func, reg)
-# end
-
-# function replace_all_keys(cla::LoopAlgorithm, name::Symbol)
-#     newfuncs = replace_all_keys.(getalgos(cla), name)
-#     new_registry = replace_all_keys(getregistry(cla), name)
-#     cla = setfield(cla, :funcs, newfuncs)
-#     cla = setfield(cla, :registry, new_registry)
-#     return cla
-# end
