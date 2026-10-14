@@ -35,12 +35,6 @@ gettype(rte::RegistryTypeEntry) = gettype(typeof(rte))
     @inline static_findfirst_match(rte, Val(id))
 end
 
-## IN GENERATEDFUNCTIONS
-# @inline @generated function static_findfirst_match(rte::RegistryTypeEntry{T,S}, v::Val{value}) where {T,S,value}
-#     idx = findfirst(x -> match(value, x), entry_types(rte))
-#     return :($idx)
-# end
-
 @inline dynamic_find_match(rte::RegistryTypeEntry{T}, val) where {T} = get(getdynamiclookup(rte), dynamic_lookup_key(val), nothing)
 @inline findfirst_match(rte::RegistryTypeEntry, val) = isstaticallyfindable(val) ? static_findfirst_match(rte, val) : dynamic_find_match(rte, val)
 

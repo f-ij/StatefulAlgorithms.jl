@@ -24,14 +24,6 @@ end
 
 static_findfirst_match(r::SR, val) where SR <: SimpleRegistry = static_findfirst_match(r, Val(val))
 static_findfirst_match(r::SR, v::Val{val}) where {SR <: SimpleRegistry{T} where T,val} = static_findfirst_match(SR, v)
-# @generated function static_findfirst_match(r::Type{SR}, ::Val{val}) where {SR <: SimpleRegistry{T} where T,val}
-#     ETypes = entrytypes(SR)
-#     fidx = findfirst(x -> match(x, val), ETypes)
-#     if isnothing(fidx)
-#         return :(nothing)
-#     end
-#     return :($fidx)
-# end
 
 function Base.getindex(r::SimpleRegistry{T}, key) where T
     fidx = static_findfirst_match(r, Val(key))
@@ -74,14 +66,3 @@ end
     return getmultipliers(r)[fidx]
 end
 
-"""
-Replace all keys in the registry with a new key
-"""
-function replace_all_keys(r::SimpleRegistry, key)
-    newentries = setcontextkey.(getentries(r), key)
-    return setfield(r, :entries, newentries)
-end
-
-
-# inherit(parent::AbstractRegistry, child::AbstractRegistry) = error("inherit not implemented for $(typeof(parent)) and $(typeof(child))")
-# static_findfirst_match(r::AbstractRegistry, val) = error("static_findfirst_match not implemented for $(typeof(r))")
