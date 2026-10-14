@@ -1,5 +1,4 @@
 export getregistry, add, find_typeidx, registry_allowmerge
-include("PreferStrongKeyDict.jl")
 include("Interfaces.jl")
 include("Findability.jl")
 

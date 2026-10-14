@@ -1,46 +1,45 @@
-@inline function Base.length(te::RegistryTypeEntry)
-    return length(getentries(te))
-end
+#=
+Reading one entry of a registry (`RegistryTypeEntry`): its algorithms, multipliers and keys, and finding an algorithm
+in it, by its matcher (`static_findfirst_match`, for `isstaticallyfindable` values) or through its runtime lookup
+table (`dynamic_lookup`, for other values).
+=#
 
-@inline function Base.setindex(rte::RegistryTypeEntry, new::N , idx::Int) where {N}
-    entries = getentries(rte)
-    new_entries = setindex(entries, new, idx)
-    return setfield(rte, :entries, new_entries)
-end
-
+"""The entry's algorithms (keyed handles), as a tuple; for an entry type, the tuple of their types."""
 @inline getentries(rte::RegistryTypeEntry) = getfield(rte, :entries)
-@inline getdynamiclookup(rte::RegistryTypeEntry) = getfield(rte, :dynamic_lookup)
-@inline getmultipliers(rte::RegistryTypeEntry) = getfield(rte, :multipliers)
-@inline getmultiplier(rte::RegistryTypeEntry, idx::Int) = getmultipliers(rte)[idx]
 @inline getentries(rtetype::Type{<:RegistryTypeEntry{T,S}}) where {T,S} = tuple(S.parameters...)
-
-###############################
-##### TYPE INFO ##############
-###############################
-
-"""
-Get the types of static entries
-"""
+"""The types of the entry type's algorithms (a `svec`)."""
 entry_types(rte::Type{<:RegistryTypeEntry{T,E}}) where {T,E} = E.parameters
-
+"""The entry type (`Lin`) of an entry or of its type."""
 gettype(rte::Type{<:RegistryTypeEntry{T}}) where T = T
 gettype(rte::RegistryTypeEntry) = gettype(typeof(rte))
+"""The number of algorithms in the entry."""
+@inline Base.length(te::RegistryTypeEntry) = length(getentries(te))
 
-############################
-######### Finding ##########
-############################
+"""The runtime lookup table of the entry (lookup key => position)."""
+@inline getdynamiclookup(rte::RegistryTypeEntry) = getfield(rte, :dynamic_lookup)
+"""How often each algorithm of the entry runs per root step, in order."""
+@inline getmultipliers(rte::RegistryTypeEntry) = getfield(rte, :multipliers)
+"""How often the `idx`-th algorithm of the entry runs per root step."""
+@inline getmultiplier(rte::RegistryTypeEntry, idx::Int) = getmultipliers(rte)[idx]
 
+###############################################################################
+# Finding an algorithm
+###############################################################################
+
+"""The position of `val` in the entry, found by its matcher (`match_by`), or `nothing`."""
 @inline function static_findfirst_match(rte::RegistryTypeEntry, val)
     id = @inline match_by(val)
     @inline static_findfirst_match(rte, Val(id))
 end
+# `static_findfirst_match(rte, Val(matcher))` is generated: GeneratedCode/Registry.jl.
 
-@inline dynamic_find_match(rte::RegistryTypeEntry{T}, val) where {T} = get(getdynamiclookup(rte), dynamic_lookup_key(val), nothing)
-@inline findfirst_match(rte::RegistryTypeEntry, val) = isstaticallyfindable(val) ? static_findfirst_match(rte, val) : dynamic_find_match(rte, val)
+"""The position of `val` in the entry, found through the runtime lookup table (`dynamic_lookup_key`), or `nothing`."""
+dynamic_lookup(rte::RegistryTypeEntry{T}, val) where {T} = get(getdynamiclookup(rte), dynamic_lookup_key(val), nothing)
 
-##########################
-######## GETTERS #########
-##########################
+"""The position of `val` in the entry, or `nothing`: by its matcher when `isstaticallyfindable`, else by lookup."""
+@inline findfirst_match(rte::RegistryTypeEntry, val) = isstaticallyfindable(val) ? static_findfirst_match(rte, val) : dynamic_lookup(rte, val)
+
+"""`te[algo]`: the algorithm `algo` as the entry stores it (keyed); errors when it is not there."""
 function Base.getindex(te::RegistryTypeEntry, obj)
     if isstaticallyfindable(obj)
         return static_get(te, obj)
@@ -50,13 +49,12 @@ function Base.getindex(te::RegistryTypeEntry, obj)
     return entry
 end
 
+"""`te[idx]`: the `idx`-th algorithm of the entry."""
 function Base.getindex(te::RegistryTypeEntry, idx::Int)
     getentries(te)[idx]
 end
 
-"""
-Match Exact with value
-"""
+"""The algorithm `val` as the entry stores it, found by its matcher; errors when it is not there."""
 @inline function static_get(rte::RegistryTypeEntry, val::V) where V 
     idx = static_findfirst_match(rte, val)
     if isnothing(idx)
@@ -65,18 +63,7 @@ Match Exact with value
     return getentries(rte)[idx]
 end
 
-
-#############################
-##### VALUE LOOKUPS #########
-#############################
-
-#=
-Match either a scoped or non scope value with one of the entries
-This is faster for runtime, slower for inlining
-=#
-
-dynamic_lookup(rte::RegistryTypeEntry{T}, val) where {T} = get(getdynamiclookup(rte), dynamic_lookup_key(val), nothing)
-
+"""The algorithm `val` as the entry stores it, found through the runtime lookup table, or `nothing`."""
 @inline function dynamic_get(rte::RegistryTypeEntry{T}, val) where {T}
     idx = dynamic_lookup(rte, val)
     if isnothing(idx)
@@ -85,12 +72,7 @@ dynamic_lookup(rte::RegistryTypeEntry{T}, val) where {T} = get(getdynamiclookup(
     return getentries(rte)[idx]
 end
 
-
-
-############################
-######## ITERATE  ##########
-############################
-
+"""Iterates over `(algorithm, multiplier)` pairs of the entry, in order."""
 function Base.iterate(te::RegistryTypeEntry, state = 1)
     if state > length(te)
         return nothing
@@ -99,37 +81,25 @@ function Base.iterate(te::RegistryTypeEntry, state = 1)
     end
 end
 
+###############################################################################
+# Keys
+###############################################################################
 
-###############################
-########## Names #############
-###############################
-function all_named_algos(te::Union{RegistryTypeEntry, Type{<:RegistryTypeEntry}})
-    getentries_list = getentries(te)
-end
+"""The entry's algorithms (all have a key); for an entry or its type."""
+all_named_algos(te::Union{RegistryTypeEntry, Type{<:RegistryTypeEntry}}) = getentries(te)
 
-"""
-Context names
-"""
+"""The keys of the entry's algorithms (`Lin_1`, ...), in order; for an entry or its type."""
 function all_keys(te::Union{RegistryTypeEntry, Type{<:RegistryTypeEntry}})
     getkey.(getentries(te))
 end
 
-"""
-Change the context name of an entry
-from oldname to newname
-"""
-function replacecontextkeys(te::RegistryTypeEntry, oldname, newname::Symbol)
-    idx = findfirst(==(oldname), all_keys(te))
-    if isnothing(idx)
-        return te
-    end
-    return setindex(te, setcontextkey(te[idx], newname), idx)
+"""The keys of the entry's algorithms, as a constant tuple; for an entry or its type."""
+@inline @generated function Base.keys(entry::Union{RTE, Type{<:RTE}}) where RTE<:RegistryTypeEntry
+    keys = getkey.(getentries(RTE))
+    return :($keys)
 end
 
-"""
-From a dict that contains oldname => newname
-Change all referenced context names in the RegistryTypeEntry
-"""
+"""The entry with the keys in `changed_names` (`old => new`) replaced."""
 function replacecontextkeyss(te::RegistryTypeEntry, changed_names::Dict{Symbol,Symbol})
     ps = pairs(changed_names)
     unrollreplace_splat(te, ps...) do rte, (oldname, newname)
@@ -137,6 +107,7 @@ function replacecontextkeyss(te::RegistryTypeEntry, changed_names::Dict{Symbol,S
     end
 end
 
+"""The position of the algorithm with key `key` in the entry, or `nothing`; for an entry or its type."""
 @inline findkey(te::Union{RTE, Type{<:RTE}}, key::Symbol) where RTE <: RegistryTypeEntry = findkey(te, Val(key))
 @inline @generated function findkey(te::Union{RTE, Type{<:RTE}}, ::Val{key}) where {RTE <: RegistryTypeEntry, key}
     entries = getentries(RTE)
@@ -148,6 +119,7 @@ end
     end
 end
 
+"""Whether the entry has an algorithm with key `key`; for an entry or its type."""
 @inline Base.haskey(te::Union{RTE, Type{<:RTE}}, key::Symbol) where RTE <: RegistryTypeEntry = !isnothing(findkey(te, key))
 
 @inline _registry_findall_type(::Type{E}) where {E} = E
@@ -162,17 +134,13 @@ end
 end
 
 """
-Return all registered entries whose algorithm type is a subtype of `T`.
+    findall(T, entry) -> tuple
 
-Entries are returned as they are stored in the registry, usually identifiable
-wrappers. For identifiable entries, matching uses the wrapped algorithm type.
+The entry's algorithms whose algorithm type is a subtype of `T`, as stored (keyed handles); a handle matches by the
+type of the algorithm it wraps.
 """
 @inline Base.findall(::Type{T}, te::RegistryTypeEntry) where {T} =
     _registry_findall_type_entries(T, getentries(te))
-
-###############################
-##### SHOWING ENTRIES ##########
-###############################
 
 function Base.show(io::IO, rte::RegistryTypeEntry{T}) where {T}
     println(io, "RegistryTypeEntry for type: $(T)")
