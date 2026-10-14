@@ -101,11 +101,11 @@ end
 # again), and a `FinalizedAlgorithm` argument fails (`LoopAlgorithm(::FinalizedAlgorithm)` has no method). Route it
 # through the same steps as `resolve(la)`.
 Base.@nospecializeinfer function _build_shared_registry_and_keyed_algos(@nospecialize(loopalgorithms::Tuple))
-    draft = RegistryDraft()
+    builder = RegistryBuilder()
     keyed = Vector{Any}(undef, nfields(loopalgorithms))
     for i in eachindex(keyed)
         la = getfield(loopalgorithms, i)
-        keyed[i] = draft_add_loopalgorithm!(draft, la isa LoopAlgorithm ? la : LoopAlgorithm(la))
+        keyed[i] = add_tree!(builder, la isa LoopAlgorithm ? la : LoopAlgorithm(la))
     end
-    return build_registry(draft), Tuple(keyed)
+    return registry(builder), Tuple(keyed)
 end
