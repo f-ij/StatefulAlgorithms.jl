@@ -1,7 +1,8 @@
 #=
 What a step returns. A step has a return value, as a Julia function has, and separately the values it writes back
 (`StateUpdates`): an algorithm's state, or the variable of the block that was passed to it. `@StepAlgorithm` builds a
-`StepResult` from `return` and `@update`; a hand-written `step!` may return one too.
+`StepResult` from `return` and `@update`; a hand-written `step!` (deprecated: define algorithms with `@StepAlgorithm`)
+may return one too.
 
 A hand-written `step!` that returns a plain named tuple keeps the older meaning: every name is written back where it
 lives (its state, or the wire it was read through), and the named tuple is also its return value.
@@ -41,7 +42,7 @@ When a block is built, the DSL reads it for every algorithm statement: a value o
 arguments changes, so it warns unless the value is state or declared `@mutable`, and an `@input`, an outside value or
 a `@transform` passed there is an error.
 
-`@StepAlgorithm` defines it from the body's `@update`s. A hand-written `step!` that returns
+`@StepAlgorithm` defines it from the body's `@update`s. A hand-written `step!` (deprecated) that returns
 `StepResult(value, StateUpdates(; x))` defines it with the same names, so these checks apply to it too:
 
 ```julia

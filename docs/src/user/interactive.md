@@ -138,14 +138,8 @@ without reading selected variables or applying pending writes.
 ```julia
 using StatefulAlgorithms
 
-struct InteractiveTarget <: StepAlgorithm end
-
-function StatefulAlgorithms.init(::InteractiveTarget, context)
-    return (; value = 1.0)
-end
-
-function StatefulAlgorithms.step!(::InteractiveTarget, context)
-    return (;)
+@StepAlgorithm function InteractiveTarget(@managed(value = 1.0))
+    return
 end
 
 algo = resolve(CompositeAlgorithm(

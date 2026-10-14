@@ -18,8 +18,12 @@ Reference algorithms the same way you inserted them into the composition.
 ## Pattern 1: Added by Type
 
 ```julia
-struct Producer <: StepAlgorithm end
-struct Consumer <: StepAlgorithm end
+@StepAlgorithm function Producer(@managed(value = 0.0))
+    @update value += 1.0
+end
+@StepAlgorithm function Consumer(value)
+    return value
+end
 
 algo = CompositeAlgorithm(
     Producer, Consumer,
