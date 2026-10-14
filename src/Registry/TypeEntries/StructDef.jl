@@ -1,30 +1,16 @@
 """
-Abstract supertype for registry implementations.
+    RegistryTypeEntry{T, E}(algos, multipliers, lookup)
 
-Registries provide a static, type-driven name/lookup layer used by the StatefulAlgorithms
-system. The primary implementation is `NameSpaceRegistry`, which supports scoped
-values, auto-naming, and multiplier tracking.
+One entry of a registry: the algorithms of entry type `T` (`Lin`), as a tuple `algos` of keyed handles (`Lin_1`,
+`Lin_2`, ...) whose types are `E`, how often each runs per root step (`multipliers`), and the runtime lookup table
+(`lookup`: each algorithm's lookup key, `dynamic_lookup_key`, => its position), used to find values that are not
+`isbits`. The multipliers and the lookup table can be changed in place.
 """
-
-###############################
-##### REGISTRY TYPE ENTRY #####
-###############################
-"""
-Holds scoped value entries for a specific type T
-    S: Entries
-    M: Multipliers per entry
-    D: Dynamic Entries Type (Dict)
-    DL: Dynamic Lookup Type (PreferStrongKeyDict)
-
-I'm not super happy about the name, since it's easy to confuse with the ScopedValueEntries,
-    but it's what we have for now.
-"""
-
 struct RegistryTypeEntry{T,E}
-    entries::E   # isbits(x) == true, 
+    entries::E
     multipliers::Vector{Float64}
-    dynamic_lookup::Dict{LookupKey,Int} # lookup key of each entry (`dynamic_lookup_key`) => its index
+    dynamic_lookup::Dict{LookupKey,Int}
 end
 
 RegistryTypeEntry{T}() where {T} = RegistryTypeEntry{T,Tuple{}}((), Float64[], Dict{LookupKey,Int}())
-RegistryTypeEntry{T}(entries::E, multipliers, lookup) where {T,E,} = RegistryTypeEntry{T,E}(entries, multipliers, lookup)
+RegistryTypeEntry{T}(entries::E, multipliers, lookup) where {T,E} = RegistryTypeEntry{T,E}(entries, multipliers, lookup)
