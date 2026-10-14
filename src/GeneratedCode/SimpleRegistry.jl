@@ -1,8 +1,11 @@
 @generated function static_findfirst_match(r::Type{SR}, ::Val{val}) where {SR <: SimpleRegistry{T} where T,val}
-    ETypes = entrytypes(SR)
-    fidx = findfirst(x -> match(x, val), ETypes)
-    if isnothing(fidx)
-        return :(nothing)
+    # A loop, not `findfirst` with a closure: the closure captures `val` and compiles for every value.
+    fidx = nothing
+    for (i, E) in enumerate(entrytypes(SR))
+        if match(E, val)
+            fidx = i
+            break
+        end
     end
     return :($fidx)
 end

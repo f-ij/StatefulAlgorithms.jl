@@ -1,10 +1,9 @@
 """
-Trait for whether a lookup object can use the generated static registry matcher path.
+    isstaticallyfindable(x) -> Bool
 
-Static cases:
-- isbits values
-- all type objects
-- identifiable wrappers, whose matchers already live in their type/id data
+Whether `x` is found in a registry by its matcher, worked out while compiling (`static_findfirst_match`): true for
+`isbits` values, types, and handles (`AbstractIdentifiableAlgo`, whose id is in their type). Other values are found
+through a registry entry's runtime lookup table.
 """
 @inline isstaticallyfindable(obj) = isbits(obj)
 @inline isstaticallyfindable(::Type) = true
