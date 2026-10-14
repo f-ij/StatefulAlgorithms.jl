@@ -1,8 +1,8 @@
 """
-A simple registry works like a simple set based on matching
-It's not hierarchical by type, making searching ever so slightly slower
+    SimpleRegistry(entries, multipliers)
 
-But it's easier to imlplement and a better choice for a registry that is not expected to have a large number of entries
+A registry without entry types: a flat tuple of keyed algorithms and their multipliers, found by matching each in
+turn. Used for the few algorithms of a `Package`; a `NameSpaceRegistry` groups algorithms by entry type instead.
 """
 struct SimpleRegistry{T} <: AbstractRegistry
     entries::T
