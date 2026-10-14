@@ -54,7 +54,7 @@ type that stores its children or wiring differently, or whose constructor takes 
 method.
 """
 Base.@nospecializeinfer function rebuild_plan(@nospecialize(plan::AbstractPlan), @nospecialize(funcs::Tuple), @nospecialize(wiring))
-    return _with_fields(plan, (:funcs, :wiring), (funcs, wiring))
+    return with_fields(plan, (:funcs, :wiring), (funcs, wiring))
 end
 
 """
@@ -74,25 +74,27 @@ only the children change (step 1 of `resolve`, the DSL).
 @inline rebuild_loopalgorithm_funcs(plan::P, funcs::F) where {P<:AbstractPlan, F} = setfield(plan, :funcs, funcs)
 
 """
-Return `s` with the fields `names` set to `values`, built by `s`'s type's constructor called with all fields in order;
-the type parameter that a replaced field is declared as (`_field_parameter_index`) becomes the type of the new value.
-Used by the defaults above; works on types as values, so it is compiled once, not once per plan type.
+    with_fields(s, names, values) -> copy of s
 
-`s` can be a `_GenItem` (with `values` `_GenItem`s, see `RegistryDraft`): the result is then a `_GenItem` of the new
-type, whose expression calls its constructor on `s`'s other fields and the new values.
+`s` with the fields `names` set to `values`, built by `s`'s type's constructor called with all fields in order; the
+type parameter that a replaced field is declared as (`_field_parameter_index`) becomes the type of the new value. Used
+by the defaults above and the registry walk; works on types as values, so it is compiled once, not once per plan type.
+
+`s` can be a `KnownByType` (with `values` `KnownByType`s): the result is then a `KnownByType` of the new type, whose
+code calls its constructor on `s`'s other fields and the new values.
 """
-Base.@nospecializeinfer function _with_fields(@nospecialize(s), names::Tuple{Vararg{Symbol}}, @nospecialize(values::Tuple))
-    T = _itemtype(s)
+Base.@nospecializeinfer function with_fields(@nospecialize(s), names::Tuple{Vararg{Symbol}}, @nospecialize(values::Tuple))
+    T = type_of(s)
     params = Any[T.parameters...]
-    fields = Any[_ifield(s, i) for i in 1:_infields(s)]
+    fields = Any[field_of(s, i) for i in 1:nfields_of(s)]
     for k in 1:length(names)
         i = Base.fieldindex(T, names[k])
         new = getfield(values, k)
         j = _field_parameter_index(T, i)
-        isnothing(j) || (params[j] = _itemtype(new))
+        isnothing(j) || (params[j] = type_of(new))
         fields[i] = new
     end
     NT = Core.apply_type(T.name.wrapper, params...)
-    s isa _GenItem || return NT(fields...)
-    return _GenItem(NT, Expr(:call, NT, Any[f.ex for f in fields]...), fields)
+    s isa KnownByType || return NT(fields...)
+    return KnownByType(NT, Expr(:call, NT, Any[f.expr for f in fields]...), fields)
 end

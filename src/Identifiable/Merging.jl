@@ -12,10 +12,8 @@ registry_allowmerge(::Any, ::Any) = false
     return registry_allowmerge(getalgo(sa)) || registry_allowmerge(_merge_inner(other))
 end
 
-@inline function registry_allowmerge(sa1::IdentifiableAlgo, sa2::IdentifiableAlgo)
-    _merge_key_compatible(sa1, sa2) || return false
-    return registry_allowmerge(getalgo(sa1)) || registry_allowmerge(getalgo(sa2))
-end
+"""Whether two handles may be merged: `handles_merge` of their types (Registry/Interfaces.jl)."""
+registry_allowmerge(sa1::IdentifiableAlgo, sa2::IdentifiableAlgo) = handles_merge(typeof(sa1), typeof(sa2))
 
 @inline function registry_allowmerge(other, sa::IdentifiableAlgo)
     return registry_allowmerge(sa, other)

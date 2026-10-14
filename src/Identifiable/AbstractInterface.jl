@@ -60,10 +60,10 @@ end
 ############### Traits #################
 ########################################
 
-@inline function hasautokey(sa::AbstractIdentifiableAlgo)
+"""Whether the handle `sa` has an automatic key (`is_autokey`), not one given to it."""
+function hasautokey(sa::AbstractIdentifiableAlgo)
     key = getkey(sa)
-    (!isnothing(key) && key != Symbol()) || return false
-    startswith(string(key), "$(autokey_basename(getalgo(sa)))_")
+    return key isa Symbol && is_autokey(algotype(sa), key)
 end
 @inline function Base.haskey(sa::AbstractIdentifiableAlgo)
     key = getkey(sa)
