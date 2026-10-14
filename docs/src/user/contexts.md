@@ -1,6 +1,6 @@
 # [Contexts and Indexing](@id contexts_user)
 
-## What You Receive in `init`/`step!`/`cleanup`
+## What an algorithm sees
 
 The full runtime data object is a `ProcessContext`.
 
@@ -21,20 +21,23 @@ That view exposes:
 ## Reading Variables
 
 ```julia
-function StatefulAlgorithms.step!(::MyAlgo, context)
-    (; state, dt) = context
+@StepAlgorithm function MyAlgo(state, dt)
     # ...
-    return (;)
+    return
 end
 ```
 
-`context.name` and destructuring both read from the view.
+Each argument of a `@StepAlgorithm` is read from the view by its name at every step (a keyword argument with its
+default when the view does not have it). In a deprecated hand-written `step!(::MyAlgo, context)`, `context.name`
+and destructuring (`(; state, dt) = context`) read from the view.
 
 ## Writing Variables
 
-A `@StepAlgorithm` writes a name back with `@update name = …`; its return is a value, not a write. This section
-is about hand-written hooks (`init`, `step!`, `cleanup` methods), which return a `NamedTuple`. The phase changes what
-that return means.
+A `@StepAlgorithm` writes a name back with `@update name = …`; its return is a value, not a write.
+
+The rest of this section is about hooks written by hand, which return a `NamedTuple`: `cleanup`, and the
+**deprecated** hand-written `init` and `step!` (define algorithms with `@StepAlgorithm` instead). The phase changes
+what that return means.
 
 1. `init` defines the persistent fields owned by the entity and replaces its
    initially empty subcontext with those fields.

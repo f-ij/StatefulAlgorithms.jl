@@ -151,12 +151,16 @@ This prints the recorded `view`, `getproperty`, `get`, `haskey`, and `getindex` 
 The analyzer only sees what goes through the context/view surface.
 These forms work best:
 
+- `@StepAlgorithm` arguments: positional for required reads, keywords with defaults for optional reads
+- `@StepAlgorithm ... @inputs((; ...))` for init-only requirements
+
+In deprecated hand-written `init`/`step!` methods (and in `cleanup`):
+
 - required reads through `context.x` or destructuring like `(; x, y) = context`
 - optional reads through `get(context, :x, default)`
 - explicit presence checks through `haskey(context, :x)`
 - explicit indexed reads like `context[:OtherAlgo_1]` or `context[algo_ref]`
-- `@StepAlgorithm ... @inputs((; ...))` for init-only requirements
-- `step!` methods that return plain `NamedTuple`s with stable output names
+- returns of plain `NamedTuple`s with stable output names
 
 These forms are harder to analyse accurately:
 

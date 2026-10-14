@@ -2,7 +2,7 @@
 
 `StepAlgorithm` and `AlgoState` are the two main building blocks you compose into a process.
 
-- Use `StepAlgorithm` for something that actively participates in the loop by implementing `StatefulAlgorithms.step!`.
+- Use `StepAlgorithm` for something that actively participates in the loop: define it with `@StepAlgorithm`.
 - Use `AlgoState` for data that should be initialized into a subcontext and then shared or read by algorithms.
 
 Both are process entities: values that the package knows how to place inside a
@@ -11,8 +11,8 @@ process context. That named part is its **subcontext**.
 
 User methods receive a view of the current subcontext, plus any routed or shared
 values that were made visible to it. In normal code, treat that view like a
-read-only input object. A `@StepAlgorithm` writes values back with `@update`; a hand-written `step!` writes them
-back by returning a named tuple or a `StepResult` (see [Returns and updates](#Returns-and-updates)).
+read-only input object. A `@StepAlgorithm` writes values back with `@update` (see
+[Returns and updates](#Returns-and-updates)); its return is only a value.
 
 ## Lifecycle Hooks
 
@@ -39,6 +39,25 @@ If you want a one-time preparation step, fold it into `init` or guard the first 
 ## Full Definitions
 
 ```julia
+@StepAlgorithm @config gain = 1.0 function MyAlgo(@managed(x = 0.0))
+    @update x = x + gain
+end
+
+function StatefulAlgorithms.cleanup(::MyAlgo, context)
+    return (;)
+end
+```
+
+`@managed(x = 0.0)` makes `x` the algorithm's state, created at `init`; `@update` writes it back after each step;
+`gain` is a field of the struct (`MyAlgo(gain = 2.0)`). The step's return value (here `nothing`) is a separate value,
+which a block captures with `y = MyAlgo()`.
+
+### Hand-written `init` / `step!` (deprecated)
+
+**Deprecated**: define algorithms with `@StepAlgorithm`. Hand-written `init`/`step!` methods still work until they
+are removed:
+
+```julia
 struct MyAlgo <: StepAlgorithm
     gain::Float64
 end
@@ -52,10 +71,6 @@ function StatefulAlgorithms.step!(a::MyAlgo, context)
     (; x) = context
     x = x + a.gain
     return (; x)
-end
-
-function StatefulAlgorithms.cleanup(::MyAlgo, context)
-    return (;)
 end
 ```
 
@@ -75,6 +90,8 @@ StatefulAlgorithms.updated_names(::Type{MyAlgo}) = (:x,)   # the names in `State
 `x` gets the same checks as for a `@StepAlgorithm` (a warning unless the value is state or `@mutable`, an error for an
 `@input`). `@StepAlgorithm` defines it from its `@update`s; a hand-written `step!` defines it itself, and without it
 nothing is checked.
+
+### States
 
 ```julia
 struct MyState <: AlgoState end
@@ -97,7 +114,7 @@ function signature.
 end
 ```
 
-You can still define `init` and `cleanup` manually for the generated type.
+You can still define `cleanup` manually for the generated type.
 
 #### Returns and updates
 
@@ -227,9 +244,10 @@ locals before forwarding into that typed implementation.
 If you want `ContextAnalyser` to discover dependencies more reliably:
 
 - use `@inputs((; ...))` to make init-time requirements explicit
-- use `context.name` or `(; name) = context` for required reads
-- use `get(context, :name, default)` for optional reads
-- return plain `NamedTuple`s from `init` and `step!`
+- name what a step reads as arguments: positional for required reads, keywords with defaults for optional ones
+
+For deprecated hand-written `init`/`step!` methods: use `context.name` or `(; name) = context` for required reads,
+`get(context, :name, default)` for optional reads, and return plain `NamedTuple`s.
 
 See [Init Analysis](@ref init_analysis_user) for the analyzer workflow and limitations.
 
