@@ -43,38 +43,38 @@ end
 """Plans whose compile time is measured, with a variant for reconfiguration (one interval changed)."""
 const COMPILE_CASES = Dict(
     "flat composite, 4 children" => (
-        () -> CompositeAlgorithm(Lin{1}, Lin{2}, Lin{3}, Lin{4}, (1, 1, 1, 1)),
-        () -> CompositeAlgorithm(Lin{1}, Lin{2}, Lin{3}, Lin{4}, (1, 1, 1, 2))),
+        () -> CompositeAlgorithm(LIN[1], LIN[2], LIN[3], LIN[4], (1, 1, 1, 1)),
+        () -> CompositeAlgorithm(LIN[1], LIN[2], LIN[3], LIN[4], (1, 1, 1, 2))),
     "route from interval-10 producer" => (
-        () -> CompositeAlgorithm(Lin{1}, Chain{2}, (10, 1), Route(Lin{1} => Chain{2}, :x => :u)),
-        () -> CompositeAlgorithm(Lin{1}, Chain{2}, (5, 1), Route(Lin{1} => Chain{2}, :x => :u))),
+        () -> CompositeAlgorithm(LIN[1], Chain2, (10, 1), Route(LIN[1] => Chain2, :x => :u)),
+        () -> CompositeAlgorithm(LIN[1], Chain2, (5, 1), Route(LIN[1] => Chain2, :x => :u))),
     "nested composite" => (
-        () -> CompositeAlgorithm(CompositeAlgorithm(Lin{1}, Lin{2}, (1, 3)), Lin{3}, (2, 1)),
-        () -> CompositeAlgorithm(CompositeAlgorithm(Lin{1}, Lin{2}, (1, 4)), Lin{3}, (2, 1))),
+        () -> CompositeAlgorithm(CompositeAlgorithm(LIN[1], LIN[2], (1, 3)), LIN[3], (2, 1)),
+        () -> CompositeAlgorithm(CompositeAlgorithm(LIN[1], LIN[2], (1, 4)), LIN[3], (2, 1))),
     "wide composite, 32 children" => (
-        () -> CompositeAlgorithm((Lin{k} for k in 1:32)..., ntuple(_ -> 1, 32)),
-        () -> CompositeAlgorithm((Lin{k} for k in 1:32)..., (ntuple(_ -> 1, 31)..., 2))),
+        () -> CompositeAlgorithm((LIN[k] for k in 1:32)..., ntuple(_ -> 1, 32)),
+        () -> CompositeAlgorithm((LIN[k] for k in 1:32)..., (ntuple(_ -> 1, 31)..., 2))),
     "flat Routine (1, 1, 1)" => (
-        () -> Routine(Lin{1}, Lin{2}, Lin{3}, (1, 1, 1)),
-        () -> Routine(Lin{1}, Lin{2}, Lin{3}, (1, 1, 2))),
+        () -> Routine(LIN[1], LIN[2], LIN[3], (1, 1, 1)),
+        () -> Routine(LIN[1], LIN[2], LIN[3], (1, 1, 2))),
     "Routine (100, 5)" => (
-        () -> Routine(Lin{1}, Lin{2}, (100, 5)),
-        () -> Routine(Lin{1}, Lin{2}, (100, 6))),
+        () -> Routine(LIN[1], LIN[2], (100, 5)),
+        () -> Routine(LIN[1], LIN[2], (100, 6))),
     "Routine in Routine" => (
-        () -> Routine(Routine(Lin{1}, Lin{2}, (1, 1)), Lin{3}, (1, 1)),
-        () -> Routine(Routine(Lin{1}, Lin{2}, (1, 2)), Lin{3}, (1, 1))),
+        () -> Routine(Routine(LIN[1], LIN[2], (1, 1)), LIN[3], (1, 1)),
+        () -> Routine(Routine(LIN[1], LIN[2], (1, 2)), LIN[3], (1, 1))),
     "Routine in Routine, repeats" => (
-        () -> Routine(Routine(Lin{1}, Lin{2}, (10, 5)), Lin{3}, (3, 2)),
-        () -> Routine(Routine(Lin{1}, Lin{2}, (10, 6)), Lin{3}, (3, 2))),
+        () -> Routine(Routine(LIN[1], LIN[2], (10, 5)), LIN[3], (3, 2)),
+        () -> Routine(Routine(LIN[1], LIN[2], (10, 6)), LIN[3], (3, 2))),
     "3-level Routine" => (
-        () -> Routine(Routine(Routine(Lin{1}, Lin{2}, (1, 2)), Lin{3}, (2, 1)), Lin{4}, (1, 3)),
-        () -> Routine(Routine(Routine(Lin{1}, Lin{2}, (1, 3)), Lin{3}, (2, 1)), Lin{4}, (1, 3))),
+        () -> Routine(Routine(Routine(LIN[1], LIN[2], (1, 2)), LIN[3], (2, 1)), LIN[4], (1, 3)),
+        () -> Routine(Routine(Routine(LIN[1], LIN[2], (1, 3)), LIN[3], (2, 1)), LIN[4], (1, 3))),
     "Routine in composite" => (
-        () -> CompositeAlgorithm(Routine(Lin{1}, Lin{2}, (2, 3)), Lin{3}, (2, 1)),
-        () -> CompositeAlgorithm(Routine(Lin{1}, Lin{2}, (2, 4)), Lin{3}, (2, 1))),
+        () -> CompositeAlgorithm(Routine(LIN[1], LIN[2], (2, 3)), LIN[3], (2, 1)),
+        () -> CompositeAlgorithm(Routine(LIN[1], LIN[2], (2, 4)), LIN[3], (2, 1))),
     "composite in Routine" => (
-        () -> Routine(CompositeAlgorithm(Lin{1}, Lin{2}, (1, 2)), Lin{3}, (4, 1)),
-        () -> Routine(CompositeAlgorithm(Lin{1}, Lin{2}, (1, 3)), Lin{3}, (4, 1))),
+        () -> Routine(CompositeAlgorithm(LIN[1], LIN[2], (1, 2)), LIN[3], (4, 1)),
+        () -> Routine(CompositeAlgorithm(LIN[1], LIN[2], (1, 3)), LIN[3], (4, 1))),
     "DSL, 4 plain-function statements" => (dsl_plan, dsl_plan),   # "reconfigure" = rebuilding the same block
 )
 

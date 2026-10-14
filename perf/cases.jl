@@ -9,25 +9,30 @@ const SA = StatefulAlgorithms
 ### Algorithms ###
 #################
 
-"""`x ← 0.999x + K`: a trivial step, so framework overhead dominates."""
-struct Lin{K} <: StepAlgorithm end
-SA.init(::Lin, context) = (; x = 0.0)
-SA.step!(::Lin{K}, context) where {K} = (; x = context.x * 0.999 + Float64(K))
+# `Lin1` … `Lin32`: `x ← 0.999x + K` for `K` = 1 … 32, a trivial step, so framework overhead dominates. `LIN[K]`
+# is the one for `K`; each is its own type, as the plans need.
+for K in 1:32
+    @eval @StepAlgorithm function $(Symbol(:Lin, K))(@managed(x = 0.0))
+        @update x = x * 0.999 + $(Float64(K))
+    end
+end
+const LIN = ntuple(K -> getfield(@__MODULE__, Symbol(:Lin, K)), 32)
 
-"""Like `Lin`, but also reads a routed input `u`."""
-struct Chain{K} <: StepAlgorithm end
-SA.init(::Chain, context) = (; x = 0.0)
-SA.step!(::Chain{K}, context) where {K} = (; x = context.x * 0.999 + context.u * 1e-3 + Float64(K))
+"""Like `Lin2`, but also reads a routed input `u`."""
+@StepAlgorithm function Chain2(u, @managed(x = 0.0))
+    @update x = x * 0.999 + u * 1e-3 + 2.0
+end
 
-"""Produces `reading`, which is not declared in `init` (a transient output)."""
-struct Sensor <: StepAlgorithm end
-SA.init(::Sensor, context) = (; n = 0)
-SA.step!(::Sensor, context) = (; n = context.n + 1, reading = Float64(context.n + 1))
+"""Writes `reading`, a name that is not its state (a transient output, routed to `Controller`)."""
+@StepAlgorithm function Sensor(@managed(n = 0); reading = nothing)
+    @update n += 1
+    @update reading = Float64(n)
+end
 
 """Consumes the routed transient `reading`."""
-struct Controller <: StepAlgorithm end
-SA.init(::Controller, context) = (; acc = 0.0)
-SA.step!(::Controller, context) = (; acc = context.acc + context.reading)
+@StepAlgorithm function Controller(reading, @managed(acc = 0.0))
+    @update acc += reading
+end
 
 @inline lin(x, K) = x * 0.999 + Float64(K)
 
@@ -191,45 +196,45 @@ end
     return (x1, x2, x3)
 end
 
-xs(context, ks...) = map(k -> context[Lin{k}].x, ks)
+xs(context, ks...) = map(k -> context[LIN[k]].x, ks)
 
 const CASES = PerfCase[
     PerfCase(name = "flat composite, 4 children", N = 10^7, inner = 4,
-        plan = () -> CompositeAlgorithm(Lin{1}, Lin{2}, Lin{3}, Lin{4}, (1, 1, 1, 1)),
+        plan = () -> CompositeAlgorithm(LIN[1], LIN[2], LIN[3], LIN[4], (1, 1, 1, 1)),
         hand = hand_flat4, result = c -> xs(c, 1, 2, 3, 4)),
     PerfCase(name = "intervals (1, 3)", N = 2 * 10^7, inner = 1,
-        plan = () -> CompositeAlgorithm(Lin{1}, Lin{2}, (1, 3)),
+        plan = () -> CompositeAlgorithm(LIN[1], LIN[2], (1, 3)),
         hand = hand_intervals, result = c -> xs(c, 1, 2)),
     PerfCase(name = "route from interval-10 producer", N = 10^7,
-        plan = () -> CompositeAlgorithm(Lin{1}, Chain{2}, (10, 1), Route(Lin{1} => Chain{2}, :x => :u)),
-        hand = hand_route, result = c -> (c[Lin{1}].x, c[Chain{2}].x)),
+        plan = () -> CompositeAlgorithm(LIN[1], Chain2, (10, 1), Route(LIN[1] => Chain2, :x => :u)),
+        hand = hand_route, result = c -> (c[LIN[1]].x, c[Chain2].x)),
     PerfCase(name = "nested composite", N = 10^7,
-        plan = () -> CompositeAlgorithm(CompositeAlgorithm(Lin{1}, Lin{2}, (1, 3)), Lin{3}, (2, 1)),
+        plan = () -> CompositeAlgorithm(CompositeAlgorithm(LIN[1], LIN[2], (1, 3)), LIN[3], (2, 1)),
         hand = hand_nested, result = c -> xs(c, 1, 2, 3)),
     PerfCase(name = "wide composite, 32 children", N = 10^6, inner = 32,
-        plan = () -> CompositeAlgorithm((Lin{k} for k in 1:32)..., ntuple(_ -> 1, 32)),
+        plan = () -> CompositeAlgorithm((LIN[k] for k in 1:32)..., ntuple(_ -> 1, 32)),
         hand = hand_wide32, result = c -> xs(c, 1:32...)),
     PerfCase(name = "flat Routine (1, 1, 1)", N = 10^7, inner = 3,
-        plan = () -> Routine(Lin{1}, Lin{2}, Lin{3}, (1, 1, 1)),
+        plan = () -> Routine(LIN[1], LIN[2], LIN[3], (1, 1, 1)),
         hand = hand_routine3, result = c -> xs(c, 1, 2, 3)),
     PerfCase(name = "Routine (100, 5)", N = 10^5, inner = 105,
-        plan = () -> Routine(Lin{1}, Lin{2}, (100, 5)),
+        plan = () -> Routine(LIN[1], LIN[2], (100, 5)),
         hand = hand_routine_100_5, result = c -> xs(c, 1, 2)),
     PerfCase(name = "Routine in Routine", N = 10^6, inner = 3,
-        plan = () -> Routine(Routine(Lin{1}, Lin{2}, (1, 1)), Lin{3}, (1, 1)),
+        plan = () -> Routine(Routine(LIN[1], LIN[2], (1, 1)), LIN[3], (1, 1)),
         hand = hand_routine3, result = c -> xs(c, 1, 2, 3),
         note = "inner _subroutine_step! becomes a dynamic invoke (recursion limit)"),
     PerfCase(name = "Routine in Routine, repeats", N = 2 * 10^5, inner = 47,
-        plan = () -> Routine(Routine(Lin{1}, Lin{2}, (10, 5)), Lin{3}, (3, 2)),
+        plan = () -> Routine(Routine(LIN[1], LIN[2], (10, 5)), LIN[3], (3, 2)),
         hand = hand_routine_nested_repeats, result = c -> xs(c, 1, 2, 3)),
     PerfCase(name = "3-level Routine", N = 10^6, inner = 10,
-        plan = () -> Routine(Routine(Routine(Lin{1}, Lin{2}, (1, 2)), Lin{3}, (2, 1)), Lin{4}, (1, 3)),
+        plan = () -> Routine(Routine(Routine(LIN[1], LIN[2], (1, 2)), LIN[3], (2, 1)), LIN[4], (1, 3)),
         hand = hand_routine_3level, result = c -> xs(c, 1, 2, 3, 4)),
     PerfCase(name = "Routine in composite", N = 4 * 10^6,
-        plan = () -> CompositeAlgorithm(Routine(Lin{1}, Lin{2}, (2, 3)), Lin{3}, (2, 1)),
+        plan = () -> CompositeAlgorithm(Routine(LIN[1], LIN[2], (2, 3)), LIN[3], (2, 1)),
         hand = hand_routine_in_composite, result = c -> xs(c, 1, 2, 3)),
     PerfCase(name = "composite in Routine", N = 2 * 10^6,
-        plan = () -> Routine(CompositeAlgorithm(Lin{1}, Lin{2}, (1, 2)), Lin{3}, (4, 1)),
+        plan = () -> Routine(CompositeAlgorithm(LIN[1], LIN[2], (1, 2)), LIN[3], (4, 1)),
         hand = hand_composite_in_routine, result = c -> xs(c, 1, 2, 3)),
     PerfCase(name = "transient route, produced on step 1", N = 10^7,
         plan = () -> CompositeAlgorithm(Sensor, Controller, (Interval(10, :start), Interval(10, :start)), Route(Sensor => Controller, :reading)),
