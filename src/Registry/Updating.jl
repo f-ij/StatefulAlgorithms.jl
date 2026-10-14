@@ -1,21 +1,10 @@
 """
-Scoped Algorithms or thin_wrapped scoped algorithms that need an updated name
-    Can be matched with a new registry and rebuilt accordingly
+    update_keys(algo, registry) -> keyed algo
+
+`algo` (or the algorithm type `algo`) as `registry` stores it, with the key it has there (`registry[algo]`).
 """
 function update_keys(func::F, reg::NameSpaceRegistry) where {F <: ProcessEntity}
     reg[func]
-    # if func isa IdentifiableAlgo
-    #     @DebugMode println("Updating name for IdentifiableAlgo: $func using registry: $reg")
-
-    #     newval = static_get_match(reg, func)
-    #     allentries = all_entries(reg)
-    #     if isnothing(newval)
-    #         error("Tyring to update name of function $(func) but no match found in registry $reg")
-    #     end
-    #     return setcontextkey(func, getkey(newval))
-    # end
-    # # Default: keep non-Identifiable algorithms unchanged.
-    # return func
 end
 
 function update_keys(::Type{F}, reg::NameSpaceRegistry) where {F <: ProcessEntity}
@@ -23,23 +12,20 @@ function update_keys(::Type{F}, reg::NameSpaceRegistry) where {F <: ProcessEntit
 end
 
 """
-Changes all the names in target_reg to match those in ground_reg
-    Matched by thincontainer contained_type
+    update_keys(target_registry, ground_registry, changed_names = Dict()) -> registry
 
-    Can be supplied with a Dict of changed names to fill
+`target_registry` with the key of every algorithm replaced by the key the same algorithm has in `ground_registry`
+(algorithms not in `ground_registry` keep theirs). `changed_names` is filled with `old key => new key`.
 """
 function update_keys(target_reg::NameSpaceRegistry,  ground_reg::NameSpaceRegistry, changed_names = Dict{Symbol,Symbol}())
-    # changed_names = Dict{Symbol,Symbol}() # old name => new name
-    _all_entries = all_entries(target_reg)
+    _all_entries = all_algos(target_reg)
     for target_entry in _all_entries
         oldname = getkey(target_entry)
         groundval = static_get_match(ground_reg, target_entry)
         if isnothing(groundval) # TODO: Assume it's supposed to be there?
             continue
         end
-        # if !isnothing(changed_names)
         changed_names[oldname] = getkey(groundval)
-        # end
     end
     target_reg = replacecontextkeyss(target_reg, changed_names)
     return target_reg
