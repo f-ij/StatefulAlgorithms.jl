@@ -16,7 +16,7 @@ julia --project=perf perf/run.jl --compile-only      # only compile times
 
 Each case runs under three runners: `inline` (`InlineProcess`), `process, no stop checks` (`Process` with
 `NoStopRepeat`, a perf-only lifetime whose stop check is always `false`) and `process` (`Process` as users run it).
-A `Process` reads `shouldrun` before every routine repeat and after every step, so a pause or close is seen while a
+A `Process` reads `shouldrun` after every routine repeat and after every step, so a pause or close is seen while a
 long repeat runs (repeats can run for a long time, so this check cannot move to once per routine child). That is
 work a hand-written loop does not do, and it can cost more than the read itself: each check is a possible exit, so
 the compiler cannot write out a routine's repeats one after another (e.g. `composite in Routine`). So:

@@ -654,6 +654,12 @@ end
             e
         end
         @test !isnothing(err) && occursin("Lifetime selector `count` is not a block value", sprint(showerror, err))
+
+        # The condition is checked before every repeat, as a `while` loop's: when it already holds, the child does not run.
+        already_met = run(@Routine(begin
+            @repeat Until(x -> x >= 0, Var(DSLRepeatLifetimeCounter, :count)) DSLRepeatLifetimeCounter()
+        end); repeats = 1)
+        @test counter_state(already_met) == 0
     end
 
     @testset "Nested DSL state writeback resolves through keyed _state" begin

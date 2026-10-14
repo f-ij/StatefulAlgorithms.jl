@@ -127,14 +127,18 @@ function _inline_routine_child_exprs(ChildType::Type, child, child_cursor, child
                    :($carried = @inline next_carried($carried, (@inline getpersistent($stepped)))),
                    :(@inline tick!(process))]
     end
-    # After repeat `idx_expr`: the child's own stop condition (`Until`, ...) ends the child; otherwise a pause or close
-    # of the process stops it, and it resumes at the next repeat. It sees the persistent and the runtime context: the
-    # stop condition may read what the repeat assigned and declared locals.
-    stop_after(idx_expr) = quote
-        if @inline routine_breakcondition($repeat_value, lifetime, process, (@inline final_context(LoopContext((@inline with_carried($start_persistent, $carried)), $runtime))), $idx_expr)
-            if !(@inline _routine_local_breakcondition($repeat_value, process, (@inline final_context(LoopContext((@inline with_carried($start_persistent, $carried)), $runtime))), $idx_expr))
-                @inline set_resume_point!($routine_cursor, $i, $idx_expr + 1)
-            end
+    # Before a repeat, with `done_expr` repeats done: the child's own stop condition (`Until`, ...) ends the child, as a
+    # `while` loop's condition (if it already holds, the child does not run).
+    finished_before(done_expr) = quote
+        if @inline _routine_breakcondition($repeat_value, process, (@inline final_context(LoopContext((@inline with_carried($start_persistent, $carried)), $runtime))), $done_expr)
+            $(Expr(:symbolicgoto, done))
+        end
+    end
+    # After repeat `idx_expr`: a pause or close of the process stops the child; it resumes at the next repeat. The
+    # stop conditions may read declared locals, so they see the persistent and the runtime context.
+    paused_after(idx_expr) = quote
+        if @inline _process_breakcondition(lifetime, process, (@inline final_context(LoopContext((@inline with_carried($start_persistent, $carried)), $runtime))))
+            @inline set_resume_point!($routine_cursor, $i, $idx_expr + 1)
             $(Expr(:symbolicgoto, done))
         end
     end
@@ -146,13 +150,14 @@ function _inline_routine_child_exprs(ChildType::Type, child, child_cursor, child
                # what the nested plan's `_step!` returns, from inside this `_step!`).
                :(local $carried = @inline _written_values($start_persistent, (@inline _writes($child, $child_cursor, $start_persistent, (@inline runtime_type(typeof($lc))), $child_wiring, $namespace_expr, process, lifetime))))]
     if once
-        push!(body, :(if $resume_point <= 1; $(repeat_once()...); $(stop_after(resume_point)); end))
+        push!(body, :(if $resume_point <= 1; $(repeat_once()...); $(paused_after(resume_point)); end))   # `Repeat(1)`: no own condition
     else
-        # One loop, every repeat the same: the repeat, then the stop check (see `_subroutine_step!`).
+        # One loop, every repeat the same: the child's own condition, the repeat, the pause check (see `_subroutine_step!`).
         push!(body, :(local $count = @inline routine_repeat_count($repeat_value)))
         push!(body, :(for $lidx in $resume_point:$count
+            $(finished_before(:($lidx - 1)))
             $(repeat_once()...)
-            $(stop_after(lidx))
+            $(paused_after(lidx))
         end))
     end
     push!(body, Expr(:symboliclabel, done))
@@ -316,20 +321,25 @@ end
         # The repeats carry only the fields the child writes, as the loops do (see src/Context/Carried/Carry.jl); `context`
         # stays the routine's starting context.
         carried = @inline create_carried(func, func_cursor, lc, child_step_wiring, namespace, process, lifetime)
-        # Every repeat the same: the repeat, then the stop check. Every repeat (of any child) is followed by a check, so a
-        # pause or close is seen between any two repeats, also between two children: repeats can run for a long time.
-        # Checked after the repeat because the child's own stop condition (`Until`, ...) may read what the repeat assigned.
+        # Every repeat the same:
+        # - before it, the child's own stop condition (`Until`, ...), as a `while` loop's condition: if it already holds,
+        #   the child does not run. It gets the number of repeats done.
+        # - after it, a pause or close of the process: the child resumes at the next repeat. Every repeat (of any child)
+        #   is followed by this check, so a pause is seen between any two repeats, also between two children (repeats
+        #   can run for a long time). After, not before: a check before the update made LLVM select between the new and
+        #   old values on the `shouldrun` byte, which put that read in every update's dependency chain.
+        # Both may read declared locals, so they see the persistent and the runtime context. Built fresh for each check:
+        # carrying `stepped` instead would make the whole context a loop variable.
         for lidx in resume_point:this_repeat_count
+            if @inline _routine_breakcondition(subroutine_lifetime, process, (@inline final_context(LoopContext((@inline with_carried(persistent_context, carried)), runtime_context))), lidx - 1)
+                break
+            end
             stepped_lc = @inline _step!(func, func_cursor, (@inline withcontexts(lc, (@inline with_carried(persistent_context, carried)), runtime_context)), child_step_wiring, namespace, process, lifetime)
             runtime_context = @inline getruntime(stepped_lc)
             carried = @inline next_carried(carried, (@inline getpersistent(stepped_lc)))
             @inline tick!(process)
-            # Built fresh for the check: carrying `stepped` instead would make the whole context a loop variable.
-            seen = @inline final_context(LoopContext((@inline with_carried(persistent_context, carried)), runtime_context))   # the stop condition may read declared locals
-            if @inline routine_breakcondition(subroutine_lifetime, lifetime, process, seen, lidx)
-                if !(@inline _routine_local_breakcondition(subroutine_lifetime, process, seen, lidx))
-                    @inline set_resume_point!(routine_cursor, idx, lidx + 1)
-                end
+            if @inline _process_breakcondition(lifetime, process, (@inline final_context(LoopContext((@inline with_carried(persistent_context, carried)), runtime_context))))
+                @inline set_resume_point!(routine_cursor, idx, lidx + 1)
                 break
             end
         end
@@ -356,14 +366,11 @@ the loop, so the child's `_step!` is emitted once instead of twice.
     namespace::N,
 ) where {L<:LoopContext,F,FS<:AbstractLoopCursor,R<:Routine,RS<:Union{DirectRoutineCursor,PausableRoutineCursor},P<:AbstractProcess,LT<:Lifetime,SL<:Lifetime,W,N<:Namespace}
     resume_point = @inline get_resume_point(routine_cursor, idx)
-    if resume_point <= 1
+    if resume_point <= 1   # `Repeat(1)`: no own stop condition, only a pause or close after the repeat
         lc = @inline _step!(func, func_cursor, lc, child_step_wiring, namespace, process, lifetime)
         @inline tick!(process)
-        seen = @inline final_context(lc)   # the stop condition may read declared locals
-        if @inline routine_breakcondition(subroutine_lifetime, lifetime, process, seen, resume_point)
-            if !(@inline _routine_local_breakcondition(subroutine_lifetime, process, seen, resume_point))
-                @inline set_resume_point!(routine_cursor, idx, resume_point + 1)
-            end
+        if @inline _process_breakcondition(lifetime, process, (@inline final_context(lc)))
+            @inline set_resume_point!(routine_cursor, idx, resume_point + 1)
         end
     end
     return lc

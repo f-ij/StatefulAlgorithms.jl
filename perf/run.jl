@@ -17,7 +17,7 @@
 # reported ratio package / hand-written is mostly independent of machine and load.
 #
 # Runners: `inline` (InlineProcess), `process` (Process) and `process, no stop checks` (Process with a lifetime whose
-# stop check is always false, see `NoStopRepeat` in cases.jl). A Process checks `shouldrun` before every routine
+# stop check is always false, see `NoStopRepeat` in cases.jl). A Process checks `shouldrun` after every routine
 # repeat and after every step, so it can be paused or closed while a long repeat runs; a hand-written loop does not.
 # That cost is real work, not overhead: the `process` row shows it as `stop ns` (its ns per step minus the
 # no-stop-checks row's) and is not held to the target; the no-stop-checks row is.
