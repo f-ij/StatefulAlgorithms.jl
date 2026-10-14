@@ -32,6 +32,7 @@ const TEST_FILES = [
     "ContextDeltaTest.jl",
     "ReturnsUpdatesTest.jl",
     "ReLayoutTest.jl",
+    "RegistryBuildTest.jl",
 ]
 
 #=
