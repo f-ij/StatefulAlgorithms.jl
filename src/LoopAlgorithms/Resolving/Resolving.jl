@@ -96,16 +96,16 @@ end
 @inline resolve(loopalgorithms::Tuple{Vararg{LoopSpec}}) = resolve(loopalgorithms...)
 
 """Build one registry for several loop algorithms and return it with each algorithm's keyed plan tree."""
-# TODO: unlike `resolve(la)`, this is compiled for every combination of plan types (no unspecialized entry), skips the
-# `isresolved` check and `Unique` id normalization (so each new id compiles it again), and a `FinalizedAlgorithm`
-# argument fails (`LoopAlgorithm(::FinalizedAlgorithm)` has no method). Route it through the same steps as `resolve(la)`.
-function _build_shared_registry_and_keyed_algos(loopalgorithms::LAS) where {LAS<:Tuple}
-    registry = NameSpaceRegistry()
-    keyed_loopalgorithms = ()
-    for la in loopalgorithms
-        resolved = la isa LoopAlgorithm ? la : LoopAlgorithm(la)
-        registry, keyed = setup_registry_and_keyed_algos(resolved, registry)
-        keyed_loopalgorithms = (keyed_loopalgorithms..., keyed)
+# TODO: unlike `resolve(la)`, the `resolve(la1, la2, ...)` calling this is compiled for every combination of plan types
+# (no unspecialized entry), skips the `isresolved` check and `Unique` id normalization (so each new id compiles it
+# again), and a `FinalizedAlgorithm` argument fails (`LoopAlgorithm(::FinalizedAlgorithm)` has no method). Route it
+# through the same steps as `resolve(la)`.
+Base.@nospecializeinfer function _build_shared_registry_and_keyed_algos(@nospecialize(loopalgorithms::Tuple))
+    draft = RegistryDraft()
+    keyed = Vector{Any}(undef, nfields(loopalgorithms))
+    for i in eachindex(keyed)
+        la = getfield(loopalgorithms, i)
+        keyed[i] = draft_add_loopalgorithm!(draft, la isa LoopAlgorithm ? la : LoopAlgorithm(la))
     end
-    return registry, keyed_loopalgorithms
+    return build_registry(draft), Tuple(keyed)
 end

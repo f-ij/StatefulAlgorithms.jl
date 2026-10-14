@@ -137,6 +137,161 @@ function addall(reg::NSR, objs::O, mults::M) where {NSR<:NameSpaceRegistry,O<:Tu
     end
 end
 
+#########################
+##### DRAFT REGISTRY ####
+#########################
+#=
+Building a registry from plain values. Adding to a `NameSpaceRegistry` one algorithm at a time (`add`) gives a new
+registry type after every add, and Julia compiles each add anew. A `RegistryDraft` holds the same data as plain
+values (entry types, keyed algorithms, multipliers, lookup tables) and follows the same rules as `add`; the registry is
+then built once from it (`build_registry`). The functions below take types and algorithms as values (`@nospecialize`),
+so they are compiled once, not per plan.
+=#
+
+"""
+    RegistryDraft()
+
+A registry under construction, as plain values: per entry type, in registry order, the type (`Lin`), the keyed
+algorithms (`Lin_1`, `Lin_2`, ...), their multipliers and the runtime lookup table (`dynamic_lookup`), and the
+matcher of each keyed algorithm's type (`match_by`, kept to find matches without recomputing it). Fill it with
+`draft_add!`, then `build_registry` gives the `NameSpaceRegistry` that the same adds with `add` would give.
+"""
+struct RegistryDraft
+    types::Vector{Any}
+    entries::Vector{Vector{Any}}
+    multipliers::Vector{Vector{Float64}}
+    lookups::Vector{Dict{Any,Int}}
+    matchers::Vector{Vector{Any}}
+end
+RegistryDraft() = RegistryDraft(Any[], Vector{Any}[], Vector{Float64}[], Dict{Any,Int}[], Vector{Any}[])
+
+"""
+    draft_add!(draft, obj, multiplier) -> keyed
+
+Add `obj` with `multiplier` to `draft` and return it as the registry stores it (keyed, for example `Lin_1`); the
+same as `add(reg, obj, multiplier)` on a `NameSpaceRegistry`. A new entry type goes first if it is a state
+(`AlgoState`), last otherwise. Within an entry type, an algorithm that matches one already there (`match_by`, or the
+lookup table for values that are not `isbits`) is not added again: its multiplier is added to that one's, a given key
+replaces an automatic one, and mergeable entries (`registry_allowmerge`) are merged.
+"""
+Base.@nospecializeinfer function draft_add!(draft::RegistryDraft, @nospecialize(obj), @nospecialize(multiplier))
+    obj isa NameSpaceRegistry && error("Cannot add a NameSpaceRegistry to another NameSpaceRegistry")
+    isnothing(obj) && error("Trying to add `nothing` to a registry")
+    entry_t = assign_entrytype(obj)
+    t = 0
+    for i in eachindex(draft.types)
+        if entry_t <: draft.types[i]
+            t = i
+            break
+        end
+    end
+    if t == 0
+        if entry_t <: AlgoState   # states go first
+            pushfirst!(draft.types, entry_t); pushfirst!(draft.entries, Any[])
+            pushfirst!(draft.multipliers, Float64[]); pushfirst!(draft.lookups, Dict{Any,Int}()); pushfirst!(draft.matchers, Any[])
+            t = 1
+        else
+            push!(draft.types, entry_t); push!(draft.entries, Any[])
+            push!(draft.multipliers, Float64[]); push!(draft.lookups, Dict{Any,Int}()); push!(draft.matchers, Any[])
+            t = length(draft.types)
+        end
+    end
+    entries, mults, lookup, matchers = draft.entries[t], draft.multipliers[t], draft.lookups[t], draft.matchers[t]
+
+    fidx = _draft_findmatch(entries, matchers, lookup, obj)
+    if isnothing(fidx)
+        keyed = _draft_autokey(obj, length(entries) + 1)
+        push!(mults, multiplier)
+        push!(entries, keyed)
+        push!(matchers, _UNSET_MATCHER)
+        lookup[dynamic_lookup_key(keyed)] = length(entries)
+        return keyed
+    end
+    # The same rules as `add(::RegistryTypeEntry, ...)`: a given key replaces an automatic one, given keys must agree,
+    # mergeable entries are merged.
+    if hasautokey(entries[fidx]) && haskey(obj)
+        _draft_replace!(entries, lookup, matchers, fidx, obj)
+    end
+    if hasgivenkey(entries[fidx]) && hasgivenkey(obj)
+        @assert getkey(entries[fidx]) == getkey(obj) "Trying to add an entry with name $(getkey(obj)) but an entry with the same type already exists with name $(getkey(entries[fidx]))"
+    end
+    if registry_allowmerge(entries[fidx], obj) && !_same_unique_entry(entries[fidx], obj)
+        _draft_replace!(entries, lookup, matchers, fidx, merge(entries[fidx], obj))
+    end
+    mults[fidx] += multiplier
+    return entries[fidx]
+end
+
+"""
+The index of the entry in `entries` that `obj` matches, or `nothing`; as `findfirst_match` on a `RegistryTypeEntry`.
+`matchers` keeps the matcher of each entry's type once it has been computed.
+"""
+Base.@nospecializeinfer function _draft_findmatch(entries::Vector{Any}, matchers::Vector{Any}, lookup::Dict{Any,Int}, @nospecialize(obj))
+    isstaticallyfindable(obj) || return get(lookup, dynamic_lookup_key(obj), nothing)
+    # As the generated `static_findfirst_match`, which calls `match(match_by(obj), entry type)`: `match` compares the
+    # matchers of both (a matcher is its own), and the entry types' matchers are kept in `matchers`.
+    value = match_by(obj)
+    value isa AbstractMatcher || (value = match_by(value))
+    # Concrete types (algorithms often match by their type, `Lin{1}`) are equal only if identical: compared without
+    # calling `==`.
+    concrete = value isa DataType && isconcretetype(value)
+    for i in eachindex(matchers)
+        matchers[i] === _UNSET_MATCHER && (matchers[i] = match_by(typeof(entries[i])))
+        m = matchers[i]
+        if concrete && m isa DataType && isconcretetype(m)
+            value === m && return i
+        elseif value == m
+            return i
+        end
+    end
+    return nothing
+end
+
+struct _UnsetMatcher end
+const _UNSET_MATCHER = _UnsetMatcher()   # an entry whose type's matcher is not computed yet
+
+"""Put `new` at `idx` in `entries`, moving its key in `lookup` from the old entry to `new` and resetting its matcher; as `replace` on a `RegistryTypeEntry`."""
+Base.@nospecializeinfer function _draft_replace!(entries::Vector{Any}, lookup::Dict{Any,Int}, matchers::Vector{Any}, idx::Int, @nospecialize(new))
+    delete!(lookup, dynamic_lookup_key(entries[idx]))
+    lookup[dynamic_lookup_key(new)] = idx
+    entries[idx] = new
+    matchers[idx] = _UNSET_MATCHER
+    return nothing
+end
+
+"""
+    _draft_autokey(obj, i) -> keyed
+
+`Autokey(obj, i)`: `obj` with the automatic key of the `i`-th entry of its type (`Lin_2`), or unchanged if it has a
+key. For a handle (`IdentifiableAlgo`) the key is set on its type here, as a value, so nothing is compiled per handle
+type and index (`Autokey` builds the key with `static_symbol`, one generated method per key); other values go to
+`Autokey`.
+"""
+Base.@nospecializeinfer function _draft_autokey(@nospecialize(obj), i::Int)
+    obj isa IdentifiableAlgo || return Autokey(obj, i)
+    p = typeof(obj).parameters    # {F, Id, VarAliases, AlgoName, ContextKey, R}
+    p[5] == Symbol() || return obj
+    key = Symbol(autokey_basename(getfield(obj, :func)), :_, i)
+    return Core.apply_type(IdentifiableAlgo, p[1], p[2], p[3], p[4], key, p[6])(getfield(obj, :func), getfield(obj, :reconstructor))
+end
+
+"""
+    build_registry(draft) -> NameSpaceRegistry
+
+The registry that `draft` describes: one `RegistryTypeEntry{T, Tuple{entry types...}}` per entry type, in order, with
+the draft's multipliers and lookup tables. Builds each type once, with its constructor called on the values.
+"""
+Base.@nospecializeinfer function build_registry(draft::RegistryDraft)
+    n = length(draft.types)
+    typeentries = Vector{Any}(undef, n)
+    for i in 1:n
+        entries = Tuple(draft.entries[i])
+        typeentries[i] = RegistryTypeEntry{draft.types[i], typeof(entries)}(entries, draft.multipliers[i], draft.lookups[i])
+    end
+    all_entries = Tuple(typeentries)
+    return NameSpaceRegistry{typeof(all_entries)}(all_entries)
+end
+
 ########################
 
 function scale_multipliers!(reg::NameSpaceRegistry{T}, factor::Number) where {T}

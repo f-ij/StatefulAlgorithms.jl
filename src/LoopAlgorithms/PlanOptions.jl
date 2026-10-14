@@ -188,7 +188,7 @@ end
     return getwiring(child)
 end
 
-# A named nested plan (see `add_algo_to_registry` for one): its name plays no part in wiring.
+# A named nested plan (see `draft_add_child!` for one): its name plays no part in wiring.
 # TODO (TODO.md, "named plans as context slices"): keep it that way, a plan name is read-only.
 """Return nested plan wiring for identifiable loop-plan children."""
 @inline function _child_wiring_for_child(child::IA, bucket::Wiring) where {F<:LoopSpec, IA<:AbstractIdentifiableAlgo{F}}
