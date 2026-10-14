@@ -1,5 +1,10 @@
 # Unique() ids: stop recompiling when the same code runs again
 
+> Historical (2026-10-15): written for the registry before `refactor/registry`. The registry is now built in one
+> walk (`RegistryBuilder`, `add!`, Registry/Builder.jl) and its setup is generated from the plan's type
+> (GeneratedCode/RegistrySetup.jl); the functions named below (`add_algos_to_registry`, `add_algo_tuple_to_registry`)
+> no longer exist.
+
 Every call of `Unique(f)` draws a random UUID that becomes a type parameter, so each call makes a new type and everything specialized on
 it is compiled again: constructing the plan, resolving it, and the loop. Re-running the same user code costs 420 to 600 ms per call
 instead of 0.1 to 0.2 ms (measured; the cost is compile time, not a per-iteration cost).

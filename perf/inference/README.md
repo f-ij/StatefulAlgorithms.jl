@@ -1,5 +1,10 @@
 # Making `resolve` inferable
 
+> Historical (2026-10-15): written for the registry before `refactor/registry`. The registry is now built in one
+> walk (`RegistryBuilder`, `add!`, Registry/Builder.jl) and its setup is generated from the plan's type
+> (GeneratedCode/RegistrySetup.jl); the functions named below (`add_algos_to_registry`, `add_algo_tuple_to_registry`)
+> no longer exist.
+
 `resolve(plan)` used to infer as `Any`, so everything computed from it was compiled from untyped values. JET (`JET.report_opt`) found the causes:
 
 1. `add_algo_tuple_to_registry` called itself on the tail of the children while the registry type grew at each level. Inference widens a
