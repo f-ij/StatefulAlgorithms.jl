@@ -1,0 +1,40 @@
+1|precompile|COMPILE precompile=11.390210375
+1|flat composite, 4 children|COMPILE load=3.3412620000000004 first_inline=0.35062899999999964 first_process=0.07746900000000068 reconfigure=0.09945100000000018
+1|route from interval-10 producer|COMPILE load=2.091608 first_inline=0.25567600000000024 first_process=0.07504500000000025 reconfigure=0.08327299999999926
+1|nested composite|COMPILE load=2.094114 first_inline=0.31343299999999985 first_process=0.078843 reconfigure=0.14846899999999952
+1|wide composite, 32 children|COMPILE load=1.99793 first_inline=1.9255339999999999 first_process=0.22921100000000028 reconfigure=0.28566100000000016
+1|flat Routine (1, 1, 1)|COMPILE load=1.9426510000000001 first_inline=0.29871599999999976 first_process=0.08563600000000005 reconfigure=0.07345900000000061
+1|Routine (100, 5)|COMPILE load=2.160842 first_inline=0.1671699999999996 first_process=0.07720299999999991 reconfigure=0.06625199999999953
+1|Routine in Routine|COMPILE load=2.099992 first_inline=0.30192899999999945 first_process=0.08493700000000004 reconfigure=0.14524000000000026
+1|Routine in Routine, repeats|COMPILE load=1.988388 first_inline=0.3047469999999999 first_process=0.10716899999999985 reconfigure=0.1704459999999992
+1|3-level Routine|COMPILE load=2.092382 first_inline=0.4570059999999998 first_process=0.1491769999999999 reconfigure=0.25257100000000055
+1|Routine in composite|COMPILE load=2.003176 first_inline=0.350295 first_process=0.09976000000000074 reconfigure=0.15981700000000032
+1|composite in Routine|COMPILE load=2.231804 first_inline=0.30886499999999995 first_process=0.09033800000000003 reconfigure=0.16826000000000008
+1|DSL, 4 plain-function statements|COMPILE load=1.9580270000000002 first_inline=0.31299799999999944 first_process=0.14625099999999946 reconfigure=0.08521799999999935
+2|precompile|COMPILE precompile=11.432680375
+2|flat composite, 4 children|COMPILE load=3.3029710000000003 first_inline=0.3143589999999996 first_process=0.0720320000000001 reconfigure=0.09413799999999917
+2|route from interval-10 producer|COMPILE load=2.02807 first_inline=0.2704499999999994 first_process=0.07783899999999999 reconfigure=0.07336700000000018
+2|nested composite|COMPILE load=1.969714 first_inline=0.29533699999999996 first_process=0.07447099999999995 reconfigure=0.1404930000000002
+2|wide composite, 32 children|COMPILE load=1.989063 first_inline=1.850816 first_process=0.20654400000000006 reconfigure=0.31521499999999936
+2|flat Routine (1, 1, 1)|COMPILE load=1.949831 first_inline=0.27101299999999995 first_process=0.08204799999999945 reconfigure=0.06643899999999991
+2|Routine (100, 5)|COMPILE load=2.1424950000000003 first_inline=0.16361900000000063 first_process=0.07664500000000007 reconfigure=0.0716669999999997
+2|Routine in Routine|COMPILE load=1.992012 first_inline=0.26113100000000067 first_process=0.07671600000000023 reconfigure=0.1413549999999999
+2|Routine in Routine, repeats|COMPILE load=2.010377 first_inline=0.3002080000000005 first_process=0.10353700000000021 reconfigure=0.15321400000000018
+2|3-level Routine|COMPILE load=1.8728939999999998 first_inline=0.4551879999999997 first_process=0.14856800000000003 reconfigure=0.24863500000000016
+2|Routine in composite|COMPILE load=2.106253 first_inline=0.32677599999999973 first_process=0.10358299999999954 reconfigure=0.15717900000000018
+2|composite in Routine|COMPILE load=2.081906 first_inline=0.30630999999999986 first_process=0.09569000000000027 reconfigure=0.17320400000000014
+2|DSL, 4 plain-function statements|COMPILE load=2.022111 first_inline=0.317488 first_process=0.14336000000000038 reconfigure=0.084727
+3|precompile|COMPILE precompile=11.443514208
+3|flat composite, 4 children|COMPILE load=3.357358 first_inline=0.3302770000000006 first_process=0.08171000000000017 reconfigure=0.11071399999999976
+3|route from interval-10 producer|COMPILE load=2.155894 first_inline=0.28480799999999995 first_process=0.08245300000000011 reconfigure=0.07460799999999956
+3|nested composite|COMPILE load=2.095304 first_inline=0.32219 first_process=0.07911800000000024 reconfigure=0.1510480000000003
+3|wide composite, 32 children|COMPILE load=1.980723 first_inline=1.9437189999999998 first_process=0.21456799999999987 reconfigure=0.32251100000000044
+3|flat Routine (1, 1, 1)|COMPILE load=2.002532 first_inline=0.3331010000000001 first_process=0.08842099999999942 reconfigure=0.07426600000000061
+3|Routine (100, 5)|COMPILE load=2.038382 first_inline=0.16452299999999997 first_process=0.07756100000000021 reconfigure=0.06974699999999956
+3|Routine in Routine|COMPILE load=2.032908 first_inline=0.31847199999999987 first_process=0.08255899999999983 reconfigure=0.1471309999999999
+3|Routine in Routine, repeats|COMPILE load=2.0470710000000003 first_inline=0.29696000000000033 first_process=0.10480200000000028 reconfigure=0.16140000000000043
+3|3-level Routine|COMPILE load=2.118645 first_inline=0.41400400000000026 first_process=0.13968500000000006 reconfigure=0.23031299999999977
+3|Routine in composite|COMPILE load=2.09427 first_inline=0.31332000000000004 first_process=0.09835599999999989 reconfigure=0.15120300000000064
+3|composite in Routine|COMPILE load=2.0903300000000002 first_inline=0.30050000000000043 first_process=0.09317099999999989 reconfigure=0.1722760000000001
+3|DSL, 4 plain-function statements|COMPILE load=2.067475 first_inline=0.305237 first_process=0.1620189999999999 reconfigure=0.09063800000000022
+done
