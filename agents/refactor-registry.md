@@ -13,13 +13,23 @@ Measured on this branch at a4c581f, machine otherwise quiet. Raw files next to t
   for the small cases, 1.85 s wide; first Process run 0.07-0.21 s; rebuild 0.07-0.29 s; precompile 11.4 s (wall).
 - Loop time (perf/run.jl --runtime-only; registry-baseline-runtime.txt): every row as on refactor/no-first-step.
 
-## Plan: simplify and modularize the registry (owner, 2026-10-14)
-Readable, semantically named, close to the old `add`-based construction; interfaces wherever possible; speed first.
-1. Rules as an interface (src/Registry/Interfaces.jl): entry type, what counts as the same algorithm, automatic name,
-   merging, states first. Defined on types; the build code only calls these.
-2. `RegistryBuilder` with `add!(builder, algo, multiplier) -> keyed algo` (the old `add`), `registry(builder)`;
-   the plan walk as `add_tree!` / `add_states!` / `add_children!`; the "known only by its type" value and its helpers
-   named for what they are and read.
-3. Files: builder, plan walk, code generation separate; the generated function in src/GeneratedCode/.
-4. Redefining a rule regenerates the layout (the generated function returns its code with the methods it depends on).
-5. Tests: the generated path is taken for the usual plan shapes; redefining a rule updates the registry.
+## How the registry code is organized (after the simplification, 2026-10-15)
+- Registry/Interfaces.jl: the rules that decide a registry's layout (entry type, states first, what makes two
+  algorithms the same, automatic keys `Lin_1`, merging), defined on types; `ask_rule` records which rule methods a
+  generated layout asked.
+- Registry/Builder.jl: `RegistryBuilder`; `add!(builder, algo, multiplier) -> keyed algo` (the old `add`, which is
+  now a thin wrapper), `registry(builder)` (on values), `registry_code(builder)` (the code that builds it, for the
+  generated path).
+- Registry/KnownByType.jl: a value known only by its type while a layout is worked out from types, with
+  `field_of`, `tuple_of`, ... that read it the same way as a value.
+- LoopAlgorithms/Preparation/RegistrySetup.jl: the walk over a plan: `add_tree!`, `add_states!`, `add_children!`,
+  `add_child!`; `setup_registry_from_values` (run time) and `setup_registry_code` (from types).
+- GeneratedCode/RegistrySetup.jl: the generated `setup_registry_and_keyed_algos`; GeneratedCode/RuleDependencies.jl:
+  makes the generated code depend on the rule methods it asked (redefining one regenerates it; a rule method defined
+  after loading makes that plan use the run-time path).
+- Registry/Registries.jl, TypeEntries/: reading a registry and its entries (finding, keys, multipliers, listing).
+- Tests: test/RegistryBuildTest.jl (generated path taken, both paths agree, redefined rules followed).
+
+## Done (from the plan)
+1-5 of the plan are done (wip/registry-simplify, fast-forwarded into this branch). Not done: Packages name their
+keys their own way (`Autokey(::Package)`); unifying it would change the keys of Packages inside plans.
