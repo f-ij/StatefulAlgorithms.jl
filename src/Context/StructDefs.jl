@@ -48,8 +48,8 @@ export inject
 
 """
 Where a variable a view sees is stored. The type parameter is the kind of location:
-    - :state       the view's namespace's own field (persistent context)
-    - :subcontext  a field of another subcontext (a route or share from it)
+    - :state       a field of a namespace's state (persistent context): the view's own, or another's through a
+                   route or share
     - :runtime     a runtime value (declared local, input, captured or subcontext return)
     - :injected    a value given to the view directly
 """

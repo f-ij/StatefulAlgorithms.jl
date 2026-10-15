@@ -11,7 +11,7 @@ VarLocation(type, subcontextname::Symbol, originalname::Union{Tuple, Symbol}, fu
 """
     ReplacedVar(varlocation)
 
-Persistent context marker for a local field whose algorithm-facing value is
+Persistent context marker for a state field whose algorithm-facing value is
 backed by another `VarLocation`.
 """
 struct ReplacedVar{T<:VarLocation}
