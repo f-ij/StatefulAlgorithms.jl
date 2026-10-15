@@ -8,15 +8,17 @@ Each registered algorithm or state owns one named part of that context. That
 part is a `SubContext`.
 
 Entity methods receive a `SubContextView`, not the raw `ProcessContext`. A view
-shows the values that the current entity is allowed to read. Those values can
-come from its own subcontext, from a `Route`, from a `Share`, or from temporary
-values supplied by the package.
+shows the values that the current entity is allowed to read.
 
-That view exposes:
+An algorithm's view exposes:
 
 - its own state (its subcontext),
-- routed and shared variables,
-- declared locals of the enclosing blocks, and outputs (what statements and calls returned this step).
+- its routes and shares.
+
+It does not see the declared locals or captured returns of the block it runs in (see
+[Values That Live For A Run](#Values-That-Live-For-A-Run)) unless they are wired to it. The DSL wires every argument
+of an algorithm statement, so `Algo(x)` sees `x`. A plain function call (`y = f(x)`) sees the block's declared locals
+and captured returns directly.
 
 ## Reading Variables
 
@@ -41,9 +43,9 @@ what that return means.
 
 1. `init` defines the persistent fields owned by the entity and replaces its
    initially empty subcontext with those fields.
-2. `step!` updates existing local, routed, or shared fields. A new name is a
-   loop-local output: it remains available only when downstream routing or a
-   root finalizer demands it, and it is not added to the persistent subcontext.
+2. `step!` updates existing fields of its own state, routes, or shares. A new name is a
+   subcontext return: it is kept for one step only when something reads it later, and it
+   is not added to the persistent subcontext.
 3. `cleanup` uses the same mapped-write mechanism as `step!`; its returned
    existing fields are committed during finalization.
 
@@ -66,8 +68,6 @@ ctx = context(p)
 
 `context(p)` and `getcontext(p)` both return the process's current stored
 context. `getcontext(p, key)` is shorthand for indexing that context by `key`.
-The running loop injects `process` only into the transient runtime context seen
-by lifecycle hooks; it is not present in the persistent context after completion.
 
 From a context, index by:
 
@@ -119,9 +119,9 @@ Besides the stored (persistent) state, a run has values that are not stored with
 | captured returns (`y = f(x)`) | one step of the block that assigns it | dropped |
 | subcontext returns (an algorithm's return value, `_return`; for a hand-written `step!`, the returned names that are not its state) | one step of the block the algorithm is in | dropped |
 
-A step reads them by name like its own variables. Every block (a composite or routine, nested ones too) is a scope,
-as a `for` loop body is in Julia: its children see the declared locals and captured returns of the block and of the
-blocks around it, and a name declared in an inner block hides the same name of an outer one. Assigning a name that is
+An algorithm reads them through its wires (the DSL wires every argument); a plain function call reads them by name.
+Every block (a composite or routine, nested ones too) is a scope, as a `for` loop body is in Julia: its children can
+read the declared locals and captured returns of the block and of the blocks around it, and a name declared in an inner block hides the same name of an outer one. Assigning a name that is
 already visible, in a block or a block inside it, updates it. A captured return is unset each time its block is
 entered. A name assigned on a schedule (`y = @every 3 f()`) has to be declared first (`local y`, or `Local` outside
 the DSL): it then keeps its last value between steps, and reading it before its first assignment is an

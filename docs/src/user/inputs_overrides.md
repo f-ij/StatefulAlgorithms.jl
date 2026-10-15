@@ -94,8 +94,7 @@ For exact patterns and examples, see [Referencing Algorithms](@ref referencing_a
 
 Runtime inputs are declared on a `@CompositeAlgorithm` or `@Routine` with
 `@input`. They are passed as keyword arguments to `run`, validated before loop
-execution, and merged into the transient `ProcessContext._inputs` field for that
-run only.
+execution, and are the run's read-only inputs (`_inputs`) for that run only.
 
 ```julia
 algo = @CompositeAlgorithm begin

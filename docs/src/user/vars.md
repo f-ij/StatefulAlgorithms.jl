@@ -30,10 +30,10 @@ Var(counter, :count)
 Var(:name)
 ```
 
-This reads `:name` from `context.globals`.
-
-Use this form only for values that are actually stored in the persistent
-context globals.
+This reads the captured return `name` (`_captured_returns`): the value a DSL
+statement `name = f(...)` assigned in the current step. Captured returns are not
+stored in the persistent context, so a process `lifetime` cannot read them; use
+the subcontext form there.
 
 ## Common Use in `Until`
 

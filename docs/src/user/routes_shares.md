@@ -75,7 +75,7 @@ Important constraints from the current implementation:
 - If `transform` or `reverse_transform` is provided, the route must define exactly one mapping.
 - Multi-source reverse transforms may return a tuple in source-variable order or
   a named tuple keyed by source variable name.
-- Returning a transformed route alias without `reverse_transform` is an error,
+- Updating a transformed route alias without `reverse_transform` is an error,
   because the writeback would otherwise be ambiguous.
 
 ## `Share`: Whole Subcontext
@@ -89,6 +89,10 @@ Share(Source, Target)
 Default is bidirectional (`directional = false`), so both sides can read the
 other side's values. Use `directional = true` for a one-way share from the first
 argument to the second.
+
+A route given the same name as a field of the target's own state hides that field: the target reads and writes the
+route's source instead. A share that gives the target a name it also has from its own state or from a route is an
+error, thrown the first time the target's step runs.
 
 ## `Replace`: Persistent Field Backing
 

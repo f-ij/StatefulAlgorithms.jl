@@ -25,8 +25,8 @@ value_ref[] = 4.0
 ```
 
 The wrapper is applied after `init` and `Override`, so the example starts at
-`3.0`. Lifecycle methods read `context.value` as the contained `Float64`, and a
-returned `(; value = new_value)` writes through the existing wrapper. External
+`3.0`. An algorithm reads `value` as the contained `Float64`, and `@update value = new_value`
+writes through the existing wrapper. External
 code sees the stored `InteractiveVar` and can read or assign it with `[]`.
 
 This mechanism changes the value immediately and provides no scheduler boundary

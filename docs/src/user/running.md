@@ -33,7 +33,7 @@ run(p; temperature = 2.0, sweep = 10)
 ```
 
 The keywords are converted to a `NamedTuple`, validated against the algorithm's
-runtime input declarations, and merged into `ProcessContext._inputs` only for
+runtime input declarations, and become the run's inputs (`_inputs`, read-only) only for
 that loop run. Finished processes strip runtime-only fields before storing their
 persistent context. A paused process may keep its live runtime context and loop
 cursor internally so it can resume.
@@ -83,7 +83,8 @@ In practice:
   context; `getcontext(p, key)` additionally indexes it by `key`.
 
 For an ordinary process, the task result is the final cleanup-visible context.
-It may still expose transient runtime outputs that a root finalizer can consume.
+It also holds the run's runtime values (inputs, declared locals, captured and subcontext returns), which a root
+finalizer can consume.
 The process itself stores only the cleaned persistent context, so use
 `context(p)` when you need the state that will be reused by a later run. A
 `FinalizedAlgorithm` can instead make `fetch(p)` return the finalizer function's
@@ -110,7 +111,7 @@ run(ip)
 `InlineProcess` also accepts `lifetime = 10_000` and converts it to a repeat
 count. For `Process`, use `repeats = 10_000` or `lifetime = Repeat(10_000)`.
 Unlike `Process`, `InlineProcess` stores a context that can be absorbed back
-into an algorithm, so runtime-only fields such as `:_inputs` and `process` are
+into an algorithm, so the run's runtime values (inputs, declared locals, captured and subcontext returns) are
 stripped after the loop.
 Like finished `Process` runs, this means the persistent context is the persistent
 context shape rather than the transient loop context.

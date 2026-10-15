@@ -160,7 +160,7 @@ In deprecated hand-written `init`/`step!` methods (and in `cleanup`):
 - optional reads through `get(context, :x, default)`
 - explicit presence checks through `haskey(context, :x)`
 - explicit indexed reads like `context[:OtherAlgo_1]` or `context[algo_ref]`
-- returns of plain `NamedTuple`s with stable output names
+- returns of plain `NamedTuple`s with stable names
 
 These forms are harder to analyse accurately:
 
