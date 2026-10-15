@@ -51,8 +51,8 @@ step returns (`RuntimeContextType` when the step cannot return, `Any` when infer
 For the first round of typing only. Unlike `_runtime_context_type_after_node_step` it does not keep the type before
 the step as an alternative (for a node that may not run): with that union, the node after it is inferred once per
 earlier node, so the first round grows with the square of the number of nodes. A step that reads a return of a node
-that did not run fails, so the alternative adds no written types; the later rounds, with every return in a slot that
-may be unset, check the result.
+that did not run fails, so the alternative adds no written types; the later rounds, which infer the step as a whole,
+check the result.
 """
 @inline function _runtime_context_type_after_node_run(node::NodeType, cursor::CursorType, persistent_context::PersistentContextType, ::Type{RuntimeContextType}, wiring::WiringViewType, namespace::NamespaceType, process::ProcessType, lifetime::LifetimeType) where {NodeType, CursorType, PersistentContextType, RuntimeContextType, WiringViewType, NamespaceType, ProcessType, LifetimeType}
     RuntimeContextType <: ProcessContext || return Any
