@@ -34,7 +34,7 @@ algotype(::Union{IdentifiableAlgo{F}, Type{<:IdentifiableAlgo{F}}}) where {F} = 
 @inline getalgo(sa::IdentifiableAlgo{F}) where {F} = sa.func
 @inline getalgos(sa::IdentifiableAlgo) = tuple(sa.func)
 @inline _profile_step_algo(sa::AbstractIdentifiableAlgo) = getalgo(sa)
-@inline _profile_step_context(sa::AbstractIdentifiableAlgo, context) = view(context, sa)
+@inline _profile_step_context(sa::AbstractIdentifiableAlgo, bundle) = view(bundle, sa)
 
 @inline Base.getkey(sa::IdentifiableAlgo) = getkey(typeof(sa))
 @inline function Base.getkey(sat::Type{<:IdentifiableAlgo{F, Id, Aliases, AlgoName, ScopeName}}) where {F, Id, Aliases, AlgoName, ScopeName}
