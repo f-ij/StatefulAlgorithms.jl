@@ -56,7 +56,8 @@ end
 
     resolved = resolve(CompositeAlgorithm(:view_alias => ViewAliasAlgo(), (1,)))
     ctx = initcontext(resolved; lifetime = Repeat(1))
-    scv = view(ctx, resolved[:view_alias])
+    keyed = StatefulAlgorithms.static_get(StatefulAlgorithms.getregistry(ctx), resolved[:view_alias])
+    scv = view(StatefulAlgorithms.bundle_of(ctx), keyed)
     alias = StatefulAlgorithms.VarAliases(foo = :bar)
     aliased = StatefulAlgorithms.withaliases(scv, alias)
 
