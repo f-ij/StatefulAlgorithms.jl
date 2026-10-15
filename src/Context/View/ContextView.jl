@@ -19,7 +19,6 @@ view_sharedvars(scv::Union{SubContextView{B, SubKey, T, NT, Aliases, SharedConte
 
 @inline getbundle(scv::SubContextView) = @inline getfield(scv, :bundle)
 @inline getpersistent(scv::SubContextView) = @inline getpersistent(getbundle(scv))
-@inline getsubcontext(scv::SubContextView{B, SubKey}) where {B<:ContextBundle, SubKey} = @inline getproperty(getpersistent(scv), SubKey)
 
 
 getinjected(scv::SubContextView) = getfield(scv, :injected)
