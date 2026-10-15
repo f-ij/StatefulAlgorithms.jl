@@ -102,13 +102,16 @@ function get_injected_locations(sct::Type{SCT}) where {SCT<:SubContextView{B, Su
     return NamedTuple{(injected_vars...,)}(injst)
 end
 
-"""An error for two explicit kinds that give the view the same name."""
-function _check_explicit_clashes(::Type{SCT}, kinds::Pair...) where {SCT<:SubContextView{B, SubKey}} where {B<:ContextBundle, SubKey}
-    for i in eachindex(kinds), j in (i + 1):length(kinds)
-        (name_i, locations_i), (name_j, locations_j) = kinds[i], kinds[j]
-        for name in intersect(keys(locations_i), keys(locations_j))
-            error("`$(SubKey)` ($(this_instance_type(SCT))) gets `$(name)` both from its $(name_i) and from its $(name_j). Give one of them another name.")
-        end
+"""
+Throws an error when a share gives the view a name that its state or one of its routes also gives it; returns
+`nothing` otherwise. A route and a state field may share a name (the route wins), a share may not: the share would be
+silently hidden.
+"""
+function _check_share_clashes(::Type{SCT}, state, routes, shares) where {SCT<:SubContextView{B, SubKey}} where {B<:ContextBundle, SubKey}
+    for name in keys(shares)
+        other = haskey(state, name) ? "state" : haskey(routes, name) ? "routes" : nothing
+        isnothing(other) && continue
+        error("`$(SubKey)` ($(this_instance_type(SCT))) gets `$(name)` both from its $(other) and from its shares. Give one of them another name.")
     end
     return nothing
 end
@@ -122,10 +125,7 @@ function _compute_all_locations(::Type{SCT}) where {SCT<:SubContextView}
     state = get_state_locations(SCT)
     routes = get_routed_locations(SCT)
     shares = get_shared_locations(SCT)
-    # A route wins over a state field of the same name (the route is written for this child); shares may not clash
-    # with either.
-    _check_explicit_clashes(SCT, "state" => state, "shares" => shares)
-    _check_explicit_clashes(SCT, "routes" => routes, "shares" => shares)
+    _check_share_clashes(SCT, state, routes, shares)
     return (; get_scope_locations(SCT)..., shares..., state..., routes..., get_injected_locations(SCT)...)
 end
 
@@ -158,7 +158,13 @@ end
 @inline Base.haskey(scv::SCV, name::Symbol) where SCV <: SubContextView = @inline haskey(get_all_locations(scv), name)
 @inline getregistry(scv::SCV) where SCV <: SubContextView = getregistry(getpersistent(scv))
 
-"""The runtime values under `subcontextname`: a runtime part (`_captured_returns`, `_inputs`, ...), or a namespace's subcontext returns."""
+"""
+Return the named tuple of runtime values filed under `subcontextname`.
+
+If `subcontextname` is one of the runtime context's fields (`_captured_returns`, `_subcontext_returns`,
+`_declared_locals`, `_inputs`), that is the field's contents. Otherwise `subcontextname` is a namespace, and it is what
+that namespace's algorithm returned this step besides its state (empty if nothing).
+"""
 @inline function _runtime_values(runtime_context::ProcessContext, ::Val{subcontextname}) where {subcontextname}
     subcontexts = @inline get_subcontexts(runtime_context)
     haskey(subcontexts, subcontextname) && return getdata(getproperty(subcontexts, subcontextname))
@@ -174,33 +180,10 @@ end
     return getproperty(_runtime_values(runtime_context, Val(subcontextname)), varname)
 end
 
-"""
-    subcontext_view_value(value, view)
-
-Return the value exposed by `SubContextView` reads for one stored field.
-
-This is an overloadable API for storage wrappers that need custom
-algorithm-facing read behavior. Methods should transform `value` and then call
-`subcontext_view_value(next_value, view)` again, so nested wrappers unfold until
-the default identity method is reached.
-"""
-@inline subcontext_view_value(value::T, view::V) where {T, V<:SubContextView} = value
-
 """Resolve a replaced field through its stored backing location."""
 @inline function subcontext_view_value(value::R, view::V) where {VL<:VarLocation, R<:ReplacedVar{VL}, V<:SubContextView}
     return @inline subcontext_view_value(getproperty(view, getfield(value, :varlocation)), view)
 end
-
-"""
-    subcontext_writeback_value(old, returned)
-
-Return the value that should be written to context when an algorithm returns
-`returned` for a field currently storing `old`.
-
-This is an overloadable API for storage wrappers that absorb writes while
-preserving their context representation, for example mutable reference wrappers.
-"""
-@inline subcontext_writeback_value(::Any, returned) = returned
 
 @inline function getproperty_fromsubcontext(
     scv::SCV,
@@ -210,11 +193,23 @@ preserving their context representation, for example mutable reference wrappers.
     return @inline _read_part(context_part(Val(subcontextname)), scv, Val(subcontextname), Val(varname))
 end
 
-"""A runtime part's value is in the runtime context."""
+"""
+    _read_part(kind, view, Val(subcontextname), Val(varname))
+
+Return the value a view shows for `subcontextname.varname`.
+
+`subcontextname` is either a namespace (the name of an algorithm or a `@state`), or one of the runtime context's
+fields: `_captured_returns`, `_subcontext_returns`, `_declared_locals`, `_inputs`. `kind` is
+`context_part(Val(subcontextname))`, which says which of the two it is, and each method reads from the matching place.
+Both pass the value through `subcontext_view_value`, which unwraps storage wrappers such as `ReplacedVar`.
+"""
+function _read_part end
+
+"""`subcontextname` is a runtime context field (`_inputs`, ...): read `varname` from that field."""
 @inline _read_part(::ContextPart, scv::SCV, ::Val{subcontextname}, ::Val{varname}) where {SCV<:SubContextView, subcontextname, varname} =
     @inline subcontext_view_value(_runtime_get_var(getbundle(scv), Val(subcontextname), Val(varname)), scv)
 
-"""A namespace's value: its state, or else one of its subcontext returns (see `storedproperty_fromsubcontext`)."""
+"""`subcontextname` is a namespace: read `varname` from its state, or, if its state has no `varname`, from what its algorithm returned this step (see `storedproperty_fromsubcontext`)."""
 @inline _read_part(::State, scv::SCV, ::Val{subcontextname}, ::Val{varname}) where {SCV<:SubContextView, subcontextname, varname} =
     @inline subcontext_view_value(storedproperty_fromsubcontext(scv, Val(subcontextname), Val(varname)), scv)
 
