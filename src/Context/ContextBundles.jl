@@ -86,13 +86,14 @@ runtime_type(::Type{<:LoopContext{PersistentContextType, RuntimeContextType}}) w
 @inline bundle_of(persistent_context::ProcessContext) = LoopContext(persistent_context, _empty_context())
 
 """
-Return the runtime values of a bundle, by part or by name: `get_part_data(bundle, CapturedReturns())`, or
-`_runtime_values(bundle, Val(:_captured_returns))`. Init has no runtime values, so it always gets an empty named tuple.
+Return values from a bundle's runtime context: one runtime context partition (`get_runtime_partition(bundle,
+CapturedReturns())`), or the values filed under a subcontext name (`_runtime_values(bundle, Val(:_captured_returns))`).
+Init has no runtime context, so it always gets an empty named tuple.
 """
 @inline _runtime_values(lc::LoopContext, name::Val) = @inline _runtime_values(getruntime(lc), name)
 @inline _runtime_values(::InitContext, ::Val) = (;)
-@inline get_part_data(lc::LoopContext, part::ContextPart) = @inline get_part_data(getruntime(lc), part)
-@inline get_part_data(::InitContext, ::ContextPart) = (;)
+@inline get_runtime_partition(lc::LoopContext, partition::RuntimePartition) = @inline get_runtime_partition(getruntime(lc), partition)
+@inline get_runtime_partition(::InitContext, ::RuntimePartition) = (;)
 
 """Returns the persistent and runtime values together as one `ProcessContext`. This is what `finalstep` gets."""
 @inline visible_context(lc::LoopContext) = @inline _visible_context(getpersistent(lc), getruntime(lc))
@@ -108,7 +109,7 @@ Builds the bundle a step continues with, after one algorithm's return has been w
 already in `persistent_context`, which replaces the old one; the runtime values it wrote (declared locals, returns) are
 in `runtime_patch` and are written into the runtime context.
 
-`runtime_patch` is grouped by runtime part: `(; _declared_locals = (; x = 1.0), _captured_returns = (; y = 2))`.
+`runtime_patch` is grouped by runtime context partition: `(; _declared_locals = (; x = 1.0), _captured_returns = (; y = 2))`.
 During init there is no runtime context, so the patch is always empty there.
 """
 @inline _rebundle(lc::LoopContext, persistent_context::ProcessContext, runtime_patch::NamedTuple) =

@@ -46,12 +46,12 @@ end
 @inline Base.propertynames(pc::ProcessContext, private::Bool = false) = propertynames(@inline get_subcontexts(pc))
 
 @inline Base.@constprop :aggressive function Base.getindex(pc::ProcessContext, name::Symbol)
-    return @inline _getindex_part(context_part(Val(name)), pc, name)
+    return @inline _getindex_partition(context_partition(Val(name)), pc, name)
 end
 
-# `pc[:_captured_returns]` and `pc[:_inputs]` give that part's values; any other name its subcontext.
-@inline _getindex_part(::ContextPart, pc::ProcessContext, name::Symbol) = @inline getproperty(pc, name)
-@inline _getindex_part(part::Union{CapturedReturns, Inputs}, pc::ProcessContext, name::Symbol) = @inline get_part_data(pc, part)
+# `pc[:_captured_returns]` and `pc[:_inputs]` give the values in that runtime context partition; any other name its subcontext.
+@inline _getindex_partition(::ContextPartition, pc::ProcessContext, name::Symbol) = @inline getproperty(pc, name)
+@inline _getindex_partition(partition::Union{CapturedReturns, Inputs}, pc::ProcessContext, name::Symbol) = @inline get_runtime_partition(pc, partition)
 
 @inline function Base.getindex(pc::ProcessContext, obj)
     reg = getregistry(pc)
@@ -74,19 +74,20 @@ end
 @inline getregistrytype(::Type{<:ProcessContext{D,Nothing}}) where {D} = Nothing
 @inline getregistrytype(pc::ProcessContext) = getregistrytype(typeof(pc))
 
-"""The values of a runtime part in a runtime context, as a named tuple; empty when the context has no such part."""
-@inline function get_part_data(pc::ProcessContext, part::ContextPart)
+"""Return the values in one partition of a runtime context (e.g. its inputs) as a named tuple; empty when the runtime context does not have that partition."""
+@inline function get_runtime_partition(pc::ProcessContext, partition::RuntimePartition)
     subcontexts = @inline get_subcontexts(pc)
-    return haskey(subcontexts, part_name(part)) ? getdata(getproperty(subcontexts, part_name(part))) : (;)
+    name = runtime_partition_name(partition)
+    return haskey(subcontexts, name) ? getdata(getproperty(subcontexts, name)) : (;)
 end
 
 """The captured returns in a runtime context: what statements (`y = f(x)`, calls) returned this step."""
-@inline get_captured_returns(pc::ProcessContext) = @inline get_part_data(pc, CapturedReturns())
+@inline get_captured_returns(pc::ProcessContext) = @inline get_runtime_partition(pc, CapturedReturns())
 
 @inline get_captured_returns(pc::ProcessContext, name::Symbol) = getproperty(get_captured_returns(pc), name)
 
 """Return the runtime-input bucket stored in a runtime context."""
-@inline get_inputs(pc::ProcessContext) = @inline get_part_data(pc, Inputs())
+@inline get_inputs(pc::ProcessContext) = @inline get_runtime_partition(pc, Inputs())
 
 @inline get_inputs(pc::ProcessContext, name::Symbol) = getproperty(get_inputs(pc), name)
 
@@ -94,10 +95,10 @@ end
 The subcontext returns in a runtime context: per namespace, what its algorithm returned this step that is not its
 state, as `(; Sensor_1 = (; extra = ...), ...)`.
 """
-@inline get_subcontext_returns(pc::ProcessContext) = @inline get_part_data(pc, SubcontextReturns())
+@inline get_subcontext_returns(pc::ProcessContext) = @inline get_runtime_partition(pc, SubcontextReturns())
 
 """Return the declared loop-local variables (`Local`) held in a runtime or paused context."""
-@inline get_declared_locals(pc::ProcessContext) = @inline get_part_data(pc, DeclaredLocals())
+@inline get_declared_locals(pc::ProcessContext) = @inline get_runtime_partition(pc, DeclaredLocals())
 
 @inline getwidened(::ProcessContext) = (;)
 @inline has_widened_var(::ProcessContext, ::Val, ::Val) = false
@@ -115,17 +116,20 @@ Return an immutable `ProcessContext` rebuild with updated subcontexts.
     return ProcessContext(subcontexts, registryref(pc))
 end
 
-"""A runtime part as `(name, data expression)` pairs for the final projection: subcontext returns per namespace."""
-_final_parts(::ContextPart, name::Symbol, ::Type) = [(name, :(getdata(getproperty(runtime_subcontexts, $(QuoteNode(name))))))]
-_final_parts(::CapturedReturns, name::Symbol, ::Type) = [(name, :(map(_final_value, getdata(getproperty(runtime_subcontexts, $(QuoteNode(name)))))))]
-_final_parts(part::SubcontextReturns, name::Symbol, ::Type{T}) where {T} =
+"""
+Return what one runtime context partition shows in the final context, as `(name, data expression)` pairs. Captured
+returns are unwrapped from their slots; subcontext returns are split per namespace, so each shows in that namespace.
+"""
+_final_runtime_partitions(::RuntimePartition, name::Symbol, ::Type) = [(name, :(getdata(getproperty(runtime_subcontexts, $(QuoteNode(name))))))]
+_final_runtime_partitions(::CapturedReturns, name::Symbol, ::Type) = [(name, :(map(_final_value, getdata(getproperty(runtime_subcontexts, $(QuoteNode(name)))))))]
+_final_runtime_partitions(::SubcontextReturns, name::Symbol, ::Type{T}) where {T} =
     [(owner, :(map(_final_value, getproperty(getdata(getproperty(runtime_subcontexts, $(QuoteNode(name)))), $(QuoteNode(owner)))))) for owner in fieldnames(T)]
 
 """
     visible_context(lc::LoopContext)   (ContextBundles.jl)
 
 Everything a loop holds at its end, as one `ProcessContext` to read from: the persistent subcontexts with each namespace's
-subcontext returns merged in, and the runtime parts (captured returns, inputs, declared locals) as subcontexts. A return
+subcontext returns merged in, and the runtime context partitions (captured returns, inputs, declared locals) as subcontexts. A return
 shows the value of the last step that wrote it, or `nothing`. What `finalstep`
 gets. Only a projection: the persistent context stays what the loop stores.
 """
@@ -139,13 +143,13 @@ gets. Only a projection: the persistent context stays what the loop stores.
         :(runtime_subcontexts = @inline get_subcontexts(runtime_context)),
     ]
 
-    # Each runtime part as (name, data): a namespace's subcontext returns are shown in that namespace.
-    parts = Any[]
+    # Each runtime context partition as (name, data): a namespace's subcontext returns are shown in that namespace.
+    partitions = Any[]
     for name in runtime_names
-        append!(parts, _final_parts(context_part(Val(name)), name, getdatatype(fieldtype(RC.parameters[1], name))))
+        append!(partitions, _final_runtime_partitions(context_partition(Val(name)), name, getdatatype(fieldtype(RC.parameters[1], name))))
     end
 
-    for (name, data_expr) in parts
+    for (name, data_expr) in partitions
         if name in state_names
             push!(
                 exprs,
@@ -225,7 +229,7 @@ end
 """
     merge_runtime_return(runtime_context, Val(owner), returns)
 
-`runtime_context` with `returns`, a step's returns for `owner`, written into the part `owner` names: captured returns,
+`runtime_context` with `returns`, a step's returns for `owner`, written into the runtime context partition `owner` names: captured returns,
 declared locals, or (any other `owner`, a namespace) its subcontext returns. Nothing returned leaves it as it is.
 """
 @inline function merge_runtime_return(runtime_context::C, ::Val{owner}, ::Nothing) where {C<:ProcessContext,owner}
