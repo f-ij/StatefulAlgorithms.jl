@@ -113,7 +113,7 @@ p = Process(
 Important:
 
 - Use the same algorithm reference you used in `Process(...)` (same instance or same `Unique` variable).
-- `Var(:name)` reads a value that is actually stored in the persistent context globals.
+- `Var(:name)` reads a captured return, which is not stored in the persistent context; a process `lifetime` selects a stored field with `Var(entity_ref, :name)`.
 - The safest current `Until` usage is a single selector value.
 
 For full `Var` details, see [Vars (`Var` Selectors)](@ref vars_user).
