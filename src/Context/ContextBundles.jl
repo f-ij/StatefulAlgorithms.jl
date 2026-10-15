@@ -86,10 +86,6 @@ runtime_type(::Type{<:LoopContext{PersistentContextType, RuntimeContextType}}) w
 @inline get_part_data(lc::LoopContext, part::ContextPart) = @inline get_part_data(getruntime(lc), part)
 @inline get_part_data(::InitContext, ::ContextPart) = (;)
 
-"""The data type of a runtime part in a bundle type; empty when it has no such part."""
-_part_data_type(::Type{BundleType}, part::ContextPart) where {BundleType<:LoopContext} = _part_data_type(runtime_type(BundleType), part)
-_part_data_type(::Type{<:InitContext}, ::ContextPart) = NamedTuple{(), Tuple{}}
-
 """What `finalstep` gets: the loop's persistent and runtime values as one `ProcessContext` (see `_visible_context`)."""
 @inline visible_context(lc::LoopContext) = @inline _visible_context(getpersistent(lc), getruntime(lc))
 

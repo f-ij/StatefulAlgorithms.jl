@@ -80,12 +80,6 @@ function _routed_locations(part::ContextPart, sv)
     return NamedTuple(pairs)
 end
 
-"""The data type of a runtime part in runtime context type `RC`; empty when `RC` has no such part."""
-function _part_data_type(::Type{RC}, part::ContextPart) where {RC<:ProcessContext}
-    D = fieldtype(RC, :subcontexts)
-    return part_name(part) in fieldnames(D) ? getdatatype(fieldtype(D, part_name(part))) : NamedTuple{(), Tuple{}}
-end
-
 """
 The names the view sees from the scope its bundle is in (see `Scope`), by name. Only a call (namespace
 `_captured_returns`) sees them: the declared locals and captured returns, which its arguments name and its assignment
