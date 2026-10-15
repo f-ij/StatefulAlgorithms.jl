@@ -1,7 +1,9 @@
-# exp/inline-scopes: notes and open work for agents
+# refactor/no-first-step (was exp/inline-scopes): notes and open work for agents
 
-Branch `exp/inline-scopes` sits on `refactor/dsl-locals-rebased` (the DSL refactor; its changes go there, the
-experiment goes here). Nothing is pushed. Write-up for the owner: https://claude.ai/artifact/UrageccHJ1C8G8gA734V2o
+Branch `refactor/no-first-step` (renamed from `exp/inline-scopes`, 2026-10-14) sits on `refactor/dsl-locals-rebased`
+(the DSL refactor; its changes go there). It scopes returns (a return exists from its assignment to the end of its
+block, the context type is known at every line, no `Maybe` slots for returns) and so needs no separate first step.
+`refactor/registry` sits on this branch. Nothing is pushed. Write-up for the owner: https://claude.ai/artifact/UrageccHJ1C8G8gA734V2o
 
 ## Mistake to not repeat (2026-10-12)
 
