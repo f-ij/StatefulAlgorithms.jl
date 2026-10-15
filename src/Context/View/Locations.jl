@@ -214,26 +214,9 @@ end
 @inline _read_part(::ContextPart, scv::SCV, ::Val{subcontextname}, ::Val{varname}) where {SCV<:SubContextView, subcontextname, varname} =
     @inline subcontext_view_value(_runtime_get_var(getbundle(scv), Val(subcontextname), Val(varname)), scv)
 
-"""A namespace's value: its state, or else one of its subcontext returns."""
-@inline function _read_part(::State, scv::SCV, ::Val{subcontextname}, ::Val{varname}) where {SCV<:SubContextView, subcontextname, varname}
-    bundle = @inline getbundle(scv)
-    persistent_context = @inline getpersistent(scv)
-    subcontexts = @inline get_subcontexts(persistent_context)
-    if haskey(subcontexts, subcontextname)
-        subcontext = @inline getproperty(subcontexts, subcontextname)
-        if @inline haskey(getdata(subcontext), varname)
-            return @inline subcontext_view_value(getproperty(subcontext, varname), scv)
-        end
-    end
-    if @inline _runtime_has_var(bundle, Val(subcontextname), Val(varname))
-        return @inline subcontext_view_value(_runtime_get_var(bundle, Val(subcontextname), Val(varname)), scv)
-    end
-    if haskey(subcontexts, subcontextname)
-        subcontext = @inline getproperty(subcontexts, subcontextname)
-        return @inline subcontext_view_value(getproperty(subcontext, varname), scv)
-    end
-    error("Subcontext `$subcontextname` is not available in state or runtime context.")
-end
+"""A namespace's value: its state, or else one of its subcontext returns (see `storedproperty_fromsubcontext`)."""
+@inline _read_part(::State, scv::SCV, ::Val{subcontextname}, ::Val{varname}) where {SCV<:SubContextView, subcontextname, varname} =
+    @inline subcontext_view_value(storedproperty_fromsubcontext(scv, Val(subcontextname), Val(varname)), scv)
 
 """
     storedproperty_fromsubcontext(scv, Val(subcontext), Val(varname))
@@ -260,7 +243,6 @@ that are hidden from algorithm code during normal reads.
     end
     error("Variable `$subcontextname.$varname` is not available in state or runtime context.")
 end
-@inline getinjected(scv::SCV, key) where SCV <: SubContextView = getproperty(getinjected(scv), key)
 @inline function Base.get(scv::SCV, name::Symbol, default) where SCV <: SubContextView
     if haskey(scv, name)
         return getproperty(scv, Val(name))
