@@ -75,6 +75,7 @@ What a step returns is written to where its view says the name lives:
 ## Open questions
 
 - Should a call see the scope only through wires, like an algorithm? Then a call's view has only explicit names, and
-  any clash in it is an error.
+  any clash in it is an error. See `TODO.md`.
+- Can injected values go (only `Package` uses them)? See `TODO.md`.
 - Routes with an explicit direction (read from, write to); see `TODO.md`.
 - Should shares go; see `TODO.md`.
