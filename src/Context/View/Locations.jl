@@ -23,7 +23,7 @@ get_state_locations(::Type{SCT}) where {SCT<:SubContextView{B, SubKey}} where {B
 """A call has no state: its namespace is the captured returns."""
 _state_locations(::CapturedReturns, ::Type) = (;)
 
-function _state_locations(::Persistent, ::Type{SCT}) where {SCT<:SubContextView{B, SubKey}} where {B<:ContextBundle, SubKey}
+function _state_locations(::State, ::Type{SCT}) where {SCT<:SubContextView{B, SubKey}} where {B<:ContextBundle, SubKey}
     _subcontext_type = subcontext_type(SCT)
     _data_type = getdatatype(_subcontext_type)
     state_names = keys(_subcontext_type)
@@ -58,7 +58,7 @@ function get_shared_locations(sct::Type{SCT}) where {SCT<:SubContextView{B, SubK
     sharedvars = named_flat_collect_broadcast(shared_context_names) do name
         shared_subcontext_type = subcontext_type(persistent_type(B), name)
         shared_varnames = keys(shared_subcontext_type)
-        pairs = (shared_varnames[i] => VarLocation{:subcontext}(name, shared_varnames[i]) for i in 1:length(shared_varnames))
+        pairs = (shared_varnames[i] => VarLocation{:state}(name, shared_varnames[i]) for i in 1:length(shared_varnames))
         return NamedTuple(pairs)
     end
     return sharedvars
@@ -215,7 +215,7 @@ end
     @inline subcontext_view_value(_runtime_get_var(getbundle(scv), Val(subcontextname), Val(varname)), scv)
 
 """A namespace's value: its state, or else one of its subcontext returns."""
-@inline function _read_part(::Persistent, scv::SCV, ::Val{subcontextname}, ::Val{varname}) where {SCV<:SubContextView, subcontextname, varname}
+@inline function _read_part(::State, scv::SCV, ::Val{subcontextname}, ::Val{varname}) where {SCV<:SubContextView, subcontextname, varname}
     bundle = @inline getbundle(scv)
     persistent_context = @inline getpersistent(scv)
     subcontexts = @inline get_subcontexts(persistent_context)
@@ -282,7 +282,7 @@ end
 #     return @inline getproperty(sct, varlocation)
 # end
 
-@inline @generated function Base.getproperty(sct::SCV, vl::Union{VarLocation{:subcontext}, VarLocation{:state}}) where SCV <: SubContextView
+@inline @generated function Base.getproperty(sct::SCV, vl::VarLocation{:state}) where SCV <: SubContextView
     target_subcontext = get_subcontextname(vl)
     target_variable = get_originalname(vl)
     if isnothing(getfunc(vl)) && target_variable isa Symbol

@@ -69,7 +69,7 @@ are concrete subcontext names.
 
 Replacement is not stored in the route/share `PlanWiring`. After loop-algorithm init,
 `apply_replace_specs(context, la)` resolves each root replacement and rewrites
-the target persistent field to a `ReplacedVar(VarLocation{:subcontext}(...))`
+the target persistent field to a `ReplacedVar(VarLocation{:state}(...))`
 marker. The source and target fields must already exist in the initialized
 context, and self-replacement is rejected.
 
@@ -88,7 +88,7 @@ When creating `SubContextView` locations (`src/Context/View/Locations.jl`):
   `VarLocation` to the stored backing location.
 
 Shared fields and routes from persistent entity subcontexts become
-`VarLocation{:subcontext}` entries. Routes whose source is `:_inputs` or
+`VarLocation{:state}` entries. Routes whose source is `:_inputs` or
 `:_captured_returns` become `VarLocation{:runtime}` entries and read from the separate
 loop-local runtime context. Replacement-backed locals retain the location kind
 of their stored backing location.

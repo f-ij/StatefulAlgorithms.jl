@@ -132,7 +132,7 @@ using StatefulAlgorithms
     @test reverse_tuple_context[ReverseTupleRouteSource].x == 4
     @test reverse_tuple_context[ReverseTupleRouteSource].y == 4
 
-    missing_reverse_location = StatefulAlgorithms.VarLocation{:subcontext}(:source, :value, x -> 2x)
+    missing_reverse_location = StatefulAlgorithms.VarLocation{:state}(:source, :value, x -> 2x)
     @test_throws ErrorException StatefulAlgorithms._subcontext_view_writeback_exprs(missing_reverse_location, :source, :input)
 
 end

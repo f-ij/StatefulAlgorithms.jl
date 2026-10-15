@@ -21,7 +21,7 @@ function _apply_replace_mapping(context::C, ::Val{fromname}, ::Val{toname}, ::Va
     _replacement_context_value(context, Val(fromname), Val(sourcevar), "source")
     _replacement_context_value(context, Val(toname), Val(targetvar), "target")
 
-    marker = ReplacedVar(VarLocation{:subcontext}(fromname, sourcevar))
+    marker = ReplacedVar(VarLocation{:state}(fromname, sourcevar))
     patch = NamedTuple{(toname,)}((NamedTuple{(targetvar,)}((marker,)),))
     return @inline merge_into_subcontexts(context, patch)
 end
