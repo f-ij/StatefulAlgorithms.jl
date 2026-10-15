@@ -249,24 +249,23 @@ Base.@assume_effects :foldable _runtime_context_type_after_leaving(@nospecialize
 _view_node(::Type{<:PlanWiringView{Root, WiringType}}) where {Root, WiringType} = WiringType
 
 """
-    _children_writes_expr(PlanType, repeat_values)
+    _children_writes_expr(PlanType)
 
 The body of `_writes` for a plan that steps its children in order (a composite, routine or threaded composite): the
 union of its children's writes, each at its own position (cursor, wiring view, namespace), with the runtime context
-type passed from child to child as `_step!` passes the runtime context. A child that repeats (a routine child with
-more than one repeat) uses the runtime type it settles on. `repeat_values` is `nothing` for a plan whose children run
-once per step. Nested plans are written inline, as in `_plan_step_exprs`: a nested `_writes` call would be the same
+type passed from child to child as `_step!` passes the runtime context (a child that repeats sees the same type in
+every repeat: a step removes what it adds). Nested plans are written inline, as in `_plan_step_exprs`: a nested `_writes` call would be the same
 method with a growing runtime context type, which inference stops following.
 """
-function _children_writes_expr(PlanType::Type, repeat_values)
+function _children_writes_expr(PlanType::Type)
     exprs = Any[:(local writes = Val(())), :(local runtime_context_type = RuntimeContextType)]
-    _children_writes_exprs!(exprs, PlanType, repeat_values, :plan, :cursor, :wiring)
+    _children_writes_exprs!(exprs, PlanType, :plan, :cursor, :wiring)
     push!(exprs, :(return writes))
     return Expr(:block, exprs...)
 end
 
 """Append to `exprs` the writes of the children of `plan` (type `PlanType`), nested plans inline; see `_children_writes_expr`."""
-function _children_writes_exprs!(exprs, PlanType::Type, repeat_values, plan, cursor, wiring)
+function _children_writes_exprs!(exprs, PlanType::Type, plan, cursor, wiring)
     child_namespace_tuple_type = PlanType.parameters[3]
     children = fieldtype(PlanType, :funcs)
     algos = gensym(:algos)
@@ -276,16 +275,13 @@ function _children_writes_exprs!(exprs, PlanType::Type, repeat_values, plan, cur
         child_namespace = :($(fieldtype(child_namespace_tuple_type, i))())
         setup, child, child_cursor, child_wiring = _child_setup_exprs(algos, cursor, wiring, i)
         append!(exprs, setup)
-        repeated = !isnothing(repeat_values) && !(repeat_values[i] isa Repeat && repeats(repeat_values[i]) == 1)
         if _steps_inline(ChildType)
             # The nested plan's writes, inline, with the runtime context type passed through its children; when it
             # ends its returns are removed, so the type afterwards is the one before it, also over repeats. Nothing
             # here asks what a plan's `_step!` returns: that would be the self-call inference stops following.
-            nested_repeats = ChildType <: Routine ? ChildType.parameters[2] : nothing
-            _children_writes_exprs!(exprs, ChildType, nested_repeats, child, child_cursor, child_wiring)
+            _children_writes_exprs!(exprs, ChildType, child, child_cursor, child_wiring)
             push!(exprs, :(runtime_context_type = @inline _runtime_context_type_after_leaving(runtime_context_type, typeof($child_wiring))))
         else
-            repeated && push!(exprs, :(runtime_context_type = @inline _runtime_context_type_over_repeats($child, $child_cursor, persistent_context, runtime_context_type, $child_wiring, $child_namespace, process, lifetime)))
             push!(exprs, :(writes = @inline _union_writes(writes, (@inline _writes($child, $child_cursor, persistent_context, runtime_context_type, $child_wiring, $child_namespace, process, lifetime)))))
             push!(exprs, :(runtime_context_type = @inline _runtime_context_type_after_node_step($child, $child_cursor, persistent_context, runtime_context_type, $child_wiring, $child_namespace, process, lifetime)))
         end
@@ -295,9 +291,9 @@ end
 
 # The persistent fields a composite or routine writes (see src/Context/Carried/Writes.jl).
 @inline @generated _writes(plan::PlanType, cursor::CursorType, persistent_context::PersistentContextType, ::Type{RuntimeContextType}, wiring::WiringViewType, namespace::NamespaceType, process::ProcessType, lifetime::LifetimeType) where {PlanType<:CompositeAlgorithm, CursorType, PersistentContextType<:ProcessContext, RuntimeContextType, WiringViewType, NamespaceType, ProcessType, LifetimeType} =
-    _children_writes_expr(PlanType, nothing)
+    _children_writes_expr(PlanType)
 @inline @generated _writes(plan::PlanType, cursor::CursorType, persistent_context::PersistentContextType, ::Type{RuntimeContextType}, wiring::WiringViewType, namespace::NamespaceType, process::ProcessType, lifetime::LifetimeType) where {PlanType<:Routine, CursorType, PersistentContextType<:ProcessContext, RuntimeContextType, WiringViewType, NamespaceType, ProcessType, LifetimeType} =
-    _children_writes_expr(PlanType, PlanType.parameters[2])
+    _children_writes_expr(PlanType)
 
 """Step one lifetime-scheduled child inside a `Routine`."""
 @inline function _subroutine_step!(

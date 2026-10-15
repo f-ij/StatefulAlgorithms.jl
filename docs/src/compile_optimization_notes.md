@@ -14,10 +14,8 @@ Potential next targets, in the order they should be investigated:
    and error reporting. If profiles show it from normal execution again, trace
    the exact caller before adding a cache.
 
-3. Check first-step and steady-step duplication.
-   Repeat loops compile an unstable first step and a stable steady loop. For
-   algorithms whose context type cannot grow, there may be a way to skip or
-   shrink the unstable generated path.
+3. ~~Check first-step and steady-step duplication.~~ Done on `refactor/no-first-step`: there is no separate
+   first step; every step keeps the context's type, so a loop compiles one step.
 
 4. Isolate context init merge cost.
    Lifecycle `init` now resolves `Init`/`Override` specs and stores them on the

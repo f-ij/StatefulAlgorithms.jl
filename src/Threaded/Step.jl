@@ -131,4 +131,4 @@ end
 
 # The persistent fields a threaded composite writes (see src/Context/Carried/Writes.jl): as a composite's.
 @inline @generated _writes(plan::PlanType, cursor::CursorType, persistent_context::PersistentContextType, ::Type{RuntimeContextType}, wiring::WiringViewType, namespace::NamespaceType, process::ProcessType, lifetime::LifetimeType) where {PlanType<:ThreadedCompositeAlgorithm, CursorType, PersistentContextType<:ProcessContext, RuntimeContextType, WiringViewType, NamespaceType, ProcessType, LifetimeType} =
-    _children_writes_expr(PlanType, nothing)
+    _children_writes_expr(PlanType)

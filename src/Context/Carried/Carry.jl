@@ -33,9 +33,10 @@ those are not known).
 @inline function create_carried(algo::AlgoType, cursor::CursorType, lc::LoopContext{PersistentContextType, RuntimeContextType}, wiring::WiringViewType, namespace::NamespaceType,
                                 process::ProcessType, lifetime::LifetimeType) where {AlgoType, CursorType, PersistentContextType<:ProcessContext, RuntimeContextType, WiringViewType, NamespaceType, ProcessType, LifetimeType}
     persistent_context = @inline getpersistent(lc)
-    # The runtime context type the repeated steps settle on: the views, and so the writes, depend on it.
-    settled_runtime_context_type = @inline _runtime_context_type_over_repeats(algo, cursor, persistent_context, RuntimeContextType, wiring, namespace, process, lifetime)
-    written = @inline _writes(algo, cursor, persistent_context, settled_runtime_context_type, wiring, namespace, process, lifetime)
+    # The views, and so the writes, depend on the runtime context type. Every repeat sees the same one: a step removes
+    # what it adds to the runtime context (a return lives until the end of its block), so its type at the end of a step
+    # is its type at the start.
+    written = @inline _writes(algo, cursor, persistent_context, RuntimeContextType, wiring, namespace, process, lifetime)
     return @inline _written_values(persistent_context, written)
 end
 

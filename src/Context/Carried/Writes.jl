@@ -18,9 +18,9 @@ Each node type's rule sits next to its `_step!`:
 
 What a child's view sees depends on the runtime context, which changes from child to child within one step (each
 child's returns are added). So the runtime context type is passed along from child to child: the type after a child is
-the union of the type before it and the type its `_step!` returns (`_runtime_context_type_after_node_step`). Repeated
-steps (a loop, a routine's repeats) use the type it settles on (`_runtime_context_type_over_repeats`). Both can only
-make a write set larger, never smaller.
+the union of the type before it and the type its `_step!` returns (`_runtime_context_type_after_node_step`), which can
+only make a write set larger, never smaller. A repeated step (a loop, a routine's repeats) sees the same runtime
+context type in every repeat: a step removes what it adds (a return lives until the end of its block).
 =#
 
 """`written` and `new` as one sorted tuple of `(subcontext, field)` pairs without repeats."""
@@ -96,15 +96,4 @@ Base.@assume_effects :foldable function _runtime_context_types_of(@nospecialize(
         runtime_context_types = Union{runtime_context_types, runtime_type(T)}
     end
     return runtime_context_types
-end
-
-"""
-The runtime context type a repeated `_step!(node, ...)` settles on, starting from `RuntimeContextType`: the union over
-the repeats. `Any` when it does not settle within three steps.
-"""
-@inline function _runtime_context_type_over_repeats(node::NodeType, cursor::CursorType, persistent_context::PersistentContextType, ::Type{RuntimeContextType}, wiring::WiringViewType, namespace::NamespaceType, process::ProcessType, lifetime::LifetimeType) where {NodeType, CursorType, PersistentContextType, RuntimeContextType, WiringViewType, NamespaceType, ProcessType, LifetimeType}
-    after_one = @inline _runtime_context_type_after_node_step(node, cursor, persistent_context, RuntimeContextType, wiring, namespace, process, lifetime)
-    after_two = @inline _runtime_context_type_after_node_step(node, cursor, persistent_context, after_one, wiring, namespace, process, lifetime)
-    after_three = @inline _runtime_context_type_after_node_step(node, cursor, persistent_context, after_two, wiring, namespace, process, lifetime)
-    return after_three === after_two ? after_two : Any
 end

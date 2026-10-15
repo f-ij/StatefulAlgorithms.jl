@@ -1,77 +1,20 @@
 #=
-Typing the run's values before the first step.
+Typing the run's values before the first step, and removing a plan node's returns when it ends.
 
-A run holds, next to the stored state: inputs (read-only), declared locals (the run) and returns (captured returns,
-what statements and calls return, and subcontext returns, what an algorithm returns that is not its state). A return
-lives for one step of the plan node it belongs to: entering the node makes it unset (`enter_scope`).
-Like Julia does for the variables of a function, their types are decided before the loop, from the types the steps
-write, so the runtime context has one type in every step:
+A run holds, next to the stored state: inputs (read-only), declared locals and returns (captured returns, what
+statements and calls return, and subcontext returns, what an algorithm returns that is not its state). A return exists
+from the line that writes it to the end of its plan node (`leave_scope` removes it, `_strip_returns`), so a step ends
+with the runtime context it started with.
 
-- a declared local without a type (`local x`, `x = nothing`) gets the type of its first value and keeps it (Locals.jl);
-- a return gets a slot, a `Maybe` of every type written to it, unset until it is written in a step (e.g. `v = f(y)`
-  gets `Maybe{Float64}`; reading it before it is written is an `UndefRefError`). Writing it converts the value into the
-  slot (`_merge_slots`).
-
-Without these slots a return would only appear in the runtime context when first written, and a value that is
-`nothing` in some steps and a `Float64` in others would change the runtime context's type from step to step.
+A declared local without a value (`local x`) has no value before the first step, but the runtime context needs its type
+from the start, as Julia needs a variable's type before a loop. So its type is decided before the loop from the types
+the steps write to it (`_settle_runtime_context`), and it is held in an unset `Maybe` of that type until it
+is written (`_merge_slots` puts a written value into it).
 =#
 
-"""The fields of a runtime partition (`_captured_returns`) in context type `RC`, as `name => type` pairs (a slot as the type it holds)."""
-function _list_partition_slots(::Type{RC}, partition::Symbol) where {RC<:ProcessContext}
-    D = fieldtype(RC, :subcontexts)
-    partition in fieldnames(D) || return Pair{Symbol, Any}[]
-    return _list_slots(getdatatype(fieldtype(D, partition)))
-end
-_list_slots(::Type{T}) where {T<:NamedTuple} = Pair{Symbol, Any}[n => _unwrap_slot_type(fieldtype(T, n)) for n in fieldnames(T)]
+"""The type a declared local's `Maybe` holds (the type itself for a value that is not a `Maybe`)."""
 _unwrap_slot_type(::Type{T}) where {T} = T
 _unwrap_slot_type(::Type{<:Maybe{T}}) where {T} = T
-
-"""`slots` (name => type, in order) joined with the `written` ones: every written type is added."""
-function _join_slots(slots::Vector{Pair{Symbol, Any}}, written)
-    joined = copy(slots)
-    for (name, T) in written
-        i = findfirst(p -> first(p) === name, joined)
-        isnothing(i) ? push!(joined, name => T) : (joined[i] = name => Union{last(joined[i]), T})
-    end
-    return joined
-end
-
-"""The named tuple type of slots `name => type`: each an unset-able `Maybe` of its type."""
-_build_slots_type(slots) = NamedTuple{Tuple(first.(slots)), Tuple{(make_maybe_type(last(p), UndefInitializer) for p in slots)...}}
-_build_owner_slots_type(owners) = NamedTuple{Tuple(first.(owners)), Tuple{last.(owners)...}}
-
-"""
-`RC` with output slots for everything the `returned` runtime context types hold in `_captured_returns` and
-`_subcontext_returns`, joined with the slots `RC` already has.
-"""
-function _add_return_slots(::Type{RC}, returned) where {RC<:ProcessContext}
-    declared = _list_partition_slots(RC, :_captured_returns)
-    owners = Dict{Symbol, Vector{Pair{Symbol, Any}}}(name => _list_slots(T) for (name, T) in _list_partition_slots(RC, :_subcontext_returns))
-    owner_order = Symbol[first(p) for p in _list_partition_slots(RC, :_subcontext_returns)]
-    for R in returned
-        declared = _join_slots(declared, _list_partition_slots(R, :_captured_returns))
-        for (owner, T) in _list_partition_slots(R, :_subcontext_returns)
-            owner in owner_order || push!(owner_order, owner)
-            owners[owner] = _join_slots(get(owners, owner, Pair{Symbol, Any}[]), _list_slots(T))
-        end
-    end
-    partitions = Pair{Symbol, Any}[]
-    isempty(declared) || push!(partitions, :_captured_returns => SubContext{:_captured_returns, _build_slots_type(declared)})
-    isempty(owner_order) || push!(partitions, :_subcontext_returns => SubContext{:_subcontext_returns, _build_owner_slots_type([o => _build_slots_type(owners[o]) for o in owner_order])})
-    return _set_partition_types(RC, partitions)
-end
-
-"""Context type `RC` with the subcontext types in `partitions` (name => type) put in, replacing or appending."""
-function _set_partition_types(::Type{RC}, partitions) where {RC<:ProcessContext}
-    D = fieldtype(RC, :subcontexts)
-    names = Symbol[fieldnames(D)...]
-    types = Any[fieldtypes(D)...]
-    for (name, T) in partitions
-        i = findfirst(==(name), names)
-        isnothing(i) ? (push!(names, name); push!(types, T)) : (types[i] = T)
-    end
-    return ProcessContext{NamedTuple{Tuple(names), Tuple{types...}}, fieldtype(RC, :reg)}
-end
 
 #=
 Typing the runtime context before the loop: the functions below whose names end in `type` or `types` return types;
@@ -92,8 +35,8 @@ end
 
 """
 The runtime context type after one step, given the type `RuntimeContextType` before it and `stepped`, what inference
-says one step returns (`LoopContext` types): declared locals without a value get the types written to them (Locals.jl),
-and every return gets a slot for the types written to it. `Nothing` when inference could not tell.
+says one step returns (`LoopContext` types): declared locals without a value get the types written to them (Locals.jl).
+`Nothing` when inference could not tell.
 """
 @generated function _add_step_write_types(::Type{RuntimeContextType}, ::Type{Stepped}) where {RuntimeContextType<:ProcessContext, Stepped}
     returned = _collect_returned_contexts(Stepped)
@@ -134,8 +77,10 @@ inference cannot tell.
 Why not infer the plan's `_step!` as a whole: a nested plan's `_step!` is the same method, called with a runtime
 context type that has grown (every algorithm before it added its returns). Julia's inference stops following a method
 that calls itself with a growing argument type, and then answers `Any` for the whole step. Inferring one algorithm at a
-time, with the nested plans unrolled in one generated body, avoids that. Only the first round of typing needs it: once
-every return has a slot, the runtime context type no longer grows within a step (`_infer_runtime_context_type_after_whole_step`).
+time, with the nested plans unrolled in one generated body, avoids that. The later rounds infer the step as a whole
+(`_infer_runtime_context_type_after_whole_step`).
+TODO: nested plans are now written into their parent's `_step!` (Step.jl), so inferring the whole step may work in the
+first round too; not checked.
 """
 @inline @generated function _infer_runtime_context_type_per_algorithm(plan::PlanType, cursor::CursorType, persistent_context::PersistentContextType, ::Type{RuntimeContextType}, wiring::WiringViewType, process::ProcessType, lifetime::LifetimeType) where {PlanType<:AbstractPlan, CursorType, PersistentContextType, RuntimeContextType, WiringViewType, ProcessType, LifetimeType}
     exprs = Any[:(runtime_context_type = RuntimeContextType)]
@@ -146,8 +91,8 @@ end
 
 """
 The runtime context type after the first step, from `RuntimeContextType` (its declared locals without a value as
-probes, see Locals.jl), inferred per algorithm (`_infer_runtime_context_type_per_algorithm`): every return gets a
-slot, every declared local without a value the type written to it. `Nothing` when inference cannot tell.
+probes, see Locals.jl), inferred per algorithm (`_infer_runtime_context_type_per_algorithm`): every declared local
+without a value gets the type written to it. `Nothing` when inference cannot tell.
 """
 @inline _infer_runtime_context_type_after_first_step(::Type{RuntimeContextType}, plan::PlanType, cursor::CursorType, persistent_context::PersistentContextType, wiring::WiringViewType, process::ProcessType, lifetime::LifetimeType) where {RuntimeContextType, PlanType, CursorType, PersistentContextType, WiringViewType, ProcessType, LifetimeType} =
     _add_step_write_types(RuntimeContextType, _build_returned_loopcontext_types(PersistentContextType, (@inline _infer_runtime_context_type_per_algorithm(plan, cursor, persistent_context, RuntimeContextType, wiring, process, lifetime)), WiringViewType))
@@ -162,7 +107,7 @@ Base.@assume_effects :foldable _build_returned_loopcontext_types(@nospecialize(P
 
 """
 The runtime context type after one step from `RuntimeContextType`, inferring the plan's step as a whole (see
-`_add_step_write_types`). Used once every return has a slot.
+`_add_step_write_types`). Used from the second round of typing on.
 """
 @inline _infer_runtime_context_type_after_whole_step(::Type{RuntimeContextType}, plan::PlanType, cursor::CursorType, persistent_context::PersistentContextType, wiring::WiringViewType, process::ProcessType, lifetime::LifetimeType) where {RuntimeContextType, PlanType, CursorType, PersistentContextType, WiringViewType, ProcessType, LifetimeType} =
     _add_step_write_types(RuntimeContextType, Core.Compiler.return_type(_probe_step, Tuple{PlanType, CursorType, LoopContext{PersistentContextType, RuntimeContextType, wiring_parent(WiringViewType)}, WiringViewType, ProcessType, LifetimeType}))
@@ -172,9 +117,9 @@ _has_same_locals(::Type{A}, ::Type{B}) where {A, B} = _get_locals_type(A) === _g
 _has_same_locals(::Type{A}, ::Type{Nothing}) where {A} = false
 
 """
-`merge(old, args)`, except that a value written to a slot (a `Maybe`, see the note above) is put into it, so the field
-keeps its type and the runtime context has the same type in every step. A value that does not fit the slot (a return
-that could not be typed before the run) replaces the field as `merge` does.
+`merge(old, args)`, except that a value written to a declared local held in a `Maybe` (see the note at the top) is
+put into it, so the field keeps its type and the runtime context has the same type in every step. A value that does
+not fit replaces the field as `merge` does.
 """
 @inline @generated function _merge_slots(old::NT, args::A) where {NT<:NamedTuple, A<:NamedTuple}
     names = Symbol[fieldnames(NT)...]
@@ -192,18 +137,17 @@ end
 """
     _settle_runtime_context(plan, cursor, persistent_context, runtime_context, wiring, process, lifetime)
 
-The runtime context the loop starts with: `runtime_context` with its types decided before the first step, so it has
-the same type in every step. Every return gets a typed slot (unset), every declared local without a value the type of
-what is written to it. Returns a value; all of it is worked out while the run is compiled, nothing of it runs per step.
+The runtime context the loop starts with: `runtime_context` with every declared local without a value as an unset
+`Maybe` of the type written to it, so the runtime context has the same type in every step. Returns a value; all of it
+is worked out while the run is compiled, nothing of it runs per step.
 
 1. The declared locals without a value become probes, and one step is inferred per algorithm
-   (`_infer_runtime_context_type_after_first_step`): what is written to each declared local and what is returned. The
-   declared locals get their types, the returns typed slots.
+   (`_infer_runtime_context_type_after_first_step`): what is written to each declared local gives its type.
 2. A second round, with these types, inferring the step as a whole, checks the rule that a declared local keeps the
-   type of its first value (an error otherwise, naming the step). It can still widen a return slot: a return computed
-   from a declared local (`v = f(y)`) is only known once that local's type is.
-3. If the second round changed something, a third round must not. If the returns do not settle, or inference cannot
-   tell, the returns get no slots and take their types as written; entering a scope then removes them.
+   type of its first value (an error otherwise, naming the step). It can still change a type: a local computed from
+   another declared local (`y = f(x)`) is only known once that local's type is.
+3. If the second round changed something, a third round must not. If the types do not settle, or inference cannot
+   tell, the declared locals keep the types of the first round.
 """
 @inline function _settle_runtime_context(plan, cursor, persistent_context, runtime_context::RuntimeContextType, wiring, process, lifetime) where {RuntimeContextType<:ProcessContext}
     step = (plan, cursor, persistent_context, wiring, process, lifetime)
@@ -230,11 +174,7 @@ function _drop_partitions(::Type{RC}, drop) where {RC<:ProcessContext}
     return ProcessContext{NamedTuple{Tuple(fieldnames(D)[keep]), Tuple{fieldtypes(D)[keep]...}}, fieldtype(RC, :reg)}
 end
 
-"""A value of slots type `T` (a named tuple, possibly of named tuples) with every slot unset."""
-_build_empty_slots_expr(::Type{T}) where {T<:NamedTuple} =
-    :($T(($((fieldtype(T, n) <: NamedTuple ? _build_empty_slots_expr(fieldtype(T, n)) : :($(fieldtype(T, n))()) for n in fieldnames(T))...),)))
-
-"""`runtime_context` with the types of `TypedRuntimeContextType`: declared locals without a value as unset `Maybe`s of their type, and every return slot unset."""
+"""`runtime_context` with the declared locals of `TypedRuntimeContextType`: those without a value as unset `Maybe`s of their type."""
 @inline @generated function _retype_runtime_context(runtime_context::RuntimeContextType, ::Type{TypedRuntimeContextType}) where {RuntimeContextType<:ProcessContext, TypedRuntimeContextType<:ProcessContext}
     exprs = Any[:(typed = runtime_context)]
     if _has_untyped_locals(RuntimeContextType)
@@ -242,13 +182,6 @@ _build_empty_slots_expr(::Type{T}) where {T<:NamedTuple} =
     end
     push!(exprs, :(return typed))
     return Expr(:block, exprs...)
-end
-
-"""A named tuple of type `T` read from `source`, with the fields in `names` unset: a slot unset, any other one left out."""
-function _build_unset_expr(::Type{T}, names, source) where {T<:NamedTuple}
-    kept = Tuple(n for n in fieldnames(T) if !(n in names) || fieldtype(T, n) <: Maybe)
-    values = map(n -> n in names ? :($(fieldtype(T, n))()) : :(getfield($source, $(QuoteNode(n)))), kept)
-    return :(NamedTuple{$kept}(($(values...),)))
 end
 
 """
@@ -275,37 +208,4 @@ in `returns`, and every subcontext return of the namespaces in `owners`. What a 
     end
     length(names) == fieldcount(subcontexts) && all(v -> v isa Expr && v.args[1] === :getfield, values) && return :runtime_context
     return :(ProcessContext(NamedTuple{$(Tuple(names))}(($(values...),)), getfield(runtime_context, :reg)))
-end
-
-"""
-    _unset_returns(runtime_context, Val(resets))
-
-`runtime_context` with the returns in `resets` unset (`(; returns, owners)`, see `enter_scope`): the captured returns
-named in `returns`, and every subcontext return of the namespaces in `owners`. A slot is made unset; a return without
-one (not typed before the run) is removed.
-"""
-@inline @generated function _unset_returns(runtime_context::RC, ::Val{Resets}) where {RC<:ProcessContext, Resets}
-    D = fieldtype(RC, :subcontexts)
-    exprs = Any[:(rc = runtime_context)]
-    if :_captured_returns in fieldnames(D)
-        T = getdatatype(fieldtype(D, :_captured_returns))
-        if any(in(fieldnames(T)), Resets.returns)
-            data = _build_unset_expr(T, Resets.returns, :(get_captured_returns(rc)))
-            push!(exprs, :(rc = @inline with_subcontext(rc, Val(:_captured_returns), SubContext{:_captured_returns}($data))))
-        end
-    end
-    if :_subcontext_returns in fieldnames(D)
-        T = getdatatype(fieldtype(D, :_subcontext_returns))
-        if any(in(fieldnames(T)), Resets.owners)
-            kept = Tuple(o for o in fieldnames(T) if !(o in Resets.owners) || any(F -> F <: Maybe, fieldtypes(fieldtype(T, o))))
-            values = map(kept) do o
-                source = :(getfield(get_subcontext_returns(rc), $(QuoteNode(o))))
-                o in Resets.owners ? _build_unset_expr(fieldtype(T, o), fieldnames(fieldtype(T, o)), source) : source
-            end
-            data = :(NamedTuple{$kept}(($(values...),)))
-            push!(exprs, :(rc = @inline with_subcontext(rc, Val(:_subcontext_returns), SubContext{:_subcontext_returns}($data))))
-        end
-    end
-    push!(exprs, :(return rc))
-    return Expr(:block, exprs...)
 end
