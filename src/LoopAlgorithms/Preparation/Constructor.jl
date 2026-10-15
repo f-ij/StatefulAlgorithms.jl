@@ -256,7 +256,7 @@ function _resolve_scopes(la::LA, ::Type{Outer}, path::String, keep_returns::Bool
         funcs[i] isa LoopSpec ? getwiring(funcs[i]) : _scope_routes_to_storage(getfield(child_wiring(wiring), i), Sc)
     end
     owners = Tuple(unique(Symbol[plan_child_namespace(rebuilt, i) for i in 1:length(funcs)
-                                 if !(funcs[i] isa LoopSpec) && context_part(Val(plan_child_namespace(rebuilt, i))) isa State]))
+                                 if !(funcs[i] isa LoopSpec) && context_partition(Val(plan_child_namespace(rebuilt, i))) isa NamespacePartition]))
     resets = (; returns = map(name -> scoped_storage_name(name, path), captured), owners)
     return setfield(rebuilt, :wiring, PlanWiring(global_wiring(wiring), children, own_locals, Sc, Val(resets)))
 end
