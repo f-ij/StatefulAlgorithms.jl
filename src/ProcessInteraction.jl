@@ -71,7 +71,7 @@ function _cleanup_paused_process!(p::Process, fetched_result)
     cleaned = @inline cleanup(getalgo(p), LoopContext(cleanup_state_context, cleanup_runtime_context))
     cleaned = @inline withpersistent(cleaned, _paused_state_context(getpersistent(cleaned)))
     cleaned_context = @inline getpersistent(cleaned)
-    p.lastresult = @inline _loop_final_result(getalgo(p), (@inline visible_context(cleaned)), getruntime(cleaned))
+    p.lastresult = @inline _loop_final_result(getalgo(p), (@inline final_context(cleaned)), getruntime(cleaned))
     commit_context!(p, cleaned_context)
     return p.lastresult
 end

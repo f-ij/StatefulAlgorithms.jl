@@ -149,7 +149,7 @@ _throw_undef() = throw(UndefRefError())
     !iszero(getfield(m, :isset)) ? view_value(view, getfield(m, :value)) : nothing
 @inline view_value(view::V, m::Maybe{T, F, UndefInitializer}) where {T, F, V<:SubContextView} =
     !iszero(getfield(m, :isset)) ? view_value(view, getfield(m, :value)) : _throw_undef()
-"""A return as the final context shows it (`visible_context`): a slot as its value, or `nothing` while unset."""
+"""A return as `final_context` shows it: a slot as its value, or `nothing` while unset."""
 _final_value(x) = x
 _final_value(m::Maybe) = iszero(getfield(m, :isset)) ? nothing : getfield(m, :value)
 # A local declared without a value that no step ever writes keeps its `undef`.

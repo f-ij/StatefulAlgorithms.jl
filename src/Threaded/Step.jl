@@ -35,7 +35,7 @@ Base.@constprop :aggressive function _threaded_run_child(base_context::C, tca::T
     merged_context = @inline getpersistent(merge(contextview, retval))
     local_payload = @inline getdata(getproperty(merged_context, getkey(sa)))
     child_name = getkey(getalgotype(TCA, idx))
-    return NamedTuple{(child_name,), Tuple{getdatatype(subcontext_type(C, child_name))}}((local_payload,))
+    return NamedTuple{(child_name,), Tuple{getdatatype(get_subcontext_type(C, child_name))}}((local_payload,))
 end
 
 Base.@constprop :aggressive function _threaded_spawn_child(base_context::C, tca::TCA, ::ThreadedIndex{idx}, this_inc::Int) where {C<:ProcessContext, TCA<:ThreadedCompositeAlgorithm, idx}
@@ -55,7 +55,7 @@ Base.@constprop :aggressive function _threaded_merge_child_payload(merged::Named
     merged_context = @inline getpersistent(merge(contextview, retval))
     local_payload = @inline getdata(getproperty(merged_context, getkey(sa)))
     child_name = getkey(getalgotype(TCA, idx_val))
-    payload = NamedTuple{(child_name,), Tuple{getdatatype(subcontext_type(C, child_name))}}((local_payload,))
+    payload = NamedTuple{(child_name,), Tuple{getdatatype(get_subcontext_type(C, child_name))}}((local_payload,))
     return @inline merge(merged, payload)
 end
 
