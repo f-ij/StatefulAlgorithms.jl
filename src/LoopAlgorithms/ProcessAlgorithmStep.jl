@@ -81,28 +81,3 @@ end
 end
 @inline _writes_payload(contextview, ::NamedTuple{()}, demand::ReturnDemand) = (;)
 @inline _writes_payload(contextview, writes::NamedTuple, demand::ReturnDemand) = @inline _merge_payload(contextview, writes, demand)
-
-"""
-Step an unscoped root `ProcessAlgorithm` inside the loop runtime.
-
-This is the terminal fallback for algorithms that are executed without a child
-namespace. Runtime-only returns are written to `_captured_returns` only when demanded by
-the current plan wiring.
-"""
-@inline function _step!(
-    algo::A,
-    lc::L,
-    wiring::W,
-    process::P,
-    lifetime::LT,
-) where {A<:ProcessAlgorithm,L<:LoopContext,W<:PlanWiringView,P<:AbstractProcess,LT<:Lifetime}
-    persistent_context = @inline getpersistent(lc)
-    retval = @inline step_updates(@inline step!(algo, persistent_context))
-    runtime_context = @inline merge_runtime_return(
-        (@inline getruntime(lc)),
-        Val(:_captured_returns),
-        retval,
-        return_demand(wiring, Namespace{:_captured_returns}()),
-    )
-    return @inline withcontexts(lc, persistent_context, runtime_context)
-end
