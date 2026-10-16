@@ -45,9 +45,8 @@ end
 
 @inline interactive_names(::Union{Interactive{Target, Names}, Type{<:Interactive{Target, Names}}}) where {Target, Names} = Names
 
-"""Expose the current interactive payload through the generic view-value hook."""
-@inline view_value(view::V, ref::InteractiveVar) where {V<:SubContextView} =
-    @inline view_value(view, ref[])
+"""An `InteractiveVar` reads as the value it currently holds."""
+@inline read_action(reader::R, ref::InteractiveVar) where {R<:AbstractContext} = DirectRead(ref[])
 
 """Wrap a context value for interactive mutation, unless it is already wrapped."""
 @inline interactive_wrapper(value) = InteractiveVar(value)

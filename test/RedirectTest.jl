@@ -7,14 +7,16 @@ struct RecursiveViewWrapper{T}
     value::T
 end
 
-"""Recursively expose the wrapped test value through the generic view hook."""
-function StatefulAlgorithms.view_value(view::V, value::RecursiveViewWrapper{T}) where {T, V<:StatefulAlgorithms.SubContextView}
-    return StatefulAlgorithms.view_value(view, getfield(value, :value))
-end
+"""A test wrapper that reads as its inner value, so wrappers inside wrappers test `ReadVar`."""
+StatefulAlgorithms.read_action(reader::R, value::RecursiveViewWrapper{T}) where {R<:StatefulAlgorithms.AbstractContext, T} =
+    StatefulAlgorithms.ReadVar(getfield(value, :value))
 
 function StatefulAlgorithms.init(::RedirectSourceState, context::C) where {C}
     return (; value = 3)
 end
+
+struct RedirectMiddleState <: AlgoState end
+StatefulAlgorithms.init(::RedirectMiddleState, context::C) where {C} = (; value = 0)
 
 @StepAlgorithm function RedirectSourceAlgo(@managed(value = 3))
     @update value
@@ -76,7 +78,34 @@ end
         stepped_context = StatefulAlgorithms._step!(initialized, StatefulAlgorithms.context(initialized))
 
         @test stepped_context.target.seen == 8
-        @test stepped_context[Var(:target, :value)] === stepped_context.source.value
+        # `context[Var]` reads like a view: through the redirect and both wrappers; `context.source.value` is the stored value.
+        @test stepped_context[Var(:target, :value)] == 8
+        @test stepped_context[Var(:source, :value)] == 8
+        @test stepped_context.source.value isa RecursiveViewWrapper
+    end
+
+    @testset "A redirect to a redirect is followed, inferred and without allocations" begin
+        algo = resolve(CompositeAlgorithm(
+            :target => RedirectReadTargetAlgo(),
+            (1,),
+            :middle => RedirectMiddleState(),
+            :source => RedirectSourceState(),
+            Redirect(:middle => :target, :value),
+            Redirect(:source => :middle, :value),
+        ))
+
+        initialized = init(algo; lifetime = Repeat(1))
+        context = StatefulAlgorithms.context(initialized)
+        @test context.target.value isa RedirectedVar
+        @test context.middle.value isa RedirectedVar
+
+        stepped_context = StatefulAlgorithms._step!(initialized, context)
+        @test stepped_context.target.seen == 3
+
+        read_target(c) = c[Var(:target, :value)]
+        @test @inferred(read_target(stepped_context)) == 3
+        read_target(stepped_context)
+        @test (@allocated read_target(stepped_context)) == 0
     end
 
     @testset "A Redirect cycle is an error when the redirects are applied" begin
