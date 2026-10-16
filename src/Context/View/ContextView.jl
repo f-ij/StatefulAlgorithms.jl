@@ -132,7 +132,7 @@ end
 """
 Get the type of the original subcontext from the view
 """
-@inline subcontext_type(scv::Union{SubContextView{B, SubKey}, Type{<:SubContextView{B, SubKey}}}) where {B<:ContextBundle, SubKey} = subcontext_type(persistent_type(B), SubKey)
+@inline get_subcontext_type(scv::Union{SubContextView{B, SubKey}, Type{<:SubContextView{B, SubKey}}}) where {B<:ContextBundle, SubKey} = get_subcontext_type(persistent_type(B), SubKey)
 
 
 

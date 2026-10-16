@@ -13,12 +13,12 @@ end
 """
     finalizer!(func, persistent_context, runtime_context, process, lifetime)
 
-Run cleanup and build the final result (`finalstep` gets `visible_context`) while the run's runtime values are still
+Run cleanup and build the final result (`finalstep` gets `final_context`) while the run's runtime values are still
 there. Returns the persistent context and the result; the runtime values end with the run.
 """
 @inline function finalizer!(func::F, persistent_context::C, runtime_context::RC, process::P, lifetime::LT) where {F,C<:ProcessContext,RC<:ProcessContext,P<:AbstractProcess,LT<:Lifetime}
     cleaned = @inline cleanup(func, LoopContext(persistent_context, runtime_context))
-    return (@inline getpersistent(cleaned)), (@inline _loop_final_result(func, (@inline visible_context(cleaned)), getruntime(cleaned)))
+    return (@inline getpersistent(cleaned)), (@inline _loop_final_result(func, (@inline final_context(cleaned)), getruntime(cleaned)))
 end
 
 """

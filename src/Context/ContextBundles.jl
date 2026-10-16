@@ -95,8 +95,42 @@ Init has no runtime context, so it always gets an empty named tuple.
 @inline get_runtime_partition(lc::LoopContext, partition::RuntimePartition) = @inline get_runtime_partition(getruntime(lc), partition)
 @inline get_runtime_partition(::InitContext, ::RuntimePartition) = (;)
 
-"""Returns the persistent and runtime values together as one `ProcessContext`. This is what `finalstep` gets."""
-@inline visible_context(lc::LoopContext) = @inline _visible_context(getpersistent(lc), getruntime(lc))
+"""
+    final_context(lc::LoopContext)
+
+Returns everything a loop holds at its end as one `ProcessContext`. A `finalstep` (`@finally`) gets it; without one, it
+is the run's result (`fetch(p)`, `p.lastresult`). It is the persistent context with the runtime context shown in it:
+1. each namespace's subcontext returns are merged into that namespace's subcontext, so `ctx.Sensor_1.extra` reads one;
+   a return with the name of a state variable shows instead of that variable
+2. the inputs, declared locals and captured returns are added as the subcontexts `_inputs`, `_declared_locals` and
+   `_captured_returns`, in the order a run's runtime context has them
+
+A return shows the value of the last step that wrote it, or `nothing` if no step did. The persistent context the loop
+stores does not change.
+"""
+@inline function final_context(lc::LoopContext)
+    runtime_context = @inline getruntime(lc)
+    returns = map(r -> map(_final_value, r), (@inline get_subcontext_returns(runtime_context)))
+    shown = @inline merge_into_subcontexts((@inline getpersistent(lc)), returns)
+    shown = @inline _show_partition(shown, runtime_context, Inputs())
+    shown = @inline _show_partition(shown, runtime_context, DeclaredLocals())
+    return @inline _show_partition(shown, runtime_context, CapturedReturns())
+end
+
+"""
+Returns `pc` with one partition of `runtime_context` added as the subcontext of that partition's name, or `pc` itself
+when `runtime_context` does not have that partition.
+"""
+@inline function _show_partition(pc::PC, runtime_context::RC, partition::P) where {PC<:ProcessContext, RC<:ProcessContext, P<:RuntimePartition}
+    name = runtime_partition_name(partition)
+    haskey(get_subcontexts(runtime_context), name) || return pc
+    values = _shown_values(partition, (@inline get_runtime_partition(runtime_context, partition)))
+    return @inline with_subcontext(pc, Val(name), SubContext{name}(values))
+end
+
+"""Returns a partition's values as the visible context shows them: captured returns unwrapped from their slots, the rest as stored."""
+_shown_values(::P, values::NT) where {P<:RuntimePartition, NT<:NamedTuple} = values
+_shown_values(::CapturedReturns, values::NT) where {NT<:NamedTuple} = map(_final_value, values)
 
 """Returns the lifetime of the run being prepared. Only init can ask for it (to size buffers). A step that asks gets an error."""
 @inline bundle_lifetime(ic::InitContext) = init_lifetime(ic)

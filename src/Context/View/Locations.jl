@@ -24,7 +24,7 @@ get_state_locations(::Type{SCT}) where {SCT<:SubContextView{B, SubKey}} where {B
 _state_locations(::CapturedReturns, ::Type) = (;)
 
 function _state_locations(::NamespacePartition, ::Type{SCT}) where {SCT<:SubContextView{B, SubKey}} where {B<:ContextBundle, SubKey}
-    _subcontext_type = subcontext_type(SCT)
+    _subcontext_type = get_subcontext_type(SCT)
     _data_type = getdatatype(_subcontext_type)
     state_names = keys(_subcontext_type)
     locations = ntuple(i -> _redirected_varlocation(fieldtype(_data_type, state_names[i]), Val(SubKey), Val(state_names[i])), length(state_names))
@@ -56,7 +56,7 @@ function get_shared_locations(sct::Type{SCT}) where {SCT<:SubContextView{B, SubK
     shared_context_names = contextname.(_view_shared_types(view_sharedcontexts(SCT)))
 
     sharedvars = named_flat_collect_broadcast(shared_context_names) do name
-        shared_subcontext_type = subcontext_type(persistent_type(B), name)
+        shared_subcontext_type = get_subcontext_type(persistent_type(B), name)
         shared_varnames = keys(shared_subcontext_type)
         pairs = (shared_varnames[i] => VarLocation{:state}(name, shared_varnames[i]) for i in 1:length(shared_varnames))
         return NamedTuple(pairs)
