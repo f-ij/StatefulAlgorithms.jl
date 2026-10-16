@@ -10,25 +10,26 @@ state as it was put into the plan (its type, or the instance), or a context key 
 `transform`, reading it gives `transform(value)`. Read with `context[var]`, used by lifetimes
 (`Until(cond, Var(counter, :count))`), and as the source of a wire in `WithWiring` (`From`).
 
-Everything is type data. A reference that cannot be a type parameter (an instance with
-non-plain-data fields, e.g. a `Vector`) is kept as the matcher the registry identifies it by;
-the transform must be a plain function or a closure without captured values, as for routes.
+Everything is type data. `subcontext_ref` is stored as an SCRef is stored in a route
+(`scref_match`): a context key as itself, anything else (a type, an instance) as its matcher type.
+Reading the `Var` resolves the matcher to a key in the context's registry (`resolve_scref`); a type
+reads the first registered algorithm of that type. The transform must be a plain function or a
+closure without captured values, as for routes.
 """
 struct Var{SubcontextRef, name, transform} end
 
-Var(subcontext_ref, name::Symbol; transform = nothing) = Var{_stored_subcontext_ref(subcontext_ref), name, transform}()
+Var(subcontext_ref, name::Symbol; transform = nothing) = Var{scref_match(subcontext_ref), name, transform}()
 Var(name::Symbol) = Var{:_captured_returns, name, nothing}()
 
-"""A subcontext reference as `Var` stores it in its type: as given, or as its registry matcher."""
-_stored_subcontext_ref(ref::Symbol) = ref
-_stored_subcontext_ref(ref) = (ref isa Type || isbits(ref)) ? ref : scref_match(ref)
-
-"""The subcontext a `Var` refers to: by key, by registry lookup, or by the matcher it was stored as."""
-@inline _var_subcontext(c::ProcessContext, ref) = c[ref]
+"""
+Return the subcontext a `Var` refers to: the one named by its SCKey, or the registry entry its
+matcher matches (resolved as a route endpoint, so the key is found at compile time).
+"""
+@inline _var_subcontext(c::ProcessContext, key::Symbol) = c[key]
 @inline function _var_subcontext(c::ProcessContext, ::Type{M}) where {M<:AbstractMatcher}
     reg = getregistry(c)
     isnothing(reg) && error("Cannot look up a `Var`'s subcontext without a registry in this context.")
-    return getproperty(c, getkey(get_by_matcher(reg, M())))
+    return getproperty(c, resolve_scref(reg, M, nothing, "Var subcontext"))
 end
 
 @inline _var_transform(::Var{E, N, nothing}, value) where {E, N} = value

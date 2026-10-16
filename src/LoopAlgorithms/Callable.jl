@@ -280,5 +280,6 @@ subcontext (an algorithm, its type or key, `:_captured_returns` for a captured r
 declared local), optionally transformed, as `alias`.
 """
 From(wire::Pair{<:Var, Symbol}) = _var_route(first(wire), last(wire))
+# A `Var` already stores its reference as a route stores an endpoint (an SCKey or a matcher type).
 _var_route(::Var{Ref, name, transform}, alias::Symbol) where {Ref, name, transform} =
-    Route{(Ref isa Symbol || (Ref isa Type && Ref <: AbstractMatcher)) ? Ref : scref_match(Ref), OwnerMatcher, transform, nothing, (name,), (alias,), Nothing, ThisChild}(nothing, ThisChild())
+    Route{Ref, OwnerMatcher, transform, nothing, (name,), (alias,), Nothing, ThisChild}(nothing, ThisChild())
