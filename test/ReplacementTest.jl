@@ -79,6 +79,24 @@ end
         @test stepped_context[Var(:target, :value)] === stepped_context.source.value
     end
 
+    @testset "A Replace cycle is an error when the replacements are applied" begin
+        cycle = resolve(CompositeAlgorithm(
+            :target => ReplacementReadTargetAlgo(),
+            (1,),
+            :source => ReplacementSourceState(),
+            Replace(:source => :target, :value),
+            Replace(:target => :source, :value),
+        ))
+        @test_throws "Replace makes a cycle" init(cycle; lifetime = Repeat(1))
+
+        to_itself = resolve(CompositeAlgorithm(
+            :target => ReplacementReadTargetAlgo(),
+            (1,),
+            Replace(:target => :target, :value),
+        ))
+        @test_throws "Replace makes a cycle" init(to_itself; lifetime = Repeat(1))
+    end
+
     @testset "DSL @replace lowers to root replacement option" begin
         algo = @CompositeAlgorithm begin
             @alias source = ReplacementSourceAlgo
