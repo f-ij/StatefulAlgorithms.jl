@@ -141,7 +141,7 @@ function _subcontext_view_writeback_field_expr(target_subcontext::Symbol, target
     return Expr(
         :(=),
         targetname,
-        :(@inline subcontext_writeback_value(
+        :(@inline writeback_value(
             (@inline storedproperty_fromsubcontext(scv, Val($(QuoteNode(target_subcontext))), Val($(QuoteNode(targetname))))),
             $value_expr,
         )),
