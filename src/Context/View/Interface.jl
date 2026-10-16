@@ -11,7 +11,7 @@ calls `view_value(view, inner)` again, so nested wrappers unfold until this defa
 `SubContextView` the value is read through (as the container comes first in `getindex`), so a wrapper can read
 elsewhere through it (`ReplacedVar`).
 """
-@inline view_value(view::V, value::T) where {T, V<:SubContextView} = value
+@inline view_value(view::V, stored::S) where {V<:SubContextView, S} = stored
 
 """
     writeback_value(stored, returned) -> value
@@ -20,4 +20,4 @@ The value to store in a field that holds `stored` when a step returns `returned`
 storage wrapper that absorbs writes while keeping its place in the context adds a method (an `InteractiveVar` puts
 `returned` into its reference and stays itself).
 """
-@inline writeback_value(::Any, returned) = returned
+@inline writeback_value(stored::S, returned::R) where {S, R} = returned
