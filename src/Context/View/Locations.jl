@@ -248,6 +248,7 @@ end
 # """
 # Equivalent to getproperty(sct, Val(name)), but allows for inlining and constant propagation on the name argument
 # """
+# TODO: Do we really need the generated version?
 # function Base.getproperty(sct::SubContextView, symb::S) where S <: Symbol
 #     locations = get_all_locations(sct)
 #     subcontext_name = algo_to_subcontext_names(sct, symb)
