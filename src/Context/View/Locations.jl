@@ -301,14 +301,14 @@ Read a routed runtime variable from the runtime context.
     target_variables = location_fieldname(vl)
     if isnothing(getfunc(vl)) && target_variables isa Symbol
         return quote
-            return @inline view_value(sct, _assigned_value(_runtime_values(getbundle(sct), Val($(QuoteNode(target_subcontext)))), $(QuoteNode(target_variables))))
+            return @inline read_value(sct, _assigned_value(_runtime_values(getbundle(sct), Val($(QuoteNode(target_subcontext)))), $(QuoteNode(target_variables))))
         end
     end
 
     varnames = target_variables isa Tuple ? target_variables : (target_variables,)
     varsymbols = ntuple(i -> gensym(:runtime_var), length(varnames))
     assign_exprs = [
-        :($(varsymbols[i]) = @inline view_value(sct, _assigned_value(_runtime_values(getbundle(sct), Val($(QuoteNode(target_subcontext)))), $(QuoteNode(varnames[i])))))
+        :($(varsymbols[i]) = @inline read_value(sct, _assigned_value(_runtime_values(getbundle(sct), Val($(QuoteNode(target_subcontext)))), $(QuoteNode(varnames[i])))))
         for i in eachindex(varnames)
     ]
     fexpr = funcexpr(vl, varsymbols...)
@@ -348,23 +348,23 @@ Return the value a view shows for `subcontextname.varname`.
 partitions: `_captured_returns`, `_subcontext_returns`, `_declared_locals`, `_inputs`. `partition` is
 `context_partition(Val(subcontextname))`, which says which of the two it is, and each method reads from the matching
 place.
-Both pass the value through `view_value`, which unwraps storage wrappers such as `RedirectedVar`.
+Both pass the stored value through `read_value`, which follows storage wrappers such as `RedirectedVar`.
 """
 function _read_partition end
 
 """`subcontextname` is a runtime context partition (`_inputs`, ...): read `varname` from that partition of the runtime context."""
 @inline _read_partition(::RuntimePartition, scv::SCV, ::Val{subcontextname}, ::Val{varname}) where {SCV<:SubContextView, subcontextname, varname} =
-    @inline view_value(scv, _assigned_value(_runtime_values(getbundle(scv), Val(subcontextname)), varname))
+    @inline read_value(scv, _assigned_value(_runtime_values(getbundle(scv), Val(subcontextname)), varname))
 
 """`subcontextname` is a namespace: read `varname` from its state, or, if its state has no `varname`, from what its algorithm returned this step (see `partition_storedproperty`)."""
 @inline _read_partition(::NamespacePartition, scv::SCV, ::Val{subcontextname}, ::Val{varname}) where {SCV<:SubContextView, subcontextname, varname} =
-    @inline view_value(scv, partition_storedproperty(scv, Val(subcontextname), Val(varname)))
+    @inline read_value(scv, partition_storedproperty(scv, Val(subcontextname), Val(varname)))
 
 """
     partition_storedproperty(scv, Val(subcontext), Val(varname))
 
 Return the backing value stored for one `SubContextView` location without
-applying `view_value`. Writeback hooks use this to inspect wrappers
+applying `read_value`. Writeback hooks use this to inspect wrappers
 that are hidden from algorithm code during normal reads.
 """
 @inline function partition_storedproperty(
@@ -410,10 +410,11 @@ steps). Whether it is there is known from the type, so the check costs nothing.
 
 @noinline _throw_unassigned(name::Symbol) = error("`$name` has no value in this step: it is assigned by a step that does not run in every step (on a schedule). Declare it first (`local $name` in a DSL block, `Local` in a plan) to keep its last value between steps.")
 
-"""Resolve a redirected field through its stored backing location."""
-@inline function view_value(view::V, value::R) where {VL<:VarLocation, R<:RedirectedVar{VL}, V<:SubContextView}
-    return @inline view_value(view, getproperty(view, getfield(value, :varlocation)))
-end
+"""A redirected field is read at the location its marker points to."""
+@inline read_action(reader::R, ::RedirectedVar{VL}) where {R<:AbstractContext, VL<:VarLocation} = ReadFrom{VL}()
+
+"""Return the value `view` shows at `location`, as an algorithm reading through it would see it."""
+@inline read_location(view::V, location::VL) where {V<:SubContextView, VL<:VarLocation} = @inline getproperty(view, location)
 
 ##########################################
 ########## Unused ########################

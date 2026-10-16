@@ -37,19 +37,12 @@ end
 
 @inline function Base.getindex(c::ProcessContext, var::Var{SubcontextRef, name}) where {SubcontextRef, name}
     # A field redirected by `Redirect` reads the value of the field it points to, not its `RedirectedVar` marker.
-    @inline _var_transform(var, (@inline context_value(c, getproperty(_var_subcontext(c, SubcontextRef), name))))
+    @inline _var_transform(var, (@inline read_value(c, getproperty(_var_subcontext(c, SubcontextRef), name))))
 end
 
-"""
-    context_value(c, stored)
-
-Return the value a stored field reads as: `stored` itself, or for a
-`RedirectedVar` marker the value at the location it points to in `c`.
-"""
-@inline context_value(c::ProcessContext, stored) = stored
-@inline function context_value(c::ProcessContext, ::RedirectedVar{VL}) where {VL}
+"""Return the value `context[Var(...)]` gives at `location`: what a `ReadFrom` goes on with when reading a `ProcessContext`."""
+@inline read_location(c::ProcessContext, location::VL) where {VL<:VarLocation} =
     @inline c[Var(get_subcontextname(VL), location_fieldname(VL))]
-end
 
 @inline function Base.getindex(c::ProcessContext, vars::Var...)
     ntuple(Val(length(vars))) do i

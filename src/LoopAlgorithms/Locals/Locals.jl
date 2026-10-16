@@ -130,17 +130,13 @@ _to_storage_type(::Type{T}) where {T} = (T isa Union && Nothing <: T && T !== No
 
 # Reads: a `Maybe` reads as its value, or as `nothing` / an error while unset.
 _throw_undef() = throw(UndefRefError())
-@inline view_value(view::V, m::Maybe{T, F, Nothing}) where {T, F, V<:SubContextView} =
-    !iszero(getfield(m, :isset)) ? view_value(view, getfield(m, :value)) : nothing
-@inline view_value(view::V, m::Maybe{T, F, UndefInitializer}) where {T, F, V<:SubContextView} =
-    !iszero(getfield(m, :isset)) ? view_value(view, getfield(m, :value)) : _throw_undef()
-# A declared local read from a `ProcessContext` (a `Var`, `context.x`): the same, its value or `nothing` / an error.
-@inline context_value(c::ProcessContext, m::Maybe{T, F, Nothing}) where {T, F} =
-    !iszero(getfield(m, :isset)) ? getfield(m, :value) : nothing
-@inline context_value(c::ProcessContext, m::Maybe{T, F, UndefInitializer}) where {T, F} =
-    !iszero(getfield(m, :isset)) ? getfield(m, :value) : _throw_undef()
+# Through a view and from a `ProcessContext` (a `Var`, `context.x`) alike.
+@inline read_action(reader::R, m::Maybe{T, F, Nothing}) where {R<:AbstractContext, T, F} =
+    !iszero(getfield(m, :isset)) ? DirectRead(getfield(m, :value)) : DirectRead(nothing)
+@inline read_action(reader::R, m::Maybe{T, F, UndefInitializer}) where {R<:AbstractContext, T, F} =
+    !iszero(getfield(m, :isset)) ? DirectRead(getfield(m, :value)) : _throw_undef()
 # A local declared without a value that no step ever writes keeps its `undef`.
-@inline view_value(view::V, ::UndefInitializer) where {V<:SubContextView} = _throw_undef()
+@inline read_action(view::V, ::UndefInitializer) where {V<:SubContextView} = _throw_undef()
 
 # Shown after the run (`final_context`): a `Maybe` shows as its value, or as `nothing` while unset.
 @inline shown_value(m::Maybe) = iszero(getfield(m, :isset)) ? nothing : shown_value(getfield(m, :value))
@@ -172,9 +168,10 @@ a local while inference finds out what gets written to it.
 
 """Inference-only stand-in for an untyped local while its type is worked out; never constructed."""
 struct LocalProbe{T, Empty} end   # T: the local's type so far; Empty: `UndefInitializer` or `Nothing`, what it is before its first value
-@inline view_value(view::V, ::LocalProbe{T, UndefInitializer}) where {T, V<:SubContextView} =
-    T === Union{} ? _throw_undef() : _pretend_value(T)
-@inline view_value(view::V, ::LocalProbe{T, Nothing}) where {T, V<:SubContextView} = _pretend_value(Union{Nothing, T})
+@inline read_action(view::V, ::LocalProbe{T, UndefInitializer}) where {T, V<:SubContextView} =
+    T === Union{} ? _throw_undef() : DirectRead{T}(_pretend_value(T))
+@inline read_action(view::V, ::LocalProbe{T, Nothing}) where {T, V<:SubContextView} =
+    DirectRead{Union{Nothing, T}}(_pretend_value(Union{Nothing, T}))
 """Return a value that inference treats as being of type `T`."""
 _pretend_value(::Type{T}) where {T} = Base.inferencebarrier(nothing)::T
 
