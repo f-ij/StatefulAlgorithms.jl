@@ -141,6 +141,29 @@ end
     @test graph2 == [0, 0]
 end
 
+# Config fields with and without a declared type, for the test below (top level: a struct type).
+@StepAlgorithm begin
+    @config gain = 2.0
+    @config scale <: Real = 3
+    @config label::Symbol = :a
+    function TypedConfigForTest(@managed(x = 0.0))
+        return (; x = x * 0.5 + gain * scale)
+    end
+end
+
+@testset "StepAlgorithm @config fields are always typed" begin
+    # `gain = 2.0`: a type parameter, the type of the value; `scale <: Real = 3`: a bounded one; `label::Symbol`: as declared.
+    @test TypedConfigForTest() isa TypedConfigForTest{Float64, Int64}
+    @test fieldtypes(typeof(TypedConfigForTest())) == (Float64, Int64, Symbol)
+    @test TypedConfigForTest(gain = 1f0) isa TypedConfigForTest{Float32, Int64}
+    @test_throws MethodError TypedConfigForTest(scale = "three")
+    # A run of it is inferred: the config values are not `Any`.
+    ip = InlineProcess(TypedConfigForTest(); repeats = 10)
+    @test isconcretetype(Base.return_types(run, (typeof(ip),))[1])
+    run(ip)
+    @test StatefulAlgorithms.context(ip)[:TypedConfigForTest_1].x ≈ 12 * (1 - 0.5^10)
+end
+
 @testset "StepAlgorithm macro supports @config-backed structs" begin
     @StepAlgorithm @config seed::Int = 3 begin
         @config begin
