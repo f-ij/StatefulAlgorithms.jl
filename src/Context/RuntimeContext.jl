@@ -75,24 +75,6 @@ end
     return @inline with_subcontext(runtime_context, Val(:_declared_locals), SubContext{:_declared_locals}(locals))
 end
 
-"""With a `ReturnDemand`: only the returns that something downstream reads are written."""
-@inline function merge_runtime_return(runtime_context::C, ::Val{owner}, args::A, demand::ReturnDemand{Names}) where {C<:ProcessContext,owner,A<:NamedTuple,Names}
-    return @inline merge_runtime_return(runtime_context, Val(owner), _demanded_namedtuple(args, demand))
-end
-
-@inline function merge_runtime_return(runtime_context::C, ::Val{owner}, ::Nothing, demand::ReturnDemand) where {C<:ProcessContext,owner}
-    return runtime_context
-end
-
-"""Return `args` filtered to the fields demanded by downstream runtime consumers."""
-@inline _demanded_namedtuple(args::A, ::ReturnDemand{:all}) where {A<:NamedTuple} = args
-
-@inline @generated function _demanded_namedtuple(args::A, ::ReturnDemand{Names}) where {A<:NamedTuple,Names}
-    kept = tuple((name for name in fieldnames(A) if name in Names)...)
-    exprs = (:(getproperty(args, $(QuoteNode(name)))) for name in kept)
-    return :(NamedTuple{$kept}(($(exprs...),)))
-end
-
 """Return `runtime_context` with the returns of several owners written in, `args` holding `owner = returns` (see `merge_runtime_return`)."""
 @inline @generated function merge_runtime_returns(runtime_context::C, args::As) where {C<:ProcessContext,As<:NamedTuple}
     names = fieldnames(As)
