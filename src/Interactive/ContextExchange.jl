@@ -175,12 +175,19 @@ function _resolve_exchange_var(context::ProcessContext, ::Var{Entity, Varname}) 
     return subcontext, Varname, initial
 end
 
+"""
+Return the SCKey of the subcontext an exchange selector `Var` targets. The `Var` stores a context
+key or a matcher (see `Var`); a key must name a subcontext of `context`.
+"""
 function _resolve_exchange_entity(context::ProcessContext, entity::Symbol)
     entity in get_subcontexts_fieldnames(typeof(context)) || error("ContextExchange target subcontext $(entity) not found.")
     return entity
 end
 
-function _resolve_exchange_entity(context::ProcessContext, entity::Type)
+# A type selector (`Var(MyAlgo, :x)`) must name exactly one registered algorithm, unlike a `Var`
+# read, which takes the first: an exchange exposes one value under one name.
+function _resolve_exchange_entity(context::ProcessContext, ::Type{M}) where {M<:TypeMatcher}
+    entity = _typematcher_target(M)
     matches = findall(entity, getregistry(context))
     if isempty(matches)
         error("No algorithm matching $(entity) was found in the registry.")
@@ -190,8 +197,9 @@ function _resolve_exchange_entity(context::ProcessContext, entity::Type)
     return getkey(only(matches))
 end
 
-function _resolve_exchange_entity(context::ProcessContext, entity)
-    return getkey(getregistry(context)[entity])
+# An instance selector resolves as a route endpoint does.
+function _resolve_exchange_entity(context::ProcessContext, ::Type{M}) where {M<:AbstractMatcher}
+    return resolve_scref(getregistry(context), M, nothing, "ContextExchange target")
 end
 
 function _validate_exchange_target(context::ProcessContext, subcontext::Symbol, varname::Symbol)

@@ -17,6 +17,18 @@ This reads `:name` from the subcontext of `entity_ref`. Use the same
 `entity_ref` style you used when building the process: type, saved instance,
 saved `Unique(...)` value, or symbol key.
 
+Which subcontext that is, is decided as for a route endpoint:
+
+| # | `entity_ref` | Reads from |
+|---|---|---|
+| 1 | symbol key (`:Sensor_1`) | the subcontext with that key |
+| 2 | saved instance or `Unique(...)` value | the subcontext of that algorithm or state |
+| 3 | type (`Counter`) | the subcontext of the first registered algorithm of that type; use a key or an instance when there are several |
+
+The reference is stored in the `Var`'s type (a key as itself, anything else as
+the matcher the registry identifies it by), so a `Var` holds no values and the
+lookup is resolved when the code is compiled.
+
 Example:
 
 ```julia
@@ -24,7 +36,7 @@ counter = Counter()
 Var(counter, :count)
 ```
 
-### 2. Global variable
+### 2. Captured return
 
 ```julia
 Var(:name)
