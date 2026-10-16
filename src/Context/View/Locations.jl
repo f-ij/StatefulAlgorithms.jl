@@ -177,8 +177,8 @@ that namespace's algorithm returned this step besides its state (empty if nothin
 end
 
 """Resolve a replaced field through its stored backing location."""
-@inline function subcontext_view_value(value::R, view::V) where {VL<:VarLocation, R<:ReplacedVar{VL}, V<:SubContextView}
-    return @inline subcontext_view_value(getproperty(view, getfield(value, :varlocation)), view)
+@inline function view_value(view::V, value::R) where {VL<:VarLocation, R<:ReplacedVar{VL}, V<:SubContextView}
+    return @inline view_value(view, getproperty(view, getfield(value, :varlocation)))
 end
 
 @inline function getproperty_fromsubcontext(
@@ -198,23 +198,23 @@ Return the value a view shows for `subcontextname.varname`.
 partitions: `_captured_returns`, `_subcontext_returns`, `_declared_locals`, `_inputs`. `partition` is
 `context_partition(Val(subcontextname))`, which says which of the two it is, and each method reads from the matching
 place.
-Both pass the value through `subcontext_view_value`, which unwraps storage wrappers such as `ReplacedVar`.
+Both pass the value through `view_value`, which unwraps storage wrappers such as `ReplacedVar`.
 """
 function _read_partition end
 
 """`subcontextname` is a runtime context partition (`_inputs`, ...): read `varname` from that partition of the runtime context."""
 @inline _read_partition(::RuntimePartition, scv::SCV, ::Val{subcontextname}, ::Val{varname}) where {SCV<:SubContextView, subcontextname, varname} =
-    @inline subcontext_view_value(getfield(_runtime_values(getbundle(scv), Val(subcontextname)), varname), scv)
+    @inline view_value(scv, getfield(_runtime_values(getbundle(scv), Val(subcontextname)), varname))
 
 """`subcontextname` is a namespace: read `varname` from its state, or, if its state has no `varname`, from what its algorithm returned this step (see `storedproperty_fromsubcontext`)."""
 @inline _read_partition(::NamespacePartition, scv::SCV, ::Val{subcontextname}, ::Val{varname}) where {SCV<:SubContextView, subcontextname, varname} =
-    @inline subcontext_view_value(storedproperty_fromsubcontext(scv, Val(subcontextname), Val(varname)), scv)
+    @inline view_value(scv, storedproperty_fromsubcontext(scv, Val(subcontextname), Val(varname)))
 
 """
     storedproperty_fromsubcontext(scv, Val(subcontext), Val(varname))
 
 Return the backing value stored for one `SubContextView` location without
-applying `subcontext_view_value`. Writeback hooks use this to inspect wrappers
+applying `view_value`. Writeback hooks use this to inspect wrappers
 that are hidden from algorithm code during normal reads.
 """
 @inline function storedproperty_fromsubcontext(
@@ -281,14 +281,14 @@ Read a routed runtime variable from the runtime context.
     target_variables = get_originalname(vl)
     if isnothing(getfunc(vl)) && target_variables isa Symbol
         return quote
-            return @inline subcontext_view_value(getfield(_runtime_values(getbundle(sct), Val($(QuoteNode(target_subcontext)))), $(QuoteNode(target_variables))), sct)
+            return @inline view_value(sct, getfield(_runtime_values(getbundle(sct), Val($(QuoteNode(target_subcontext)))), $(QuoteNode(target_variables))))
         end
     end
 
     varnames = target_variables isa Tuple ? target_variables : (target_variables,)
     varsymbols = ntuple(i -> gensym(:runtime_var), length(varnames))
     assign_exprs = [
-        :($(varsymbols[i]) = @inline subcontext_view_value(getfield(_runtime_values(getbundle(sct), Val($(QuoteNode(target_subcontext)))), $(QuoteNode(varnames[i]))), sct))
+        :($(varsymbols[i]) = @inline view_value(sct, getfield(_runtime_values(getbundle(sct), Val($(QuoteNode(target_subcontext)))), $(QuoteNode(varnames[i])))))
         for i in eachindex(varnames)
     ]
     fexpr = funcexpr(vl, varsymbols...)

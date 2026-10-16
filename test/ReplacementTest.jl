@@ -8,8 +8,8 @@ struct RecursiveViewWrapper{T}
 end
 
 """Recursively expose the wrapped test value through the generic view hook."""
-function StatefulAlgorithms.subcontext_view_value(value::RecursiveViewWrapper{T}, view::V) where {T, V<:StatefulAlgorithms.SubContextView}
-    return StatefulAlgorithms.subcontext_view_value(getfield(value, :value), view)
+function StatefulAlgorithms.view_value(view::V, value::RecursiveViewWrapper{T}) where {T, V<:StatefulAlgorithms.SubContextView}
+    return StatefulAlgorithms.view_value(view, getfield(value, :value))
 end
 
 function StatefulAlgorithms.init(::ReplacementSourceState, context::C) where {C}

@@ -145,15 +145,15 @@ Base.convert(::Type{M}, m::M) where {M<:Maybe} = m
 
 # Reads: a `Maybe` reads as its value, or as `nothing` / an error while unset.
 _throw_undef() = throw(UndefRefError())
-@inline subcontext_view_value(m::Maybe{T, F, Nothing}, view::V) where {T, F, V<:SubContextView} =
-    !iszero(getfield(m, :isset)) ? subcontext_view_value(getfield(m, :value), view) : nothing
-@inline subcontext_view_value(m::Maybe{T, F, UndefInitializer}, view::V) where {T, F, V<:SubContextView} =
-    !iszero(getfield(m, :isset)) ? subcontext_view_value(getfield(m, :value), view) : _throw_undef()
+@inline view_value(view::V, m::Maybe{T, F, Nothing}) where {T, F, V<:SubContextView} =
+    !iszero(getfield(m, :isset)) ? view_value(view, getfield(m, :value)) : nothing
+@inline view_value(view::V, m::Maybe{T, F, UndefInitializer}) where {T, F, V<:SubContextView} =
+    !iszero(getfield(m, :isset)) ? view_value(view, getfield(m, :value)) : _throw_undef()
 """A return as the final context shows it (`visible_context`): a slot as its value, or `nothing` while unset."""
 _final_value(x) = x
 _final_value(m::Maybe) = iszero(getfield(m, :isset)) ? nothing : getfield(m, :value)
 # A local declared without a value that no step ever writes keeps its `undef`.
-@inline subcontext_view_value(::UndefInitializer, view::V) where {V<:SubContextView} = _throw_undef()
+@inline view_value(view::V, ::UndefInitializer) where {V<:SubContextView} = _throw_undef()
 
 @inline @generated function _merge_declared(old::NT, args::A) where {NT<:NamedTuple, A<:NamedTuple}
     values = map(fieldnames(NT)) do name
@@ -181,9 +181,9 @@ a local while inference finds out what gets written to it.
 
 """Inference-only stand-in for an untyped local while its type is worked out; never constructed."""
 struct LocalProbe{T, Empty} end   # T: the local's type so far; Empty: `UndefInitializer` or `Nothing`, what it is before its first value
-@inline subcontext_view_value(::LocalProbe{T, UndefInitializer}, view::V) where {T, V<:SubContextView} =
+@inline view_value(view::V, ::LocalProbe{T, UndefInitializer}) where {T, V<:SubContextView} =
     T === Union{} ? _throw_undef() : _probe_value(T)
-@inline subcontext_view_value(::LocalProbe{T, Nothing}, view::V) where {T, V<:SubContextView} = _probe_value(Union{Nothing, T})
+@inline view_value(view::V, ::LocalProbe{T, Nothing}) where {T, V<:SubContextView} = _probe_value(Union{Nothing, T})
 _probe_value(::Type{T}) where {T} = Base.inferencebarrier(nothing)::T
 
 """

@@ -3,24 +3,21 @@ Extendable API of views: functions packages overload to change what a view shows
 =#
 
 """
-    subcontext_view_value(value, view)
+    view_value(view, stored) -> value
 
-Return the value exposed by `SubContextView` reads for one stored field.
-
-This is an overloadable API for storage wrappers that need custom
-algorithm-facing read behavior. Methods should transform `value` and then call
-`subcontext_view_value(next_value, view)` again, so nested wrappers unfold until
-the default identity method is reached.
+The value `view` shows an algorithm for the value `stored` in one of its fields: `stored` itself by default. A storage
+wrapper (`InteractiveVar`, `ReplacedVar`, a declared local's `Maybe`, ...) adds a method that unwraps one layer and
+calls `view_value(view, inner)` again, so nested wrappers unfold until this default is reached. `view` is the
+`SubContextView` the value is read through (as the container comes first in `getindex`), so a wrapper can read
+elsewhere through it (`ReplacedVar`).
 """
-@inline subcontext_view_value(value::T, view::V) where {T, V<:SubContextView} = value
+@inline view_value(view::V, value::T) where {T, V<:SubContextView} = value
 
 """
-    subcontext_writeback_value(old, returned)
+    writeback_value(stored, returned) -> value
 
-Return the value that should be written to context when an algorithm returns
-`returned` for a field currently storing `old`.
-
-This is an overloadable API for storage wrappers that absorb writes while
-preserving their context representation, for example mutable reference wrappers.
+The value to store in a field that holds `stored` when a step returns `returned` for it: `returned` by default. A
+storage wrapper that absorbs writes while keeping its place in the context adds a method (an `InteractiveVar` puts
+`returned` into its reference and stays itself).
 """
-@inline subcontext_writeback_value(::Any, returned) = returned
+@inline writeback_value(::Any, returned) = returned
