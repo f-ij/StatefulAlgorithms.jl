@@ -247,9 +247,9 @@ in a `@StepAlgorithm`), the source field `value` is written through `reverse_tra
 `@transform(f, source)` is read-transform syntax for call arguments. Reverse
 writeback uses `@route ... reverse_transform = g`.
 
-## Replacements
+## Redirects
 
-Use `@replace` when a target should keep a local field name but the field should
+Use `@redirect` when a target should keep a local field name but the field should
 read and write through a source field after initialization.
 
 ```julia
@@ -260,22 +260,22 @@ algo = @CompositeAlgorithm begin
     source()
     target()
 
-    @replace source.value => target.value
+    @redirect source.value => target.value
 end
 ```
 
-This lowers to a `Replace(source => target, :value)` option of the block. It
-can be written in any block, also a nested one: `resolve` collects the `Replace`s
+This lowers to a `Redirect(source => target, :value)` option of the block. It
+can be written in any block, also a nested one: `resolve` collects the `Redirect`s
 of every plan. During init, the target field is created normally and then
-materialized as a replacement marker that points at the source field.
+materialized as a redirect marker that points at the source field.
 
 Aliases are supported on the target side:
 
 ```julia
-@replace source.value => target.input_value
+@redirect source.value => target.input_value
 ```
 
-This lowers to `Replace(source => target, :value => :input_value)`, so `target`
+This lowers to `Redirect(source => target, :value => :input_value)`, so `target`
 sees `context.input_value` backed by `source.value`.
 
 ## Ref and Indexed Reads
@@ -437,7 +437,7 @@ written out, in one of three ways:
 |---|---|---|
 | `@bind source => target` | routing: inside the bound statements, `target` is `source` | the block (or its `begin ... end`) |
 | `@merge c1, c2` | identity: the nested blocks' `@state`s are one state | everywhere |
-| `@replace source => target` | storage: `target` is stored in `source` | everywhere |
+| `@redirect source => target` | storage: `target` is stored in `source` | everywhere |
 
 ### `@bind`
 
@@ -512,11 +512,11 @@ initialized = init(resolved, Init(name; buffers = make_buffers()))
 ```
 
 `@merge` only takes whole states. To make one field of a block another field,
-use `@bind` (inside a block) or `@replace` (everywhere).
+use `@bind` (inside a block) or `@redirect` (everywhere).
 
-### `@replace`
+### `@redirect`
 
-`@replace source.x => target.y` (see [Replacements](#Replacements)) is an option
+`@redirect source.x => target.y` (see [Redirects](#Redirects)) is an option
 of the block it is written in, and applies to the whole run wherever that block
 is nested.
 

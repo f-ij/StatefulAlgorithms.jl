@@ -36,7 +36,7 @@ end
 @inline _var_transform(::Var{E, N, transform}, value) where {E, N, transform} = transform(value)
 
 @inline function Base.getindex(c::ProcessContext, var::Var{SubcontextRef, name}) where {SubcontextRef, name}
-    # A field replaced by `Replace` reads the value of the field it points to, not its `ReplacedVar` marker.
+    # A field redirected by `Redirect` reads the value of the field it points to, not its `RedirectedVar` marker.
     @inline _var_transform(var, (@inline context_value(c, getproperty(_var_subcontext(c, SubcontextRef), name))))
 end
 
@@ -44,11 +44,11 @@ end
     context_value(c, stored)
 
 Return the value a stored field reads as: `stored` itself, or for a
-`ReplacedVar` marker the value at the location it points to in `c`.
+`RedirectedVar` marker the value at the location it points to in `c`.
 """
 @inline context_value(c::ProcessContext, stored) = stored
-@inline function context_value(c::ProcessContext, ::ReplacedVar{VL}) where {VL}
-    @inline c[Var(get_subcontextname(VL), get_originalname(VL))]
+@inline function context_value(c::ProcessContext, ::RedirectedVar{VL}) where {VL}
+    @inline c[Var(get_subcontextname(VL), location_fieldname(VL))]
 end
 
 @inline function Base.getindex(c::ProcessContext, vars::Var...)

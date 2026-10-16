@@ -101,7 +101,7 @@ Base.@nospecializeinfer function _find_returns_read_in_plan_typed(@nospecialize(
 end
 """The inferred `_find_returns_read_by_route` (Scopes.jl), from the route's type."""
 _find_returns_read_by_route_typed(::Type{<:Route}) = ()
-_find_returns_read_by_route_typed(R::Type{<:Route{:_captured_returns}}) = getvarnames(R)
+_find_returns_read_by_route_typed(R::Type{<:Route{:_captured_returns}}) = source_fieldnames(R)
 
 """
     _resolve_scopes_typed(plan, Outer, Val(path))

@@ -143,21 +143,21 @@ function _dsl_build_global_route_statement(stmt, alias_map, context_map; include
     return _dsl_maybe_guard_metadata_expr(:(push!(_dsl_options, $route)), include_condition)
 end
 
-"""Parse `@replace source.field => target.field` as a root replacement option."""
-function _dsl_build_replace_statement(stmt, alias_map, context_map; include_condition = nothing)
-    stmt isa Expr && stmt.head == :macrocall && stmt.args[1] == Symbol("@replace") || return nothing
-    length(stmt.args) == 3 || error("@replace expects `source.field => target.field`.")
-    replace_expr = stmt.args[3]
-    replace_expr isa Expr && replace_expr.head == :call && replace_expr.args[1] == :(=>) && length(replace_expr.args) == 3 ||
-        error("@replace expects `source.field => target.field`.")
+"""Parse `@redirect source.field => target.field` as a root redirect option."""
+function _dsl_build_redirect_statement(stmt, alias_map, context_map; include_condition = nothing)
+    stmt isa Expr && stmt.head == :macrocall && stmt.args[1] == Symbol("@redirect") || return nothing
+    length(stmt.args) == 3 || error("@redirect expects `source.field => target.field`.")
+    redirect_expr = stmt.args[3]
+    redirect_expr isa Expr && redirect_expr.head == :call && redirect_expr.args[1] == :(=>) && length(redirect_expr.args) == 3 ||
+        error("@redirect expects `source.field => target.field`.")
 
-    source = _dsl_parse_owned_route_expr(alias_map, context_map, replace_expr.args[2])
-    target = _dsl_parse_owned_route_expr(alias_map, context_map, replace_expr.args[3])
-    isnothing(source) && error("@replace source must be an owned field reference like `source.value` or `c1.inner.value`.")
-    isnothing(target) && error("@replace target must be an owned field reference like `sink.value`.")
+    source = _dsl_parse_owned_route_expr(alias_map, context_map, redirect_expr.args[2])
+    target = _dsl_parse_owned_route_expr(alias_map, context_map, redirect_expr.args[3])
+    isnothing(source) && error("@redirect source must be an owned field reference like `source.value` or `c1.inner.value`.")
+    isnothing(target) && error("@redirect target must be an owned field reference like `sink.value`.")
 
-    replacement = :(StatefulAlgorithms.Replace($(esc(source.owner)) => $(esc(target.owner)), $(QuoteNode(source.source)) => $(QuoteNode(target.source))))
-    return _dsl_maybe_guard_metadata_expr(:(push!(_dsl_options, $replacement)), include_condition)
+    redirect = :(StatefulAlgorithms.Redirect($(esc(source.owner)) => $(esc(target.owner)), $(QuoteNode(source.source)) => $(QuoteNode(target.source))))
+    return _dsl_maybe_guard_metadata_expr(:(push!(_dsl_options, $redirect)), include_condition)
 end
 
 """
@@ -240,7 +240,7 @@ function _dsl_build_state_merge_statement(stmt::S, context_map::CM) where {S, CM
     length(args) >= 2 || error("@merge expects at least two nested blocks, e.g. `@merge f, n`.")
     for arg in args
         arg isa Symbol && haskey(context_map, arg) && continue
-        error("@merge merges whole states of nested blocks named with `@context`, like `@merge f, n`. Got `$arg`. To make one field of one block another's, use `@replace` or `@bind`.")
+        error("@merge merges whole states of nested blocks named with `@context`, like `@merge f, n`. Got `$arg`. To make one field of one block another's, use `@redirect` or `@bind`.")
     end
     blocks = Expr(:tuple, (:(StatefulAlgorithms._composite_dsl_context_entity(_dsl_algos, _dsl_context_indices, $(QuoteNode(arg)))) for arg in args)...)
     return :(StatefulAlgorithms._composite_dsl_merge_states!(_dsl_states, $blocks))
@@ -449,8 +449,8 @@ function _dsl_build_statement(stmt, alias_map, context_map, known_outputs::Set{S
     global_route = _dsl_build_global_route_statement(stmt, alias_map, context_map; include_condition)
     isnothing(global_route) || return global_route
 
-    replace_option = _dsl_build_replace_statement(stmt, alias_map, context_map; include_condition)
-    isnothing(replace_option) || return replace_option
+    redirect_option = _dsl_build_redirect_statement(stmt, alias_map, context_map; include_condition)
+    isnothing(redirect_option) || return redirect_option
 
     outputs = ()
     returns_expr = :(())

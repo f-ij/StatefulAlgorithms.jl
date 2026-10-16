@@ -11,7 +11,7 @@ For current documentation, use the split docs below.
 - [Referencing Algorithms](@ref referencing_algorithms_user)
 - [Contexts and Indexing](@ref contexts_user)
 - [Init Analysis](@ref init_analysis_user)
-- [Routes, Shares, and Replacements](@ref routes_shares_user)
+- [Routes, Shares, and Redirects](@ref routes_shares_user)
 - [Init, Overrides, and Runtime Inputs](@ref inputs_overrides_user)
 - [Vars (`Var` Selectors)](@ref vars_user)
 - [Interactive Contexts](@ref interactive_user)

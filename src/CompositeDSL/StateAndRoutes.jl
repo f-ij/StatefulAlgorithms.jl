@@ -600,7 +600,7 @@ function _composite_dsl_rebind_option(route::Route, binds::Tuple)
     isresolved(route) && return (route,)
     from = isnothing(getfrom(route)) ? from_match_by(route) : getfrom(route)
     to = isnothing(getto(route)) ? to_match_by(route) : getto(route)
-    varnames, aliases = getvarnames(route), getaliases(route)
+    varnames, aliases = source_fieldnames(route), getaliases(route)
     kept = Pair{Symbol, Symbol}[]
     moved = Any[]
     for i in eachindex(varnames)

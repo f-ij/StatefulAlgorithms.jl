@@ -31,7 +31,7 @@ function initcontext(algo::F, c::ProcessContext; lifetime = Indefinite()) where 
     @DebugMode "Prepared in initcontext context is $prepared_context"
 
     state_context = @inline _init_state_context(prepared_context, c)
-    return @inline apply_replace_specs(state_context, algo)
+    return @inline apply_redirect_specs(state_context, algo)
 end
 
 function initcontext(algo::F, c::ProcessContext = ProcessContext(algo), overrides_and_inputs::InputInterface...; lifetime = Indefinite()) where {F <: LoopSpec}
@@ -49,7 +49,7 @@ function initcontext(algo::F, c::ProcessContext = ProcessContext(algo), override
     overridden_context = merge_resolved_inputs(prepared_state_context, overrides)
 
     interactive_context = @inline apply_interactive_specs(overridden_context, interactives)
-    return @inline apply_replace_specs(interactive_context, algo)
+    return @inline apply_redirect_specs(interactive_context, algo)
 end
 
 function makecontext(p::AbstractProcess, inputs_overrides...; lifetime=nothing)

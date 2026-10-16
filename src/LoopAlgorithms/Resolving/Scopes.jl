@@ -132,7 +132,7 @@ _append_unique!(names::Vector{Symbol}, @nospecialize(new)) = (for name in new; n
 
 """Find the names one route reads from the captured returns: none unless it reads from `_captured_returns`."""
 _find_returns_read_by_route(::Route) = ()
-_find_returns_read_by_route(r::Route{:_captured_returns}) = getvarnames(r)
+_find_returns_read_by_route(r::Route{:_captured_returns}) = source_fieldnames(r)
 
 """
 The wiring with every route that reads a declared local or a captured return (`Route(:_declared_locals => ..., :y => :x)`)

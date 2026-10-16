@@ -3,8 +3,8 @@ export get_captured_returns, withaliases
 ########## Properties ###########
 #################################
 varaliases(scv::Union{SubContextView{B, SubKey, T, NT, Aliases}, Type{<:SubContextView{B, SubKey, T, NT, Aliases}}}) where {B<:ContextBundle, SubKey, T, NT, Aliases} = Aliases
-view_sharedcontexts(scv::Union{SubContextView{B, SubKey, T, NT, Aliases, SharedContexts}, Type{<:SubContextView{B, SubKey, T, NT, Aliases, SharedContexts}}}) where {B<:ContextBundle, SubKey, T, NT, Aliases, SharedContexts} = SharedContexts
-view_sharedvars(scv::Union{SubContextView{B, SubKey, T, NT, Aliases, SharedContexts, SharedVars}, Type{<:SubContextView{B, SubKey, T, NT, Aliases, SharedContexts, SharedVars}}}) where {B<:ContextBundle, SubKey, T, NT, Aliases, SharedContexts, SharedVars} = SharedVars
+view_shares(scv::Union{SubContextView{B, SubKey, T, NT, Aliases, Shares}, Type{<:SubContextView{B, SubKey, T, NT, Aliases, Shares}}}) where {B<:ContextBundle, SubKey, T, NT, Aliases, Shares} = Shares
+view_routes(scv::Union{SubContextView{B, SubKey, T, NT, Aliases, Shares, Routes}, Type{<:SubContextView{B, SubKey, T, NT, Aliases, Shares, Routes}}}) where {B<:ContextBundle, SubKey, T, NT, Aliases, Shares, Routes} = Routes
 
 @inline this_instance(scv::SubContextView) = getfield(scv, :instance)
 
@@ -31,9 +31,9 @@ Helper to merge into a subcontext target in a namedtuple
 
 This merges a set of named tuples into the appropriate subcontexts in the provided context
 """
-function algo_to_subcontext_names(scv::Union{SubContextView{B, SubKey, T, NT, Aliases}, Type{<:SubContextView{B, SubKey, T, NT, Aliases}}}, name::Symbol) where {B<:ContextBundle, SubKey, T, NT, Aliases}
+function algo_to_subcontext_name(scv::Union{SubContextView{B, SubKey, T, NT, Aliases}, Type{<:SubContextView{B, SubKey, T, NT, Aliases}}}, name::Symbol) where {B<:ContextBundle, SubKey, T, NT, Aliases}
     _aliases = varaliases(scv)
-    return @inline algo_to_subcontext_names(_aliases, name)
+    return @inline algo_to_subcontext_name(_aliases, name)
 end
 
 #################################
@@ -55,11 +55,11 @@ the runtime object. This keeps alias dispatch tied to type information and lets
 view property lookup specialize on the alias mapping.
 """
 @inline function withaliases(
-    scv::SubContextView{B, SubKey, T, NT, OldAliases, SharedContexts, SharedVars},
+    scv::SubContextView{B, SubKey, T, NT, OldAliases, Shares, Routes},
     ::Type{Alias},
-) where {B<:ContextBundle, SubKey, T, NT, OldAliases, SharedContexts, SharedVars, Alias}
+) where {B<:ContextBundle, SubKey, T, NT, OldAliases, Shares, Routes, Alias}
     typed_alias = @inline _alias_from_type(Alias)
-    return SubContextView{B, SubKey, T, NT, typeof(typed_alias), SharedContexts, SharedVars}(getbundle(scv), this_instance(scv), getinjected(scv))
+    return SubContextView{B, SubKey, T, NT, typeof(typed_alias), Shares, Routes}(getbundle(scv), this_instance(scv), getinjected(scv))
 end
 
 @inline function withaliases(scv::SubContextView, alias::Alias) where {Alias}
@@ -67,13 +67,13 @@ end
 end
 
 @inline function withaliases(
-    scv::SubContextView{B, SubKey, OldT, OldNT, OldAliases, SharedContexts, SharedVars},
+    scv::SubContextView{B, SubKey, OldT, OldNT, OldAliases, Shares, Routes},
     instance::T,
     injected::NT,
     ::Type{Alias},
-) where {B<:ContextBundle, SubKey, OldT, OldNT, OldAliases, SharedContexts, SharedVars, T, NT, Alias}
+) where {B<:ContextBundle, SubKey, OldT, OldNT, OldAliases, Shares, Routes, T, NT, Alias}
     typed_alias = @inline _alias_from_type(Alias)
-    return SubContextView{B, SubKey, T, NT, typeof(typed_alias), SharedContexts, SharedVars}(getbundle(scv), instance, injected)
+    return SubContextView{B, SubKey, T, NT, typeof(typed_alias), Shares, Routes}(getbundle(scv), instance, injected)
 end
 
 @inline function withaliases(scv::SubContextView, instance, injected, alias::Alias) where {Alias}
@@ -85,11 +85,11 @@ end
     return SubContextView{B, key, typeof(instance), typeof(inject)}(b, instance; inject)
 end
 
-@inline function Base.view(b::B, instance::SA, inject::I, sharedcontexts::SC, sharedvars::SV) where {B<:ContextBundle, SA<:AbstractIdentifiableAlgo, I, SC<:Tuple, SV<:Tuple}
+@inline function Base.view(b::B, instance::SA, inject::I, shares::SC, routes::SV) where {B<:ContextBundle, SA<:AbstractIdentifiableAlgo, I, SC<:Tuple, SV<:Tuple}
     key = @inline getkey(instance)
-    typed_sharedcontexts = @inline wiring_from_tuple_type(SC)
-    typed_sharedvars = @inline wiring_from_tuple_type(SV)
-    return SubContextView{B, key, typeof(instance), typeof(inject), varaliases(instance), typed_sharedcontexts, typed_sharedvars}(b, instance, inject)
+    typed_shares = @inline wiring_from_tuple_type(SC)
+    typed_routes = @inline wiring_from_tuple_type(SV)
+    return SubContextView{B, key, typeof(instance), typeof(inject), varaliases(instance), typed_shares, typed_routes}(b, instance, inject)
 end
 
 @inline function Base.view(b::B, instance::A, ::Namespace{Name}, inject::I, ::Tuple{}, ::Tuple{}) where {B<:ContextBundle, A<:ProcessAlgorithm, Name, I}
@@ -97,21 +97,21 @@ end
     return SubContextView{B, Name, typeof(instance), typeof(inject), typeof(aliases), (), ()}(b, instance, inject)
 end
 
-@inline function Base.view(b::B, instance::A, ::Namespace{Name}, inject::I, sharedcontexts::SC, sharedvars::SV) where {B<:ContextBundle, A<:ProcessAlgorithm, Name, I, SC<:Tuple, SV<:Tuple}
+@inline function Base.view(b::B, instance::A, ::Namespace{Name}, inject::I, shares::SC, routes::SV) where {B<:ContextBundle, A<:ProcessAlgorithm, Name, I, SC<:Tuple, SV<:Tuple}
     aliases = VarAliases()
-    typed_sharedcontexts = @inline wiring_from_tuple_type(SC)
-    typed_sharedvars = @inline wiring_from_tuple_type(SV)
-    return SubContextView{B, Name, typeof(instance), typeof(inject), typeof(aliases), typed_sharedcontexts, typed_sharedvars}(b, instance, inject)
+    typed_shares = @inline wiring_from_tuple_type(SC)
+    typed_routes = @inline wiring_from_tuple_type(SV)
+    return SubContextView{B, Name, typeof(instance), typeof(inject), typeof(aliases), typed_shares, typed_routes}(b, instance, inject)
 end
 
 """The view of a raw child algorithm in namespace `namespace`, with the shares and routes of its wiring."""
-@inline function Base.view(b::ContextBundle, instance::A, namespace::Namespace; inject = (;), sharedcontexts = (), sharedvars = ()) where {A<:ProcessAlgorithm}
-    return @inline view(b, instance, namespace, inject, sharedcontexts, sharedvars)
+@inline function Base.view(b::ContextBundle, instance::A, namespace::Namespace; inject = (;), shares = (), routes = ()) where {A<:ProcessAlgorithm}
+    return @inline view(b, instance, namespace, inject, shares, routes)
 end
 
 """The view of a keyed algorithm or state (an identifiable wrapper)."""
-@inline function Base.view(b::ContextBundle, instance::SA; inject = (;), sharedcontexts = (), sharedvars = ()) where SA <: AbstractIdentifiableAlgo
-    return @inline view(b, instance, inject, sharedcontexts, sharedvars)
+@inline function Base.view(b::ContextBundle, instance::SA; inject = (;), shares = (), routes = ()) where SA <: AbstractIdentifiableAlgo
+    return @inline view(b, instance, inject, shares, routes)
 end
 
 """

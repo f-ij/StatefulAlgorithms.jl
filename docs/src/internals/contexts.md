@@ -73,7 +73,7 @@ subcontext. During `step!`, generated merge code treats returned names in two
 ways:
 
 1. A name with a `VarLocation` writes to its mapped persistent field, including
-   routed/shared writeback and replacement redirection.
+   routed/shared writeback and redirection.
 2. An unknown name is written only to the owner bucket in the runtime context
    when current plan wiring or the root finalizer demands it. Otherwise it is
    discarded.

@@ -1,7 +1,7 @@
-export Share, Route, Replace, ReplacedVar, Wiring, ReturnDemand, PlanWiring, PlanWiringView
+export Share, Route, Redirect, RedirectedVar, Wiring, ReturnDemand, PlanWiring, PlanWiringView
 
 include("RouteDef.jl")
-include("ReplaceDef.jl")
+include("RedirectDef.jl")
 include("Routes.jl")
 include("ShareDef.jl")
 include("Sharing.jl")

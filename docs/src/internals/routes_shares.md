@@ -1,17 +1,17 @@
-# [Routes, Shares, and Replacements Internals](@id routes_shares_internals)
+# [Routes, Shares, and Redirects Internals](@id routes_shares_internals)
 
 `Route` and `Share` are wiring: a plan keeps them in its `wiring`, plan-wide or for
 one child, and their endpoints are resolved when the plan is wrapped and resolved as
-a concrete `LoopAlgorithm`. `Replace` is an option, a `RootOption`: a plan keeps it in
+a concrete `LoopAlgorithm`. `Redirect` is an option, a `RootOption`: a plan keeps it in
 its `options`, `resolve` collects it from every plan in the tree, and it is
 materialized after lifecycle init has created the persistent context.
 
 Relevant files:
 
-- Definitions: `src/RoutingInterface/RouteDef.jl`, `src/RoutingInterface/ShareDef.jl`, `src/RoutingInterface/ReplaceDef.jl`
+- Definitions: `src/RoutingInterface/RouteDef.jl`, `src/RoutingInterface/ShareDef.jl`, `src/RoutingInterface/RedirectDef.jl`
 - Resolution backend: `src/RoutingInterface/Resolving.jl`, `src/RoutingInterface/Backend.jl`, `src/RoutingInterface/Sharing.jl`
 - Plan integration: `src/LoopAlgorithms/PlanOptions.jl`, `src/LoopAlgorithms/Resolving/` (`Resolving.jl`, step 3 in `Wiring.jl`)
-- Replacement materialization: `src/LoopAlgorithms/Replace/Materialization.jl`, cycle check: `src/LoopAlgorithms/Replace/Checking.jl`
+- Redirect materialization: `src/LoopAlgorithms/Redirect/Materialization.jl`, cycle check: `src/LoopAlgorithms/Redirect/Checking.jl`
 - View integration: `src/Context/View/StructDef.jl`, `src/Context/View/Locations.jl`
 
 ## 1. Route Resolution
@@ -53,9 +53,9 @@ Transform details:
 This metadata is inlaid into the target child's resolved `Wiring` bucket and is
 read through a `PlanWiringView` while that child executes.
 
-## 3. Replacement Materialization
+## 3. Redirect Materialization
 
-`Replace` stores:
+`Redirect` stores:
 
 - source endpoint (`from`)
 - target endpoint (`to`)
@@ -63,18 +63,18 @@ read through a `PlanWiringView` while that child executes.
 - target aliases
 - precomputed matcher identities for from/to
 
-`resolve_replacement(reg, replacement)` resolves endpoints against the
-namespace registry and returns a resolved `Replace` whose endpoint identities
+`resolve_redirect(reg, redirect)` resolves endpoints against the
+namespace registry and returns a resolved `Redirect` whose endpoint identities
 are concrete subcontext names.
 
-Replacement is not stored in the route/share `PlanWiring`. After loop-algorithm init,
-`apply_replace_specs(context, la)` resolves each root replacement and rewrites
-the target persistent field to a `ReplacedVar(VarLocation{:state}(...))`
+Redirect is not stored in the route/share `PlanWiring`. After loop-algorithm init,
+`apply_redirect_specs(context, la)` resolves each root redirect and rewrites
+the target persistent field to a `RedirectedVar(VarLocation{:state}(...))`
 marker. The source and target fields must already exist in the initialized
-context, and self-replacement is rejected.
+context, and self-redirect is rejected.
 
-`partialinit` applies replacement materialization again after rebuilding the
-targeted subcontexts, so replacement markers are restored when an affected
+`partialinit` applies redirect materialization again after rebuilding the
+targeted subcontexts, so redirect markers are restored when an affected
 field is reinitialized.
 
 ## 4. How Views See Them
@@ -84,13 +84,13 @@ When creating `SubContextView` locations (`src/Context/View/Locations.jl`):
 - `SharedContext` contributes all variables from the shared subcontext.
 - Route metadata contributes only specified routed vars, plus transform and
   reverse transform if provided.
-- Local fields whose storage type is `ReplacedVar` redirect their local
+- Local fields whose storage type is `RedirectedVar` redirect their local
   `VarLocation` to the stored backing location.
 
 Shared fields and routes from persistent entity subcontexts become
 `VarLocation{:state}` entries. Routes whose source is `:_inputs` or
 `:_captured_returns` become `VarLocation{:runtime}` entries and read from the separate
-loop-local runtime context. Replacement-backed locals retain the location kind
+loop-local runtime context. Redirect-backed locals retain the location kind
 of their stored backing location.
 
 Returning a routed or shared variable backed by persistent state can therefore
@@ -99,14 +99,14 @@ update the remote source field, not only local state.
 The view constructor reconstructs resolved route/share tuples from their
 concrete tuple types. The runtime routing value selects the type-specialized
 view, but the view does not depend on const-propagating route/share values.
-Replacement-backed local locations are discovered from the persistent context
+Redirect-backed local locations are discovered from the persistent context
 field type instead of from runtime routing metadata.
 
 ## 5. Errors and Validation
 
 If route/share endpoints are not present in the registry, resolution throws explicit errors listing available keys (see `to_sharedvar` and `to_sharedcontext`).
 
-Replacement materialization throws explicit errors when source/target
+Redirect materialization throws explicit errors when source/target
 subcontexts or variables are absent after init.
 
 ## 6. Relation to Packaging

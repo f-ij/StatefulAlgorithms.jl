@@ -1,11 +1,11 @@
-# [Routes, Shares, and Replacements](@id routes_shares_user)
+# [Routes, Shares, and Redirects](@id routes_shares_user)
 
-`Route`, `Share`, and `Replace` make values from one algorithm or state visible
+`Route`, `Share`, and `Redirect` make values from one algorithm or state visible
 to another.
 
 Each algorithm or state owns a subcontext: its named part of the full process
 context. A route exposes selected names from one subcontext. A share exposes all
-names from one subcontext. A replacement makes a target-owned field read and
+names from one subcontext. A redirect makes a target-owned field read and
 write through a source-owned field after initialization.
 
 ## Referencing Algorithms
@@ -94,16 +94,16 @@ A route given the same name as a field of the target's own state hides that fiel
 route's source instead. A share that gives the target a name it also has from its own state or from a route is an
 error, thrown the first time the target's step runs.
 
-## `Replace`: Persistent Field Backing
+## `Redirect`: Persistent Field Backing
 
-Use `Replace` when one subcontext should keep its local field name, but the
+Use `Redirect` when one subcontext should keep its local field name, but the
 field should be backed by another subcontext's storage:
 
 ```julia
 algo = CompositeAlgorithm(
     Source, Target,
     (1, 1),
-    Replace(Source => Target, :value),
+    Redirect(Source => Target, :value),
 )
 ```
 
@@ -113,22 +113,22 @@ through `Source.value`.
 You can also alias the target field name:
 
 ```julia
-Replace(Source => Target, :value => :input_value)
+Redirect(Source => Target, :value => :input_value)
 ```
 
 In that case, `Target` sees `context.input_value`, backed by `Source.value`.
 
-Unlike `Route`, `Replace` is materialized into the persistent context. The
-target field is initialized normally, then replaced by a `ReplacedVar` marker
-that points at the source field. This makes replacement useful when a target
+Unlike `Route`, `Redirect` is materialized into the persistent context. The
+target field is initialized normally, then replaced by a `RedirectedVar` marker
+that points at the source field. This makes a redirect useful when a target
 algorithm requires a local field to exist during initialization, but the runtime
 value should be shared with a source field afterwards.
 
 Constraints:
 
-- A replacement must name at least one variable mapping.
+- A redirect must name at least one variable mapping.
 - Source and target subcontexts, and their variables, must exist after init.
-- A field cannot replace itself.
+- A field cannot redirect to itself.
 
 ## Read and Write Semantics
 
@@ -140,9 +140,9 @@ This enables coupling patterns like:
 
 - algorithm B reading and damping algorithm A's `velocity`, then updating `velocity`.
 
-Replacement-backed fields behave the same way from the target algorithm's point
-of view: updating the replaced local name writes through to the source field
-while preserving the target's persistent replacement marker.
+Redirect-backed fields behave the same way from the target algorithm's point
+of view: updating the redirected local name writes through to the source field
+while preserving the target's persistent redirect marker.
 
 ## Plan-Wide and Child-Local Routes
 
