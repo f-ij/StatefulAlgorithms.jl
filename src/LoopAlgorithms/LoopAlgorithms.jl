@@ -15,7 +15,7 @@ end
 """Loop algorithm types match by their type."""
 @inline match_by(t::Type{<:LoopSpec}) = t
 
-include("Callable.jl")   # before the plan code: its methods take `Callable` and `WithWiring` children
+include("Callable/Callable.jl")   # before the plan code: its methods take `Callable` and `WithWiring` children
 include("Utils.jl")
 include("Interval.jl")
 include("GetFirst.jl")
