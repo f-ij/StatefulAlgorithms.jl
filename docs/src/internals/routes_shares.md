@@ -11,7 +11,7 @@ Relevant files:
 - Definitions: `src/RoutingInterface/RouteDef.jl`, `src/RoutingInterface/ShareDef.jl`, `src/RoutingInterface/ReplaceDef.jl`
 - Resolution backend: `src/RoutingInterface/Resolving.jl`, `src/RoutingInterface/Backend.jl`, `src/RoutingInterface/Sharing.jl`
 - Plan integration: `src/LoopAlgorithms/PlanOptions.jl`, `src/LoopAlgorithms/Resolving/` (`Resolving.jl`, step 3 in `Wiring.jl`)
-- Replacement materialization: `src/LoopAlgorithms/ReplaceMaterialization.jl`
+- Replacement materialization: `src/LoopAlgorithms/Replace/Materialization.jl`, cycle check: `src/LoopAlgorithms/Replace/Checking.jl`
 - View integration: `src/Context/View/StructDef.jl`, `src/Context/View/Locations.jl`
 
 ## 1. Route Resolution

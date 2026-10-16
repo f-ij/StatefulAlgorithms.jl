@@ -17,7 +17,6 @@ end
 
 """Write one replacement marker into its target persistent context field."""
 function _apply_replace_mapping(context::C, ::Val{fromname}, ::Val{toname}, ::Val{sourcevar}, ::Val{targetvar}) where {C<:ProcessContext, fromname, toname, sourcevar, targetvar}
-    fromname === toname && sourcevar === targetvar && error("Replace cannot point `$toname.$targetvar` to itself.")
     _check_replace_endpoint(context, Val(fromname), Val(sourcevar), "source")
     _check_replace_endpoint(context, Val(toname), Val(targetvar), "target")
 
@@ -49,6 +48,7 @@ function apply_replace_specs(context::C, registry::R, replacements::Replacements
     for replacement in replacements
         context = @inline _apply_resolved_replace(context, resolve_replacement(registry, replacement))
     end
+    isempty(replacements) || check_replace_cycles(context)
     return context
 end
 
