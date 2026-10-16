@@ -183,6 +183,8 @@ Rules worth knowing:
 - `@input/@inputs/@init` may only appear once and must be the last keyword-like item.
 - `@config` fields must have defaults and become fields on the generated struct.
   You can write them in a surrounding block or as a prelude like `@StepAlgorithm @config seed = 1 function MyAlgo(...) ... end`.
+- `@config` fields are always typed: `seed = 1` gives the struct a type parameter for `seed`, the type of its value
+  (`MyAlgo{Int64}`); `seed <: Integer = 1` bounds that parameter; `seed::Int = 1` gives the field exactly that type.
 - inside the algorithm body, config fields are available directly by name.
   Use `seed`, not `config.seed`.
 - plain positional arguments are runtime-only and are not available while constructing managed state.

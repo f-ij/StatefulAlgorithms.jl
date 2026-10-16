@@ -73,11 +73,26 @@ function _pa_parse_kw_decl(ex)
     return (; name, typeexpr, default = ex.args[2])
 end
 
+"""
+    _pa_parse_config_decl(ex) -> (; name, typeexpr, bound, default)
+
+One `@config` field: `name = default`, `name::T = default` or `name <: S = default`. `typeexpr` is the declared type
+of `name::T` (`nothing` otherwise); `bound` is `S` of `name <: S` (`nothing` otherwise). A field without a declared
+type gets a type parameter of the algorithm's struct (bounded by `S` when given), so it is stored with the type of its
+value, never as `Any`.
+"""
 function _pa_parse_config_decl(ex)
-    ex isa Expr && ex.head == :(=) || error("@config fields must use `name = default` or `name::T = default`, got $ex")
-    name, typeexpr = _pa_binding_parts(ex.args[1])
-    return (; name, typeexpr, default = ex.args[2])
+    ex isa Expr && ex.head == :(=) || error("@config fields must use `name = default`, `name::T = default` or `name <: S = default`, got $ex")
+    lhs = ex.args[1]
+    if lhs isa Expr && lhs.head == :(<:) && length(lhs.args) == 2 && lhs.args[1] isa Symbol
+        return (; name = lhs.args[1], typeexpr = nothing, bound = lhs.args[2], default = ex.args[2])
+    end
+    name, typeexpr = _pa_binding_parts(lhs)
+    return (; name, typeexpr, bound = nothing, default = ex.args[2])
 end
+
+"""The type parameter of the algorithm's struct that holds the type of the `@config` field `name` (`T_name`)."""
+_pa_config_typeparam(name::Symbol) = Symbol(:T_, name)
 
 function _pa_parse_config_macro(ex)
     _pa_is_config_macro(ex) || error("Expected @config declaration, got $ex")
@@ -513,8 +528,11 @@ end
 Rules:
 
 - every `@config` field must have a default
-- typed fields like `name::T = value` are supported
-- config values become fields on the generated algorithm struct
+- config values become fields on the generated algorithm struct, always typed:
+  - `name = value`: the field's type is a type parameter of the struct, the type of the value
+    (`struct F{T_name}; name::T_name; end`)
+  - `name <: S = value`: the same, with the type parameter bounded (`T_name <: S`)
+  - `name::T = value`: the field has exactly the type `T`
 - `@config` may be written in the surrounding block form or as a prelude like
   `@StepAlgorithm @config seed = 1 function F(...) ... end`
 - config field names are available directly as locals inside the algorithm body
@@ -727,8 +745,8 @@ function _step_algorithm_macro(ex; legacy::Bool = false)
     positional_name_tuple = Expr(:tuple, [QuoteNode(arg.name) for arg in signature.positional]...)
     dsl_metadata_defs = quote
         StatefulAlgorithms._dsl_processalgorithm_positional_names(::$fname) = $positional_name_tuple
-        StatefulAlgorithms._dsl_processalgorithm_positional_names(::Type{$fname}) = $positional_name_tuple
-        StatefulAlgorithms.updated_names(::Type{$fname}) = $(Expr(:tuple, QuoteNode.(updated)...))
+        StatefulAlgorithms._dsl_processalgorithm_positional_names(::Type{<:$fname}) = $positional_name_tuple
+        StatefulAlgorithms.updated_names(::Type{<:$fname}) = $(Expr(:tuple, QuoteNode.(updated)...))
     end
     step_def = quote
         function StatefulAlgorithms.step!(_algo::$fname, context::C) where {C <: Union{StatefulAlgorithms.AbstractContext, NamedTuple}}
@@ -741,8 +759,17 @@ function _step_algorithm_macro(ex; legacy::Bool = false)
     struct_def = if isempty(config_fields)
         :(Base.@__doc__ struct $fname <: $supertype end)
     else
-        field_exprs = [Expr(:(=), _pa_binding_expr(field.name, field.typeexpr), field.default) for field in config_fields]
-        :(Base.@__doc__ Base.@kwdef struct $fname <: $supertype
+        # A field without a declared type is stored with a type parameter (`x::T_x`, `T_x <: S` for `x <: S`), so its
+        # value keeps its type; a field with a declared type (`x::T`) has exactly that type.
+        typeparams = Any[]
+        field_exprs = map(config_fields) do field
+            isnothing(field.typeexpr) || return Expr(:(=), Expr(:(::), field.name, field.typeexpr), field.default)
+            P = _pa_config_typeparam(field.name)
+            push!(typeparams, isnothing(field.bound) ? P : Expr(:(<:), P, field.bound))
+            return Expr(:(=), Expr(:(::), field.name, P), field.default)
+        end
+        struct_name = isempty(typeparams) ? fname : Expr(:curly, fname, typeparams...)
+        :(Base.@__doc__ Base.@kwdef struct $struct_name <: $supertype
             $(field_exprs...)
         end)
     end
