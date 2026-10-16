@@ -50,12 +50,9 @@ end
     merge_runtime_return(runtime_context, Val(owner), returns)
 
 Return `runtime_context` with `returns`, a step's returns for `owner`, written into the runtime context partition `owner`
-names: captured returns, declared locals, or (any other `owner`, a namespace) its subcontext returns. Nothing returned
-leaves it as it is.
+names: captured returns, declared locals, or (any other `owner`, a namespace) its subcontext returns.
 """
-@inline function merge_runtime_return(runtime_context::C, ::Val{owner}, ::Nothing) where {C<:ProcessContext,owner}
-    return runtime_context
-end
+function merge_runtime_return end
 
 """A namespace's subcontext returns (`owner` is its key): stored under it in `_subcontext_returns`."""
 @inline function merge_runtime_return(runtime_context::C, ::Val{owner}, args::A) where {C<:ProcessContext,owner,A<:NamedTuple}
