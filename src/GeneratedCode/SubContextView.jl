@@ -30,14 +30,14 @@ function _subcontext_view_merge_exprs(SCV::Type, Args::Type, demanded_runtime_na
         # First look if varname is in locations
         if target_location isa VarLocation{:runtime}  # a runtime location: declared locals and this step's own outputs are writable
             target_subcontext = get_subcontextname(target_location)
-            targetname = get_originalname(target_location)
+            targetname = location_fieldname(target_location)
             _writable_runtime(context_partition(Val(target_subcontext)), target_subcontext, SubKey) || error("An algorithm writes back `$(algo_varname)`, which it reads from `$(target_subcontext)`: that is read-only.")
             exprs = get!(runtime_expressions_by_subcontext, target_subcontext, Expr[])
             # Converted to the slot's type by `merge_runtime_return(…, Val(target_subcontext), …)`.
             push!(exprs, Expr(:(=), targetname, :(getproperty(args, $(QuoteNode(algo_varname))))))
         elseif !isnothing(target_location) # If the local variable exists
             target_subcontext = get_subcontextname(target_location)
-            targetname = get_originalname(target_location)
+            targetname = location_fieldname(target_location)
 
             exprs = get!(merge_expressions_by_subcontext, target_subcontext, Expr[])
             preambles = get!(merge_preambles_by_subcontext, target_subcontext, Expr[])
@@ -98,7 +98,7 @@ Build preamble and named-tuple field expressions that write one returned view
 field back into its backing subcontext location.
 """
 function _subcontext_view_writeback_exprs(@nospecialize(target_location::VarLocation), target_subcontext::Symbol, algo_varname::Symbol)
-    targetname = get_originalname(target_location)
+    targetname = location_fieldname(target_location)
     forward_func = getfunc(target_location)
     reverse_func = getreversefunc(target_location)
     returned_expr = :(getproperty(args, $(QuoteNode(algo_varname))))
@@ -142,7 +142,7 @@ function _subcontext_view_writeback_field_expr(target_subcontext::Symbol, target
         :(=),
         targetname,
         :(@inline writeback_value(
-            (@inline storedproperty_fromsubcontext(scv, Val($(QuoteNode(target_subcontext))), Val($(QuoteNode(targetname))))),
+            (@inline partition_storedproperty(scv, Val($(QuoteNode(target_subcontext))), Val($(QuoteNode(targetname))))),
             $value_expr,
         )),
     )

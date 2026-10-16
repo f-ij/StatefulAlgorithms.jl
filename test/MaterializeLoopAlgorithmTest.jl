@@ -45,7 +45,7 @@ using StatefulAlgorithms
 
     @test haskey(sharedvars, other_name)
     @test length(sharedvars[other_name]) == 1
-    @test StatefulAlgorithms.get_fromname(only(sharedvars[other_name])) == source_name
+    @test StatefulAlgorithms.source_namespace(only(sharedvars[other_name])) == source_name
 
     initialized = StatefulAlgorithms.init(algo)
     reinitialized = StatefulAlgorithms.init(initialized)
@@ -108,7 +108,7 @@ using StatefulAlgorithms
     @test StatefulAlgorithms.contextname(only(sharedcontexts1[target_name])) == source_name
     @test haskey(sharedvars1, other_name)
     @test length(sharedvars1[other_name]) == 1
-    @test StatefulAlgorithms.get_fromname(only(sharedvars1[other_name])) == source_name
+    @test StatefulAlgorithms.source_namespace(only(sharedvars1[other_name])) == source_name
     @test isempty(sharedcontexts2)
     @test isempty(sharedvars2)
 

@@ -62,7 +62,7 @@ end
     @test all(child -> child isa SubPackage, StatefulAlgorithms.getalgos(pkg))
     @test all(child -> !haskey(child), StatefulAlgorithms.getalgos(pkg))
     @test map(child -> StatefulAlgorithms.getalgo(child), StatefulAlgorithms.getalgos(pkg)) == map(StatefulAlgorithms.getalgo, StatefulAlgorithms.getalgos(comp))
-    @test StatefulAlgorithms.algo_to_subcontext_names(StatefulAlgorithms.getvaraliases(StatefulAlgorithms.getalgo(pkg, 2)), :input) == :value
+    @test StatefulAlgorithms.algo_to_subcontext_name(StatefulAlgorithms.getvaraliases(StatefulAlgorithms.getalgo(pkg, 2)), :input) == :value
     reg = StatefulAlgorithms.NameSpaceRegistry()
     reg, registered_pkg = StatefulAlgorithms.add(reg, pkg, 1.0)
     @test StatefulAlgorithms.getkey(registered_pkg) == :NewPack_1
@@ -169,7 +169,7 @@ end
     )
     routed_pack = Package(routed_fibluc, "RoutedFLPack")
     routed_aliases = StatefulAlgorithms.getvaraliases(StatefulAlgorithms.getalgo(routed_pack, 2))
-    @test StatefulAlgorithms.algo_to_subcontext_names(routed_aliases, :source_fib) == :fiblist
+    @test StatefulAlgorithms.algo_to_subcontext_name(routed_aliases, :source_fib) == :fiblist
 
     bench = benchmark(pack, n, 1)
     @test bench > 0

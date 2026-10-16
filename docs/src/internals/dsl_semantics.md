@@ -30,10 +30,10 @@ A block builds a plan (`CompositeAlgorithm` or `Routine`) that holds, apart from
 | schedule | `intervals` / `repeats` | `@interval`, `@every`, `@repeat` (default 1) |
 | wiring (routes, shares, declared locals) | `getwiring`, `get_routes`, `get_shares` | arguments of calls, `@route`, `@all`, outputs written to `@state`, `@bind`, `local` |
 | states | `getstates` | `@state`, `@input` |
-| options | `getoptions` | `@replace`, `@input` (`RuntimeInputs`) |
+| options | `getoptions` | `@redirect`, `@input` (`RuntimeInputs`) |
 
 `resolve` wraps the plan in a `LoopAlgorithm`: it names every algorithm and state in a registry, resolves the wiring
-against it, and collects the `RootOption`s (`Replace`, `RuntimeInputs`) of every plan in the tree. `states(la)` lists the
+against it, and collects the `RootOption`s (`Redirect`, `RuntimeInputs`) of every plan in the tree. `states(la)` lists the
 states of the resolved tree by name.
 
 ## Identity
@@ -164,7 +164,7 @@ Nothing runs; these decide where values go.
 | Statement | Meaning |
 |---|---|
 | `@route a.x => b.y` (`transform = f`, `reverse_transform = g`) | `b` sees `a`'s `x` as `y`; an update of `y` (`@update y = …`) writes back through `g`. |
-| `@replace a.x => b.y` | `b`'s field `y` is `a`'s field `x` after init. |
+| `@redirect a.x => b.y` | `b`'s field `y` is `a`'s field `x` after init. |
 | `@bind x => c.x` | This block's state field `x` and the nested block's `x` are the same field. |
 | `@merge c1.x, c2.x` | Two nested blocks' fields `x` are the same field. |
 | `Algo(@all(a))` | `Algo` sees every field of `a` (a `Share`). |

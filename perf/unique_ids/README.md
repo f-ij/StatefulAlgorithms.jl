@@ -34,7 +34,7 @@ re-executed. "compile" is Julia's cumulative compile-time counter for the whole 
 * A type-stable (generated) normalizer works but still compiles about 11 ms per fresh call, because it specializes on the fresh types.
   The shape that costs nothing is an erased boundary that dispatches dynamically into the type-stable core, which is compiled once.
 * The remaining 7 ms with a `Route` is the user-facing `Route(b => Reader, :x)` constructor, which sees the fresh handle type before the entry
-  runs. The constructors that take handles (`Route`, `Share`, `Replace`, `Init`, `Override`) would need the same treatment (an erased front end
+  runs. The constructors that take handles (`Route`, `Share`, `Redirect`, `Init`, `Override`) would need the same treatment (an erased front end
   that builds an untyped description which the entry turns into the typed object after renaming).
 * Not prototyped: looking up a held handle after construction (`la[b]`, `Init(b)` in `partialinit`). The plan would keep a plain table from
   uuid to ordinal (data, not type) so a held handle is renamed at that entry too; the core keeps matching statically on `SimpleId(n)`.

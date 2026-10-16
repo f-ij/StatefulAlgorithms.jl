@@ -95,7 +95,7 @@ end
 end
 
 @inline function _rename_route(r::Route, replacements)
-    varnames = getvarnames(r)
+    varnames = source_fieldnames(r)
     aliases = getaliases(r)
     mappings = ntuple(i -> varnames[i] == aliases[i] ? varnames[i] : (varnames[i] => aliases[i]), length(varnames))
     return Route(

@@ -7,7 +7,7 @@ function _callable_string(ex::Callable{F, Args, Kwargs, Returns}, wiring = Wirin
     for r in routes(wiring)
         owner = isnothing(getfrom(r)) ? from_match_by(r) : getfrom(r)
         owner_label = owner isa Symbol ? string(owner) : owner isa AbstractIdentifiableAlgo && haskey(owner) ? string(getkey(owner)) : string(owner)
-        for (name, alias) in zip(getvarnames(r), getaliases(r))
+        for (name, alias) in zip(source_fieldnames(r), getaliases(r))
             source = string(owner_label, ".", name isa Tuple ? join(name, ".") : name)
             sources[alias] = isnothing(gettransform(r)) ? source : string("@transform(", gettransform(r), ", ", source, ")")
         end

@@ -2,11 +2,11 @@ abstract type SteppableAlgorithm end
 
 abstract type StepAlgorithm <: SteppableAlgorithm end
 const ProcessAlgorithm = StepAlgorithm
-"""An option of a plan that is not route/share wiring, such as `RuntimeInputs` or `Replace`; kept in the plan's `options`."""
+"""An option of a plan that is not route/share wiring, such as `RuntimeInputs` or `Redirect`; kept in the plan's `options`."""
 abstract type AbstractOption end
 """
 An option whose effect is on the whole run, wherever in the plan tree it is declared: `RuntimeInputs` (the inputs of a
-run) and `Replace` (where a stored field lives). `resolve` collects them from every plan into the `LoopAlgorithm`.
+run) and `Redirect` (where a stored field lives). `resolve` collects them from every plan into the `LoopAlgorithm`.
 """
 abstract type RootOption <: AbstractOption end
 """Route/share wiring of a plan (`Route`, `Share`, ...); kept in the plan's `wiring`, separate from its options."""

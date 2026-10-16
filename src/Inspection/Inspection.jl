@@ -227,10 +227,10 @@ function _inspection_resolved_sharing(la::LA) where {LA<:AbstractLoopAlgorithm}
 
     for target in propertynames(sharedvars)
         for shared in _inspection_tuple(getproperty(sharedvars, target))
-            source = get_fromname(shared)
+            source = source_namespace(shared)
             source isa Symbol || continue
-            varnames = collect(subvarcontextnames(shared))
-            aliases = collect(localnames(shared))
+            varnames = collect(source_fieldnames(shared))
+            aliases = collect(getaliases(shared))
             mappings = Pair{Symbol,Symbol}[varnames[i] => aliases[i] for i in eachindex(varnames)]
             push!(routes, InspectionRoute(target, source, mappings, gettransform(shared), getreverse_transform(shared)))
         end

@@ -49,23 +49,23 @@ Overloadable storage-type hook for state fields in `SubContextView`.
 
 The default maps a state field to its location in the persistent context. Storage
 marker types can overload this to redirect reads and writeback to another
-`VarLocation`; `ReplacedVar` uses this to make a state marker behave as a source
+`VarLocation`; `RedirectedVar` uses this to make a state marker behave as a source
 field elsewhere in the persistent context.
 """
 @inline _redirected_varlocation(::Type{T}, ::Val{SubKey}, ::Val{name}) where {T, SubKey, name} =
     VarLocation{:state}(SubKey, name)
 
-@inline _redirected_varlocation(::Type{T}, ::Val{SubKey}, ::Val{name}) where {VL<:VarLocation, T<:ReplacedVar{VL}, SubKey, name} =
+@inline _redirected_varlocation(::Type{T}, ::Val{SubKey}, ::Val{name}) where {VL<:VarLocation, T<:RedirectedVar{VL}, SubKey, name} =
     VL()
 
 """
 Shared subcontexts => VarLocations
 """
-@inline _view_shared_types(shared) = shared isa Tuple ? shared : (shared,)
+@inline _as_tuple(shared) = shared isa Tuple ? shared : (shared,)
 
 function get_shared_locations(@nospecialize(SCT::Type{<:SubContextView}))
     persistent = persistent_type(SCT.parameters[1])
-    shared = _view_shared_types(view_sharedcontexts(SCT))
+    shared = _as_tuple(view_shares(SCT))
     locations = _Locations()
     for k in 1:length(shared)
         name = contextname(shared[k])
@@ -80,23 +80,23 @@ end
 
 """Routes supplied to the view => VarLocations."""
 function get_routed_locations(@nospecialize(SCT::Type{<:SubContextView}))
-    routes = _view_shared_types(view_sharedvars(SCT))
+    routes = _as_tuple(view_routes(SCT))
     locations = _Locations()
     for k in 1:length(routes)
         route = routes[k]
-        append!(locations, _routed_locations(context_partition(Val(get_fromname(route))), route))
+        append!(locations, _routed_locations(context_partition(Val(source_namespace(route))), route))
     end
     return locations
 end
 
 """The locations a route gives the view, read from where its source lives (`location_kind`)."""
 function _routed_locations(partition::ContextPartition, @nospecialize(sv))
-    fromname = get_fromname(sv)
-    _localnames = localnames(sv)
-    _subvarcontextnames = subvarcontextnames(sv)
+    fromname = source_namespace(sv)
+    _aliases = getaliases(sv)
+    _source_fieldnames = source_fieldnames(sv)
     locations = _Locations()
-    for i in 1:length(_localnames)
-        push!(locations, _localnames[i] => VarLocation{location_kind(partition)}(fromname, _subvarcontextnames[i], gettransform(sv), getreverse_transform(sv)))
+    for i in 1:length(_aliases)
+        push!(locations, _aliases[i] => VarLocation{location_kind(partition)}(fromname, _source_fieldnames[i], gettransform(sv), getreverse_transform(sv)))
     end
     return locations
 end
@@ -152,12 +152,12 @@ end
 function _check_explicit_clashes(@nospecialize(SCT::Type{<:SubContextView}), (name_i, locations_i)::Pair{String, _Locations}, (name_j, locations_j)::Pair{String, _Locations})
     SubKey = SCT.parameters[2]
     for name in intersect(first.(locations_i), first.(locations_j))
-        error("`$(SubKey)` ($(this_instance_type(SCT))) gets `$(name)` both from its $(name_i) and from its $(name_j). Give one of them another name.")
+        error("`$(SubKey)` ($(view_instance_type(SCT))) gets `$(name)` both from its $(name_i) and from its $(name_j). Give one of them another name.")
     end
     return nothing
 end
 
-this_instance_type(::Type{<:SubContextView{B, SubKey, T}}) where {B, SubKey, T} = T
+view_instance_type(::Type{<:SubContextView{B, SubKey, T}}) where {B, SubKey, T} = T
 
 ##########################################
 ########## All locations of a view #######
@@ -196,7 +196,7 @@ Where the name `name` (as the algorithm uses it) is stored, and the name it has 
 `nothing` and the name when the view does not see it. An alias of the view maps the algorithm's name to its own first.
 """
 function _compute_location(@nospecialize(SCT::Type{<:SubContextView}), name::Symbol)
-    subcontext_name = algo_to_subcontext_names(SCT, name)
+    subcontext_name = algo_to_subcontext_name(SCT, name)
     list = _all_location_list(SCT)
     for wanted in (subcontext_name, name), (seen, location) in list
         seen === wanted && return location, wanted
@@ -236,7 +236,7 @@ end
 # TODO: Do we really need the generated version?
 # function Base.getproperty(sct::SubContextView, symb::S) where S <: Symbol
 #     locations = get_all_locations(sct)
-#     subcontext_name = algo_to_subcontext_names(sct, symb)
+#     subcontext_name = algo_to_subcontext_name(sct, symb)
 #     varlocation = @inline getproperty(locations, subcontext_name)
 #     return @inline getproperty(sct, varlocation)
 # end
@@ -277,10 +277,10 @@ end
 
 @inline @generated function Base.getproperty(sct::SCV, vl::VarLocation{:state}) where SCV <: SubContextView
     target_subcontext = get_subcontextname(vl)
-    target_variable = get_originalname(vl)
+    target_variable = location_fieldname(vl)
     if isnothing(getfunc(vl)) && target_variable isa Symbol
         return quote
-            return @inline getproperty_fromsubcontext(sct, Val($(QuoteNode(target_subcontext))), Val($(QuoteNode(target_variable))))
+            return @inline partition_getproperty(sct, Val($(QuoteNode(target_subcontext))), Val($(QuoteNode(target_variable))))
         end
     end
 
@@ -298,7 +298,7 @@ Read a routed runtime variable from the runtime context.
 """
 @inline @generated function Base.getproperty(sct::SCV, vl::VarLocation{:runtime}) where SCV <: SubContextView
     target_subcontext = get_subcontextname(vl)
-    target_variables = get_originalname(vl)
+    target_variables = location_fieldname(vl)
     if isnothing(getfunc(vl)) && target_variables isa Symbol
         return quote
             return @inline view_value(sct, _assigned_value(_runtime_values(getbundle(sct), Val($(QuoteNode(target_subcontext)))), $(QuoteNode(target_variables))))
@@ -320,7 +320,7 @@ Read a routed runtime variable from the runtime context.
 end
 
 @inline @generated function Base.getproperty(sct::SCV, vl::VarLocation{:injected}) where SCV <: SubContextView
-    target_variable = get_originalname(vl)
+    target_variable = location_fieldname(vl)
     return quote
         injected = getinjected(sct)
         return @inline getproperty(injected, $(QuoteNode(target_variable)))
@@ -331,7 +331,7 @@ end
 ########## Reading a partition ###########
 ##########################################
 
-@inline function getproperty_fromsubcontext(
+@inline function partition_getproperty(
     scv::SCV,
     ::Val{subcontextname},
     ::Val{varname},
@@ -348,7 +348,7 @@ Return the value a view shows for `subcontextname.varname`.
 partitions: `_captured_returns`, `_subcontext_returns`, `_declared_locals`, `_inputs`. `partition` is
 `context_partition(Val(subcontextname))`, which says which of the two it is, and each method reads from the matching
 place.
-Both pass the value through `view_value`, which unwraps storage wrappers such as `ReplacedVar`.
+Both pass the value through `view_value`, which unwraps storage wrappers such as `RedirectedVar`.
 """
 function _read_partition end
 
@@ -356,18 +356,18 @@ function _read_partition end
 @inline _read_partition(::RuntimePartition, scv::SCV, ::Val{subcontextname}, ::Val{varname}) where {SCV<:SubContextView, subcontextname, varname} =
     @inline view_value(scv, _assigned_value(_runtime_values(getbundle(scv), Val(subcontextname)), varname))
 
-"""`subcontextname` is a namespace: read `varname` from its state, or, if its state has no `varname`, from what its algorithm returned this step (see `storedproperty_fromsubcontext`)."""
+"""`subcontextname` is a namespace: read `varname` from its state, or, if its state has no `varname`, from what its algorithm returned this step (see `partition_storedproperty`)."""
 @inline _read_partition(::NamespacePartition, scv::SCV, ::Val{subcontextname}, ::Val{varname}) where {SCV<:SubContextView, subcontextname, varname} =
-    @inline view_value(scv, storedproperty_fromsubcontext(scv, Val(subcontextname), Val(varname)))
+    @inline view_value(scv, partition_storedproperty(scv, Val(subcontextname), Val(varname)))
 
 """
-    storedproperty_fromsubcontext(scv, Val(subcontext), Val(varname))
+    partition_storedproperty(scv, Val(subcontext), Val(varname))
 
 Return the backing value stored for one `SubContextView` location without
 applying `view_value`. Writeback hooks use this to inspect wrappers
 that are hidden from algorithm code during normal reads.
 """
-@inline function storedproperty_fromsubcontext(
+@inline function partition_storedproperty(
     scv::SCV,
     ::Val{subcontextname},
     ::Val{varname},
@@ -410,8 +410,8 @@ steps). Whether it is there is known from the type, so the check costs nothing.
 
 @noinline _throw_unassigned(name::Symbol) = error("`$name` has no value in this step: it is assigned by a step that does not run in every step (on a schedule). Declare it first (`local $name` in a DSL block, `Local` in a plan) to keep its last value between steps.")
 
-"""Resolve a replaced field through its stored backing location."""
-@inline function view_value(view::V, value::R) where {VL<:VarLocation, R<:ReplacedVar{VL}, V<:SubContextView}
+"""Resolve a redirected field through its stored backing location."""
+@inline function view_value(view::V, value::R) where {VL<:VarLocation, R<:RedirectedVar{VL}, V<:SubContextView}
     return @inline view_value(view, getproperty(view, getfield(value, :varlocation)))
 end
 
@@ -430,7 +430,7 @@ function create_merge_tuples_expr(locations::Locs, args) where Locs
     for localname in argsnames_to_merge
         varlocation = getproperty(locations, localname)
         target_subcontext = get_subcontextname(varlocation)
-        target_variable = get_originalname(varlocation)
+        target_variable = location_fieldname(varlocation)
 
         subcontext_nt_parameters = get(subcontext_merge_parameter_exprs, target_subcontext, Expr(:parameters))
         subcontext_merge_parameter_exprs = (;subcontext_merge_parameter_exprs..., target_subcontext => subcontext_nt_parameters)

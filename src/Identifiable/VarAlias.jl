@@ -29,7 +29,7 @@ VarAliases(;subcontext_to_algo_names...) = VarAliases{(;subcontext_to_algo_names
     @inline getproperty(StoA_nt, name)
 end
 
-@inline Base.@constprop :aggressive function algo_to_subcontext_names(va::Union{VarAliases{StoA_nt, AtoS_nt}, Type{<:VarAliases{StoA_nt, AtoS_nt}}}, name::Symbol) where {StoA_nt, AtoS_nt}
+@inline Base.@constprop :aggressive function algo_to_subcontext_name(va::Union{VarAliases{StoA_nt, AtoS_nt}, Type{<:VarAliases{StoA_nt, AtoS_nt}}}, name::Symbol) where {StoA_nt, AtoS_nt}
     if isempty(AtoS_nt) || !haskey(AtoS_nt, name)
         return name
     end
@@ -39,7 +39,7 @@ end
 """
 No alias means the name is the same in the subcontext and the algo
 """
-algo_to_subcontext_names(::Nothing, name) = name
+algo_to_subcontext_name(::Nothing, name) = name
 """
 No alias means the name is the same in the subcontext and the algo
 """
@@ -95,8 +95,8 @@ StateAlias(postfix = uuid4()) = StateAlias{Symbol(state_regex,postfix)}()
     return :(nothing)
 end
 
-@inline Base.@constprop :aggressive algo_to_subcontext_names(sd::Union{StateAlias{postfix}, Type{StateAlias{postfix}}}, name::Symbol) where {postfix} = algo_to_subcontext_names(sd, Val(name) )
-@inline @generated function algo_to_subcontext_names(sd::Union{StateAlias{postfix}, Type{StateAlias{postfix}}}, name::Val{ViewName}) where {postfix, ViewName <:Symbol}
+@inline Base.@constprop :aggressive algo_to_subcontext_name(sd::Union{StateAlias{postfix}, Type{StateAlias{postfix}}}, name::Symbol) where {postfix} = algo_to_subcontext_name(sd, Val(name) )
+@inline @generated function algo_to_subcontext_name(sd::Union{StateAlias{postfix}, Type{StateAlias{postfix}}}, name::Val{ViewName}) where {postfix, ViewName <:Symbol}
     viewnamestring = string(ViewName)
     subcontextname = Symbol(viewnamestring, state_regex, postfix)
     return :( $subcontextname )

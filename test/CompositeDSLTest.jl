@@ -69,10 +69,10 @@ dsl_final_summary(context) = (; result = context[DSLValueAlgo].result)
 dsl_runtime_final_summary(context) = (; result = context.result)
 dsl_state_push_writer!(buffers) = (push!(buffers, :writer); buffers)
 dsl_state_push_reader!(buffers) = (push!(buffers, :reader); buffers)
-@StepAlgorithm function DSLReplaceSourceAlgo(@managed(x = 1.0))
+@StepAlgorithm function DSLRedirectSourceAlgo(@managed(x = 1.0))
     @update x = x + 1
 end
-@StepAlgorithm function DSLReplaceSinkAlgo(@managed(y = 0.0, seen = 0.0))
+@StepAlgorithm function DSLRedirectSinkAlgo(@managed(y = 0.0, seen = 0.0))
     @update seen = y
 end
 
@@ -160,8 +160,8 @@ end
         @test StatefulAlgorithms.init(overlap_merged, (; scale = 3.0)) == (; seed = 7, scale = 3.0)
     end
 
-    @testset "@bind, @merge and @replace share state explicitly" begin
-        @info "Composite DSL: @bind, @merge and @replace share state explicitly"
+    @testset "@bind, @merge and @redirect share state explicitly" begin
+        @info "Composite DSL: @bind, @merge and @redirect share state explicitly"
         writer = @Routine begin
             @state buffers
             buffers = dsl_state_push_writer!(buffers)
@@ -210,7 +210,7 @@ end
         # An algorithm's own field as the target: it reads the bound value instead of its own `y` (0.0)
         bound_algo = @CompositeAlgorithm begin
             @state level = 7.0
-            @alias sink = DSLReplaceSinkAlgo
+            @alias sink = DSLRedirectSinkAlgo
             sink()
             @bind level => sink.y
         end
@@ -227,7 +227,7 @@ end
         @test state_data(StatefulAlgorithms.context(run(init(merged, Init(name; buffers = Symbol[])); repeats = 1))) ==
             Dict(name => (; buffers = [:writer, :reader]))
 
-        # `@merge` takes whole states; one field is shared with `@bind` or `@replace`
+        # `@merge` takes whole states; one field is shared with `@bind` or `@redirect`
         @test_throws Exception @eval @CompositeAlgorithm begin
             @context f = $writer()
             @context n = $reader()
@@ -263,13 +263,13 @@ end
         ctx = StatefulAlgorithms.context(run(init(both, Init(:ps; x = [1.0, 2.0, 3.0])); repeats = 2))
         @test ctx[:ps].total == [4.0, 8.0, 12.0]    # 2 steps of 2 blocks
 
-        # `@replace` is an option of its block, also when that block is nested
+        # `@redirect` is an option of its block, also when that block is nested
         inner = @CompositeAlgorithm begin
-            @alias a = DSLReplaceSourceAlgo
-            @alias b = DSLReplaceSinkAlgo
+            @alias a = DSLRedirectSourceAlgo
+            @alias b = DSLRedirectSinkAlgo
             a()
             b()
-            @replace a.x => b.y
+            @redirect a.x => b.y
         end
         ctx = steps(@CompositeAlgorithm(begin
             inner()
@@ -310,7 +310,7 @@ end
         sharedcontexts, sharedvars = StatefulAlgorithms._resolved_wiring_by_target(resolved)
         @test !isempty(sharedvars)
         combine_routes = sharedvars[:DSLCombineAlgo_1]
-        @test any(route -> StatefulAlgorithms.get_fromname(route) == :_captured_returns && StatefulAlgorithms.localnames(route) == (:right,), combine_routes)
+        @test any(route -> StatefulAlgorithms.source_namespace(route) == :_captured_returns && StatefulAlgorithms.getaliases(route) == (:right,), combine_routes)
 
         init_ctx = StatefulAlgorithms.initcontext(resolved; lifetime = Repeat(10))
         @test init_ctx[:_state_1].seed == 3
@@ -400,7 +400,7 @@ end
         sink_routes = @inferred StatefulAlgorithms.routes(step_wiring[2])
         @test step_wiring[2] isa StatefulAlgorithms.Wiring
         @test length(sink_routes) == 1
-        @test StatefulAlgorithms.localnames(only(sink_routes)) == (:value,)
+        @test StatefulAlgorithms.getaliases(only(sink_routes)) == (:value,)
 
         p = Process(resolved, repeat = 1)
         StatefulAlgorithms.run(p)
@@ -425,7 +425,7 @@ end
         step_wiring = StatefulAlgorithms.child_wiring(StatefulAlgorithms.getwiring(StatefulAlgorithms.getplan(resolved)))
         sink_routes = @inferred StatefulAlgorithms.routes(step_wiring[3])   # 2 is the capture of `source`'s return
         @test length(sink_routes) == 1
-        @test StatefulAlgorithms.subvarcontextnames(only(sink_routes)) == (:passthrough,)
+        @test StatefulAlgorithms.source_fieldnames(only(sink_routes)) == (:passthrough,)
 
         p = Process(resolved, repeat = 1)
         StatefulAlgorithms.run(p)

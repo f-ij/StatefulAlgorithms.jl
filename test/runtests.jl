@@ -22,7 +22,7 @@ const TEST_FILES = [
     "InnerTypeFilterTest.jl",
     "InteractiveTest.jl",
     "ContextExchangeTest.jl",
-    "ReplacementTest.jl",
+    "RedirectTest.jl",
     "ProcessAlgorithmMacroTest.jl",
     "ContextAnalyzerTest.jl",
     "InspectionTest.jl",

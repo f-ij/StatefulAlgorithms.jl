@@ -7,10 +7,10 @@ and what the context after a run (`final_context`) shows for it.
     view_value(view, stored) -> value
 
 The value `view` shows an algorithm for the value `stored` in one of its fields: `stored` itself by default. A storage
-wrapper (`InteractiveVar`, `ReplacedVar`, a declared local's `Maybe`, ...) adds a method that unwraps one layer and
+wrapper (`InteractiveVar`, `RedirectedVar`, a declared local's `Maybe`, ...) adds a method that unwraps one layer and
 calls `view_value(view, inner)` again, so nested wrappers unfold until this default is reached. `view` is the
 `SubContextView` the value is read through (as the container comes first in `getindex`), so a wrapper can read
-elsewhere through it (`ReplacedVar`).
+elsewhere through it (`RedirectedVar`).
 """
 @inline view_value(view::V, stored::S) where {V<:SubContextView, S} = stored
 

@@ -53,7 +53,7 @@ _describe_step(child, namespace::Namespace) = string("`", namesymbol(namespace),
 """What a plan child's own step writes back (see `step_updates`), as the plan's step would call it (calls are viewed from `_captured_returns`). Only inferred, never run."""
 @inline function _infer_step_updates(algo, lc, wiring, namespace::Namespace)
     viewed_as = algo isa Callable ? Namespace{:_captured_returns}() : namespace
-    contextview = view(lc, algo, viewed_as; sharedcontexts = shares(wiring), sharedvars = routes(wiring))
+    contextview = view(lc, algo, viewed_as; shares = shares(wiring), routes = routes(wiring))
     return step_updates(step!(algo, contextview))
 end
 

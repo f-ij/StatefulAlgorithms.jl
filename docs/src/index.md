@@ -24,7 +24,7 @@ If you are new to the package, read these first:
 2. [Running, Wait, Fetch](@ref running_user)
 3. [Contexts and Indexing](@ref contexts_user)
 4. [Init, Overrides, and Runtime Inputs](@ref inputs_overrides_user)
-5. [Routes, Shares, and Replacements](@ref routes_shares_user)
+5. [Routes, Shares, and Redirects](@ref routes_shares_user)
 6. [Composite DSL](@ref composite_dsl_user)
 
 ## User Documentation
@@ -34,7 +34,7 @@ If you are new to the package, read these first:
 - [Referencing Algorithms](@ref referencing_algorithms_user)
 - [Contexts and Indexing](@ref contexts_user)
 - [Init Analysis](@ref init_analysis_user)
-- [Routes, Shares, and Replacements](@ref routes_shares_user)
+- [Routes, Shares, and Redirects](@ref routes_shares_user)
 - [Init, Overrides, and Runtime Inputs](@ref inputs_overrides_user)
 - [Vars (`Var` Selectors)](@ref vars_user)
 - [Interactive Contexts](@ref interactive_user)
@@ -48,5 +48,5 @@ If you are new to the package, read these first:
 
 - [Registry Internals](@ref registry_internals)
 - [Context Internals](@ref context_internals)
-- [Routes, Shares, and Replacements Internals](@ref routes_shares_internals)
+- [Routes, Shares, and Redirects Internals](@ref routes_shares_internals)
 - [Process Pipeline Internals](@ref process_pipeline_internals)

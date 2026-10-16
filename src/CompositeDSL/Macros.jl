@@ -340,7 +340,7 @@ State composition (each construction of a block has its own `@state`):
 - `@bind buffers => c.buffers [more mappings] [begin ... end]`: inside the block, or
   only inside its `begin ... end`, `c.buffers` is this block's `buffers`.
 - `@merge c1, c2`: the `@state`s of the nested blocks become one state.
-- `@replace source.x => target.y`: an option of the block; `target.y` is stored in
+- `@redirect source.x => target.y`: an option of the block; `target.y` is stored in
   `source.x` for the whole run.
 
 Direct owned-field access like `dynamics.state` is also accepted in route

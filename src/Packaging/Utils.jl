@@ -10,7 +10,7 @@ function route_to_alias_zip(route::Route, registry::NameSpaceRegistry)
     @assert target_obj ∈ registry "Cannot convert Route: $route to Alias if target object: $target_obj is not in the registry"
 
     _localnames = getaliases(route)
-    _subcontextvarnames = getvarnames(route)
+    _subcontextvarnames = source_fieldnames(route)
     
     # return VarAliases(;zip(_subcontextvarnames, _localnames)...)
     return zip(_subcontextvarnames, _localnames)

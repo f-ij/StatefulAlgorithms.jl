@@ -9,7 +9,7 @@ getfrom(r::Route) = getfield(r, :from)
 getto(r::Route) = getfield(r, :to)
 
 """Return source variable names carried by a route."""
-getvarnames(::Union{Route{Fmatch, Tmatch, FT, RFT, varnames}, Type{<:Route{Fmatch, Tmatch, FT, RFT, varnames}}}) where {Fmatch, Tmatch, FT, RFT, varnames} = varnames
+source_fieldnames(::Union{Route{Fmatch, Tmatch, FT, RFT, varnames}, Type{<:Route{Fmatch, Tmatch, FT, RFT, varnames}}}) where {Fmatch, Tmatch, FT, RFT, varnames} = varnames
 
 """Return local variable aliases carried by a route."""
 getaliases(::Union{Route{Fmatch, Tmatch, FT, RFT, varnames, aliases}, Type{<:Route{Fmatch, Tmatch, FT, RFT, varnames, aliases}}}) where {Fmatch, Tmatch, FT, RFT, varnames, aliases} = aliases
@@ -31,13 +31,7 @@ isresolved(r::Union{Route{Fmatch, Tmatch}, Type{<:Route{Fmatch, Tmatch}}}) where
     Fmatch isa Symbol && Tmatch isa Symbol
 
 """Return the source context name for a resolved route."""
-get_fromname(r::Union{Route{Fmatch}, Type{<:Route{Fmatch}}}) where {Fmatch} = Fmatch
+source_namespace(r::Union{Route{Fmatch}, Type{<:Route{Fmatch}}}) where {Fmatch} = Fmatch
 
-"""Return the route aliases expected by generated view code."""
-@inline localnames(r::Union{Route{Fmatch, Tmatch, FT, RFT, varnames, aliases}, Type{<:Route{Fmatch, Tmatch, FT, RFT, varnames, aliases}}}) where {Fmatch, Tmatch, FT, RFT, varnames, aliases} = aliases
-
-"""Return the route source variable names expected by generated view code."""
-@inline subvarcontextnames(r::Union{Route{Fmatch, Tmatch, FT, RFT, varnames}, Type{<:Route{Fmatch, Tmatch, FT, RFT, varnames}}}) where {Fmatch, Tmatch, FT, RFT, varnames} = varnames
-
-Base.keys(r::Union{Route, Type{<:Route}}) = getvarnames(r)
+Base.keys(r::Union{Route, Type{<:Route}}) = source_fieldnames(r)
 Base.values(r::Union{Route, Type{<:Route}}) = getaliases(r)

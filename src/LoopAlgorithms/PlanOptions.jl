@@ -15,7 +15,7 @@ _add_slot_wiring(w::WithWiring, bucket) = error("`WithWiring` can only wire a co
 """Point the routes that belong to this child (`OwnerMatcher` target) at its namespace."""
 function _retarget_owner_routes(bucket::Wiring, target::Symbol)
     retarget(r) = to_match_by(r) === OwnerMatcher ?
-        Route{from_match_by(r), target, gettransform(r), getreverse_transform(r), getvarnames(r), getaliases(r), typeof(getfrom(r)), Nothing}(getfrom(r), nothing) : r
+        Route{from_match_by(r), target, gettransform(r), getreverse_transform(r), source_fieldnames(r), getaliases(r), typeof(getfrom(r)), Nothing}(getfrom(r), nothing) : r
     return Wiring(map(retarget, routes(bucket)), shares(bucket))
 end
 
@@ -24,7 +24,7 @@ end
 
 The options that are not routes, shares (`AbstractWiring`) or declared locals (`Local`, kept in the plan's wiring),
 in their original order: what a plan keeps in its `options` field, next to its `wiring`. For example
-`(route, runtime_inputs, replace)` gives `(runtime_inputs, replace)`.
+`(route, runtime_inputs, redirect)` gives `(runtime_inputs, redirect)`.
 """
 @inline function _non_wiring(options::Options) where {Options<:Tuple}
     # Written as recursion instead of `filter` so that the result type stays known for any number of options: Base's

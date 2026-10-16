@@ -62,6 +62,6 @@ end
     aliased = StatefulAlgorithms.withaliases(scv, alias)
 
     @test StatefulAlgorithms.varaliases(aliased) === typeof(alias)
-    @test StatefulAlgorithms.algo_to_subcontext_names(aliased, :bar) == :foo
+    @test StatefulAlgorithms.algo_to_subcontext_name(aliased, :bar) == :foo
     @test aliased.bar == 1
 end

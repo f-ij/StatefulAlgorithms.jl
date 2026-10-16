@@ -92,7 +92,7 @@ function resolve_wiring(reg::NameSpaceRegistry, r::R) where {R<:Route}
 
     # Resolved routes are pure type data: endpoint refs are dropped so
     # `typeof(route)()` reconstructs the same route without runtime lookup.
-    resolved = Route{fromname, toname, gettransform(r), getreverse_transform(r), getvarnames(r), getaliases(r), Nothing, Nothing}()
+    resolved = Route{fromname, toname, gettransform(r), getreverse_transform(r), source_fieldnames(r), getaliases(r), Nothing, Nothing}()
     return toname => resolved
 end
 
@@ -101,7 +101,7 @@ function update_keys(r::R, reg::NameSpaceRegistry) where {R<:Route}
     isresolved(r) && return r
     newfrom = update_scref(reg, from_match_by(r), getfrom(r))
     newto = update_scref(reg, to_match_by(r), getto(r))
-    varnames = getvarnames(r)
+    varnames = source_fieldnames(r)
     aliases = getaliases(r)
     mappings = ntuple(i -> varnames[i] == aliases[i] ? varnames[i] : (varnames[i] => aliases[i]), length(varnames))
     return Route(newfrom => newto, mappings...; transform = gettransform(r), reverse_transform = getreverse_transform(r))

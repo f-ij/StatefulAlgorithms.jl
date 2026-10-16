@@ -53,7 +53,7 @@ end
 
 """The view a leaf step gets at its position in the plan: its namespace, and the shares and routes of its wiring."""
 @inline _leaf_view(algo::A, lc::L, wiring::W, namespace::N) where {A,L<:LoopContext,W<:PlanWiringView,N<:Namespace} =
-    @inline view(lc, algo, namespace; sharedcontexts = (@inline shares(wiring)), sharedvars = (@inline routes(wiring)))
+    @inline view(lc, algo, namespace; shares = (@inline shares(wiring)), routes = (@inline routes(wiring)))
 
 # The persistent fields a leaf writes (see src/Context/Carried/Writes.jl).
 @inline _find_writable_fields(algo::AlgoType, ::NoLoopCursor, persistent_context::PersistentContextType, ::Type{RuntimeContextType}, wiring::WiringViewType, namespace::NamespaceType, process::ProcessType, lifetime::LifetimeType) where {AlgoType<:ProcessAlgorithm, PersistentContextType<:ProcessContext, RuntimeContextType, WiringViewType, NamespaceType, ProcessType, LifetimeType} =

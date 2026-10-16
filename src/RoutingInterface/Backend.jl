@@ -90,8 +90,8 @@ end
 function _return_demand_names(@nospecialize(W::Type{<:PlanWiring}), owner::Symbol)
     names = ()
     for route_type in _route_types_from_wiring_type(W)
-        get_fromname(route_type) === owner || continue
-        for route_name in getvarnames(route_type)
+        source_namespace(route_type) === owner || continue
+        for route_name in source_fieldnames(route_type)
             names = _append_route_demand_names(names, route_name)
         end
     end
@@ -114,7 +114,7 @@ _has_symbol_overlap(left::Tuple, right::Tuple) = first(left) in right || _has_sy
 
 """Collect route aliases from a tuple of route types."""
 _route_aliases(::Tuple{}) = ()
-_route_aliases(route_types::Tuple) = (localnames(first(route_types))..., _route_aliases(Base.tail(route_types))...)
+_route_aliases(route_types::Tuple) = (getaliases(first(route_types))..., _route_aliases(Base.tail(route_types))...)
 
 """
 Merge two resolved wiring sets using type-level route alias occlusion.
@@ -132,7 +132,7 @@ Shares are concatenated because they do not bind local variable aliases.
     # specific child bucket, so it suppresses inherited routes with the same
     # alias entirely at generated-code time.
     right_aliases = _route_aliases(right_routes)
-    kept_left_routes = filter(route -> !_has_symbol_overlap(localnames(route), right_aliases), left_routes)
+    kept_left_routes = filter(route -> !_has_symbol_overlap(getaliases(route), right_aliases), left_routes)
 
     # Resolved route/share types have empty constructors, so the generated body
     # recreates the merged wiring from type data without touching field values.

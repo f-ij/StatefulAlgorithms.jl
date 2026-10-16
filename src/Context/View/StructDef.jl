@@ -9,12 +9,12 @@ VarLocation{Type}(subcontextname::Symbol, originalname::Union{Tuple, Symbol}, fu
 VarLocation(type, subcontextname::Symbol, originalname::Union{Tuple, Symbol}, func = nothing, reversefunc = nothing) = VarLocation{type, subcontextname, originalname, func, reversefunc}()
 
 """
-    ReplacedVar(varlocation)
+    RedirectedVar(varlocation)
 
 Persistent context marker for a state field whose algorithm-facing value is
 backed by another `VarLocation`.
 """
-struct ReplacedVar{T<:VarLocation}
+struct RedirectedVar{T<:VarLocation}
     varlocation::T
 end
 
@@ -23,7 +23,7 @@ end
 """Return the writeback transform carried by a `VarLocation`."""
 @inline getreversefunc(vl::Union{VarLocation{T, subcontextname, originalname, func, reversefunc}, Type{<:VarLocation{T, subcontextname, originalname, func, reversefunc}}}) where {T, subcontextname, originalname, func, reversefunc} = reversefunc
 @inline get_subcontextname(vl::Union{VarLocation{T, SCN, ON}, Type{<:VarLocation{T, SCN, ON}}}) where {T, SCN, ON} = SCN
-@inline get_originalname(vl::Union{VarLocation{T, SCN, ON}, Type{<:VarLocation{T, SCN, ON}}}) where {T, SCN, ON} = ON
+@inline location_fieldname(vl::Union{VarLocation{T, SCN, ON}, Type{<:VarLocation{T, SCN, ON}}}) where {T, SCN, ON} = ON
 
 """
 For variable names :a, :b, :c
@@ -43,12 +43,12 @@ For variable names :a, :b, :c
 end
 
 @inline function getvar_expressions_and_varnames(vl::Union{VL, Type{<:VL}}) where VL <: VarLocation
-    varnames = get_originalname(vl)
+    varnames = location_fieldname(vl)
     numvars = varnames isa Tuple ? length(varnames) : 1
     varnames = varnames isa Tuple ? varnames : (varnames,)
     assign_symbols = ntuple(i -> gensym(:var), numvars)
     target_subcontext = get_subcontextname(vl)
-    return [:($(assign_symbols[i]) = @inline getproperty_fromsubcontext(sct, Val($(QuoteNode(target_subcontext))), Val($(QuoteNode(varnames[i])))))
+    return [:($(assign_symbols[i]) = @inline partition_getproperty(sct, Val($(QuoteNode(target_subcontext))), Val($(QuoteNode(varnames[i])))))
         for i in 1:numvars], assign_symbols
 end
 
@@ -57,7 +57,7 @@ What one algorithm (`instance`, in namespace `SubName`) sees of a context bundle
 `InitContext` while initializing): its state, the variables wired to it, and, from the bundle, inputs and the names
 of the scope it is in (declared locals, captured returns). `injected` holds values given to it directly.
 """
-struct SubContextView{B<:ContextBundle, SubName, T, NT, VarAliases, SharedContexts, SharedVars} <: AbstractContext
+struct SubContextView{B<:ContextBundle, SubName, T, NT, VarAliases, Shares, Routes} <: AbstractContext
     bundle::B
     instance::T # ScopedInstance for which the view is created
     injected::NT
@@ -66,7 +66,7 @@ struct SubContextView{B<:ContextBundle, SubName, T, NT, VarAliases, SharedContex
         new{B, SubName, T, typeof(inject), varaliases(instance), (), ()}(bundle, instance, inject)
     end
 
-    function SubContextView{B, SubName, T, NT, VarAliases, SharedContexts, SharedVars}(bundle::B, instance::T, inject::NT = (;)) where {B<:ContextBundle, SubName, T, NT, VarAliases, SharedContexts, SharedVars}
-        new{B, SubName, T, typeof(inject), VarAliases, SharedContexts, SharedVars}(bundle, instance, inject)
+    function SubContextView{B, SubName, T, NT, VarAliases, Shares, Routes}(bundle::B, instance::T, inject::NT = (;)) where {B<:ContextBundle, SubName, T, NT, VarAliases, Shares, Routes}
+        new{B, SubName, T, typeof(inject), VarAliases, Shares, Routes}(bundle, instance, inject)
     end
 end
