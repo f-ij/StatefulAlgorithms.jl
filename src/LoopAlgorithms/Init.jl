@@ -1,21 +1,3 @@
-"""
-Set up an empty ProcessContext for a LoopAlgorithm with given shared specifications
-Inputargs are given as a NamedTuple of (;algo_name => (; inputname1 = value1, ...), ...)
-"""
-@inline function init(sa::IA, ic::I) where {IA<:IdentifiableAlgo,I<:InitContext}
-    name = getkey(sa)
-    inputcontext = merge_into_subcontexts(getpersistent(ic), (;name => (;_instance = sa)))
-    inputview = @inline view(withpersistent(ic, inputcontext), sa)
-    prepared = @inline init(getalgo(sa), inputview)
-    return @inline replace(inputcontext, (;name => prepared))
-end
-
-@inline function cleanup(sa::IA, lc::L) where {IA<:IdentifiableAlgo,L<:LoopContext}
-    contextview = view(lc, sa)
-    cleanup_args = @inline cleanup(getalgo(sa), contextview)
-    return @inline merge(contextview, cleanup_args)
-end
-
 @inline function init(algo::A, ic::I) where {A<:ProcessAlgorithm,I<:InitContext}
     return @inline init(algo, getpersistent(ic))
 end

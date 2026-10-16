@@ -47,6 +47,7 @@ module StatefulAlgorithms
 
     include("RoutingInterface/RoutingInterface.jl")
     include("Context/Context.jl")
+    include("Identifiable/Init.jl")
     include("Reports/Reports.jl")
 
     include("InputInterface/InputInterface.jl")
