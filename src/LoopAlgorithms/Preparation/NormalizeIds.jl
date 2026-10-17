@@ -6,7 +6,7 @@ gives a plan of a new type, and the whole typed `resolve` compiles again. For a 
 
     normalized = normalize_ids(la)        # SimpleId{uuid} -> NormalizedId{k, R}, k = order of first appearance;
                                           # a handle keeps its original id in its `reconstructor` field
-    resolved = _resolve_untyped(normalized) # compiled once per plan shape
+    resolved = _resolve_plan(normalized)  # compiled once per plan shape
     restore_original_ids(resolved)        # every normalized handle back to the original one
 
 While `resolve` runs, the registry holds the normalized handles, so its type is the same for every uuid, and their

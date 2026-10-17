@@ -25,24 +25,31 @@ registry, and collects the `RootOption`s of the plan tree. The returned value is
 `FinalizedAlgorithm`, in which case the finalized outer shape is preserved and
 its inner loop is materialized.
 
-Untyped: the result is not inferred (a caller gets `Any`), and each step is compiled on its own for the types it gets
-(`_resolve_untyped`), which keeps the first resolve of a plan cheap. Plans with `Unique` handles are resolved with
-their random ids normalized, so the same layout with new ids compiles nothing again (NormalizeIds.jl). The inferred
-version, for a caller that knows the plan type, is `_resolve_typed` (Typed.jl).
+`resolve` itself is compiled once (its result is not inferred; a caller gets `Any`). Plans with `Unique` handles have
+their random ids normalized first, so the same layout with new ids is the same plan type and compiles nothing again
+(NormalizeIds.jl). The steps are then run by `_resolve_plan`, compiled once per plan type. The inferred version, for a
+caller that knows the plan type, is `_resolve_typed` (Typed.jl).
 """
 Base.@nospecializeinfer function resolve(@nospecialize(la::LoopSpec))
-    _has_unique_handles(la) || return _resolve_untyped(la)
-    return restore_original_ids(_resolve_untyped(normalize_ids(la)))
+    _has_unique_handles(la) || return _resolve_plan(la)
+    return restore_original_ids(_resolve_plan(normalize_ids(la)))
 end
 
 """
-The steps of resolving `la` (see the top of this file), each called on the runtime value: a dynamic dispatch per step,
-so every step is compiled for the types it gets and nothing is inlined or inferred across the steps.
+Run the steps of resolving `la` (see the top of this file) and return the resolved plan. Compiled for the plan's type
+(after id normalization, see `resolve`), so the steps it calls are compiled together with it; the steps themselves
+walk the plan untyped.
 """
-@noinline Base.@nospecializeinfer function _resolve_untyped(@nospecialize(la))
-    la isa FinalizedAlgorithm && return finalstep(_resolve_untyped(inneralgorithm(la)), finalfunction(la))
-    la isa LoopAlgorithm || return _resolve_untyped(LoopAlgorithm(la))
-    isresolved(la) && return la
+@inline function _resolve_plan(la::LA) where {LA<:LoopSpec}
+    if la isa FinalizedAlgorithm
+        return finalstep(_resolve_plan(inneralgorithm(la)), finalfunction(la))
+    end
+    if !(la isa LoopAlgorithm)
+        return _resolve_plan(LoopAlgorithm(la))
+    end
+    if isresolved(la)
+        return la
+    end
 
     registry, keyed_la = setup_registry_and_keyed_algos(la)   # 1. keys and namespaces
     keyed_la = attach_registry_to_tree(keyed_la, registry)     # 2. share the registry
