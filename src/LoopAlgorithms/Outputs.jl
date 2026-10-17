@@ -37,7 +37,7 @@ function _join_slots(slots::Vector{Pair{Symbol, Any}}, written)
 end
 
 """The named tuple type of slots `name => type`: each an unset-able `Maybe` of its type."""
-_slots_type(slots) = NamedTuple{Tuple(first.(slots)), Tuple{(maybe_type(last(p), UndefInitializer) for p in slots)...}}
+_slots_type(slots) = NamedTuple{Tuple(first.(slots)), Tuple{(make_maybe_type(last(p), UndefInitializer) for p in slots)...}}
 _owner_slots_type(owners) = NamedTuple{Tuple(first.(owners)), Tuple{last.(owners)...}}
 
 """
@@ -81,6 +81,15 @@ An algorithm (or call) in a plan is stepped with a `LoopContext`; inference says
 returns, and so what it writes into the runtime context: its returns, and values for declared locals without a value.
 =#
 
+"""The runtime context types a step can return (`RT` is a `LoopContext` type or a union of those), or `nothing` if inference could not tell."""
+function _inferred_contexts(RT)
+    loopcontexts = RT === Union{} ? () : Base.uniontypes(RT)
+    all(T -> T isa DataType && T <: LoopContext, loopcontexts) || return nothing
+    returned = unique(Iterators.flatten(Base.uniontypes(runtime_type(T)) for T in loopcontexts))
+    all(C -> C isa DataType && C <: ProcessContext, returned) || return nothing
+    return returned
+end
+
 """
 The runtime context type after one step, given the type `RuntimeContextType` before it and `stepped`, what inference
 says one step returns (`LoopContext` types): declared locals without a value get the types written to them (Locals.jl),
@@ -89,7 +98,7 @@ and every return gets a slot for the types written to it. `Nothing` when inferen
 @generated function _runtime_context_type_with_step_writes(::Type{RuntimeContextType}, ::Type{Stepped}) where {RuntimeContextType<:ProcessContext, Stepped}
     returned = _inferred_contexts(Stepped)
     returned === nothing && return :(Nothing)
-    return _with_output_slots(_probe_joined_type(RuntimeContextType, returned), returned)
+    return _with_output_slots(_widen_probes(RuntimeContextType, returned), returned)
 end
 
 """
@@ -147,6 +156,10 @@ slot, every declared local without a value the type written to it. `Nothing` whe
 Base.@assume_effects :foldable _returned_loopcontexts(@nospecialize(PersistentContextType), @nospecialize(RuntimeContextType), @nospecialize(WiringViewType)) =
     all(T -> T isa DataType && T <: ProcessContext, Base.uniontypes(RuntimeContextType)) ? _loop_context_type(PersistentContextType, RuntimeContextType, WiringViewType) : Any
 
+"""The plan's step as inference sees it for typing: `_step!` without a namespace. Only inferred, never run."""
+@inline _probe_step(plan, cursor, lc, wiring, process, lifetime) =
+    _step!(plan, cursor, lc, wiring, Namespace{nothing}(), process, lifetime)
+
 """
 The runtime context type after one step from `RuntimeContextType`, inferring the plan's step as a whole (see
 `_runtime_context_type_with_step_writes`). Used once every return has a slot.
@@ -155,7 +168,7 @@ The runtime context type after one step from `RuntimeContextType`, inferring the
     _runtime_context_type_with_step_writes(RuntimeContextType, Core.Compiler.return_type(_probe_step, Tuple{PlanType, CursorType, LoopContext{PersistentContextType, RuntimeContextType, wiring_parent(WiringViewType)}, WiringViewType, ProcessType, LifetimeType}))
 
 """Whether the declared locals of two runtime context types have the same types."""
-_same_locals(::Type{A}, ::Type{B}) where {A, B} = _local_data_type(A) === _local_data_type(B)
+_same_locals(::Type{A}, ::Type{B}) where {A, B} = _get_locals_type(A) === _get_locals_type(B)
 _same_locals(::Type{A}, ::Type{Nothing}) where {A} = false
 
 """
@@ -194,19 +207,19 @@ what is written to it. Returns a value; all of it is worked out while the run is
 """
 @inline function _runtime_context_typed_before_loop(plan, cursor, persistent_context, runtime_context::RuntimeContextType, wiring, process, lifetime) where {RuntimeContextType<:ProcessContext}
     step = (plan, cursor, persistent_context, wiring, process, lifetime)
-    has_locals_without_value = _has_untyped_locals(RuntimeContextType)
-    no_writes_seen = _probe_runtime_type(RuntimeContextType)
+    has_untyped_locals = _has_untyped_locals(RuntimeContextType)
+    no_writes_seen = _insert_probes(RuntimeContextType)
     first_round = _runtime_context_type_after_first_step(no_writes_seen, step...)
     if first_round === Nothing
-        has_locals_without_value && _local_type_error(no_writes_seen, false, step...)
+        has_untyped_locals && _throw_local_type_error(no_writes_seen, false, step...)
         return runtime_context
     end
     second_round = _runtime_context_type_after_whole_step(first_round, step...)
-    has_locals_without_value && !_same_locals(first_round, second_round) && _local_type_error(first_round, true, step...)
+    has_untyped_locals && !_same_locals(first_round, second_round) && _throw_local_type_error(first_round, true, step...)
     settled = second_round === first_round ? first_round :
         second_round === Nothing ? Nothing :
         _runtime_context_type_after_whole_step(second_round, step...) === second_round ? second_round : Nothing
-    settled === Nothing && return has_locals_without_value ? (@inline _runtime_context_with_types(runtime_context, _without_returns(first_round))) : runtime_context
+    settled === Nothing && return has_untyped_locals ? (@inline _runtime_context_with_types(runtime_context, _without_returns(first_round))) : runtime_context
     return @inline _runtime_context_with_types(runtime_context, settled)
 end
 
@@ -225,7 +238,7 @@ _empty_slots_expr(::Type{T}) where {T<:NamedTuple} =
 @inline @generated function _runtime_context_with_types(runtime_context::RuntimeContextType, ::Type{TypedRuntimeContextType}) where {RuntimeContextType<:ProcessContext, TypedRuntimeContextType<:ProcessContext}
     exprs = Any[:(typed = runtime_context)]
     if _has_untyped_locals(RuntimeContextType)
-        push!(exprs, :(typed = @inline with_subcontext(typed, Val(:_declared_locals), SubContext{:_declared_locals}(_settled_locals(get_declared_locals(typed), $TypedRuntimeContextType)))))
+        push!(exprs, :(typed = @inline with_subcontext(typed, Val(:_declared_locals), SubContext{:_declared_locals}(_settle_locals(get_declared_locals(typed), $TypedRuntimeContextType)))))
     end
     subcontexts = fieldtype(TypedRuntimeContextType, :subcontexts)
     for part in (:_captured_returns, :_subcontext_returns)

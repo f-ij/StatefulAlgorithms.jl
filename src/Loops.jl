@@ -58,7 +58,7 @@ end
 @inline _loop_persistent_context(start_persistent_context::C, ::Resuming{true}) where {C<:ProcessContext} = @inline _paused_state_context(start_persistent_context)
 
 @inline function _loop_runtime_context(algo::F, inputs::NamedTuple, process::P, lifetime::LT, start_persistent_context::C, ::Resuming{false}) where {F,P<:AbstractProcess,LT<:Lifetime,C<:ProcessContext}
-    return @inline _initial_runtime_context(inputs, declared_locals(algo))
+    return @inline _initial_runtime_context(inputs, collect_tree_locals(algo))
 end
 
 @inline function _loop_runtime_context(algo::F, inputs::NamedTuple, process::P, lifetime::LT, start_persistent_context::C, ::Resuming{true}) where {F,P<:AbstractProcess,LT<:Lifetime,C<:ProcessContext}
