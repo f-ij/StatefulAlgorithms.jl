@@ -47,6 +47,17 @@ Set value of run of a process, denoting wether it should run or not
 """
 shouldrun(p::Process, val) = @atomic p.shouldrun = val
 
+"""
+    _process_breakcondition(lifetime, process, context) -> Bool
+
+Whether the process stops (`breakcondition` of its lifetime: for `Repeat`, a pause or close, `!shouldrun(process)`), as
+checked inside a routine: after every repeat of a child. Repeats can run for a very long time, so a pause or close of a
+`Process` must be seen between any two of them, not once per child. See `shouldrun(::Process)`. The child's own stop
+condition is `_routine_breakcondition`.
+"""
+@inline _process_breakcondition(lifetime::LT, process::P, context::C) where {LT<:Lifetime,P<:AbstractProcess,C} =
+    @inline breakcondition(lifetime, process, context)
+
 # Loop counting
 @inline looptick!(p::Process) = (p.tickidx = p.tickidx + UInt(1))
 @inline tick!(p::Process) = (p.tickidx = p.tickidx + UInt(1))
