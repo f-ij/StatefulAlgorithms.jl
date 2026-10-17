@@ -191,7 +191,7 @@ runtime context after the last one. The steps run in a loop compiled for the run
 returns another type (a local declared without a type gets its first value, Locals.jl), the remaining steps continue in
 a call compiled for that type, so the loop stays type-stable.
 """
-function _repeat_steps(i::IndexType, carried::CarriedType, runtime_context::RuntimeContextType, step_plan::PlanType, step_cursor::CursorType, persistent_context::PersistentContextType, step_wiring::WiringViewType, process::ProcessType, lifetime::LifetimeType) where {IndexType<:Integer, CarriedType, RuntimeContextType, PlanType, CursorType, PersistentContextType, WiringViewType, ProcessType, LifetimeType}
+@inline function _repeat_steps(i::IndexType, carried::CarriedType, runtime_context::RuntimeContextType, step_plan::PlanType, step_cursor::CursorType, persistent_context::PersistentContextType, step_wiring::WiringViewType, process::ProcessType, lifetime::LifetimeType) where {IndexType<:Integer, CarriedType, RuntimeContextType, PlanType, CursorType, PersistentContextType, WiringViewType, ProcessType, LifetimeType}
     for j in i:(@inline repeats(lifetime))
         # Before the step: the lifetime's own stop condition (`Until`, ...), with the steps done; as a `while` loop's
         # condition, the same as for a routine child's repeats. It may read declared locals, so it sees both contexts.
@@ -218,7 +218,7 @@ end
 Run steps until the process's stop check holds and return the carried fields and the runtime context after the
 last one; a runtime context of another type continues in a call compiled for that type, as in `_repeat_steps`.
 """
-function _run_steps(carried::CarriedType, runtime_context::RuntimeContextType, step_plan::PlanType, step_cursor::CursorType, persistent_context::PersistentContextType, step_wiring::WiringViewType, process::ProcessType, lifetime::LifetimeType) where {CarriedType, RuntimeContextType, PlanType, CursorType, PersistentContextType, WiringViewType, ProcessType, LifetimeType}
+@inline function _run_steps(carried::CarriedType, runtime_context::RuntimeContextType, step_plan::PlanType, step_cursor::CursorType, persistent_context::PersistentContextType, step_wiring::WiringViewType, process::ProcessType, lifetime::LifetimeType) where {CarriedType, RuntimeContextType, PlanType, CursorType, PersistentContextType, WiringViewType, ProcessType, LifetimeType}
     while true
         # Before the step: the lifetime's own stop condition (`Until`, ...), with the steps done; as a `while` loop's
         # condition, the same as for a routine child's repeats. It may read declared locals, so it sees both contexts.

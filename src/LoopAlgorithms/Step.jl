@@ -272,11 +272,19 @@ end
 
 """
 Keep the code after it on its own branch: an empty `asm sideeffect` emits no instructions, but LLVM may not compute what
-follows it before the condition is known. Without it, LLVM turns a scheduled block (`@every`, `@interval`) into a
+follows it before the condition is known. It is marked as touching only memory no Julia object lives in
+(`inaccessiblemem`), so values held in memory (a process's counters, a cursor) need not be reloaded after it. Without it, LLVM turns a scheduled block (`@every`, `@interval`) into a
 `select` computed every step, which puts the schedule check on the dependency chain of the values the block writes; a
 schedule is regular, so the branch is predicted and the block costs only on its steps.
 """
-@inline _keep_branch() = Base.llvmcall("call void asm sideeffect \"\", \"\"()\nret void", Cvoid, Tuple{})
+@inline _keep_branch() = Base.llvmcall(("""
+    define void @entry() #0 {
+        call void asm sideeffect "", ""() #1
+        ret void
+    }
+    attributes #0 = { alwaysinline }
+    attributes #1 = { nounwind memory(inaccessiblemem: readwrite) }
+    """, "entry"), Cvoid, Tuple{})
 
 """
     _conditional_step(run, children, cursors, lc, wirings, namespaces, process, lifetime)
