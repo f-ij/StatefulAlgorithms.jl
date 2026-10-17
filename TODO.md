@@ -305,3 +305,8 @@ Restored 2026-10-09 from `fix/type-stability` (`e1dcbbf`, now tag `archive/type-
   2. `_merge_slots` is still called for returns (`Context/RuntimeContext.jl:45,61`), where no field is a `Maybe` any more, so there it does what `merge` does. Use `merge` for returns; keep the `Maybe`-aware merge only for declared locals, under a name that says what it does.
   3. The file name: "output" is the wrong word (these are returns), and most of the file is typing declared locals before the loop. Rename the file (or move the declared-local typing next to `Locals/Locals.jl`).
   4. Docstrings: say first what each function returns, then why.
+
+## Cleanup: names in `src/LoopAlgorithms/ProcessAlgorithmStep.jl`
+- [ ] Rename two functions whose names say no verb (noted 2026-10-17; present since `16c8d25`, on every branch of this stack):
+  1. `_writes_payload` → `_build_writes_payload`: returns `(;)` when the step wrote nothing, otherwise the `_build_merge_payload` of the writes.
+  2. `_step_payload` → `_build_step_payload`: returns what one leaf step writes into the persistent context.
