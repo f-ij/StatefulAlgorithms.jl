@@ -219,7 +219,7 @@ function _resolve_plan_wiring_tree(la::LA, registry::NameSpaceRegistry, inherite
         # Concrete children receive a single resolved `Wiring`: inherited global
         # wiring for their namespace, occluded by child-scoped routes.
         target_global = get(combined_global, target, Wiring())
-        target_child = _resolve_child_wiring_bucket(registry, bucket, target)
+        target_child = get(_resolve_wiring_grouped(registry, bucket), target, Wiring())
         resolved = merge_wiring(target_global, target_child)
         return resolved
     end
@@ -351,10 +351,4 @@ end
 function _merge_global_wiring(left::NamedTuple, right::NamedTuple)
     merged = _append_merged_global_keys((;), propertynames(left), left, right)
     return _append_merged_global_keys(merged, propertynames(right), left, right)
-end
-
-"""Resolve a child wiring bucket for one concrete target namespace."""
-function _resolve_child_wiring_bucket(registry::NameSpaceRegistry, bucket::Wiring, target::Symbol)
-    grouped = _resolve_wiring_grouped(registry, bucket)
-    return get(grouped, target, Wiring())
 end
