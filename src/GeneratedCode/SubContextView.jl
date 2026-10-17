@@ -154,11 +154,11 @@ end
 end
 
 """
-    _merge_payload(scv, args, demand)
+    _build_merge_payload(scv, args, demand)
 
 What `merge(scv, args, demand)` writes into the persistent context, as `(; subcontext = (; field = value, ...), ...)`.
 """
-@inline @generated function _merge_payload(scv::SubContextView{B, SubKey}, args::NamedTuple, demand::ReturnDemand{Names}) where {B<:ContextBundle, SubKey, Names}
+@inline @generated function _build_merge_payload(scv::SubContextView{B, SubKey}, args::NamedTuple, demand::ReturnDemand{Names}) where {B<:ContextBundle, SubKey, Names}
     mergetuple_expr, _ = _subcontext_view_merge_exprs(scv, args, Names)
     return mergetuple_expr
 end
@@ -173,7 +173,7 @@ outputs) into the runtime context. Returns the new bundle.
     # Return the expression that does the merge
     return quote
         $(LineNumberNode(@__LINE__, @__FILE__))
-        mergetuple = @inline _merge_payload(scv, args, demand)
+        mergetuple = @inline _build_merge_payload(scv, args, demand)
         newcontext = merge_into_subcontexts(getpersistent(scv), mergetuple)
         @assert typeof(newcontext) == typeof(getpersistent(scv)) "A variable type in a subcontext was changed. This is prohibited for performance reasons.\nIf type mutation is needed, set the variable up as a Ref\n$(sprint(show, ContextTypeDiff(getpersistent(scv), newcontext)))"
         runtimetuple = $runtimetuple_expr
