@@ -80,6 +80,7 @@ module StatefulAlgorithms
     # include("ProcessAlgorithms.jl")
 
     include("LoopAlgorithms/LoopAlgorithms.jl")
+    include("CompositeDSL/CompositeDSL.jl")
     include("Legacy/Legacy.jl")   # deprecated macros, removed in a later version
     include("ContextAnalyzer/ContextAnalyzer.jl")
     include("Inspection/Inspection.jl")
