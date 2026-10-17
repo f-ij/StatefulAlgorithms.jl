@@ -196,7 +196,7 @@ with `nested` a plan, and `x = @repeat n begin … end` are errors (see [Errors]
 - **The updates.** A `@StepAlgorithm` writes back exactly what its body marks with `@update x` (`updated_names` lists
   them): `x`'s value at the `return` goes to where the algorithm read `x` from, its own `@managed` state or the
   variable of the block passed as `x` (through the wire of that argument, or a share). A hand-written `step!` returns
-  `StepResult(value, StateUpdates(; x))` for the same, or a plain named tuple, which keeps the older meaning: every
+  `StepReturn(value, StateUpdates(; x))` for the same, or a plain named tuple, which keeps the older meaning: every
   returned name is written back, and the named tuple is also its value.
 - **Where an update goes.** Through the wire the name was read through, else to the algorithm's own state field of
   that name, else it is one of the algorithm's own outputs. An algorithm reads and writes the block's values (state of

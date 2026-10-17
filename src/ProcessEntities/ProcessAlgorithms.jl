@@ -336,13 +336,13 @@ function _pa_update_target(arg, names::Vector{Symbol})
     error("`@update` updates an argument by name: `@update x`, `@update x = v`, `@update x, y`. Got `$arg`.")
 end
 
-"""The body with every `return v` written as `return StepResult(v, updates)` (`updates_expr` builds the updates)."""
+"""The body with every `return v` written as `return StepReturn(v, updates)` (`updates_expr` builds the updates)."""
 function _pa_wrap_returns(ex, updates_expr)
     ex isa Expr || return ex
     _pa_is_opaque(ex) && return ex
     if ex.head == :return
         value = isempty(ex.args) ? nothing : ex.args[1]
-        return Expr(:return, :(StatefulAlgorithms.StepResult($value, $updates_expr)))
+        return Expr(:return, :(StatefulAlgorithms.StepReturn($value, $updates_expr)))
     end
     return Expr(ex.head, (_pa_wrap_returns(a, updates_expr) for a in ex.args)...)
 end
@@ -365,7 +365,7 @@ end
 
 """
 A `@StepAlgorithm` body as a step: its `@update`s lowered, and every return (a `return`, or the value of its last
-expression) a `StepResult` of the returned value and the updated names. Returns the body and the updated names.
+expression) a `StepReturn` of the returned value and the updated names. Returns the body and the updated names.
 """
 function _pa_step_body(body, fname, signature)
     names = Symbol[]
@@ -379,7 +379,7 @@ function _pa_step_body(body, fname, signature)
     isempty(stale) || @warn "`$fname` returns $(join(("`$n`" for n in stale), ", ")), which is also an argument. A return is a value: it no longer writes `$(first(stale))` back. Write `@update $(first(stale))` to update it."
     updates_expr = :(StatefulAlgorithms.StateUpdates($(Expr(:tuple, Expr(:parameters, names...)))))
     wrapped = _pa_wrap_returns(lowered, updates_expr)
-    return Expr(:return, :(StatefulAlgorithms.StepResult($(Expr(:block, wrapped)), $updates_expr))), Tuple(names)
+    return Expr(:return, :(StatefulAlgorithms.StepReturn($(Expr(:block, wrapped)), $updates_expr))), Tuple(names)
 end
 
 """
@@ -428,7 +428,7 @@ The body is a Julia function body: `return v` (or its last expression) is the st
 captures with `y = Name(...)`. Assigning an argument only changes the body's local copy. `@update x` (or
 `@update x = v`, `@update x += v`, `@update x, y`) writes `x`'s value at the `return` back to where the algorithm read
 it: its `@managed` state, or the variable of the block passed as `x`. A body ending in `@update` returns `nothing`.
-In a plan the generated `step!(algo, context)` returns a `StepResult` of the value and the updates;
+In a plan the generated `step!(algo, context)` returns a `StepReturn` of the value and the updates;
 `updated_names(Name)` lists the updated names.
 
 # Positional parsing rules
@@ -658,7 +658,7 @@ function _step_algorithm_macro(ex; legacy::Bool = false)
     impl_signature = _pa_rewrap_where(impl_signature, signature.where_params)
 
     config_assignments = _pa_bind_config_fields(config_fields, :_algo)
-    # A step returns a `StepResult`: its return value and its `@update`s (a legacy step returns what its body returns).
+    # A step returns a `StepReturn`: its return value and its `@update`s (a legacy step returns what its body returns).
     if legacy
         _pa_lower_updates(body, Symbol[]) == body || error("`@update` is not available in `@StepAlgorithm_legacy`; use `@StepAlgorithm`.")
         updated = ()

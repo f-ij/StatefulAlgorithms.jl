@@ -76,12 +76,12 @@ end
 
 A hand-written `step!` that returns a named tuple writes each name back where it lives: `x` above is the
 algorithm's state, so returning it updates it. To return a value and write back separately, return a
-`StepResult`:
+`StepReturn`:
 
 ```julia
 function StatefulAlgorithms.step!(a::MyAlgo, context)
     x = context.x + a.gain
-    return StepResult(2x, StateUpdates(; x))   # the value 2x; x is written back
+    return StepReturn(2x, StateUpdates(; x))   # the value 2x; x is written back
 end
 StatefulAlgorithms.updated_names(::Type{MyAlgo}) = (:x,)   # the names in `StateUpdates`
 ```

@@ -55,7 +55,7 @@ end
 
     # In a plan, a step returns its value and its updates.
     stepped = StatefulAlgorithms.step!(CaptureInput(), (; a = 2, b = prepared.b, c = prepared.c))
-    @test stepped isa StepResult
+    @test stepped isa StepReturn
     @test StatefulAlgorithms.step_updates(stepped) == (; b = 5, c = 14)
     @test StatefulAlgorithms.step_value(stepped) == 21
     @test updated_names(CaptureInput) == (:b, :c)
