@@ -177,3 +177,20 @@ end
         (; b = (; z = 3)),
     )
 end
+
+cc_bump(n) = n + 1
+
+@testset "The typed resolve is inferred" begin
+    bump(from, to) = StatefulAlgorithms.Callable(cc_bump, (from,), to)
+    plans = (
+        CompositeAlgorithm(Fib(), Luc, (1, 2)),
+        CompositeAlgorithm(FinalCounter, bump(:n, :n), (1, 1), Declaration(n = 0)),
+        StatefulAlgorithms.Routine(Fib, Fib(), CompositeAlgorithm(Fib(), Fib, Luc, (1, 1, 2)), (10, 20, 30)),
+        CompositeAlgorithm(CompositeAlgorithm(bump(:n, :m), (1,), Declaration(m = 0)),
+                           CompositeAlgorithm(bump(:n, :k), bump(:k, :n), (1, 1)), (1, 1), Declaration(n = 0)),
+        finalstep(CompositeAlgorithm(FinalCounter, (1,)), context -> context[FinalCounter].count),
+    )
+    for plan in plans
+        @test StatefulAlgorithms.isresolved(@inferred StatefulAlgorithms._resolve_typed(plan))
+    end
+end

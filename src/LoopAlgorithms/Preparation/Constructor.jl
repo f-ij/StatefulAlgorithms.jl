@@ -32,14 +32,14 @@ Base.@nospecializeinfer function resolve(@nospecialize(la::LoopSpec))
     return _resolve_by_trait(_unique_handles_trait(la), la)
 end
 
+# Inferred: returns the concrete resolved type of `la`, which a caller that knows the plan type gets at compile time.
+# One method per case: a method that calls itself with a growing type (plan -> `LoopAlgorithm{plan}`) is not inferred.
 # `keep_root_returns`: the plan has a final step, which reads every return of the root's calls (see `_resolve_scopes`).
-@inline function _resolve_typed(la::LA, keep_root_returns::Bool = false) where {LA<:LoopSpec}
-    if la isa FinalizedAlgorithm
-        return finalstep(_resolve_typed(inneralgorithm(la), true), finalfunction(la))
-    end
-    if !(la isa LoopAlgorithm)
-        return _resolve_typed(LoopAlgorithm(la), keep_root_returns)
-    end
+@inline _resolve_typed(fa::FA, ::Val{K} = Val(false)) where {FA<:FinalizedAlgorithm, K} =
+    finalstep(_resolve_typed(inneralgorithm(fa), Val(true)), finalfunction(fa))
+@inline _resolve_typed(la::LA, keep_root_returns::Val{K} = Val(false)) where {LA<:LoopSpec, K} =
+    _resolve_typed(LoopAlgorithm(la), keep_root_returns)
+@inline function _resolve_typed(la::LA, keep_root_returns::Val{K} = Val(false)) where {LA<:LoopAlgorithm, K}
     if isresolved(la)
         return la
     end
@@ -176,8 +176,8 @@ end
 # Only `LoopAlgorithm` roots (and finalized ones) have plan wiring to resolve.
 @inline resolve_plan_wiring(la, ::NameSpaceRegistry) = la
 
-@inline function resolve_plan_wiring(la::LoopAlgorithm, registry::NameSpaceRegistry, keep_root_returns::Bool = false)
-    return setfield(la, :plan, _resolve_scopes(_resolve_plan_wiring_tree(getplan(la), registry, (;)), NoScope, "", keep_root_returns))
+@inline function resolve_plan_wiring(la::LoopAlgorithm, registry::NameSpaceRegistry, keep_root_returns::Val{K} = Val(false)) where {K}
+    return setfield(la, :plan, _resolve_scopes(_resolve_plan_wiring_tree(getplan(la), registry, (;)), NoScope, Val(()), keep_root_returns))
 end
 
 """
@@ -195,13 +195,7 @@ function _resolve_plan_wiring_tree(la::LA, registry::NameSpaceRegistry, inherite
 
     # Resolve nested plans first. Their own `PlanWiring` then becomes the
     # child-indexed value passed to that child during parent stepping.
-    funcs = ntuple(Val(length(getalgos(la)))) do i   # unrolled: every child keeps its concrete type
-        child = getalgo(la, i)
-        if child isa LoopSpec
-            return _resolve_plan_wiring_tree(child, registry, combined_global)
-        end
-        return child
-    end
+    funcs = _resolve_child_plans(getalgos(la), registry, combined_global)
     # A new name, not `la = ...`: `la` is captured by the closure above, and a captured variable that is reassigned
     # is boxed (`Core.Box`), which makes every use of it uninferable.
     rebuilt = rebuild_loopalgorithm_funcs(la, funcs)
@@ -227,61 +221,93 @@ function _resolve_plan_wiring_tree(la::LA, registry::NameSpaceRegistry, inherite
     return setfield(rebuilt, :wiring, PlanWiring(combined_global, resolved_children, own_locals))
 end
 
-"""
-    _resolve_scopes(plan, Outer, path, keep_returns = false)
+# The children with the wiring of every nested plan resolved, the others as they are. Tuple recursion, not a closure in
+# `ntuple`: a recursive call to `_resolve_plan_wiring_tree` from inside that closure is not inferred.
+@inline _resolve_child_plans(::Tuple{}, registry::R, inherited_global::G) where {R<:NameSpaceRegistry, G<:NamedTuple} = ()
+@inline _resolve_child_plans(children::C, registry::R, inherited_global::G) where {C<:Tuple, R<:NameSpaceRegistry, G<:NamedTuple} =
+    (_resolve_child_plan(first(children), registry, inherited_global), _resolve_child_plans(Base.tail(children), registry, inherited_global)...)
+@inline _resolve_child_plan(child::C, registry::R, inherited_global::G) where {C<:LoopSpec, R<:NameSpaceRegistry, G<:NamedTuple} =
+    _resolve_plan_wiring_tree(child, registry, inherited_global)
+@inline _resolve_child_plan(child::C, ::R, ::G) where {C, R<:NameSpaceRegistry, G<:NamedTuple} = child
 
-`plan` (with resolved wiring) with the scope of every node set (see `Scope`), and every route that reads a declared
-local or a captured return pointed at its slot. `Outer` is the scope the node is in, `path` its position (`"2.1"`).
-
-A node's scope is `Outer` with the node's own declared locals, and the returns of the calls directly in it that are
-read somewhere in the node (all of them with `keep_returns`: the root of a plan with a final step, which reads them). An assignment to a name that is already visible writes that slot: a call in an inner node
-that assigns a local or a return of an enclosing node updates it, as an assignment in a Julia loop body updates a
-variable of the enclosing function.
 """
-function _resolve_scopes(la::LA, ::Type{Outer}, path::String, keep_returns::Bool = false) where {LA<:AbstractPlan, Outer<:Scope}
-    wiring = getwiring(la)
-    own_locals = getfield(wiring, :locals)
-    locals = _scoped_names(scope_locals(Outer), keys(own_locals), path)
-    read = _return_reads(la)
-    captured = Tuple(unique(Symbol[n for f in getalgos(la) for n in callable_return_names(typeof(f))
+The scope of a plan node of type `LA` and the slots entering it makes unset, `(Sc, (; returns, owners))` (see
+`_resolve_scopes`, `PlanWiring`). `Outer` is the scope the node is in, `path` its position as child indices.
+"""
+function _node_scope(::Type{LA}, ::Type{Outer}, path::Tuple, keep_returns::Bool) where {LA<:AbstractPlan, Outer<:Scope}
+    at = join(path, ".")
+    F = fieldtype(LA, :funcs)
+    NS = fieldtype(LA, :namespaces)
+    locals = _scoped_names(scope_locals(Outer), fieldnames(fieldtype(fieldtype(LA, :wiring), :locals)), at)
+    read = _return_reads(LA)
+    captured = Tuple(unique(Symbol[n for i in 1:fieldcount(F) for n in callable_return_names(fieldtype(F, i))
                                    if (keep_returns || n in read) && !haskey(locals, n) && !haskey(scope_returns(Outer), n)]))
-    Sc = Scope{locals, _scoped_names(scope_returns(Outer), captured, path)}
-
-    funcs = ntuple(Val(length(getalgos(la)))) do i   # unrolled: every child keeps its concrete type
-        child = getalgo(la, i)
-        child isa LoopSpec ? _resolve_scopes(child, Sc, isempty(path) ? string(i) : string(path, ".", i)) : child
-    end
-    rebuilt = rebuild_loopalgorithm_funcs(la, funcs)
-    children = ntuple(Val(length(funcs))) do i
-        funcs[i] isa LoopSpec ? getwiring(funcs[i]) : _scope_routes_to_storage(getfield(child_wiring(wiring), i), Sc)
-    end
-    owners = Tuple(unique(Symbol[plan_child_namespace(rebuilt, i) for i in 1:length(funcs)
-                                 if !(funcs[i] isa LoopSpec) && context_partition(Val(plan_child_namespace(rebuilt, i))) isa NamespacePartition]))
-    resets = (; returns = map(name -> make_storage_name(name, path), captured), owners)
-    return setfield(rebuilt, :wiring, PlanWiring(global_wiring(wiring), children, own_locals, Sc, Val(resets)))
+    Sc = Scope{locals, _scoped_names(scope_returns(Outer), captured, at)}
+    owners = Tuple(unique(Symbol[namesymbol(fieldtype(NS, i)) for i in 1:fieldcount(F)
+                                 if !(fieldtype(F, i) <: LoopSpec) && context_partition(Val(namesymbol(fieldtype(NS, i)))) isa NamespacePartition]))
+    return Sc, (; returns = map(name -> make_storage_name(name, at), captured), owners)
 end
+
+"""
+Make the name of the slot of a declared local (in `_declared_locals`) or a captured return (in `_captured_returns`).
+One of the root plan keeps its name; one of a nested plan is suffixed with that plan's position, `x@1.2` (see `Scope`).
+`path` is the plan's position, e.g. "1.2". Defined before `_resolve_scopes`, whose generator calls it.
+"""
+make_storage_name(name::Symbol, path::String) = isempty(path) ? name : Symbol(name, "@", path)
 
 """`inherited` (`(; name = storage_name, ...)`) with `names`, declared in the plan at `path`, added or hiding the inherited ones."""
 _scoped_names(inherited::NamedTuple, names::Tuple, path::String) =
     merge(inherited, NamedTuple{names}(map(name -> make_storage_name(name, path), names)))
 
-"""Every name read from the captured returns in a plan tree: by the calls in it, and by its routes from `_captured_returns`."""
-function _return_reads(la::AbstractPlan)
+"""Every name read from the captured returns in a plan tree (type): by the calls in it, and by its routes from `_captured_returns`."""
+function _return_reads(::Type{LA}) where {LA<:AbstractPlan}
     names = ()
-    for (i, f) in enumerate(getalgos(la))
-        if f isa LoopSpec
-            names = _append_route_demand_names(names, _return_reads(f))
+    F = fieldtype(LA, :funcs)
+    Children = fieldtype(fieldtype(LA, :wiring), :child_wiring)
+    for i in 1:fieldcount(F)
+        if fieldtype(F, i) <: LoopSpec
+            names = _append_route_demand_names(names, _return_reads(fieldtype(F, i)))
             continue
         end
-        names = _append_route_demand_names(names, callable_input_names(typeof(f)))
-        for r in routes(getfield(child_wiring(getwiring(la)), i))
-            names = _append_route_demand_names(names, _returns_read_by(r))
+        names = _append_route_demand_names(names, callable_input_names(fieldtype(F, i)))
+        for R in _route_types_from_wiring_type(fieldtype(Children, i))
+            names = _append_route_demand_names(names, _returns_read_by(R))
         end
     end
     return names
 end
-_returns_read_by(::Route) = ()
-_returns_read_by(r::Route{:_captured_returns}) = getvarnames(r)
+_returns_read_by(::Type{<:Route}) = ()
+_returns_read_by(R::Type{<:Route{:_captured_returns}}) = getvarnames(R)
+
+"""
+    _resolve_scopes(plan, Outer, Val(path), Val(keep_returns))
+
+`plan` (with resolved wiring) with the scope of every node set (see `Scope`), and every route that reads a declared
+local or a captured return pointed at its slot. `Outer` is the scope the node is in, `path` its position as child
+indices (`(2, 1)`, `()` for the root).
+
+A node's scope is `Outer` with the node's own declared locals, and the returns of the calls directly in it that are
+read somewhere in the node (all of them with `keep_returns`: the root of a plan with a final step, which reads them). An assignment to a name that is already visible writes that slot: a call in an inner node
+that assigns a local or a return of an enclosing node updates it, as an assignment in a Julia loop body updates a
+variable of the enclosing function.
+
+Generated: the scope goes into the plan's type, so it is computed from the types (`_node_scope`) and the result is inferred.
+"""
+@generated function _resolve_scopes(la::LA, ::Type{Outer}, ::Val{Path}, ::Val{KeepReturns}) where {LA<:AbstractPlan, Outer<:Scope, Path, KeepReturns}
+    Sc, resets = _node_scope(LA, Outer, Path, KeepReturns)
+    F = fieldtype(LA, :funcs)
+    funcs = [fieldtype(F, i) <: LoopSpec ? :(_resolve_scopes(getalgo(la, $i), $Sc, $(Val((Path..., i))), Val(false))) : :(getalgo(la, $i))
+             for i in 1:fieldcount(F)]
+    children = [fieldtype(F, i) <: LoopSpec ? :(getwiring(getfield(funcs, $i))) : :(_scope_routes_to_storage(getfield(child_wiring(wiring), $i), $Sc))
+                for i in 1:fieldcount(F)]
+    return quote
+        wiring = getwiring(la)
+        funcs = ($(funcs...),)
+        rebuilt = rebuild_loopalgorithm_funcs(la, funcs)
+        children = ($(children...),)
+        return setfield(rebuilt, :wiring, PlanWiring(global_wiring(wiring), children, getfield(wiring, :locals), $Sc, $(Val(resets))))
+    end
+end
 
 """
 The wiring with every route that reads a declared local or a captured return (`Route(:_declared_locals => ..., :y => :x)`)
@@ -305,7 +331,7 @@ end
 # A finalized algorithm: resolve the loop inside, keep the final step.
 @inline function resolve_plan_wiring(fa::FA, registry::NameSpaceRegistry) where {FA<:FinalizedAlgorithm}
     # The final step reads the root scope after the last step: every return of the root's calls.
-    return finalstep(resolve_plan_wiring(inneralgorithm(fa), registry, true), finalfunction(fa))
+    return finalstep(resolve_plan_wiring(inneralgorithm(fa), registry, Val(true)), finalfunction(fa))
 end
 
 #=
