@@ -1,13 +1,13 @@
 #=
 What a step returns. A step has a return value, as a Julia function has, and separately the values it writes back
 (`StateUpdates`): an algorithm's state, or the variable of the block that was passed to it. `@StepAlgorithm` builds a
-`StepResult` from `return` and `@update`; a hand-written `step!` (deprecated: define algorithms with `@StepAlgorithm`)
+`StepReturn` from `return` and `@update`; a hand-written `step!` (deprecated: define algorithms with `@StepAlgorithm`)
 may return one too.
 
 A hand-written `step!` that returns a plain named tuple keeps the older meaning: every name is written back where it
 lives (its state, or the wire it was read through), and the named tuple is also its return value.
 =#
-export StepResult, StateUpdates, updated_names
+export StepReturn, StateUpdates, updated_names
 
 """
     StateUpdates(values::NamedTuple)
@@ -22,16 +22,16 @@ end
 StateUpdates(; values...) = StateUpdates(NamedTuple(values))
 
 """
-    StepResult(value, updates::StateUpdates)
+    StepReturn(value, updates::StateUpdates)
 
 What one step returns: its return `value` (what `y = Algo()` captures at the call site) and the `updates` it writes
 back (see [`StateUpdates`](@ref)).
 """
-struct StepResult{V, U<:StateUpdates}
+struct StepReturn{V, U<:StateUpdates}
     value::V
     updates::U
 end
-StepResult(value) = StepResult(value, StateUpdates((;)))
+StepReturn(value) = StepReturn(value, StateUpdates((;)))
 
 """
     updated_names(algo or its type)
@@ -43,7 +43,7 @@ arguments changes, so it warns unless the value is state or declared `@mutable`,
 a `@transform` passed there is an error.
 
 `@StepAlgorithm` defines it from the body's `@update`s. A hand-written `step!` (deprecated) that returns
-`StepResult(value, StateUpdates(; x))` defines it with the same names, so these checks apply to it too:
+`StepReturn(value, StateUpdates(; x))` defines it with the same names, so these checks apply to it too:
 
 ```julia
 StatefulAlgorithms.updated_names(::Type{MyAlgo}) = (:x,)
@@ -55,15 +55,15 @@ Without a method it is `()`: the step still writes back what it returns, but bui
 updated_names(::Type) = ()
 updated_names(algo) = updated_names(typeof(algo))
 
-"""The return value of what a step returned: a `StepResult`'s value, else the returned value itself."""
-@inline step_value(result::StepResult) = getfield(result, :value)
+"""The return value of what a step returned: a `StepReturn`'s value, else the returned value itself."""
+@inline step_value(result::StepReturn) = getfield(result, :value)
 @inline step_value(result) = result
 
 """
-What a step writes back, as a named tuple: a `StepResult`'s updates; a plain named tuple (the older meaning: every
+What a step writes back, as a named tuple: a `StepReturn`'s updates; a plain named tuple (the older meaning: every
 name is written back); nothing for anything else.
 """
-@inline step_updates(result::StepResult) = getfield(getfield(result, :updates), :values)
+@inline step_updates(result::StepReturn) = getfield(getfield(result, :updates), :values)
 @inline step_updates(result::NamedTuple) = result
 @inline step_updates(::Any) = (;)
 

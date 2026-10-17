@@ -46,7 +46,7 @@ end
 
 struct RUHandWritten <: ProcessAlgorithm end
 StatefulAlgorithms.init(::RUHandWritten, context) = (; total = 0)
-StatefulAlgorithms.step!(::RUHandWritten, context) = StepResult(context.total * 10, StateUpdates(; total = context.total + 1))
+StatefulAlgorithms.step!(::RUHandWritten, context) = StepReturn(context.total * 10, StateUpdates(; total = context.total + 1))
 
 ru_record!(v, x) = (push!(v, x); nothing)
 ru_record!(v, xs...) = (push!(v, xs); nothing)
@@ -228,7 +228,7 @@ ru_true() = true
         @test err isa LoadError && occursin("take fields of `@state(X)` by name", sprint(showerror, err.error))
     end
 
-    @testset "A hand-written step returns a StepResult" begin
+    @testset "A hand-written step returns a StepReturn" begin
         seen = Any[]
         p = InlineProcess(@CompositeAlgorithm(begin
             y = RUHandWritten()

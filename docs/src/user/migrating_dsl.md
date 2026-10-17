@@ -31,7 +31,7 @@ named tuple is one value, which the block may destructure like any named tuple (
 Hand-written `init(algo, context)` / `step!(algo, context)` methods are **deprecated**: define the algorithm with
 `@StepAlgorithm` (`@managed(...)` state, `@update`, `return`). Until they are removed they keep working: a returned
 named tuple writes every name back where it lives and is also the step's value, and
-`StepResult(value, StateUpdates(; x))` returns a value and writes back separately.
+`StepReturn(value, StateUpdates(; x))` returns a value and writes back separately.
 
 ```julia
 # Deprecated
