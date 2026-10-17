@@ -88,6 +88,17 @@ Each was reproduced in the September 2026 code review unless marked *(unverified
 - [ ] `src/ProcessList.jl:6`: the global `processlist` Dict is mutated without a lock, so concurrent `Process` construction (e.g. OnDemandWorkers under threaded execution) corrupts it.
 - [ ] `src/ProcessList.jl:6`: bookkeeping never works: wrong key, `quit` and the finalizer never remove entries, `quitall` throws, and the Dict grows without bound.
 
+## Process files
+- [ ] **Put the process types in one folder, `src/Processes/`, and split each file by what its code is.** Found 2026-10-17 on `refactor/dsl-locals-rebased`:
+  1. Today the process code is spread over ten top-level files in `src/`: `AbstractProcesses.jl` (13 lines), `Process.jl` (458), `ProcessPrecompile.jl` (55), `InlineProcess.jl` (141), `InlineProcessShowing.jl` (47), `ProcessList.jl` (10), `ProcessStatus.jl` (42), `ProcessInteraction.jl` (227), `TimedProcess.jl` (55) and `Lifetime.jl` (105). They are included at `src/StatefulAlgorithms.jl:33-75`, with other files in between.
+  2. Use the folder layout from the other modules (`src/LoopAlgorithms/`, `src/Context/View/`): a struct-definitions file, `Interface.jl` for the `AbstractProcess` contract, `Hooks.jl` for overloadable defaults, `Accessors.jl` for concrete getters/setters, then one file per behaviour (lifecycle, status, showing, precompile), and one subfolder or file per concrete type (`Process`, `InlineProcess`).
+  3. `Process.jl` mixes all of these: the struct (line 4), getters/setters (`getloopcursor`, `shouldrun`, `getticks`, `set_starttime!`, `runtimelisteners`, `lock`), show helpers (lines 51-127 and the `Base.show` methods at the end), the constructor (lines 128-206), context handling (`context`, `commit_context!`, `getcontext`, lines 208-260) and loop setup (`makeloop!`, `_resume_paused_loop!`, `reset!`).
+  4. `AbstractProcesses.jl` holds the abstract type together with field getters (`loopidx`, `setloopidx!`, `inc!`) that read fields directly (`p.loopidx`), so they are concrete accessors under an abstract signature; decide whether they are part of the contract or go to `Accessors.jl`.
+  5. `InlineProcess.jl` defines its own getters (`lifetime`, `getcontext`, `context`, `set_starttime!`) in the same file as `run`/`reset!`; split them the same way.
+  6. `TimedProcess.jl` is not included anywhere; decide whether it moves into the folder or is deleted (see the `InlineProcess.jl` review item: whether explicit processes can go).
+  7. `Lifetime.jl` (`Repeat`, `Until`, ...) is used by every process type: decide whether it goes in the folder or stays beside it.
+  8. Related: the `processlist` items under "Process bookkeeping" (`ProcessList.jl`), and the item under "Cleanup: `src/AbstractTypeDefs.jl`".
+
 ## Process lifecycle
 - [ ] `src/ProcessInteraction.jl:122`: `pause(p)` only raises flags and returns before the loop task has stopped, so callers that edit the context right after it race the last in-flight step. There is no synchronous pause (the Gray-Scott demo does `pause(p); wait(p)`).
 
