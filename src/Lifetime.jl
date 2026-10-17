@@ -44,6 +44,8 @@ function breakcondition(u::Until{Vars}, process::P, context::C) where {Vars, P <
         return @inline u.cond(getindex(context, Vars...))
     end
 end
+@inline _routine_breakcondition(spec::U, process::P, context::C, done::LI) where {Vars,U<:Until{Vars},P<:AbstractProcess,C,LI<:Integer} =
+    spec.cond(getindex(context, Vars...))
 
 struct AtLeast{Vars, F} <: IndefiniteLifetime
     atleast::Int
@@ -63,6 +65,8 @@ function breakcondition(al::AtLeast{Vars}, process::P, context::C) where {Vars, 
         return @inline al.cond(getindex(context, Vars...))
     end
 end
+@inline _routine_breakcondition(spec::AL, process::P, context::C, done::LI) where {Vars,AL<:AtLeast{Vars},P<:AbstractProcess,C,LI<:Integer} =
+    done >= spec.atleast && spec.cond(getindex(context, Vars...))
 
 struct RepeatOrUntil{Vars, F} <: RepeatLifetime
     repeats::Int
@@ -80,6 +84,8 @@ function breakcondition(ru::RepeatOrUntil{Vars}, process::P, context::C) where {
         return @inline ru.cond(getindex(context, Vars...))
     end
 end
+@inline _routine_breakcondition(spec::ROU, process::P, context::C, done::LI) where {Vars,ROU<:RepeatOrUntil{Vars},P<:AbstractProcess,C,LI<:Integer} =
+    spec.cond(getindex(context, Vars...))
 
 struct AtLeastAtMost{Vars, F} <: RepeatLifetime
     atleast::Int
@@ -99,6 +105,8 @@ function breakcondition(aam::AtLeastAtMost{Vars}, process::P, context::C) where 
         return @inline aam.cond(getindex(context, Vars...))
     end
 end
+@inline _routine_breakcondition(spec::AAM, process::P, context::C, done::LI) where {Vars,AAM<:AtLeastAtMost{Vars},P<:AbstractProcess,C,LI<:Integer} =
+    done >= spec.atleast && spec.cond(getindex(context, Vars...))
 
 
 

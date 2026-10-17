@@ -52,36 +52,6 @@ statetypes(::Union{Routine{T,R,NS,W,id,S}, Type{<:Routine{T,R,NS,W,id,S}}}) wher
 @inline routine_repeat_count(spec::RL) where {RL<:RepeatLifetime} = repeats(spec)
 @inline routine_repeat_count(spec::IL) where {IL<:IndefiniteLifetime} = typemax(Int)
 
-"""
-    _routine_breakcondition(child_lifetime, process, context, done)
-
-Whether a routine child's own stop condition (`Until`, `RepeatOrUntil`, `AtLeast`, `AtLeastAtMost`) holds, with `done`
-repeats of the child done (in this step): the child is finished. Checked before each repeat, as a `while` loop's
-condition (if it already holds, the child does not run). Always `false` for `Repeat` and `Indefinite`. A pause or close
-of the process is `_process_breakcondition`.
-"""
-@inline _routine_breakcondition(spec::R, process::P, context::C, done::LI) where {R<:Repeat,P<:AbstractProcess,C,LI<:Integer} = false
-@inline _routine_breakcondition(spec::IL, process::P, context::C, done::LI) where {IL<:Indefinite,P<:AbstractProcess,C,LI<:Integer} = false
-@inline _routine_breakcondition(spec::U, process::P, context::C, done::LI) where {Vars,U<:Until{Vars},P<:AbstractProcess,C,LI<:Integer} =
-    spec.cond(getindex(context, Vars...))
-@inline _routine_breakcondition(spec::ROU, process::P, context::C, done::LI) where {Vars,ROU<:RepeatOrUntil{Vars},P<:AbstractProcess,C,LI<:Integer} =
-    spec.cond(getindex(context, Vars...))
-@inline _routine_breakcondition(spec::AL, process::P, context::C, done::LI) where {Vars,AL<:AtLeast{Vars},P<:AbstractProcess,C,LI<:Integer} =
-    done >= spec.atleast && spec.cond(getindex(context, Vars...))
-@inline _routine_breakcondition(spec::AAM, process::P, context::C, done::LI) where {Vars,AAM<:AtLeastAtMost{Vars},P<:AbstractProcess,C,LI<:Integer} =
-    done >= spec.atleast && spec.cond(getindex(context, Vars...))
-
-"""
-    _process_breakcondition(lifetime, process, context)
-
-Whether the process stops (`breakcondition` of its lifetime: for `Repeat`, a pause or close, `!shouldrun(process)`), as
-checked inside a routine: after every repeat of a child. Repeats can run for a very long time, so a pause or close of a
-`Process` must be seen between any two of them, not once per child. See `shouldrun(::Process)`. The child's own stop
-condition is `_routine_breakcondition`.
-"""
-@inline _process_breakcondition(lifetime::LT, process::P, context::C) where {LT<:Lifetime,P<:AbstractProcess,C} =
-    @inline breakcondition(lifetime, process, context)
-
 """Convert routine specification entries into registry multiplier weights."""
 getmultipliers_from_specification_num(::Type{R}, specification_num::S) where {R<:Routine,S} =
     map(_routine_schedule_multiplier, specification_num)
@@ -125,3 +95,4 @@ lifetimes(r::Type{<:Routine}, ::Val{idx}) where {idx} = lifetimes(r)[idx]
 repeats(r::Union{Routine, Type{<:Routine}}, idx::Int) = repeats(lifetimes(r, idx))
 repeats(r::Union{Routine, Type{<:Routine}}, idx::Val) = repeats(lifetimes(r, idx))
 
+include("Hooks.jl")
