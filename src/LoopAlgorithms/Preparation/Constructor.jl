@@ -291,15 +291,15 @@ _scope_routes_to_storage(wiring::Wiring, ::Type{Sc}) where {Sc<:Scope} =
     Wiring(map(r -> _route_to_storage(r, Sc), routes(wiring)), shares(wiring))
 _route_to_storage(r::Route, ::Type) = r
 _route_to_storage(r::Route{:_declared_locals, To, T, RT, V, A}, ::Type{Sc}) where {To, T, RT, V, A, Sc} =
-    Route{:_declared_locals, To, T, RT, _slots(scope_locals(Sc), V, "local", "declared"), A, Nothing, Nothing}()
+    Route{:_declared_locals, To, T, RT, _storage_names(scope_locals(Sc), V, "local", "declared"), A, Nothing, Nothing}()
 _route_to_storage(r::Route{:_captured_returns, To, T, RT, V, A}, ::Type{Sc}) where {To, T, RT, V, A, Sc} =
-    Route{:_captured_returns, To, T, RT, _slots(scope_returns(Sc), V, "return", "captured by a call"), A, Nothing, Nothing}()
+    Route{:_captured_returns, To, T, RT, _storage_names(scope_returns(Sc), V, "return", "captured by a call"), A, Nothing, Nothing}()
 
-"""The storage names of `names` (a name, or a tuple of them) in `slots`; an error for one that is not there."""
-_slots(slots::NamedTuple, names::Tuple, kind, how) = map(name -> _slots(slots, name, kind, how), names)
-function _slots(slots::NamedTuple, name::Symbol, kind, how)
-    haskey(slots, name) || construction_error("A route reads the ", kind, " `", name, "`, which is not ", how, " in this plan or an enclosing one.")
-    return getproperty(slots, name)
+"""The storage names of `names` (a name, or a tuple of them) in `storage` (name ⇒ storage name); an error for one that is not there."""
+_storage_names(storage::NamedTuple, names::Tuple, kind, how) = map(name -> _storage_names(storage, name, kind, how), names)
+function _storage_names(storage::NamedTuple, name::Symbol, kind, how)
+    haskey(storage, name) || construction_error("A route reads the ", kind, " `", name, "`, which is not ", how, " in this plan or an enclosing one.")
+    return getproperty(storage, name)
 end
 
 # A finalized algorithm: resolve the loop inside, keep the final step.
