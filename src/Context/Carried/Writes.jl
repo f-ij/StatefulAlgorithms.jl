@@ -1,7 +1,7 @@
 #=
 Which fields of the persistent context one step of a plan can write, worked out from the plan's types.
 
-`_writes(node, cursor, persistent_context, RuntimeContextType, wiring, namespace, process, lifetime)` gives the
+`_find_writable_fields(node, cursor, persistent_context, RuntimeContextType, wiring, namespace, process, lifetime)` gives the
 `(subcontext, field)` pairs one `_step!` of `node` can write, as `Val(written)`. Its arguments are those of the `_step!`
 call, except that the runtime context is passed as its type. It follows the plan the way `_step!` does, with the same
 child cursors, wiring views and namespaces at each position: the same algorithm can write different fields in
@@ -11,7 +11,7 @@ loop the answer is a compile-time constant.
 Each node type's rule sits next to its `_step!`:
 - an algorithm (`ProcessAlgorithm`, ProcessAlgorithmStep.jl): the payload its merge writes, read off the return type of
   `_leaf_payload`, which is built from the same pieces as the algorithm's `_step!`; a `ContextExchange` has its own
-  `_leaf_writes`;
+  `_find_leaf_writable_fields`;
 - a composite, routine or threaded composite (Step.jl, Threaded/Step.jl): the union over its children;
 - anything else (the method below), or a type that inference cannot pin down: every field of the persistent context.
   That is always correct, and as slow as carrying the whole persistent context.
@@ -26,7 +26,7 @@ context type in every repeat: a step removes what it adds (a return lives until 
 """`written` and `new` as one sorted tuple of `(subcontext, field)` pairs without repeats."""
 _union_written(written::Tuple, new::Tuple) = Tuple(sort!(unique!(Any[written..., new...]); by = string))
 
-@inline _writes(node::NodeType, cursor::CursorType, persistent_context::PersistentContextType, ::Type{RuntimeContextType}, wiring::WiringViewType, namespace::NamespaceType, process::ProcessType, lifetime::LifetimeType) where {NodeType, CursorType, PersistentContextType<:ProcessContext, RuntimeContextType, WiringViewType, NamespaceType, ProcessType, LifetimeType} =
+@inline _find_writable_fields(node::NodeType, cursor::CursorType, persistent_context::PersistentContextType, ::Type{RuntimeContextType}, wiring::WiringViewType, namespace::NamespaceType, process::ProcessType, lifetime::LifetimeType) where {NodeType, CursorType, PersistentContextType<:ProcessContext, RuntimeContextType, WiringViewType, NamespaceType, ProcessType, LifetimeType} =
     _every_field(PersistentContextType)
 
 """Every `(subcontext, field)` pair of the persistent context type, as `Val(written)`."""
@@ -37,14 +37,14 @@ _union_written(written::Tuple, new::Tuple) = Tuple(sort!(unique!(Any[written...,
 end
 
 """The union of two write sets."""
-@generated _union_writes(::Val{A}, ::Val{B}) where {A,B} = :(Val($(_union_written(A, B))))
+@generated _merge_writable_fields(::Val{A}, ::Val{B}) where {A,B} = :(Val($(_union_written(A, B))))
 
 """
 The write set read off the type `payload_type` of a payload `(; subcontext = (; field = value, ...), ...)`, for every
 type in a `Union`; every field of the persistent context type when `payload_type` is not such a named tuple type (for
 example when inference cannot tell).
 """
-Base.@assume_effects :foldable function _payload_writes(@nospecialize(payload_type), @nospecialize(PersistentContextType))
+Base.@assume_effects :foldable function _read_payload_fields(@nospecialize(payload_type), @nospecialize(PersistentContextType))
     payload_type === Union{} && return _every_field(PersistentContextType)
     written = ()
     for T in Base.uniontypes(payload_type)

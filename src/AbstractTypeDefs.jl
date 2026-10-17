@@ -219,7 +219,7 @@ struct PlanWiringView{Root, W, Parent} <: AbstractWiring
 end
 # `Parent` is the `PlanWiring` type of the plan node the current node is in (`Nothing` for the root): the current node
 # runs in its scope (a concrete child's own `Wiring` does not carry it). The `LoopContext` a node is stepped with is in
-# the same scope; `_writes` reads it from here. A node is named by its type rather than its scope written out because
+# the same scope; `_find_writable_fields` reads it from here. A node is named by its type rather than its scope written out because
 # that type is part of the caller's wiring type: it never grows from a `_step!` to a nested one, so inference follows
 # nested plans (a scope written out grows with every level, and inference stops following recursion on a type that grows).
 

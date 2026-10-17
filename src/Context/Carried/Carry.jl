@@ -20,7 +20,7 @@ Julia keeps such a variable in a stack slot and copies it every step, and cannot
 InteractiveIsing 3D graph example copied 600 + 624 bytes per step and ran at 206 updates/s/spin; carrying only the
 written fields: 509.
 
-Which fields a step can write is worked out from the plan's types in Writes.jl (`_writes`); `create_carried` asks it.
+Which fields a step can write is worked out from the plan's types in Writes.jl (`_find_writable_fields`); `create_carried` asks it.
 =#
 
 """
@@ -36,7 +36,7 @@ those are not known).
     # The views, and so the writes, depend on the runtime context type. Every repeat sees the same one: a step removes
     # what it adds to the runtime context (a return lives until the end of its block), so its type at the end of a step
     # is its type at the start.
-    written = @inline _writes(algo, cursor, persistent_context, RuntimeContextType, wiring, namespace, process, lifetime)
+    written = @inline _find_writable_fields(algo, cursor, persistent_context, RuntimeContextType, wiring, namespace, process, lifetime)
     return @inline _written_values(persistent_context, written)
 end
 

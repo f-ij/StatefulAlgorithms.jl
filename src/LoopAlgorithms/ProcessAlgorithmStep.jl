@@ -56,13 +56,13 @@ end
     @inline view(lc, algo, namespace; sharedcontexts = (@inline shares(wiring)), sharedvars = (@inline routes(wiring)))
 
 # The persistent fields a leaf writes (see src/Context/Carried/Writes.jl).
-@inline _writes(algo::AlgoType, ::NoLoopCursor, persistent_context::PersistentContextType, ::Type{RuntimeContextType}, wiring::WiringViewType, namespace::NamespaceType, process::ProcessType, lifetime::LifetimeType) where {AlgoType<:ProcessAlgorithm, PersistentContextType<:ProcessContext, RuntimeContextType, WiringViewType, NamespaceType, ProcessType, LifetimeType} =
-    @inline _leaf_writes(algo, persistent_context, RuntimeContextType, wiring, namespace)
+@inline _find_writable_fields(algo::AlgoType, ::NoLoopCursor, persistent_context::PersistentContextType, ::Type{RuntimeContextType}, wiring::WiringViewType, namespace::NamespaceType, process::ProcessType, lifetime::LifetimeType) where {AlgoType<:ProcessAlgorithm, PersistentContextType<:ProcessContext, RuntimeContextType, WiringViewType, NamespaceType, ProcessType, LifetimeType} =
+    @inline _find_leaf_writable_fields(algo, persistent_context, RuntimeContextType, wiring, namespace)
 
 """The persistent fields one step of an algorithm can write: those of the payload its merge writes, read off its type."""
-@inline _leaf_writes(algo::AlgoType, persistent_context::PersistentContextType, ::Type{RuntimeContextType}, wiring::WiringViewType, namespace::NamespaceType) where {AlgoType, PersistentContextType<:ProcessContext, RuntimeContextType, WiringViewType, NamespaceType} =
+@inline _find_leaf_writable_fields(algo::AlgoType, persistent_context::PersistentContextType, ::Type{RuntimeContextType}, wiring::WiringViewType, namespace::NamespaceType) where {AlgoType, PersistentContextType<:ProcessContext, RuntimeContextType, WiringViewType, NamespaceType} =
     RuntimeContextType <: ProcessContext ?
-        _payload_writes(Core.Compiler.return_type(_leaf_payload, Tuple{AlgoType, _loop_context_type(PersistentContextType, RuntimeContextType, WiringViewType), WiringViewType, NamespaceType}), PersistentContextType) :
+        _read_payload_fields(Core.Compiler.return_type(_leaf_payload, Tuple{AlgoType, _loop_context_type(PersistentContextType, RuntimeContextType, WiringViewType), WiringViewType, NamespaceType}), PersistentContextType) :
         _every_field(PersistentContextType)
 
 """

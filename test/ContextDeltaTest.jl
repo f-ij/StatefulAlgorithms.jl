@@ -130,5 +130,5 @@ end
     code, _ = only(Base.code_typed(StatefulAlgorithms.loop, Tuple{map(typeof, captured[])...}; debuginfo = :none))
     typed = sprint(show, code)
     @test !occursin("return_type", typed)
-    @test !occursin("_payload_writes", typed)
+    @test !occursin("_read_payload_fields", typed)
 end

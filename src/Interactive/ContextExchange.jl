@@ -256,10 +256,10 @@ end
 end
 
 # The persistent fields an exchange writes (see src/Context/Carried/Writes.jl): the targets it resolved at init.
-@inline _leaf_writes(exchange::ContextExchange, persistent_context::PersistentContextType, ::Type{RuntimeContextType}, wiring::WiringViewType, ::Namespace{Name}) where {PersistentContextType<:ProcessContext, RuntimeContextType, WiringViewType, Name} =
-    _exchange_writes(PersistentContextType, Val(Name))
+@inline _find_leaf_writable_fields(exchange::ContextExchange, persistent_context::PersistentContextType, ::Type{RuntimeContextType}, wiring::WiringViewType, ::Namespace{Name}) where {PersistentContextType<:ProcessContext, RuntimeContextType, WiringViewType, Name} =
+    _find_exchange_writable_fields(PersistentContextType, Val(Name))
 
-@generated function _exchange_writes(::Type{PersistentContextType}, ::Val{Name}) where {PersistentContextType<:ProcessContext, Name}
+@generated function _find_exchange_writable_fields(::Type{PersistentContextType}, ::Val{Name}) where {PersistentContextType<:ProcessContext, Name}
     data = getdatatype(fieldtype(PersistentContextType.parameters[1], Name))
     specs = fieldtype(data, :store).parameters[1].parameters
     written = Tuple((_exchange_subcontext(spec), _exchange_varname(spec)) for spec in specs)

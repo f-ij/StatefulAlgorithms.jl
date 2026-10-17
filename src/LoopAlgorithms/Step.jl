@@ -146,9 +146,9 @@ function _inline_routine_child_exprs(ChildType::Type, child, child_cursor, child
     body = Any[:(local $resume_point = @inline get_resume_point($routine_cursor, $i)),
                :(local $start_persistent = @inline getpersistent($lc)),
                :(local $runtime = @inline getruntime($lc)),
-               # The fields the nested plan writes (its `_writes`, nested plans inline: not `create_carried`, which asks
+               # The fields the nested plan writes (its `_find_writable_fields`, nested plans inline: not `create_carried`, which asks
                # what the nested plan's `_step!` returns, from inside this `_step!`).
-               :(local $carried = @inline _written_values($start_persistent, (@inline _writes($child, $child_cursor, $start_persistent, (@inline runtime_type(typeof($lc))), $child_wiring, $namespace_expr, process, lifetime))))]
+               :(local $carried = @inline _written_values($start_persistent, (@inline _find_writable_fields($child, $child_cursor, $start_persistent, (@inline runtime_type(typeof($lc))), $child_wiring, $namespace_expr, process, lifetime))))]
     if once
         push!(body, :(if $resume_point <= 1; $(repeat_once()...); $(paused_after(resume_point)); end))   # `Repeat(1)`: no own condition
     else
@@ -251,10 +251,10 @@ _view_node(::Type{<:PlanWiringView{Root, WiringType}}) where {Root, WiringType} 
 """
     _children_writes_expr(PlanType)
 
-The body of `_writes` for a plan that steps its children in order (a composite, routine or threaded composite): the
+The body of `_find_writable_fields` for a plan that steps its children in order (a composite, routine or threaded composite): the
 union of its children's writes, each at its own position (cursor, wiring view, namespace), with the runtime context
 type passed from child to child as `_step!` passes the runtime context (a child that repeats sees the same type in
-every repeat: a step removes what it adds). Nested plans are written inline, as in `_plan_step_exprs`: a nested `_writes` call would be the same
+every repeat: a step removes what it adds). Nested plans are written inline, as in `_plan_step_exprs`: a nested `_find_writable_fields` call would be the same
 method with a growing runtime context type, which inference stops following.
 """
 function _children_writes_expr(PlanType::Type)
@@ -282,7 +282,7 @@ function _children_writes_exprs!(exprs, PlanType::Type, plan, cursor, wiring)
             _children_writes_exprs!(exprs, ChildType, child, child_cursor, child_wiring)
             push!(exprs, :(runtime_context_type = @inline _runtime_context_type_after_leaving(runtime_context_type, typeof($child_wiring))))
         else
-            push!(exprs, :(writes = @inline _union_writes(writes, (@inline _writes($child, $child_cursor, persistent_context, runtime_context_type, $child_wiring, $child_namespace, process, lifetime)))))
+            push!(exprs, :(writes = @inline _merge_writable_fields(writes, (@inline _find_writable_fields($child, $child_cursor, persistent_context, runtime_context_type, $child_wiring, $child_namespace, process, lifetime)))))
             push!(exprs, :(runtime_context_type = @inline _runtime_context_type_after_node_step($child, $child_cursor, persistent_context, runtime_context_type, $child_wiring, $child_namespace, process, lifetime)))
         end
     end
@@ -290,9 +290,9 @@ function _children_writes_exprs!(exprs, PlanType::Type, plan, cursor, wiring)
 end
 
 # The persistent fields a composite or routine writes (see src/Context/Carried/Writes.jl).
-@inline @generated _writes(plan::PlanType, cursor::CursorType, persistent_context::PersistentContextType, ::Type{RuntimeContextType}, wiring::WiringViewType, namespace::NamespaceType, process::ProcessType, lifetime::LifetimeType) where {PlanType<:CompositeAlgorithm, CursorType, PersistentContextType<:ProcessContext, RuntimeContextType, WiringViewType, NamespaceType, ProcessType, LifetimeType} =
+@inline @generated _find_writable_fields(plan::PlanType, cursor::CursorType, persistent_context::PersistentContextType, ::Type{RuntimeContextType}, wiring::WiringViewType, namespace::NamespaceType, process::ProcessType, lifetime::LifetimeType) where {PlanType<:CompositeAlgorithm, CursorType, PersistentContextType<:ProcessContext, RuntimeContextType, WiringViewType, NamespaceType, ProcessType, LifetimeType} =
     _children_writes_expr(PlanType)
-@inline @generated _writes(plan::PlanType, cursor::CursorType, persistent_context::PersistentContextType, ::Type{RuntimeContextType}, wiring::WiringViewType, namespace::NamespaceType, process::ProcessType, lifetime::LifetimeType) where {PlanType<:Routine, CursorType, PersistentContextType<:ProcessContext, RuntimeContextType, WiringViewType, NamespaceType, ProcessType, LifetimeType} =
+@inline @generated _find_writable_fields(plan::PlanType, cursor::CursorType, persistent_context::PersistentContextType, ::Type{RuntimeContextType}, wiring::WiringViewType, namespace::NamespaceType, process::ProcessType, lifetime::LifetimeType) where {PlanType<:Routine, CursorType, PersistentContextType<:ProcessContext, RuntimeContextType, WiringViewType, NamespaceType, ProcessType, LifetimeType} =
     _children_writes_expr(PlanType)
 
 """Step one lifetime-scheduled child inside a `Routine`."""
