@@ -1,47 +1,135 @@
-"""
-Running a composite algorithm allows for static unrolling and inlining of all sub-algorithms through 
-    recursive calls
-"""
-
-
 #=
-Stepping a plan, with its nested plans written inline.
+One step of a plan: the generated `_step!` of a composite and of a routine, and the generated `_find_writable_fields` (which
+persistent fields a plan writes) that the routine repeats need.
 
-The code of one plan's step is generated here as a list of expressions, and a nested composite or routine is not
-stepped by calling `_step!` for it but written into the same body (`_plan_step_exprs` calls itself while generating).
-Why: the runtime context grows within a step (each return is added at the line that writes it, and removed when its
-plan node ends, see `leave_scope`), so a nested plan gets a larger `LoopContext` type than its parent. A nested plan's
-`_step!` is the same method as its parent's, and Julia's inference stops following a method that calls itself with a
-growing argument type: the call becomes dynamic. Written inline, nothing calls itself, and every line has its exact type.
+Terms used in this file:
+- plan: a `CompositeAlgorithm` or a `Routine`. Its children are in `getalgos(plan)`.
+- leaf: any child that is not a plan (an algorithm, a `Callable`, a threaded composite, ...). It is stepped by a call
+  to its own `_step!`.
+- `lc`: the `LoopContext` variable: the persistent context, the runtime context, and the plan node whose scope the step
+  is in (see Context/ContextBundles.jl). Every generated line that steps something reads `lc` and assigns it again.
+- schedule: how often a composite child runs (`Interval{1}` = every step, `@every n` = every n-th step).
+- repeat: how often a routine child runs in one step of the routine (`Repeat(n)`, `Until(...)`, ...).
 
-Children on a schedule (`@every n`) run in a branch: consecutive children on the same schedule share one (an
-algorithm and the call that captures its return are such a pair). After the branch the runtime context has one type
-whether it ran or not (`_conditional_step`): the fields it had before, a field the branch assigned with another type
-as the union of both (`y = nothing`, then `y = @every 2 f()`), and nothing the branch added. The DSL only lets a
-scheduled statement assign a name that exists before it, so what the branch adds is internal (an algorithm's
-return, read by its capture in the same branch).
+1. Nested plans are written inline.
+   The generated code of one plan's step is a list of lines. A child that is itself a plan is not stepped by a call to
+   its `_step!`; its lines are written into its parent's (`_plan_step_exprs` calls itself while generating). Why: the
+   runtime context grows within a step (a return is added at the line that writes it, and removed when its plan node
+   ends, see `leave_scope`), so a nested plan gets a larger `LoopContext` type than its parent. Its `_step!` would be the
+   same method as its parent's, and Julia's inference stops following a method that calls itself with a growing argument
+   type: the call becomes dynamic. Written inline, nothing calls itself, and every line has its exact type.
+
+2. What `_step!` of a composite `ca` emits (`@inline` left out; `child1`, `cursor1`, ... are gensyms):
+
+       local algos = getalgos(ca)
+       local inc = inc(cursor)                       # the composite's step count, read by the schedules
+       local outer = lc
+       lc = enter_scope(lc, wiring)
+       # child 1, every step, a leaf:
+       local child1 = getfield(algos, 1)
+       local cursor1 = child_loop_cursor(cursor, Val(1))
+       local wiring1 = child_wiring_view(wiring, Val(1))
+       lc = _step!(child1, cursor1, lc, wiring1, Namespace1(), process, lifetime)
+       # child 2, every step, a plan: the same three locals, then the lines of 2. or 3. for child 2, here
+       # children 3 and 4, on the same schedule (say `@every 2`): the locals of both, then one branch
+       lc = _conditional_step(should_run_schedule(schedule3, inc, getpersistent(lc)),
+                              (child3, child4), (cursor3, cursor4), lc, (wiring3, wiring4), (Namespace3(), Namespace4()),
+                              process, lifetime)
+       inc!(cursor, ca)
+       lc = leave_scope(lc, outer)
+       return lc
+
+   Consecutive children on the same schedule share one branch (an algorithm and the call that captures its return are
+   such a pair). The children in a branch are stepped by calls to `_step!`, also when they are plans. After the branch
+   `lc` has one type whether it ran or not (`_conditional_step`): the fields it had before, a field the branch assigned
+   with another type as the union of both (`y = nothing`, then `y = @every 2 f()`), and nothing the branch added. The
+   DSL only lets a scheduled statement assign a name that exists before it, so what a branch adds is internal (an
+   algorithm's return, read by its capture in the same branch).
+
+3. What `_step!` of a routine `r` emits:
+
+       local algos = getalgos(r)
+       local outer = lc
+       lc = enter_scope(lc, wiring)
+       # child 1, a leaf: the three locals, then one call that runs all its repeats
+       lc = _subroutine_step!(lc, child1, cursor1, r, cursor, process, lifetime, 1, repeat1, wiring1, Namespace1())
+       # child 2, a plan: the three locals, then its repeat loop, here (`_inline_routine_child_exprs`)
+       local resume_point = get_resume_point(cursor, 2)
+       local start_persistent = getpersistent(lc)
+       local runtime = getruntime(lc)
+       local carried = _written_values(start_persistent, _find_writable_fields(child2, ...))   # the fields child 2 writes
+       local count = routine_repeat_count(repeat2)
+       for lidx in resume_point:count
+           if _routine_breakcondition(repeat2, process, <context>, lidx - 1)    # child 2's own stop condition
+               @goto done
+           end
+           local stepped = withcontexts(lc, with_carried(start_persistent, carried), runtime)
+           # the lines of 2. or 3. for child 2, on `stepped` instead of `lc`
+           runtime = getruntime(stepped)
+           carried = next_carried(carried, getpersistent(stepped))
+           tick!(process)
+           if _process_breakcondition(lifetime, process, <context>)            # pause or close of the process
+               set_resume_point!(cursor, 2, lidx + 1)
+               @goto done
+           end
+       end
+       @label done
+       lc = withcontexts(lc, with_carried(start_persistent, carried), runtime)
+       lc = leave_scope(lc, outer)
+       return lc
+
+   `<context>` is `final_context(LoopContext(with_carried(start_persistent, carried), runtime))`. A child with
+   `Repeat(1)` has no loop: a leaf calls `_subroutine_step_once!`, and for a plan the loop is replaced by
+   `if resume_point <= 1; <one repeat>; <the pause check>; end` (no own stop condition).
+
+4. What `_find_writable_fields` of a plan emits (`_children_writes_expr`):
+
+       local writes = Val(())
+       local runtime_context_type = RuntimeContextType
+       local algos = getalgos(plan)
+       # child 1, a leaf: the three locals, then
+       writes = _merge_writable_fields(writes, _find_writable_fields(child1, cursor1, persistent_context, runtime_context_type, wiring1, Namespace1(), process, lifetime))
+       runtime_context_type = _runtime_context_type_after_node_step(child1, cursor1, persistent_context, runtime_context_type, wiring1, Namespace1(), process, lifetime)
+       # child 2, a plan: the three locals, then the lines of 4. for child 2's children, here, then
+       runtime_context_type = _runtime_context_type_after_leaving(runtime_context_type, typeof(wiring2))
+       return writes
 =#
 
-"""Whether a child is stepped inline (its body written into its parent's step) rather than by calling `_step!` for it."""
+"""
+`true` when a child of type `ChildType` is a plan (composite or routine): its lines are written into its parent's
+step. `false` for a leaf, which is stepped by a call to its `_step!`. See the file header, 1.
+"""
 _steps_inline(::Type) = false
 _steps_inline(::Type{<:Union{CompositeAlgorithm, Routine}}) = true
 
-"""Whether a composite schedule entry runs in every step (known from its type)."""
+"""`true` when a composite child's schedule value is `Interval{1}` (it runs every step, so it needs no branch), else `false`."""
 _always_runs(::Interval{1}) = true
 _always_runs(::Integer) = false
 _always_runs(::Any) = false
 
-"""The expressions that step `plan` (of type `PlanType`, cursor `cursor`, wiring view `wiring`), taking and assigning the `LoopContext` variable `lc`."""
+"""
+The lines (a `Vector` of expressions) that step `plan` once: the file header, 2. for a composite, 3. for a routine.
+
+`PlanType` is the plan's type. `plan`, `cursor` and `wiring` are expressions for the plan, its loop cursor and its
+wiring view. `lc` is the name of the `LoopContext` variable the lines read and assign.
+"""
 _plan_step_exprs(PlanType::Type{<:CompositeAlgorithm}, plan, cursor, wiring, lc) = _composite_step_exprs(PlanType, plan, cursor, wiring, lc)
 _plan_step_exprs(PlanType::Type{<:Routine}, plan, cursor, wiring, lc) = _routine_step_exprs(PlanType, plan, cursor, wiring, lc)
 
-"""The expressions that step one child: inline for a nested plan, a `_step!` call for anything else."""
+"""
+The lines that step one child once, assigning `lc`: the child's own lines (`_plan_step_exprs`) when it is a plan,
+otherwise the single line `lc = _step!(child, cursor, lc, wiring, namespace, process, lifetime)`.
+"""
 function _child_step_exprs(ChildType::Type, child, cursor, wiring, namespace_expr, lc)
     _steps_inline(ChildType) && return _plan_step_exprs(ChildType, child, cursor, wiring, lc)
     return Any[:($lc = @inline _step!($child, $cursor, $lc, $wiring, $namespace_expr, process, lifetime))]
 end
 
-"""The local variables for child `i` of a plan: its value, cursor and wiring view."""
+"""
+`(lines, child, child_cursor, child_wiring)`: the three lines that bind child `i` of a plan, its loop cursor and its
+wiring view to new local variables, and the names of those variables. `plan_algos` is the variable holding the plan's
+children; `cursor` and `wiring` are the plan's.
+"""
 function _child_setup_exprs(plan_algos, cursor, wiring, i)
     child, child_cursor, child_wiring = gensym(:child), gensym(:cursor), gensym(:wiring)
     setup = Any[:(local $child = @inline getfield($plan_algos, $i)),
@@ -50,6 +138,7 @@ function _child_setup_exprs(plan_algos, cursor, wiring, i)
     return setup, child, child_cursor, child_wiring
 end
 
+"""The lines that step composite `plan` once (the file header, 2.); arguments as `_plan_step_exprs`."""
 function _composite_step_exprs(PlanType::Type, plan, cursor, wiring, lc)
     schedule_values = PlanType.parameters[2]
     namespace_types = PlanType.parameters[3]
@@ -85,6 +174,10 @@ function _composite_step_exprs(PlanType::Type, plan, cursor, wiring, lc)
     return exprs
 end
 
+"""
+The lines that step routine `plan` once (the file header, 3.): each child runs all its repeats before the next child
+starts. Arguments as `_plan_step_exprs`.
+"""
 function _routine_step_exprs(PlanType::Type, plan, cursor, wiring, lc)
     repeat_values = PlanType.parameters[2]
     namespace_types = PlanType.parameters[3]
@@ -110,10 +203,12 @@ function _routine_step_exprs(PlanType::Type, plan, cursor, wiring, lc)
 end
 
 """
-The expressions that repeat a nested plan inside a routine, written inline: as `_subroutine_step!`, with the nested
-plan's step in place of the `_step!` call. The repeats carry only the persistent fields the nested plan writes, as the
-loops do (see src/Context/Carried/Carry.jl), and the runtime context, which has the same type before and after each
-repeat (the nested plan removes its own returns when it ends).
+The lines that run all repeats of routine child `i`, a plan, assigning `lc` at the end (the file header, 3., child 2).
+
+They do what `_subroutine_step!` does, with the child's own lines in place of its `_step!` call. Between repeats they
+carry only the persistent fields the child writes, as the loops do (see src/Context/Carried/Carry.jl), and the runtime
+context, which has the same type before and after each repeat (the child removes its own returns when it ends).
+`routine_cursor` is the routine's cursor (it holds the resume points) and `repeat_value` the child's repeat.
 """
 function _inline_routine_child_exprs(ChildType::Type, child, child_cursor, child_wiring, namespace_expr, lc, routine_cursor, i, repeat_value)
     resume_point, count, lidx, done = gensym(:resume_point), gensym(:count), gensym(:lidx), gensym(:done)
@@ -166,10 +261,11 @@ function _inline_routine_child_exprs(ChildType::Type, child, child_cursor, child
 end
 
 """
-Step each scheduled child of a composite plan with explicit loop runtime.
+Step composite `ca` once and return the `LoopContext` after it: each child whose schedule is due, in order, nested
+plans inline (the file header, 2.).
 
-The `process` and `lifetime` values are forwarded so nested loop algorithms can
-run without storing those transient values in the context.
+`process` and `lifetime` are passed down to the children so that routines inside can check for a pause or close
+without keeping them in the context.
 """
 Base.@constprop :aggressive @inline @generated function _step!(ca::PlanType, cursor::CursorType, lc::LoopContextType, wiring::WiringViewType, namespace::NamespaceType, process::ProcessType, lifetime::LifetimeType) where {PlanType <: CompositeAlgorithm, CursorType<:CompositeLoopCursor, LoopContextType <: LoopContext, WiringViewType <: PlanWiringView, NamespaceType <: Namespace, ProcessType <: AbstractProcess, LifetimeType <: Lifetime}
     return Expr(:block, _plan_step_exprs(PlanType, :ca, :cursor, :wiring, :lc)..., :(return lc))
@@ -178,9 +274,12 @@ end
 """
     _conditional_step(run, children, cursors, lc, wirings, namespaces, process, lifetime)
 
-The children (tuples: their values, cursors, wiring views, namespaces) stepped in order when `run`, else `lc`
-unchanged, with one type either way (`_conditional_loopcontext_type`). When inference cannot tell what the steps
-return, the two cases keep their own types.
+Return `lc` after `_step!` of each child in order when `run` is `true`, else `lc` unchanged. `children`, `cursors`,
+`wirings` and `namespaces` are tuples, one entry per child.
+
+Both results are converted to one type, `_conditional_loopcontext_type`, so the code after the branch has one type.
+When inference cannot tell which `LoopContext` type the steps return, no type is chosen: each result is returned
+as it is, and the call's return type is their union.
 """
 @inline function _conditional_step(run::Bool, children::ChildrenType, cursors::CursorsType, lc::LoopContextType, wirings::WiringViewsType, namespaces::NamespacesType, process::ProcessType, lifetime::LifetimeType) where {ChildrenType<:Tuple, CursorsType<:Tuple, LoopContextType<:LoopContext, WiringViewsType<:Tuple, NamespacesType<:Tuple, ProcessType, LifetimeType}
     Stepped = Core.Compiler.return_type(_step_children!, Tuple{LoopContextType, ChildrenType, CursorsType, WiringViewsType, NamespacesType, ProcessType, LifetimeType})
@@ -190,16 +289,19 @@ return, the two cases keep their own types.
     return @inline _as_conditional(lc, Target)
 end
 
-"""`lc` after `_step!` of each child in turn (tuples of the children and their cursors, wiring views and namespaces)."""
+"""Return `lc` after `_step!` of each child in turn; the arguments are tuples as in `_conditional_step`."""
 @inline @generated function _step_children!(lc::LoopContextType, children::ChildrenType, cursors, wirings, namespaces, process, lifetime) where {LoopContextType<:LoopContext, ChildrenType<:Tuple}
     steps = (:(lc = @inline _step!(getfield(children, $k), getfield(cursors, $k), lc, getfield(wirings, $k), getfield(namespaces, $k), process, lifetime)) for k in 1:fieldcount(ChildrenType))
     return Expr(:block, steps..., :(return lc))
 end
 
 """
-The `LoopContext` type both outcomes of a conditional step get, from the type before it (`Before`) and the type the
-steps return (`Stepped`): the runtime fields of `Before`, each with the union of its type before and after; the
-fields the steps added are left out. `Nothing` when `Stepped` is not one concrete `LoopContext` type.
+Return the `LoopContext` type that `_conditional_step` converts both its results to, or `Nothing` when `Stepped` is
+not one concrete `LoopContext` type.
+
+`Before` is the type before the branch, `Stepped` the type after the steps. The result has the persistent context of
+`Stepped` and the runtime fields of `Before`, each with the union of its type in `Before` and in `Stepped`. Fields the
+steps added are left out.
 """
 Base.@assume_effects :foldable function _conditional_loopcontext_type(@nospecialize(Before), @nospecialize(Stepped))
     (Stepped isa DataType && Stepped <: LoopContext && isconcretetype(Stepped)) || return Nothing
@@ -212,7 +314,10 @@ Base.@assume_effects :foldable function _conditional_loopcontext_type(@nospecial
     return LoopContext{persistent_type(Stepped), runtime, Stepped.parameters[3]}
 end
 
-"""The fields of the named tuple type `old`, each with the union of its type in `old` and in `new` (nested named tuples field by field)."""
+"""
+Return a named tuple type with the field names of `old`, each field typed as the union of its type in `old` and in
+`new`. A field that is a named tuple in both is joined field by field instead. Fields only `new` has are left out.
+"""
 function _joined_fields(@nospecialize(old), @nospecialize(new))
     types = map(fieldnames(old), fieldtypes(old)) do name, T
         N = fieldtype(new, name)
@@ -221,7 +326,10 @@ function _joined_fields(@nospecialize(old), @nospecialize(new))
     return NamedTuple{fieldnames(old), Tuple{types...}}
 end
 
-"""`lc` as a value of type `Target` (see `_conditional_loopcontext_type`): only the fields `Target` has, converted to its field types."""
+"""
+Return `lc` converted to `Target` (from `_conditional_loopcontext_type`): only the runtime fields `Target` has, each
+converted to its field type there. Returns `lc` itself when it already has type `Target`.
+"""
 @inline @generated function _as_conditional(lc::LoopContextType, ::Type{Target}) where {LoopContextType<:LoopContext, Target}
     LoopContextType === Target && return :lc
     target_runtime = runtime_type(Target)
@@ -233,7 +341,10 @@ end
     return :(LoopContext{$(persistent_type(Target)), $target_runtime, $(Target.parameters[3])}(getpersistent(lc), $runtime))
 end
 
-"""The value of type `Target` read from `source` (an expression): a named tuple field by field, anything else as it is."""
+"""
+Return an expression that builds a value of type `Target` from the expression `source`: for a named tuple type, a
+`Target(...)` call built field by field; for anything else, `source` itself (converted by the field it is stored in).
+"""
 function _conditional_value_expr(Target::Type, source)
     Target <: NamedTuple || return source
     values = (_conditional_value_expr(T, :(getfield($source, $(QuoteNode(name))))) for (name, T) in zip(fieldnames(Target), fieldtypes(Target)))
@@ -241,21 +352,26 @@ function _conditional_value_expr(Target::Type, source)
 end
 
 """
-The runtime context type after a plan node ends, given the type at its end and the type of its wiring view: without
-the node's returns (see `leave_scope`).
+Return the runtime context type after a plan node ends: `RuntimeContextType` (the type at the node's end) without the
+node's returns, as `leave_scope` removes them. `WiringViewType` is the type of the node's wiring view. `Any` when
+`RuntimeContextType` is not a `ProcessContext` type.
 """
 Base.@assume_effects :foldable _runtime_context_type_after_leaving(@nospecialize(RuntimeContextType), @nospecialize(WiringViewType)) =
     RuntimeContextType <: ProcessContext ? Core.Compiler.return_type(_strip_returns, Tuple{RuntimeContextType, Val{node_resets(_view_node(WiringViewType))}}) : Any
+"""The `PlanWiring` type of the node a wiring view type points at."""
 _view_node(::Type{<:PlanWiringView{Root, WiringType}}) where {Root, WiringType} = WiringType
 
 """
     _children_writes_expr(PlanType)
 
-The body of `_find_writable_fields` for a plan that steps its children in order (a composite, routine or threaded composite): the
-union of its children's writes, each at its own position (cursor, wiring view, namespace), with the runtime context
-type passed from child to child as `_step!` passes the runtime context (a child that repeats sees the same type in
-every repeat: a step removes what it adds). Nested plans are written inline, as in `_plan_step_exprs`: a nested `_find_writable_fields` call would be the same
-method with a growing runtime context type, which inference stops following.
+Return the body of the generated `_find_writable_fields` for a plan that steps its children in order (a composite, routine or
+threaded composite); see the file header, 4. The body returns the union of the persistent fields its children write,
+each child asked at its own cursor, wiring view and namespace.
+
+The runtime context type is passed from child to child as `_step!` passes the runtime context. A child that repeats
+sees the same type in every repeat, because a step removes what it adds. Nested plans are written inline, for the
+same reason as in `_plan_step_exprs`: a nested `_find_writable_fields` call would be the same method with a growing runtime
+context type, which inference stops following.
 """
 function _children_writes_expr(PlanType::Type)
     exprs = Any[:(local writes = Val(())), :(local runtime_context_type = RuntimeContextType)]
@@ -264,7 +380,10 @@ function _children_writes_expr(PlanType::Type)
     return Expr(:block, exprs...)
 end
 
-"""Append to `exprs` the writes of the children of `plan` (type `PlanType`), nested plans inline; see `_children_writes_expr`."""
+"""
+Append to `exprs` the lines that add the writes of each child of `plan` (type `PlanType`) to `writes` and update
+`runtime_context_type`; a nested plan's children are appended in its place. See `_children_writes_expr`.
+"""
 function _children_writes_exprs!(exprs, PlanType::Type, plan, cursor, wiring)
     child_namespace_tuple_type = PlanType.parameters[3]
     children = fieldtype(PlanType, :funcs)
@@ -289,13 +408,20 @@ function _children_writes_exprs!(exprs, PlanType::Type, plan, cursor, wiring)
     return exprs
 end
 
-# The persistent fields a composite or routine writes (see src/Context/Carried/Writes.jl).
+# The persistent fields a composite or routine writes in one step, as a `Val` of names (see src/Context/Carried/Writes.jl).
 @inline @generated _find_writable_fields(plan::PlanType, cursor::CursorType, persistent_context::PersistentContextType, ::Type{RuntimeContextType}, wiring::WiringViewType, namespace::NamespaceType, process::ProcessType, lifetime::LifetimeType) where {PlanType<:CompositeAlgorithm, CursorType, PersistentContextType<:ProcessContext, RuntimeContextType, WiringViewType, NamespaceType, ProcessType, LifetimeType} =
     _children_writes_expr(PlanType)
 @inline @generated _find_writable_fields(plan::PlanType, cursor::CursorType, persistent_context::PersistentContextType, ::Type{RuntimeContextType}, wiring::WiringViewType, namespace::NamespaceType, process::ProcessType, lifetime::LifetimeType) where {PlanType<:Routine, CursorType, PersistentContextType<:ProcessContext, RuntimeContextType, WiringViewType, NamespaceType, ProcessType, LifetimeType} =
     _children_writes_expr(PlanType)
 
-"""Step one lifetime-scheduled child inside a `Routine`."""
+"""
+Run the repeats of routine child `idx`, a leaf, and return `lc` after them (the file header, 3., child 1).
+
+The repeats start at the child's resume point in `routine_cursor` and run until the child's repeat
+(`subroutine_lifetime`) is done or its stop condition holds. When the process is paused or closed after a repeat,
+the next repeat is stored as the resume point and the loop stops. `lc` is returned unchanged when the resume point
+is past the last repeat.
+"""
 @inline function _subroutine_step!(
     lc::L,
     func::F,
@@ -345,8 +471,10 @@ end
 end
 
 """
-Step a routine child that repeats once: the first repeat of `_subroutine_step!` without
-the loop, so the child's `_step!` is emitted once instead of twice.
+Run routine child `idx`, a leaf with `Repeat(1)`, once (unless already run before a pause), and return `lc` after it.
+
+It is `_subroutine_step!` without the loop and without the child's own stop condition; only the pause or close check
+after the step stays. Without the loop the child's `_step!` is emitted once instead of twice.
 """
 @inline function _subroutine_step_once!(
     lc::L,
@@ -373,20 +501,20 @@ the loop, so the child's `_step!` is emitted once instead of twice.
 end
 
 """
-Step each child routine in sequence with explicit loop runtime.
-
-Each child is run once at its resume point, then repeated until its declared
-repeat count is reached or the lifetime stops. Nested plans are written inline (see `_plan_step_exprs`).
+Step routine `r` once and return the `LoopContext` after it: each child in order runs all its repeats, from its
+resume point, until its repeat is done, its stop condition holds, or the process is paused or closed. Nested plans are
+written inline (the file header, 3.).
 """
 Base.@constprop :aggressive @inline @generated function _step!(r::PlanType, cursor::CursorType, lc::LoopContextType, wiring::WiringViewType, namespace::NamespaceType, process::ProcessType, lifetime::LifetimeType) where {PlanType <: Routine, CursorType<:Union{DirectRoutineCursor,PausableRoutineCursor}, LoopContextType <: LoopContext, WiringViewType <: PlanWiringView, NamespaceType <: Namespace, ProcessType <: AbstractProcess, LifetimeType <: Lifetime}
     return Expr(:block, _plan_step_exprs(PlanType, :r, :cursor, :wiring, :lc)..., :(return lc))
 end
 
 """
-Internal single-step entrypoint for tests and manual loop-plan driving.
+Step the plan of `la` once on `persistent_context` and return the persistent context after it. For tests and for
+driving a plan by hand.
 
-This builds the minimal process handle needed by routines and interval logic,
-then enters the same `_step!` chain used by `run`.
+It builds what `run` would provide (a `LoopRunProcess` with an `Indefinite` lifetime, a fresh cursor, an empty
+runtime context) and calls the same `_step!` that `run` calls.
 """
 @inline function _step!(la::LA, persistent_context::C) where {LA<:LoopSpec, C<:AbstractContext}
     lifetime = Indefinite()
