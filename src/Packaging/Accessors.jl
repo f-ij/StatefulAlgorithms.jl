@@ -9,7 +9,6 @@
 @inline interval(pkg::Union{Package, Type{<:Package}}, idx) = intervals(pkg)[idx]
 @inline getalgotype(::Union{Package{Funcs}, Type{<:Package{Funcs}}}, idx) where {Funcs} = Funcs.parameters[idx]
 @inline numalgos(::Union{Package{Funcs}, Type{<:Package{Funcs}}}) where {Funcs} = length(Funcs.parameters)
-@inline reset!(pkg::Package) = (getinc(pkg)[] = 1; reset!.(getalgos(pkg)); pkg)
 @inline registry_entrytype(::Type{<:Package}) = Package
 @inline getmultiplier(pkg::Package, child) = static_get_multiplier(getregistry(pkg), child)
 @inline getname(::Union{Package{Funcs, States, Intervals, CustomName}, Type{<:Package{Funcs, States, Intervals, CustomName}}}) where {Funcs, States, Intervals, CustomName} = CustomName
@@ -22,18 +21,6 @@
     (!isnothing(key) && key != Symbol()) || return false
     name = getname(getalgo(pkg)) == Symbol() ? :Package : getname(getalgo(pkg))
     return startswith(string(key), string(name, "_"))
-end
-
-function Autokey(pkg::Package, i::Int, prefix = Symbol())
-    name = getname(pkg) == Symbol() ? :Package : getname(pkg)
-    key = @inline static_symbol(Symbol(prefix), Symbol(name), :_, i)
-    return IdentifiableAlgo(pkg, key; customname = getname(pkg))
-end
-
-@inline @generated function inc!(pkg::Package)
-    _lcm = lcm(intervals(pkg)...)
-    # TODO: Use the compare/select wrap from the core inc! (LoopAlgorithms/CompositeAlgorithms.jl); mod1 costs ~3 ns per tick.
-    return :(getinc(pkg)[] = mod1(getinc(pkg)[] + 1, $_lcm))
 end
 
 @inline function getmultiplier(contextview::SubContextView{B, SubKey}, instance::AbstractIdentifiableAlgo) where {B<:ContextBundle, SubKey}

@@ -31,7 +31,7 @@ Relevant files:
 
 - `src/LoopAlgorithms/CompositeAlgorithms.jl`
 - `src/Threaded/CompositeAlgorithms.jl`
-- `src/Packaging/Interface.jl`
+- `src/Packaging/Step.jl`
 
 The `inc!` methods compute a type-known LCM and update a `Ref` with `mod1`.
 For tight loops, this can be slower than a simple branch:

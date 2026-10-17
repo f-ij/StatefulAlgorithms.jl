@@ -98,3 +98,9 @@ function package_alias(func, registry::NameSpaceRegistry, routes::Routes, pairs)
     next_pairs = match(func, target) ? (pairs..., route_to_alias_zip(route, registry)...) : pairs
     return package_alias(func, registry, Base.tail(routes), next_pairs)
 end
+
+function Autokey(pkg::Package, i::Int, prefix = Symbol())
+    name = getname(pkg) == Symbol() ? :Package : getname(pkg)
+    key = @inline static_symbol(Symbol(prefix), Symbol(name), :_, i)
+    return IdentifiableAlgo(pkg, key; customname = getname(pkg))
+end
