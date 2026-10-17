@@ -12,8 +12,9 @@ algotype(f::Any) = typeof(f)
 
 abstract type AbstractIdentifiableAlgo{F, Id, VarAliases, AlgoName,ContextKey} <: ProcessAlgorithm end
 
-
-
+#############################################
+####### GETTERS (from type parameters) ######
+#############################################
 
 staticmach_by(::Union{<:AbstractIdentifiableAlgo{F,Id},Type{<:AbstractIdentifiableAlgo{F,Id}}}) where {F,Id} = Id
 
@@ -49,12 +50,15 @@ end
 # end
 
 ########################################
-############### Traits #################
+##### GETTERS SUBTYPES MUST DEFINE #####
 ########################################
 
-@inline setid(sa::AbstractIdentifiableAlgo, newid) = error("Not implemented for type: $(typeof(sa))")
 @inline getalgo(sa::AbstractIdentifiableAlgo{F}) where {F} = error("Not implemented for type: $(typeof(sa))")
 @inline getalgos(sa::AbstractIdentifiableAlgo) = error("Not implemented for type: $(typeof(sa))")
+
+########################################
+############### Traits #################
+########################################
 
 @inline function hasautokey(sa::AbstractIdentifiableAlgo)
     key = getkey(sa)
@@ -68,9 +72,10 @@ end
 @inline hasgivenkey(sa::AbstractIdentifiableAlgo) = haskey(sa) && !hasautokey(sa)
 
 ################################################
-########## SETTING PROPERTIES/TRAITS ###########
+####### SETTERS SUBTYPES MUST DEFINE ###########
 ################################################
 
+@inline setid(sa::AbstractIdentifiableAlgo, newid) = error("Not implemented for type: $(typeof(sa))")
 setcontextkey(sa::AbstractIdentifiableAlgo, newname::Symbol) = error("Not implemented for type: $(typeof(sa))")
 replacecontextkeys(a::AbstractIdentifiableAlgo, ::Any) = error("Not implemented for type: $(typeof(a))")
 setvaraliases(sa::AbstractIdentifiableAlgo, newaliases) = error("Not implemented for type: $(typeof(sa))")
