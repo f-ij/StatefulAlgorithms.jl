@@ -60,7 +60,7 @@ _kept_returns_expr(names) = Expr(:tuple, Expr(:parameters, (Expr(:kw, name, :(ge
 @inline @generated function _call_payload(contextview::SCV, retval::R) where {SCV<:SubContextView, R<:NamedTuple}
     names = _call_return_names(SCV, R)
     isempty(names) && return :((;))
-    return :(@inline _merge_payload(contextview, $(_kept_returns_expr(names)), ReturnDemand{$names}()))
+    return :(@inline _build_merge_payload(contextview, $(_kept_returns_expr(names)), ReturnDemand{$names}()))
 end
 
 """Merge a `Callable` return through its view: each name the view sees is written where it lives (see `_call_return_names`)."""

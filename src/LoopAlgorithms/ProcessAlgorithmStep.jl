@@ -66,7 +66,7 @@ end
         _every_field(PersistentContextType)
 
 """
-What one step of a leaf writes into the persistent context (see `_merge_payload`), built from the same pieces as its
+What one step of a leaf writes into the persistent context (see `_build_merge_payload`), built from the same pieces as its
 `_step!`. Only its type is used.
 """
 @inline function _leaf_payload(algo::A, lc::L, wiring::W, namespace::N) where {A,L,W,N}
@@ -80,4 +80,4 @@ end
     return @inline _writes_payload(contextview, (@inline _step_writes(retval, demand)), demand)
 end
 @inline _writes_payload(contextview, ::NamedTuple{()}, demand::ReturnDemand) = (;)
-@inline _writes_payload(contextview, writes::NamedTuple, demand::ReturnDemand) = @inline _merge_payload(contextview, writes, demand)
+@inline _writes_payload(contextview, writes::NamedTuple, demand::ReturnDemand) = @inline _build_merge_payload(contextview, writes, demand)
