@@ -8,7 +8,7 @@ _kwarg_expr(item::Tuple) = Expr(:kw, first(item), _arg_expr(last(item)))
 
 """Read the input names from `view`, call the function, and return the outputs by plan name."""
 @inline @generated function step!(ex::Callable{F, Args, Kwargs, Returns}, view) where {F, Args, Kwargs, Returns}
-    input_names = unique(Symbol[n for item in (Args..., Kwargs...) for n in _input_names(item)])
+    input_names = callable_input_names(ex)
     reads = [:($(_input_var(n)) = @inline getproperty(view, $(QuoteNode(n)))) for n in input_names]
     call = Expr(:call, :(getfield(ex, :f)), Expr(:parameters, map(_kwarg_expr, Kwargs)...), map(_arg_expr, Args)...)
 
@@ -18,7 +18,7 @@ _kwarg_expr(item::Tuple) = Expr(:kw, first(item), _arg_expr(last(item)))
         $call
         return (;)
     end
-    plan_names = kind === :properties ? map(last, names) : map(n -> n isa Splat ? splatname(n) : n, names)
+    plan_names = callable_return_names(ex)
     assign = if kind === :single
         :($(_output_var(only(plan_names))) = $call)
     elseif kind === :unpack

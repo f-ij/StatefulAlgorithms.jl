@@ -67,34 +67,36 @@ function Callable(f::F, args::Tuple, kwargs, returns) where {F}
 end
 Callable(f, args::Tuple, returns) = Callable(f, args, (;), returns)
 
-# Returns are encoded as the type `Tuple{Val{kind}, Val{names}, Tuple{types...}}` (a type, so it can
-# hold the return types); `Any` means unchecked.
-_returns_type(kind, names, types) = Tuple{Val{kind}, Val{names}, types}
-_returns_parts(::Type{Tuple{Val{kind}, Val{names}, types}}) where {kind, names, types} = (kind, names, types)
-_return_name(x::Symbol) = (x, Any)
-_return_name(x::Splat) = (x, Any)
+"""
+The returns of a `Callable`, as a type: `kind` is `:none`, `:single`, `:unpack` or `:properties`, `names` the return
+names (for `:properties`, `(property, name)` pairs), `types` a `Tuple{...}` of their types (`Any` means unchecked).
+The types are a `Tuple` type because a tuple of types cannot be a type parameter.
+"""
+struct CallReturns{kind, names, types} end
+_returns_parts(::Type{CallReturns{kind, names, types}}) where {kind, names, types} = (kind, names, types)
+_return_name(x::Union{Symbol, Splat}) = (x, Any)
 _return_name(x::Pair{<:Union{Symbol, Splat}, <:Type}) = (x.first, x.second)
 _return_name(x) = error("Callable return names are `Symbol`s, `Splat(:name)`, or `name => Type`; got $(x)")
 function _encode_returns(returns)
-    returns === () && return _returns_type(:none, (), Tuple{})
+    returns === () && return CallReturns{:none, (), Tuple{}}
     if returns isa NamedTuple
         named = map(_return_name, values(returns))
-        return _returns_type(:properties, Tuple(zip(keys(returns), first.(named))), Tuple{last.(named)...})
+        return CallReturns{:properties, Tuple(zip(keys(returns), first.(named))), Tuple{last.(named)...}}
     end
     if returns isa Tuple
         named = map(_return_name, returns)
         count(n -> first(n) isa Splat, named) <= 1 || error("At most one `Splat` in Callable returns, got $(returns)")
-        return _returns_type(:unpack, first.(named), Tuple{last.(named)...})
+        return CallReturns{:unpack, first.(named), Tuple{last.(named)...}}
     end
     name, T = _return_name(returns)
     name isa Splat && error("A single Callable return cannot be `Splat`; use `(Splat(:$(splatname(name))),)`")
-    return _returns_type(:single, (name,), Tuple{T})
+    return CallReturns{:single, (name,), Tuple{T}}
 end
 
 _input_names(item::Symbol) = (item,)
 _input_names(item::Splat) = (splatname(item),)
 _input_names(item::Tuple) = _input_names(last(item))   # keyword (name, input)
-_input_names(item) = ()                                # literal
+_input_names(::ValueRef) = ()                          # literal
 
 """The plan names a `Callable` (type) reads, or every name read by the `Callable`s in `funcs`."""
 callable_input_names(::Type{<:Callable{F, Args, Kwargs}}) where {F, Args, Kwargs} =
