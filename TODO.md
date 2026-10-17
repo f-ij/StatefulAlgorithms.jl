@@ -133,6 +133,7 @@ Restored 2026-10-09 from `fix/type-stability` (`e1dcbbf`, now tag `archive/type-
   - Not started. `composite_dsl.md` gained a state section on `main` with the state-scoping work.
 
 ## Inspection / ContextAnalyzer
+- [ ] **Check that the inspection system (`src/Inspection/`, `inspect` → `InspectionReport`) is fully operational.** Run `inspect` on current loop algorithms (`@Routine`, `@CompositeAlgorithm`, `@StepAlgorithm`, DSL locals, captured returns, routes, shares, `@input`s, nested/packaged algorithms) and check that every section of the report (registry entries, routes, shares, stateful contexts, runtime inputs, analyzer init/step passes) is filled and correct. Also check that `test/InspectionTest.jl`, `examples/inspection_example.jl`, `docs/src/user/init_analysis.md` and `src/Inspection/README.md` still match the code. Fix or list what's broken here. Added 2026-10-17 on `refactor/dsl-locals-rebased`.
 - [ ] `src/ContextAnalyzer/ContextAnalyzer.jl:309`: the analyzer ignores routes and shares, so `inspect` lists routed and defaulted values as unresolved requests.
 
 ## Printing, legacy code, exports
