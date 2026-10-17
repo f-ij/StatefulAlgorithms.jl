@@ -51,8 +51,13 @@ end
 """The `(subcontext, field)` pairs a carried named tuple type holds, as `Val(written)`."""
 @generated function _carried_fields(::Type{CarriedType}) where {CarriedType<:NamedTuple}
     written = Tuple{Symbol, Symbol}[]
-    for (s, S) in zip(fieldnames(CarriedType), fieldtypes(CarriedType)), f in fieldnames(S)
-        push!(written, (s, f))
+    # By index, not `zip` over `fieldnames`/`fieldtypes`: those are tuples whose types depend on the carried type, so
+    # iterating the `zip` would compile once per carried type.
+    for i in 1:fieldcount(CarriedType)
+        S = fieldtype(CarriedType, i)
+        for j in 1:fieldcount(S)
+            push!(written, (fieldname(CarriedType, i), fieldname(S, j)))
+        end
     end
     return :(Val($(Tuple(written))))
 end
