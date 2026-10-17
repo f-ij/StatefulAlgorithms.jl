@@ -94,14 +94,12 @@ end
 
 @inline isresolved(la::LoopAlgorithm) = !isnothing(getregistry(la))
 @inline isresolved(::AbstractPlan) = false
+@inline isresolved(::LA) where {LA<:LoopSpec} = false
 @inline getid(la::Union{LoopAlgorithm{Plan,O,R,C,I,Ov,id}, Type{<:LoopAlgorithm{Plan,O,R,C,I,Ov,id}}}) where {Plan,O,R,C,I,Ov,id} = id
 @inline hasid(la::Union{LoopAlgorithm{Plan,O,R,C,I,Ov,id}, Type{<:LoopAlgorithm{Plan,O,R,C,I,Ov,id}}}) where {Plan,O,R,C,I,Ov,id} = !isnothing(id)
 @inline id(la::Union{LoopAlgorithm{Plan,O,R,C,I,Ov,id}, Type{<:LoopAlgorithm{Plan,O,R,C,I,Ov,id}}}) where {Plan,O,R,C,I,Ov,id} = id
 
-"""
-Trait for setup
-"""
-@inline iscomposite(::Any) = false
+# `iscomposite` for plans (default and docstring in Hooks.jl)
 @inline iscomposite(::Type{<:LoopSpec}) = false
 @inline iscomposite(::Type{<:CompositeAlgorithm}) = true
 @inline iscomposite(::Type{<:LoopAlgorithm{Plan}}) where {Plan} = iscomposite(Plan)
@@ -113,9 +111,6 @@ algotypes(::Type{<:LoopAlgorithm{Plan}}) where {Plan} = algotypes(Plan)
 @inline subalgotypes(::Union{LoopAlgorithm{Plan}, Type{<:LoopAlgorithm{Plan}}}) where {Plan} = subalgotypes(Plan)
 @inline numalgos(::Union{LoopAlgorithm{Plan}, Type{<:LoopAlgorithm{Plan}}}) where {Plan} = numalgos(Plan)
 @inline getalgotype(::Union{LoopAlgorithm{Plan}, Type{<:LoopAlgorithm{Plan}}}, idx) where {Plan} = getalgotype(Plan, idx)
-
-# Reset needs to be implemented
-@inline reset!(a::Any) = a
 
 """
 Get the numbers Val(1), Val(2), ... Val(N) for the N algorithms in a composite or routine, as a tuple.
@@ -143,31 +138,3 @@ end
 
 @inline Base.length(la::LoopAlgorithm) = length(getplan(la))
 @inline Base.eachindex(la::LoopAlgorithm) = eachindex(getplan(la))
-@inline reset!(la::LoopAlgorithm) = la
-
-"""
-Internal single-step entrypoint for tests and manual loop-plan driving.
-
-This builds the minimal process handle needed by routines and interval logic,
-then enters the same `_step!` chain used by `run`.
-"""
-@inline function _step!(la::LA, persistent_context::C) where {LA<:LoopSpec, C<:AbstractContext}
-    lifetime = Indefinite()
-    process = LoopRunProcess(lifetime)
-    plan = @inline getplan(la)
-    cursor = @inline loop_cursor(plan, Val(false))
-    runtime_context = @inline _empty_context()
-    stepped_lc = @inline _step!(plan, cursor, LoopContext(persistent_context, runtime_context), PlanWiringView(getwiring(plan)), Namespace{nothing}(), process, lifetime)
-    return @inline getpersistent(stepped_lc)
-end
-
-"""
-Return the public result for a loop after cleanup has produced the persistent context.
-"""
-@inline function _loop_final_result(algo, cleaned_context)
-    return cleaned_context
-end
-
-@inline function _loop_final_result(algo, cleaned_context, runtime_context)
-    return cleaned_context
-end

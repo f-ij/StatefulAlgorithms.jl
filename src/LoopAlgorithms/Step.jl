@@ -198,3 +198,21 @@ Base.@constprop :aggressive @inline @generated function _step!(r::R, cursor::S, 
     push!(exprs, :(return @inline leave_scope(lc, outer)))
     return Expr(:block, exprs...)
 end
+
+"""
+Internal single-step entrypoint for tests and manual loop-plan driving.
+
+This builds the minimal process handle needed by routines and interval logic,
+then enters the same `_step!` chain used by `run`.
+"""
+@inline function _step!(la::LA, persistent_context::C) where {LA<:LoopSpec, C<:AbstractContext}
+    lifetime = Indefinite()
+    process = LoopRunProcess(lifetime)
+    plan = @inline getplan(la)
+    cursor = @inline loop_cursor(plan, Val(false))
+    runtime_context = @inline _empty_context()
+    stepped_lc = @inline _step!(plan, cursor, LoopContext(persistent_context, runtime_context), PlanWiringView(getwiring(plan)), Namespace{nothing}(), process, lifetime)
+    return @inline getpersistent(stepped_lc)
+end
+
+@inline reset!(la::LoopAlgorithm) = la
