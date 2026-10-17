@@ -72,13 +72,6 @@ _build_local(values::NT) where {NT<:NamedTuple} = Local{_to_storage_types(NT)}(_
 @inline _extract_locals(::T) where {T} = (;)
 
 """
-Make the name of the slot of a declared local (in `_declared_locals`) or a captured return (in `_captured_returns`).
-One of the root plan keeps its name; one of a nested plan is suffixed with that plan's position, `x@1.2` (see `Scope`).
-`path` is the plan's position, e.g. "1.2"; a `String` so the resolver's recursion keeps one type.
-"""
-make_storage_name(name::Symbol, path::String) = isempty(path) ? name : Symbol(name, "@", path)
-
-"""
 Collect the initial values of every local declared in a plan tree, keyed by storage name: the
 memory for all of them is allocated in `_declared_locals` when a run starts.
 """
