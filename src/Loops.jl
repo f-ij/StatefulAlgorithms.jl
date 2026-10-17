@@ -142,7 +142,7 @@ Run a single function in a loop indefinitely.
         carried = @inline next_carried(carried, stepped_persistent_context)
         @inline tick!(process)
         @inline inc!(process)
-        if @inline breakcondition(lifetime, process, stepped_persistent_context)
+        if @inline _process_breakcondition(lifetime, process, stepped_persistent_context)
             break
         end
     end
@@ -189,7 +189,7 @@ Base.@constprop :aggressive @inline function loop(process::P, algo::F, start_per
         carried = @inline next_carried(carried, stepped_persistent_context)
         @inline tick!(process)
         @inline inc!(process)
-        if @inline breakcondition(lifetime, process, stepped_persistent_context)
+        if @inline _process_breakcondition(lifetime, process, stepped_persistent_context)
             break
         end
     end

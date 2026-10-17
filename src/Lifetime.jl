@@ -1,5 +1,5 @@
 export Repeat, Indefinite, Until, AtLeast, RepeatOrUntil, AtLeastAtMost
-export repeats, breakcondition
+export repeats
 
 abstract type Lifetime end
 
@@ -23,13 +23,6 @@ struct Repeat <: RepeatLifetime
 end
 
 
-function breakcondition(lt::Union{Repeat, Indefinite}, process::P, context::C) where {P <: AbstractProcess, C}
-    if @inline !shouldrun(process)
-        return true
-    else
-        return false
-    end
-end
 struct Until{Vars, F} <: IndefiniteLifetime
     cond::F
 end
@@ -37,7 +30,7 @@ end
 Until(cond::Function, Vars...) = Until{Vars, typeof(cond)}(cond)
 
 
-function breakcondition(u::Until{Vars}, process::P, context::C) where {Vars, P <: AbstractProcess, C}
+function _process_breakcondition(u::Until{Vars}, process::P, context::C) where {Vars, P <: AbstractProcess, C}
     if @inline !shouldrun(process)
         return true
     else
@@ -56,7 +49,7 @@ AtLeast(cond::Function, atleast::Int, Vars...) = AtLeast{Vars, typeof(cond)}(atl
 
 @inline _atleast_reached(process::AbstractProcess, atleast::Int) = loopint(process) > atleast
 
-function breakcondition(al::AtLeast{Vars}, process::P, context::C) where {Vars, P <: AbstractProcess, C}
+function _process_breakcondition(al::AtLeast{Vars}, process::P, context::C) where {Vars, P <: AbstractProcess, C}
     if @inline !shouldrun(process)
         return true
     elseif @inline !_atleast_reached(process, al.atleast)
@@ -77,7 +70,7 @@ repeats(rou::RepeatOrUntil) = rou.repeats
 
 RepeatOrUntil(cond::Function, repeats::Int, Vars...) = RepeatOrUntil{Vars, typeof(cond)}(repeats, cond)
 
-function breakcondition(ru::RepeatOrUntil{Vars}, process::P, context::C) where {Vars, P <: AbstractProcess, C}
+function _process_breakcondition(ru::RepeatOrUntil{Vars}, process::P, context::C) where {Vars, P <: AbstractProcess, C}
     if @inline !shouldrun(process)
         return true
     else
@@ -96,7 +89,7 @@ repeats(aam::AtLeastAtMost) = aam.repeats
 
 AtLeastAtMost(cond::Function, atleast::Int, atmost::Int, Vars...) = AtLeastAtMost{Vars, typeof(cond)}(atleast, atmost, cond)
 
-function breakcondition(aam::AtLeastAtMost{Vars}, process::P, context::C) where {Vars, P <: AbstractProcess, C}
+function _process_breakcondition(aam::AtLeastAtMost{Vars}, process::P, context::C) where {Vars, P <: AbstractProcess, C}
     if @inline !shouldrun(process)
         return true
     elseif @inline !_atleast_reached(process, aam.atleast)
