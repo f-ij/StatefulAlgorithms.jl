@@ -150,7 +150,7 @@ end
                 push!(call_args, ZT <: Tuple ? :(getfield(getfield(zips, $j), $i)) : :(getfield(zips, $j)[$i]))
             end
         end
-        push!(block.args, :(r = $(Expr(:call, :f, call_args...))))
+        push!(block.args, :(r = @inline $(Expr(:call, :f, call_args...))))
     end
     push!(block.args, :r)
     return block
@@ -170,7 +170,7 @@ end
 @inline @generated function unrollreplace_splat(f::F, to_replace::C, args::Vararg{Any,N}) where {F,C,N}
     block = Expr(:block, :(r = to_replace))
     for i in 1:N
-        push!(block.args, :(r = f(r, getfield(args, $i))))
+        push!(block.args, :(r = @inline f(r, getfield(args, $i))))
     end
     push!(block.args, :r)
     return block
@@ -188,7 +188,7 @@ end
 @inline @generated function unrollreplace_splat_withargs(f::F, to_replace::C, as::Vararg{Any,N}; args) where {F,C,N}
     block = Expr(:block, :(r = to_replace))
     for i in 1:N
-        push!(block.args, :(r = f(r, getfield(as, $i), args...)))
+        push!(block.args, :(r = @inline f(r, getfield(as, $i), args...)))
     end
     push!(block.args, :r)
     return block
