@@ -61,7 +61,7 @@ helper functions specializes the same way, whatever the entry does; only handles
 
 ## Type stability today (resolve_infer.jl, infer_check.jl)
 
-On a concrete normalized plan: `LoopAlgorithm(plan)`, `attach_registry_to_tree` and `init` infer to concrete types;
+On a concrete normalized plan: `LoopAlgorithm(plan)`, `_attach_registry` and `init` infer to concrete types;
 `setup_registry_and_keyed_algos` returns `Tuple{NameSpaceRegistry, Any}` (the keyed plan type is lost in `add_algos_to_registry`) and
 `resolve_plan_wiring` returns `Any`, so `resolve` is `Any` independent of the ids. The erased entry also returns `Any`; the generated (type-stable) entry
 infers it at 4.9 to 8.1 ms per fresh-uuid call.

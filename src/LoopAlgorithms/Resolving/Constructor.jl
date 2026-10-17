@@ -8,25 +8,22 @@ function resolve(la1::LA1, la2::LA2, las::Vararg{LoopSpec}) where {LA1<:LoopSpec
     loopalgorithms = (la1, la2, las...)
     registry, keyed_loopalgorithms = _shared_registry_and_keyed_algos(loopalgorithms)
     return map(keyed_loopalgorithms) do resolved
-        resolved = attach_registry_to_tree(resolved, registry)
+        resolved = _attach_registry(resolved, registry)
         resolved = resolve_plan_wiring(resolved, registry)
         setoptions(resolved, _root_options(resolved))
     end
 end
 
 """Build one registry and keyed plan tree for several loop algorithms."""
+# TODO: a `FinalizedAlgorithm` argument fails here (`LoopAlgorithm(::FinalizedAlgorithm)` has no method), and unlike
+# `resolve(la)` this skips the `isresolved` check and `Unique` id normalization.
 function _shared_registry_and_keyed_algos(loopalgorithms::LAS) where {LAS<:Tuple}
     registry = NameSpaceRegistry()
     keyed_loopalgorithms = ()
     for la in loopalgorithms
         resolved = la isa LoopAlgorithm ? la : LoopAlgorithm(la)
-
-        states = flat_states(resolved)
-        multipliers = ntuple(i -> 1, length(states))
-        registry = addall(registry, states, multipliers)
-
-        registry, keyed_plan = add_algos_to_registry(registry, getplan(resolved), 1.0)
-        keyed_loopalgorithms = (keyed_loopalgorithms..., setfield(resolved, :plan, keyed_plan))
+        registry, keyed = setup_registry_and_keyed_algos(resolved, registry)
+        keyed_loopalgorithms = (keyed_loopalgorithms..., keyed)
     end
     return registry, keyed_loopalgorithms
 end

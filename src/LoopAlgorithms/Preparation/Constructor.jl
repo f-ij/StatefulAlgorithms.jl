@@ -1,12 +1,27 @@
 export resolve
 
 #=
+URGENT (2026-10-17, from a review of this file; not fixed yet):
+1. Compile time: `_resolve_wiring_grouped` and `_merge_global_wiring` (section 3) build their named tuples by tuple
+   recursion and splatting (`(; combined..., key => value)` in `_append_combined_keys`). Called from the `@nospecialize`
+   step 3, each call is a runtime dispatch, and besides compiling for each registry and wiring type they compile one
+   method instance per intermediate named-tuple type. Build `Symbol[]`/`Any[]` vectors and one
+   `NamedTuple{Tuple(keys)}(Tuple(values))` instead, as `_scoped_names` does.
+2. `_resolve_scopes` calls `_find_returns_read_in_plan` at every node, and each call walks that node's whole subtree:
+   the work is depth × size of the tree. Compute it once, bottom-up, if deep plans appear.
+3. `@inline` on `_resolve_plan` has no effect: its only caller, `resolve`, is `@nospecializeinfer`, so the call is
+   dynamic.
+=#
+
+#=
 Resolving a plan: everything that can only be decided once the whole composition is known.
 
 1. Registry: every algorithm and state in the tree gets a key (`Sensor_1`, `Sensor_2`, ...).
    Children are replaced by their raw algorithm and the key goes into the plan's `namespaces`.
    Calls (`Callable`) have no identity: they are not registered and share `:_captured_returns`.
-2. The registry is attached to the root wrapper and to nested `LoopAlgorithm` wrappers.
+   Nested wrappers (`LoopAlgorithm`, `FinalizedAlgorithm`) are replaced by their plan, so after this step every
+   nested child that is a `LoopSpec` is an `AbstractPlan`.
+2. The registry is attached to the root wrapper.
 3. Wiring: route/share endpoints become context keys, and plan-wide wiring is copied into each
    child's slot.
 4. Scopes: each plan node records (in its `PlanWiring` type) its scope, the declared locals and
@@ -52,17 +67,13 @@ walk the plan untyped.
     end
 
     registry, keyed_la = setup_registry_and_keyed_algos(la)   # 1. keys and namespaces
-    keyed_la = attach_registry_to_tree(keyed_la, registry)     # 2. share the registry
+    keyed_la = _attach_registry(keyed_la, registry)            # 2. share the registry
     keyed_la = resolve_plan_wiring(keyed_la, registry)         # 3. and 4. routes, shares, scopes
     # The `RootOption`s of the plan tree stay on the root wrapper.
     return setoptions(keyed_la, _root_options(la))
 end
 
 # Replace the children of a plan, of the plan inside a wrapper, or inside a finalized algorithm. Used by every step.
-@inline function rebuild_loopalgorithm_funcs(la::LA, funcs::F) where {LA<:AbstractPlan, F<:Tuple}
-    return setfield(la, :funcs, funcs)
-end
-
 @inline function rebuild_loopalgorithm_funcs(la::LA, funcs::F) where {LA<:LoopSpec, F}
     return setfield(la, :funcs, funcs)
 end
@@ -79,12 +90,12 @@ end
 # 1. Registry
 ############################################################################################
 
-"""Build the registry for the whole tree and return it with the keyed plan."""
-@inline function setup_registry_and_keyed_algos(la::LoopAlgorithm)
-    registry = NameSpaceRegistry()
-
-    # States are context-owned entries. They are registered first so the final
-    # registry keeps the same ordering as `setup_registry`.
+"""
+Add every state and algorithm of the tree to `registry` (a new one by default) and return it with the keyed plan.
+"""
+@inline function setup_registry_and_keyed_algos(la::LoopAlgorithm, registry::R = NameSpaceRegistry()) where {R<:NameSpaceRegistry}
+    # States are context-owned entries. They are registered first, as `setup_registry` (Setup.jl) also does,
+    # so both give the same registry ordering.
     states = flat_states(la)
     multipliers = ntuple(i -> 1, length(states))
     registry = addall(registry, states, multipliers)
@@ -103,15 +114,6 @@ their namespaces.
     algo_multipliers = tuplemap(m -> multiplier * m, multipliers(la))
     registry, raw_funcs, namespaces = add_algo_tuple_to_registry(registry, funcs, algo_multipliers)
     return registry, setfield(rebuild_loopalgorithm_funcs(la, raw_funcs), :namespaces, namespaces)
-end
-
-# A wrapper (`LoopAlgorithm`, `FinalizedAlgorithm`) rather than a plan: reached through a named
-# nested plan. Its children are registered, but no `namespaces` are recorded on it here.
-@inline function add_algos_to_registry(registry::R, la::LA, multiplier) where {R<:NameSpaceRegistry, LA<:LoopSpec}
-    funcs = getalgos(la)
-    algo_multipliers = tuplemap(m -> multiplier * m, multipliers(la))
-    registry, raw_funcs, _ = add_algo_tuple_to_registry(registry, funcs, algo_multipliers)
-    return registry, rebuild_loopalgorithm_funcs(la, raw_funcs)
 end
 
 """
@@ -147,56 +149,36 @@ end
 # A nested plan introduces no namespace: register its children instead, which carry theirs.
 # `Namespace{nothing}` only fills the plan's slot in `namespaces`.
 @inline function add_algo_to_registry(registry::R, algo::LA, multiplier) where {R<:NameSpaceRegistry, LA<:LoopSpec}
-    inner = algo isa LoopAlgorithm ? getplan(algo) : algo
-    registry, plan = add_algos_to_registry(registry, inner, multiplier)
+    registry, plan = add_algos_to_registry(registry, _unwrap_nested_plan(algo), multiplier)
     return registry, plan, Namespace{nothing}()
 end
 
 # The same for a nested plan that was given a name. Construction rejects `:name => plan`, but
 # `IdentifiableAlgo(plan, :name)` and `insert(la, i, :name => plan)` get here; the name is dropped.
 # TODO (TODO.md, "named plans as context slices"): record the name here as `:name => (child SCKeys...)`.
-@inline function add_algo_to_registry(registry::R, algo::IA, multiplier) where {F<:LoopSpec, R<:NameSpaceRegistry, IA<:AbstractIdentifiableAlgo{F}}
-    registry, plan = add_algos_to_registry(registry, getalgo(algo), multiplier)
-    return registry, plan, Namespace{nothing}()
-end
+@inline add_algo_to_registry(registry::R, algo::IA, multiplier) where {F<:LoopSpec, R<:NameSpaceRegistry, IA<:AbstractIdentifiableAlgo{F}} =
+    add_algo_to_registry(registry, getalgo(algo), multiplier)
+
+"""
+Return the plan of a nested child: a plan as it is, the plan inside a `LoopAlgorithm`, or the plan inside a
+`FinalizedAlgorithm`, whose final step is dropped with a warning (it is root-only, as the constructor does). `insert`
+does not go through the constructor's parsing, so either wrapper can reach this point.
+"""
+_unwrap_nested_plan(plan::AbstractPlan) = plan
+_unwrap_nested_plan(la::LoopAlgorithm) = getplan(la)
+_unwrap_nested_plan(fa::FinalizedAlgorithm) = _unwrap_nested_plan(_strip_nested_finalized_algorithm(fa))
 
 ############################################################################################
-# 2. Attaching the registry
+# 2. Attaching the registry: `_attach_registry` on the root (step 1 left no nested wrappers)
 ############################################################################################
-
-# Every `LoopAlgorithm` wrapper in the tree refers to the one registry of the whole tree.
-@inline function attach_registry_to_tree(la::LoopAlgorithm, registry::R) where {R<:NameSpaceRegistry}
-    plan = attach_registry_to_tree(getplan(la), registry)
-    return _attach_registry(setfield(la, :plan, plan), registry)
-end
-
-@inline function attach_registry_to_tree(la::LA, registry::R) where {LA<:LoopSpec, R<:NameSpaceRegistry}
-    funcs = tuplemap(getalgos(la)) do func
-        func isa LoopSpec ? attach_registry_to_tree(func, registry) : func
-    end
-    return rebuild_loopalgorithm_funcs(la, funcs)
-end
-
-@inline function attach_registry_to_tree(fa::FA, registry::R) where {FA<:FinalizedAlgorithm, R<:NameSpaceRegistry}
-    return finalstep(attach_registry_to_tree(inneralgorithm(fa), registry), finalfunction(fa))
-end
 
 ############################################################################################
 # 3. Wiring
 ############################################################################################
 
-# Only `LoopAlgorithm` roots (and finalized ones) have plan wiring to resolve.
-@inline resolve_plan_wiring(la, ::NameSpaceRegistry) = la
-
 # Resolves the wiring of the whole tree (3.), then its scopes (4.).
 @inline function resolve_plan_wiring(la::LoopAlgorithm, registry::NameSpaceRegistry)
     return setfield(la, :plan, _resolve_scopes(_resolve_plan_wiring_tree(getplan(la), registry, (;)), NoScope, ""))
-end
-
-# A finalized algorithm: resolve the loop inside, keep the final step.
-@inline function resolve_plan_wiring(fa::FA, registry::NameSpaceRegistry) where {FA<:FinalizedAlgorithm}
-    # The final step sees what outlives the steps (state, declared locals, inputs), not the last step's returns.
-    return finalstep(resolve_plan_wiring(inneralgorithm(fa), registry), finalfunction(fa))
 end
 
 """
@@ -257,43 +239,40 @@ shares) aimed at it, e.g. `(; Reader_1 = Wiring((route,), ()))`. Plan-wide wirin
 form so each child can take its group by its namespace.
 =#
 
-"""Append target-keyed `Wiring` groups for a tuple of namespace keys."""
-@inline _append_wiring_group_keys(grouped::NamedTuple, ::Tuple{}, route_groups::NamedTuple, share_groups::NamedTuple) = grouped
-@inline function _append_wiring_group_keys(grouped::NamedTuple, keys::Keys, route_groups::NamedTuple, share_groups::NamedTuple) where {Keys<:Tuple}
+"""
+Return a named tuple with the keys of `first_keys` and then those of `second_keys` (each once, in that order), each
+mapped to `combine(key)`.
+"""
+@inline _combine_by_key(combine::C, first_keys::NamedTuple, second_keys::NamedTuple) where {C} =
+    _append_combined_keys(combine, _append_combined_keys(combine, (;), propertynames(first_keys)), propertynames(second_keys))
+
+"""Append `key => combine(key)` to `combined` for each of `keys` it does not have yet."""
+@inline _append_combined_keys(::C, combined::NamedTuple, ::Tuple{}) where {C} = combined
+@inline function _append_combined_keys(combine::C, combined::NamedTuple, keys::Keys) where {C, Keys<:Tuple}
     key = first(keys)
-    if key in propertynames(grouped)
-        return _append_wiring_group_keys(grouped, Base.tail(keys), route_groups, share_groups)
+    if key in propertynames(combined)
+        return _append_combined_keys(combine, combined, Base.tail(keys))
     end
-    bucket = Wiring(get(route_groups, key, ()), get(share_groups, key, ()))
-    return _append_wiring_group_keys((; grouped..., key => bucket), Base.tail(keys), route_groups, share_groups)
+    return _append_combined_keys(combine, (; combined..., key => combine(key)), Base.tail(keys))
 end
 
 """Resolve a `Wiring` bucket and group it by target namespace."""
 function _resolve_wiring_grouped(registry::NameSpaceRegistry, wiring::Wiring)
     share_groups = resolve_options(registry, shares(wiring)...)
     route_groups = resolve_options(registry, routes(wiring)...)
-    grouped = _append_wiring_group_keys((;), propertynames(share_groups), route_groups, share_groups)
-    return _append_wiring_group_keys(grouped, propertynames(route_groups), route_groups, share_groups)
+    return _combine_by_key(share_groups, route_groups) do key
+        Wiring(get(route_groups, key, ()), get(share_groups, key, ()))
+    end
 end
 
 """Return already grouped global wiring unchanged."""
 _resolve_wiring_grouped(::NameSpaceRegistry, grouped::NamedTuple) = grouped
 
-"""Append merged global wiring for a tuple of namespace keys."""
-@inline _append_merged_global_keys(merged::NamedTuple, ::Tuple{}, left::NamedTuple, right::NamedTuple) = merged
-@inline function _append_merged_global_keys(merged::NamedTuple, keys::Keys, left::NamedTuple, right::NamedTuple) where {Keys<:Tuple}
-    key = first(keys)
-    if key in propertynames(merged)
-        return _append_merged_global_keys(merged, Base.tail(keys), left, right)
-    end
-    bucket = merge_wiring(get(left, key, Wiring()), get(right, key, Wiring()))
-    return _append_merged_global_keys((; merged..., key => bucket), Base.tail(keys), left, right)
-end
-
 """Merge grouped global wiring, with right-side route aliases occluding left."""
 function _merge_global_wiring(left::NamedTuple, right::NamedTuple)
-    merged = _append_merged_global_keys((;), propertynames(left), left, right)
-    return _append_merged_global_keys(merged, propertynames(right), left, right)
+    return _combine_by_key(left, right) do key
+        merge_wiring(get(left, key, Wiring()), get(right, key, Wiring()))
+    end
 end
 
 ############################################################################################
@@ -306,8 +285,6 @@ One of the root plan keeps its name; one of a nested plan is suffixed with that 
 `path` is the plan's position, e.g. "1.2". Defined before `_resolve_scopes_typed` (Typed.jl), whose generator calls it.
 """
 make_storage_name(name::Symbol, path::String) = isempty(path) ? name : Symbol(name, "@", path)
-
-
 
 """
     _resolve_scopes(plan, Outer, path)

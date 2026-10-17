@@ -18,7 +18,7 @@ Steps 1 and 2 (registry, attaching it) are shared with `resolve`; steps 3 and 4 
     end
 
     registry, keyed_la = setup_registry_and_keyed_algos(la)   # 1. keys and namespaces
-    keyed_la = attach_registry_to_tree(keyed_la, registry)     # 2. share the registry
+    keyed_la = _attach_registry(keyed_la, registry)            # 2. share the registry
     plan = _resolve_plan_wiring_tree_typed(getplan(keyed_la), registry, (;))   # 3. routes, shares
     keyed_la = setfield(keyed_la, :plan, _resolve_scopes_typed(plan, NoScope, Val(())))   # 4. scopes
     # The `RootOption`s of the plan tree stay on the root wrapper.

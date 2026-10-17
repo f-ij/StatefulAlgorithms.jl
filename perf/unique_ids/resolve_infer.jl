@@ -10,8 +10,8 @@ println("LoopAlgorithm(plan):                     ", short(rt(SA.LoopAlgorithm, 
 setup = SA.setup_registry_and_keyed_algos
 println("setup_registry_and_keyed_algos(la0):     ", short(rt(setup, la0)))
 registry, keyed = setup(la0)
-println("attach_registry_to_tree:                 ", short(rt(SA.attach_registry_to_tree, keyed, registry)))
-keyed2 = SA.attach_registry_to_tree(keyed, registry)
+println("_attach_registry:                        ", short(rt(SA._attach_registry, keyed, registry)))
+keyed2 = SA._attach_registry(keyed, registry)
 println("resolve_plan_wiring:                     ", short(rt(SA.resolve_plan_wiring, keyed2, registry)))
 println("resolve(la0) (the whole thing):          ", short(rt(resolve, la0)))
 println("resolve(plan) (what the user calls):     ", short(rt(resolve, plan)))
