@@ -1,6 +1,7 @@
 export ProcessContext
 
 
+include("ContextPartitions.jl")   # which partition of a run's context a subcontext name refers to
 include("StructDefs.jl")
 include("SubContext.jl")
 include("ProcessContexts.jl")
