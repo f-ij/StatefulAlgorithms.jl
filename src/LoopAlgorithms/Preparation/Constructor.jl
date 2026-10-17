@@ -257,13 +257,13 @@ function _resolve_scopes(la::LA, ::Type{Outer}, path::String, keep_returns::Bool
     end
     owners = Tuple(unique(Symbol[plan_child_namespace(rebuilt, i) for i in 1:length(funcs)
                                  if !(funcs[i] isa LoopSpec) && context_partition(Val(plan_child_namespace(rebuilt, i))) isa NamespacePartition]))
-    resets = (; returns = map(name -> scoped_storage_name(name, path), captured), owners)
+    resets = (; returns = map(name -> make_storage_name(name, path), captured), owners)
     return setfield(rebuilt, :wiring, PlanWiring(global_wiring(wiring), children, own_locals, Sc, Val(resets)))
 end
 
 """`inherited` (`(; name = storage_name, ...)`) with `names`, declared in the plan at `path`, added or hiding the inherited ones."""
 _scoped_names(inherited::NamedTuple, names::Tuple, path::String) =
-    merge(inherited, NamedTuple{names}(map(name -> scoped_storage_name(name, path), names)))
+    merge(inherited, NamedTuple{names}(map(name -> make_storage_name(name, path), names)))
 
 """Every name read from the captured returns in a plan tree: by the calls in it, and by its routes from `_captured_returns`."""
 function _return_reads(la::AbstractPlan)

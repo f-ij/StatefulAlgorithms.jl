@@ -68,7 +68,7 @@ end
 
 """Declared locals keep their declared field types when written."""
 @inline function merge_runtime_return(runtime_context::C, ::Val{:_declared_locals}, args::A) where {C<:ProcessContext,A<:NamedTuple}
-    locals = @inline _merge_declared(get_declared_locals(runtime_context), args)
+    locals = @inline _write_locals(get_declared_locals(runtime_context), args)
     return @inline with_subcontext(runtime_context, Val(:_declared_locals), SubContext{:_declared_locals}(locals))
 end
 
