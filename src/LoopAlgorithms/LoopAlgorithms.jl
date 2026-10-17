@@ -1,20 +1,4 @@
-"""
-Raw loop algorithms match by object identity when passed as values.
-
-This keeps existing wrapper surfaces like `IdentifiableAlgo(loopalgo, :name)`
-and routed references from `@context` consistent without introducing any custom
-DSL runtime machinery.
-"""
-@inline function match_by(la::LA) where {LA<:LoopSpec}
-    if isbits(la)
-        return la
-    end
-    return objectid(la)
-end
-
-"""Loop algorithm types match by their type."""
-@inline match_by(t::Type{<:LoopSpec}) = t
-
+include("Matching.jl")
 include("WithWiring.jl")          # before the plan code, which takes `WithWiring` children
 include("Callable/Callable.jl")   # before the plan code, which takes `Callable` children
 include("Utils.jl")
@@ -39,7 +23,6 @@ include("ReplaceMaterialization.jl")
 include("RuntimeInputs.jl")
 include("Step.jl")
 include("ProcessAlgorithmStep.jl")
-include("../CompositeDSL/CompositeDSL.jl")
 include("Fusing/Fusing.jl")
 include("Flatten.jl")
 include("Traits.jl")
