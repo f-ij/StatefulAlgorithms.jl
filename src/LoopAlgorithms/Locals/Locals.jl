@@ -164,7 +164,7 @@ end
 #=
 A local declared without a value or as `nothing` has no type of its own. As in Julia, its type
 is the type of every value written to it. That is found by inference before the first step
-(`_runtime_context_typed_before_loop`, Outputs.jl), so the context has its final type from the start: a local without a value
+(`_settle_runtime_context`, Outputs.jl), so the context has its final type from the start: a local without a value
 becomes `Maybe{T,F,UndefInitializer}`, a `nothing` local `Maybe{T,F,Nothing}`. Values written with
 different types are promoted to one type.
 
@@ -218,7 +218,7 @@ end
 
 """
 Widen the probes in context type `RC` by the types the step wrote to them, given the runtime context types one plan
-step can return (`returned`). Used by `_runtime_context_type_with_step_writes` (Outputs.jl).
+step can return (`returned`). Used by `_add_step_write_types` (Outputs.jl).
 """
 function _widen_probes(::Type{RC}, returned) where {RC<:ProcessContext}
     return _replace_local_types(RC) do name, P
