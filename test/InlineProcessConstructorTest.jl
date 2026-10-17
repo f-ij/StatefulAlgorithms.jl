@@ -2,7 +2,7 @@ using Test
 using StatefulAlgorithms
 
 @testset "InlineProcess constructor matches Process inputs and overrides" begin
-    @StepAlgorithm function InlineAccumulator(@managed(value = start, delta = 0); @inputs((; start)))
+    @StepAlgorithm function InlineAccumulator(@managed(value = start, delta = 0); @init((; start)))
         @update value += delta
     end
 
@@ -21,7 +21,7 @@ using StatefulAlgorithms
 end
 
 @testset "Process constructor resolves inputs for algorithm types" begin
-    @StepAlgorithm function TypeInputAccumulator(@managed(value = start); @inputs((; start)))
+    @StepAlgorithm function TypeInputAccumulator(@managed(value = start); @init((; start)))
         @update value += 1
     end
 

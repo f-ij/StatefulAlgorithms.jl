@@ -2,7 +2,7 @@ using Test
 using StatefulAlgorithms
 
 # Pushes `value` to `sink`, then adds `delta` to it; `value` starts at the input `start`.
-@StepAlgorithm function CopyManagedAccumulator(delta, @managed(value = start, sink); @inputs((; start)))
+@StepAlgorithm function CopyManagedAccumulator(delta, @managed(value = start, sink); @init((; start)))
     push!(sink, value)
     @update value = value + delta
 end

@@ -9,4 +9,4 @@ include("StepReturns.jl")
 include("Matching.jl")
 
 include("AlgoStates/AlgoStates.jl")
-include("ProcessAlgorithms.jl")
+include("StepAlgorithmMacro.jl")

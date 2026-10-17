@@ -105,6 +105,21 @@ Plain `@repeat n Algo()` and `nested()` are unchanged.
 - `@CompositeAlgorithm mc(spins, n = 3) begin … end` assigns the plan to `mc` and declares `@input spins` and
   `@input n = 3`.
 
+## 7. Renamed macros
+
+`@input` now only means a block input (`@input x` in a `@CompositeAlgorithm`), a value the block reads every step.
+The values a `@StepAlgorithm` uses only to build its `@managed` state are `@init` values:
+
+| Before | After |
+|---|---|
+| `@StepAlgorithm function F(a, @managed(b); @inputs((; b = 2)))` | `@StepAlgorithm function F(a, @managed(b); @init((; b = 2)))` |
+| `@input((; dt = 0.1))` in a `@StepAlgorithm` signature | `@init((; dt = 0.1))` |
+| `step!(F(), 1; @inputs((; b = 5)))` | `step!(F(), 1; @init((; b = 5)))` |
+| `@ProcessAlgorithm function F(...)` | `@StepAlgorithm function F(...)` |
+
+The old names still work and warn once that they are deprecated. Search and replace `@inputs((` and `@input((` by
+`@init((`; a block's `@input x` (no parentheses) is unchanged.
+
 ## Keeping the old behaviour
 
 The old rules are kept for now under new names, in `src/Legacy`:

@@ -5,12 +5,12 @@ mutable struct RuntimeShapeChanger <: StatefulAlgorithms.ProcessAlgorithm
     count::Int
 end
 
-@StepAlgorithm function LifecycleInitA(@managed(x = Ref(x), z = z); @inputs((; x = 0, z = 0)))
+@StepAlgorithm function LifecycleInitA(@managed(x = Ref(x), z = z); @init((; x = 0, z = 0)))
     x[] += 1
     return
 end
 
-@StepAlgorithm function LifecycleInitB(@managed(y = Ref(y)); @inputs((; y = 0)))
+@StepAlgorithm function LifecycleInitB(@managed(y = Ref(y)); @init((; y = 0)))
     y[] += 1
     return
 end
