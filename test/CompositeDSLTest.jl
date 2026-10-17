@@ -304,7 +304,7 @@ end
         @test length(StatefulAlgorithms.getstates(resolved)) == 1
         @test StatefulAlgorithms._composite_dsl_is_block_state(first(StatefulAlgorithms.getstates(resolved)))
 
-        sharedcontexts, sharedvars = StatefulAlgorithms._resolve_options(resolved)
+        sharedcontexts, sharedvars = StatefulAlgorithms._resolved_wiring_by_target(resolved)
         @test !isempty(sharedvars)
         combine_routes = sharedvars[:DSLCombineAlgo_1]
         @test any(route -> StatefulAlgorithms.get_fromname(route) == :_captured_returns && StatefulAlgorithms.localnames(route) == (:right,), combine_routes)
@@ -475,7 +475,7 @@ end
         end
 
         resolved_one_var = resolve(one_var_transform)
-        _, one_var_opts = StatefulAlgorithms._resolve_options(resolved_one_var)
+        _, one_var_opts = StatefulAlgorithms._resolved_wiring_by_target(resolved_one_var)
         one_var_routes = one_var_opts[:DSLSinkAlgo_1]
         @test length(one_var_routes) == 1
         @test StatefulAlgorithms.gettransform(first(one_var_routes)) !== nothing
@@ -494,7 +494,7 @@ end
         end
 
         resolved_two_var = resolve(two_var_transform)
-        _, two_var_opts = StatefulAlgorithms._resolve_options(resolved_two_var)
+        _, two_var_opts = StatefulAlgorithms._resolved_wiring_by_target(resolved_two_var)
         two_var_routes = two_var_opts[:DSLValueAlgo_1]
         @test length(two_var_routes) == 1
         @test StatefulAlgorithms.gettransform(first(two_var_routes)) !== nothing
@@ -768,7 +768,7 @@ end
         resolved = resolve(algo)
         wrapper = StatefulAlgorithms.getalgo(resolved, 2)
         wrapper_key = StatefulAlgorithms.plan_child_namespace(resolved, 2)
-        _, sharedvars = StatefulAlgorithms._resolve_options(resolved)
+        _, sharedvars = StatefulAlgorithms._resolved_wiring_by_target(resolved)
         routes = sharedvars[wrapper_key]
         @test length(routes) == 1
         @test occursin("nested_identity(plus_capture.captured)", sprint(show, StatefulAlgorithms.getplan(resolved)))   # the plan prints a call with its wires as argument sources
@@ -818,7 +818,7 @@ end
         resolved = resolve(algo)
         wrapper = StatefulAlgorithms.getalgo(resolved, 1)
         wrapper_key = StatefulAlgorithms.plan_child_namespace(resolved, 1)
-        _, sharedvars = StatefulAlgorithms._resolve_options(resolved)
+        _, sharedvars = StatefulAlgorithms._resolved_wiring_by_target(resolved)
         routes = sharedvars[wrapper_key]
         @test length(routes) == 1
         @test StatefulAlgorithms.gettransform(first(routes)) !== nothing
@@ -847,7 +847,7 @@ end
         result_key = StatefulAlgorithms.plan_child_namespace(resolved, 2)
         @test writer isa StatefulAlgorithms.ContextWrite
 
-        _, sharedvars = StatefulAlgorithms._resolve_options(resolved)
+        _, sharedvars = StatefulAlgorithms._resolved_wiring_by_target(resolved)
         routes = sharedvars[writer_key]
         @test length(routes) == 1
 
@@ -1023,7 +1023,7 @@ end
         resolved = resolve(algo)
         sink = StatefulAlgorithms.getalgo(resolved, 1)
         sink_key = StatefulAlgorithms.plan_child_namespace(resolved, 1)
-        _, sharedvars = StatefulAlgorithms._resolve_options(resolved)
+        _, sharedvars = StatefulAlgorithms._resolved_wiring_by_target(resolved)
         routes = sharedvars[sink_key]
         @test length(routes) == 1
 
@@ -1101,7 +1101,7 @@ end
         resolved = resolve(algo)
         sink = StatefulAlgorithms.getalgo(resolved, 1)
         sink_key = StatefulAlgorithms.plan_child_namespace(resolved, 1)
-        _, sharedvars = StatefulAlgorithms._resolve_options(resolved)
+        _, sharedvars = StatefulAlgorithms._resolved_wiring_by_target(resolved)
         routes = sharedvars[sink_key]
         @test length(routes) == 1
 
