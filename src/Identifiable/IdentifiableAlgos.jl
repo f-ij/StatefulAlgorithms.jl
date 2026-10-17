@@ -22,13 +22,6 @@ algotype(::Union{IdentifiableAlgo{F}, Type{<:IdentifiableAlgo{F}}}) where {F} = 
 
 @inline getalgo(sa::IdentifiableAlgo{F}) where {F} = sa.func
 @inline getalgos(sa::IdentifiableAlgo) = tuple(sa.func)
-"""Return the algorithm whose `step!` runs when `sa` steps: the algorithm it wraps."""
-@inline _get_steppable_algo(sa::IdentifiableAlgo{F}) where {F} = getfield(sa, :func)
-
-Base.@constprop :aggressive function profile_step_return(sa::IA, bundle::B) where {IA<:AbstractIdentifiableAlgo, B}
-    return typeof(@inline step!(_get_steppable_algo(sa), view(bundle, sa)))
-end
-
 @inline Base.getkey(sa::IdentifiableAlgo) = getkey(typeof(sa))
 @inline function Base.getkey(sat::Type{<:IdentifiableAlgo{F, Id, Aliases, AlgoName, ScopeName}}) where {F, Id, Aliases, AlgoName, ScopeName}
     ScopeName

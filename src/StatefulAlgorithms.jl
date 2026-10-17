@@ -11,7 +11,7 @@ module StatefulAlgorithms
 
     import DataStructures: Queue, dequeue!, enqueue!
 
-    export StepAlgorithm, ProcessAlgorithm, AlgoState, ParserOption, IfWrapped, AbstractPlan, AbstractLoopAlgorithm, AbstractLoopCursor, LoopSpec, profile_step_return, filter_by_type
+    export StepAlgorithm, ProcessAlgorithm, AlgoState, ParserOption, IfWrapped, AbstractPlan, AbstractLoopAlgorithm, AbstractLoopCursor, LoopSpec, filter_by_type
 
     const DEBUG_MODE = @load_preference("debug", false)
     debug_mode() = @load_preference("debug", false)
