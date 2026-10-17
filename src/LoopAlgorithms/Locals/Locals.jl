@@ -8,9 +8,7 @@ in the runtime context's `_declared_locals` subcontext, one slot per declaration
 
 1. Declaring     `Local`, how declarations are collected and named
 2. Storage       `Maybe`, for locals that may not hold a value yet, and the field types declared values are stored with
-3. Reading and writing during a run
-4. Typing locals declared without a type (no value, or `nothing`), before the run
-   (the errors when that fails are in TypeErrors.jl)
+3. Reading and writing during a run; a local declared without a type takes the type of its first value
 =#
 
 ############################################################################################
@@ -22,7 +20,7 @@ in the runtime context's `_declared_locals` subcontext, one slot per declaration
 
 Declare loop-local variables on a plan without a value, like `local x` (and `local y::Float64`) before a Julia `for`
 loop; what a DSL block's `local x` becomes. Pass it to `CompositeAlgorithm(...)` or `Routine(...)` like a route. A
-name alone gets the type of what is written to it, worked out before the run (section 4); `name => T` has type `T`.
+name alone gets the type of its first value (section 3); `name => T` has type `T`.
 Reading a local before anything is written to it is an error. A local with a starting value is a
 [`Declaration`](@ref).
 
@@ -141,109 +139,28 @@ _throw_undef() = throw(UndefRefError())
 # Shown after the run (`final_context`): a `Maybe` shows as its value, or as `nothing` while unset.
 @inline shown_value(m::Maybe) = iszero(getfield(m, :isset)) ? nothing : shown_value(getfield(m, :value))
 
-"""Write a step's returns `args` into the locals `old`: converted to each local's type, or widening a probe (section 4)."""
+#=
+A local declared without a type (`local x`, or a `nothing` starting value) holds that placeholder until its first
+write, which replaces it: the field gets the type of the value written (for a `nothing` local, a `Maybe` of it, which
+reads as `nothing` when `nothing` is written again), so the runtime context changes type, once. The loop continues
+with the new type (`_repeat_steps`, Loops.jl), and a block on a schedule gives the local the written type when it ran
+and the placeholder when it did not (`_conditional_loopcontext_type`, Step.jl). Later writes are converted to that
+type, as for a local declared with one.
+=#
+
+"""Whether a local's field type `T` is the placeholder of a local declared without a type."""
+_is_untyped_local(::Type{T}) where {T} = T === UndefInitializer || T === Nothing
+
+"""The value a placeholder local (field type `Empty`) holds after its first write of `value` (an expression) of type `V`."""
+_first_write_expr(::Type{UndefInitializer}, ::Type{V}, value) where {V} = value
+_first_write_expr(::Type{Nothing}, ::Type{V}, value) where {V} = V === Nothing ? value : :($(make_maybe_type(V, Nothing))($value))
+
+"""Write a step's returns `args` into the locals `old`: a placeholder is replaced by the value, anything else is converted to the local's type."""
 @inline @generated function _write_locals(old::NT, args::A) where {NT<:NamedTuple, A<:NamedTuple}
     values = map(fieldnames(NT)) do name
         !(name in fieldnames(A)) && return :(getfield(old, $(QuoteNode(name))))
-        fieldtype(NT, name) <: LocalProbe && return :(_record_probe_write(getfield(old, $(QuoteNode(name))), getfield(args, $(QuoteNode(name)))))
+        _is_untyped_local(fieldtype(NT, name)) && return _first_write_expr(fieldtype(NT, name), fieldtype(A, name), :(getfield(args, $(QuoteNode(name)))))
         return :(convert($(fieldtype(NT, name)), getfield(args, $(QuoteNode(name)))))
     end
     return :(NamedTuple{$(fieldnames(NT))}(($(values...),)))
 end
-
-############################################################################################
-# 4. Typing locals declared without a type, before the run
-############################################################################################
-
-#=
-A local declared without a value or as `nothing` has no type of its own. As in Julia, its type
-is the type of every value written to it. That is found by inference before the first step
-(`_settle_runtime_context`, Outputs.jl), so the context has its final type from the start: a local without a value
-becomes `Maybe{T,F,UndefInitializer}`, a `nothing` local `Maybe{T,F,Nothing}`. Values written with
-different types are promoted to one type.
-
-Everything here works on types, not values: a "probe" is a field *type* that stands in for such
-a local while inference finds out what gets written to it.
-=#
-
-"""Inference-only stand-in for an untyped local while its type is worked out; never constructed."""
-struct LocalProbe{T, Empty} end   # T: the local's type so far; Empty: `UndefInitializer` or `Nothing`, what it is before its first value
-@inline read_action(view::V, ::LocalProbe{T, UndefInitializer}) where {T, V<:SubContextView} =
-    T === Union{} ? _throw_undef() : DirectRead{T}(_pretend_value(T))
-@inline read_action(view::V, ::LocalProbe{T, Nothing}) where {T, V<:SubContextView} =
-    DirectRead{Union{Nothing, T}}(_pretend_value(Union{Nothing, T}))
-"""Return a value that inference treats as being of type `T`."""
-_pretend_value(::Type{T}) where {T} = Base.inferencebarrier(nothing)::T
-
-"""
-Inference only: record a write to a probe by widening the local's type with the written type; the field stays a
-probe. A write of a type the local already has leaves the probe's type as it is, so a step that may or may not write
-it (a child on a schedule) gives one type, not two.
-"""
-@generated _record_probe_write(::LocalProbe{T, Empty}, ::V) where {T, Empty, V} =
-    :($(LocalProbe{_widen_local_type(T, V, Empty), Empty}()))
-"""Widen the local type `T` with a written type `V`: `V` if nothing was written yet, else their promotion."""
-function _widen_local_type(T, V, Empty)
-    Empty === Nothing && (V = Base.typesplit(V, Nothing))   # writing `nothing` to a `nothing` local is always allowed
-    V === Union{} && return T
-    return T === Union{} ? V : promote_type(T, V)
-end
-
-_is_untyped_local(::Type{T}) where {T} = T === UndefInitializer || T === Nothing
-
-"""Get the type of the `_declared_locals` data in runtime context type `RC`."""
-_get_locals_type(::Type{RC}) where {RC<:ProcessContext} = fieldtype(fieldtype(fieldtype(RC, :subcontexts), :_declared_locals), :data)
-
-"""`RC` with each field type of its `_declared_locals` subcontext data replaced by `f(name, type)`."""
-function _replace_local_types(f, ::Type{RC}) where {RC<:ProcessContext}
-    D = fieldtype(RC, :subcontexts)
-    :_declared_locals in fieldnames(D) || return RC
-    L = _get_locals_type(RC)
-    newL = NamedTuple{fieldnames(L), Tuple{(f(n, fieldtype(L, n)) for n in fieldnames(L))...}}
-    newD = NamedTuple{fieldnames(D), Tuple{(n === :_declared_locals ? SubContext{:_declared_locals, newL} : fieldtype(D, n) for n in fieldnames(D))...}}
-    return ProcessContext{newD, fieldtype(RC, :reg)}
-end
-
-"""Replace every untyped local in runtime context type `RC` by a probe that has seen no writes."""
-@generated function _insert_probes(::Type{RC}) where {RC<:ProcessContext}
-    return _replace_local_types(RC) do name, T
-        _is_untyped_local(T) ? LocalProbe{Union{}, T} : T
-    end
-end
-
-"""
-Widen the probes in context type `RC` by the types the step wrote to them, given the runtime context types one plan
-step can return (`returned`). Used by `_add_step_write_types` (Outputs.jl).
-"""
-function _widen_probes(::Type{RC}, returned) where {RC<:ProcessContext}
-    return _replace_local_types(RC) do name, P
-        P <: LocalProbe || return P
-        T, Empty = P.parameters
-        for R in returned
-            W = fieldtype(_get_locals_type(R), name)
-            T = _widen_local_type(T, W <: LocalProbe ? W.parameters[1] : W, Empty)
-        end
-        return LocalProbe{T, Empty}
-    end
-end
-
-@generated function _has_untyped_locals(::Type{RC}) where {RC<:ProcessContext}
-    :_declared_locals in fieldnames(fieldtype(RC, :subcontexts)) || return false
-    return any(_is_untyped_local, fieldtypes(_get_locals_type(RC)))
-end
-
-"""Settle the initial locals: replace each untyped one by an unset `Maybe` of the type it settled on in `R`."""
-@generated function _settle_locals(locals::NT, ::Type{R}) where {NT<:NamedTuple, R<:ProcessContext}
-    L = _get_locals_type(R)
-    values = map(fieldnames(NT)) do name
-        P = fieldtype(L, name)
-        P <: LocalProbe || return :(getfield(locals, $(QuoteNode(name))))
-        T, Empty = P.parameters
-        T === Union{} && return :(getfield(locals, $(QuoteNode(name))))   # never written
-        isconcretetype(T) || return :(error($("Local `$name` is written with values of type $T, which is not concrete; declare its type.")))
-        return :($(make_maybe_type(T, Empty))())
-    end
-    return :(NamedTuple{$(fieldnames(NT))}(($(values...),)))
-end
-
-include("TypeErrors.jl")

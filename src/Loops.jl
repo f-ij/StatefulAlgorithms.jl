@@ -128,24 +128,13 @@ Run a single function in a loop indefinitely.
     step_cursor = @inline _loop_cursor(process, step_plan, resume)
     persistent_context = @inline _loop_persistent_context(start_persistent_context, resume)
     runtime_context = @inline _loop_runtime_context(func, inputs, process, lifetime, start_persistent_context, resume)
-    runtime_context = @inline _settle_runtime_context(step_plan, step_cursor, persistent_context, runtime_context, step_wiring, process, lifetime)
 
     isresuming && @atomic process.paused = false
 
     # Carry only the fields the steps write, not the whole context: fields left unchanged would otherwise be copied every
     # step (see src/Context/Carried/Carry.jl).
     carried = @inline create_carried(step_plan, step_cursor, LoopContext(persistent_context, runtime_context), step_wiring, Namespace{nothing}(), process, lifetime)
-    while true
-        # The step's `LoopContext` is built from the pieces the loop carries, and taken apart again after it.
-        stepped_lc = @inline _step!(step_plan, step_cursor, LoopContext((@inline with_carried(persistent_context, carried)), runtime_context), step_wiring, Namespace{nothing}(), process, lifetime)
-        stepped_persistent_context, runtime_context = (@inline getpersistent(stepped_lc)), (@inline getruntime(stepped_lc))
-        carried = @inline next_carried(carried, stepped_persistent_context)
-        @inline tick!(process)
-        @inline inc!(process)
-        if @inline _process_breakcondition(lifetime, process, stepped_persistent_context)
-            break
-        end
-    end
+    carried, runtime_context = _run_steps(carried, runtime_context, step_plan, step_cursor, persistent_context, step_wiring, process, lifetime)
     persistent_context = @inline with_carried(persistent_context, carried)
 
     if @inline _loop_ispaused(process)
@@ -175,24 +164,13 @@ Base.@constprop :aggressive @inline function loop(process::P, algo::F, start_per
     step_cursor = @inline _loop_cursor(process, step_plan, resume)
     persistent_context = @inline _loop_persistent_context(start_persistent_context, resume)
     runtime_context = @inline _loop_runtime_context(algo, inputs, process, lifetime, start_persistent_context, resume)
-    runtime_context = @inline _settle_runtime_context(step_plan, step_cursor, persistent_context, runtime_context, step_wiring, process, lifetime)
 
     isresuming && @atomic process.paused = false
 
     # Carry only the fields the steps write, not the whole context: fields left unchanged would otherwise be copied every
     # step (see src/Context/Carried/Carry.jl).
     carried = @inline create_carried(step_plan, step_cursor, LoopContext(persistent_context, runtime_context), step_wiring, Namespace{nothing}(), process, lifetime)
-    for _ in (@inline loopidx(process)):(@inline repeats(lifetime))
-        # The step's `LoopContext` is built from the pieces the loop carries, and taken apart again after it.
-        stepped_lc = @inline _step!(step_plan, step_cursor, LoopContext((@inline with_carried(persistent_context, carried)), runtime_context), step_wiring, Namespace{nothing}(), process, lifetime)
-        stepped_persistent_context, runtime_context = (@inline getpersistent(stepped_lc)), (@inline getruntime(stepped_lc))
-        carried = @inline next_carried(carried, stepped_persistent_context)
-        @inline tick!(process)
-        @inline inc!(process)
-        if @inline _process_breakcondition(lifetime, process, stepped_persistent_context)
-            break
-        end
-    end
+    carried, runtime_context = _repeat_steps((@inline loopidx(process)), carried, runtime_context, step_plan, step_cursor, persistent_context, step_wiring, process, lifetime)
     persistent_context = @inline with_carried(persistent_context, carried)
 
     if @inline _loop_ispaused(process)
@@ -203,4 +181,46 @@ Base.@constprop :aggressive @inline function loop(process::P, algo::F, start_per
     final_runtime_context = runtime_context
     persistent_context, returnvalue = @inline finalizer!(algo, persistent_context, runtime_context, process, lifetime)
     return @inline after_while(process, algo, persistent_context, final_runtime_context, returnvalue, start_persistent_context)
+end
+
+"""
+    _repeat_steps(i, carried, runtime_context, step_plan, step_cursor, persistent_context, step_wiring, process, lifetime)
+
+Run steps `i` to `repeats(lifetime)` (until the process's stop check holds) and return the carried fields and the
+runtime context after the last one. The steps run in a loop compiled for the runtime context's type; when a step
+returns another type (a local declared without a type gets its first value, Locals.jl), the remaining steps continue in
+a call compiled for that type, so the loop stays type-stable.
+"""
+function _repeat_steps(i::IndexType, carried::CarriedType, runtime_context::RuntimeContextType, step_plan::PlanType, step_cursor::CursorType, persistent_context::PersistentContextType, step_wiring::WiringViewType, process::ProcessType, lifetime::LifetimeType) where {IndexType<:Integer, CarriedType, RuntimeContextType, PlanType, CursorType, PersistentContextType, WiringViewType, ProcessType, LifetimeType}
+    for j in i:(@inline repeats(lifetime))
+        # The step's `LoopContext` is built from the pieces the loop carries, and taken apart again after it.
+        stepped_lc = @inline _step!(step_plan, step_cursor, LoopContext((@inline with_carried(persistent_context, carried)), runtime_context), step_wiring, Namespace{nothing}(), process, lifetime)
+        stepped_persistent_context, stepped_runtime_context = (@inline getpersistent(stepped_lc)), (@inline getruntime(stepped_lc))
+        carried = @inline next_carried(carried, stepped_persistent_context)
+        @inline tick!(process)
+        @inline inc!(process)
+        (@inline _process_breakcondition(lifetime, process, stepped_persistent_context)) && return carried, stepped_runtime_context
+        stepped_runtime_context isa RuntimeContextType || return _repeat_steps(j + 1, carried, stepped_runtime_context, step_plan, step_cursor, persistent_context, step_wiring, process, lifetime)
+        runtime_context = stepped_runtime_context
+    end
+    return carried, runtime_context
+end
+
+"""
+    _run_steps(carried, runtime_context, step_plan, step_cursor, persistent_context, step_wiring, process, lifetime)
+
+Run steps until the process's stop check holds and return the carried fields and the runtime context after the
+last one; a runtime context of another type continues in a call compiled for that type, as in `_repeat_steps`.
+"""
+function _run_steps(carried::CarriedType, runtime_context::RuntimeContextType, step_plan::PlanType, step_cursor::CursorType, persistent_context::PersistentContextType, step_wiring::WiringViewType, process::ProcessType, lifetime::LifetimeType) where {CarriedType, RuntimeContextType, PlanType, CursorType, PersistentContextType, WiringViewType, ProcessType, LifetimeType}
+    while true
+        stepped_lc = @inline _step!(step_plan, step_cursor, LoopContext((@inline with_carried(persistent_context, carried)), runtime_context), step_wiring, Namespace{nothing}(), process, lifetime)
+        stepped_persistent_context, stepped_runtime_context = (@inline getpersistent(stepped_lc)), (@inline getruntime(stepped_lc))
+        carried = @inline next_carried(carried, stepped_persistent_context)
+        @inline tick!(process)
+        @inline inc!(process)
+        (@inline _process_breakcondition(lifetime, process, stepped_persistent_context)) && return carried, stepped_runtime_context
+        stepped_runtime_context isa RuntimeContextType || return _run_steps(carried, stepped_runtime_context, step_plan, step_cursor, persistent_context, step_wiring, process, lifetime)
+        runtime_context = stepped_runtime_context
+    end
 end
