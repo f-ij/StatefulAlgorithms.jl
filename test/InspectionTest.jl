@@ -3,7 +3,7 @@ using StatefulAlgorithms
 
 StatefulAlgorithms.@StepAlgorithm function InspectionProducerForTest(
     @managed(history = Int[]);
-    @inputs((; seed::Int = 1))
+    @init((; seed::Int = 1))
 )
     push!(history, seed)
     return seed + 1

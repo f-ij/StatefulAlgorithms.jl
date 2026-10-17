@@ -77,8 +77,6 @@ module StatefulAlgorithms
     include("ProcessInteraction.jl")
     include("Copy.jl")
     include("Manager/Manager.jl")
-    
-    # include("ProcessAlgorithms.jl")
 
     include("LoopAlgorithms/LoopAlgorithms.jl")
     include("CompositeDSL/CompositeDSL.jl")

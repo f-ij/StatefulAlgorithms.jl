@@ -5,8 +5,8 @@ struct _CompositeDSLResolved{Kind, Entity, Inputs}
 end
 
 """ProcessAlgorithm direct-call metadata used by the DSL."""
-@inline _dsl_processalgorithm_positional_names(::Type{<:ProcessAlgorithm}) = ()
-@inline _dsl_processalgorithm_positional_names(algo::ProcessAlgorithm) = _dsl_processalgorithm_positional_names(typeof(algo))
+@inline _dsl_step_positional_names(::Type{<:ProcessAlgorithm}) = ()
+@inline _dsl_step_positional_names(algo::ProcessAlgorithm) = _dsl_step_positional_names(typeof(algo))
 
 """The DSL preserves the identity the user supplied instead of uniquifying it."""
 @inline _dsl_with_customname(algo, ::Val{Symbol()}) = algo
@@ -19,7 +19,7 @@ function _resolve_composite_dsl_algorithm_call(
     input_symbols::Tuple{Vararg{Symbol}},
     ::Val{Name},
 ) where {Name}
-    positional_names = _dsl_processalgorithm_positional_names(spec)
+    positional_names = _dsl_step_positional_names(spec)
     length(input_symbols) <= length(positional_names) || error("Too many positional DSL inputs for `$spec`. Expected at most $(length(positional_names)), got $(length(input_symbols)).")
 
     resolved = _dsl_with_customname(spec, Val(Name))
@@ -93,7 +93,7 @@ function _resolve_composite_dsl_call(
     ::Val{Name},
 ) where {Name}
     if spec isa Union{ProcessAlgorithm, Type{<:ProcessAlgorithm}}
-        positional_names = _dsl_processalgorithm_positional_names(spec)
+        positional_names = _dsl_step_positional_names(spec)
         length(routed_positional_inputs) <= length(positional_names) || error("Too many positional DSL inputs for `$spec`. Expected at most $(length(positional_names)), got $(length(routed_positional_inputs)).")
 
         resolved = _dsl_with_customname(spec, Val(Name))

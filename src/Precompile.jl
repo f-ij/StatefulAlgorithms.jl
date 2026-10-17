@@ -51,7 +51,7 @@ _process_precompile_scale(x; scale = 1.0) = x * scale
         x,
         @managed(total = start);
         gain = 1.0,
-        @inputs((; start = 0.0))
+        @init((; start = 0.0))
     )
         @update total = total + x * gain
         return total
@@ -61,7 +61,7 @@ _process_precompile_scale(x; scale = 1.0) = x * scale
         function _ProcessPrecompileConfigured(
             x;
             gain = 1.0,
-            @inputs((;))
+            @init((;))
         )
             y = x * gain + offset
             return (; y, offset)
@@ -78,7 +78,7 @@ _process_precompile_scale(x; scale = 1.0) = x * scale
             loss = Ref(0.0),
             nseen = Ref(0),
         );
-        @inputs((;))
+        @init((;))
     )
         current = params[]
         prediction = current.w * x[] + current.b

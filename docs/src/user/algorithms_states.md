@@ -149,7 +149,7 @@ The signature is split into:
 - plain positional arguments: values read from context during `StatefulAlgorithms.step!`
 - `@managed(...)` positional arguments: algorithm-owned values created during `StatefulAlgorithms.init`
 - normal keyword arguments: values read from context during `StatefulAlgorithms.step!`, using the declared default when absent
-- optional trailing `@input((; ...))` / `@inputs((; ...))` / `@init((; ...))`: values read only while constructing managed state
+- optional trailing `@init((; ...))`: values read only while constructing managed state
 - optional `@config ...` declarations before the function: fields stored on the generated algorithm object
 
 Example:
@@ -164,7 +164,7 @@ Example:
         @managed(buffer = zeros(n)),
         @managed(scale),
         @managed(metric = 0.0);
-        @inputs((; scale = 2.0))
+        @init((; scale = 2.0))
     )
         @inbounds for i in eachindex(signal)
             buffer[i] = damp * scale * signal[i]
@@ -180,7 +180,7 @@ Rules worth knowing:
 - `@managed(name)` captures `name` from the init context into local managed state.
 - `@managed(name = expr)` evaluates `expr` during `StatefulAlgorithms.init`.
 - `@managed(a, b = expr, c = expr2)` expands to multiple managed locals in order.
-- `@input/@inputs/@init` may only appear once and must be the last keyword-like item.
+- `@init` may only appear once and must be the last keyword-like item.
 - `@config` fields must have defaults and become fields on the generated struct.
   You can write them in a surrounding block or as a prelude like `@StepAlgorithm @config seed = 1 function MyAlgo(...) ... end`.
 - `@config` fields are always typed: `seed = 1` gives the struct a type parameter for `seed`, the type of its value
@@ -224,7 +224,7 @@ compiled again inside every plan that contains the algorithm.
 
 For a macro-generated algorithm `MyAlgo`, the main entrypoints are:
 
-- direct/bootstrap call: `step!(MyAlgo(), args...; @inputs((; ...)))`
+- direct call: `step!(MyAlgo(), args...; @init((; ...)))`
 - init hook: `StatefulAlgorithms.init(MyAlgo(), context)`
 - step hook: `StatefulAlgorithms.step!(MyAlgo(), context)`
 
@@ -243,7 +243,7 @@ locals before forwarding into that typed implementation.
 
 If you want `ContextAnalyser` to discover dependencies more reliably:
 
-- use `@inputs((; ...))` to make init-time requirements explicit
+- use `@init((; ...))` to make init-time requirements explicit
 - name what a step reads as arguments: positional for required reads, keywords with defaults for optional ones
 
 For deprecated hand-written `init`/`step!` methods: use `context.name` or `(; name) = context` for required reads,

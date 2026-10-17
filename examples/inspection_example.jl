@@ -2,7 +2,7 @@ using StatefulAlgorithms
 
 StatefulAlgorithms.@StepAlgorithm function InspectSource(
     @managed(counter = 0);
-    @inputs((; seed::Int = 1))
+    @init((; seed::Int = 1))
 )
     value = seed + counter
     @update counter += 1
@@ -26,7 +26,7 @@ StatefulAlgorithms.@StepAlgorithm function InspectOscillator(
     @managed(state = 1.0),
     @managed(velocity = 0.0),
     @managed(trajectory = Float64[]);
-    @inputs((; dt = 0.1))
+    @init((; dt = 0.1))
 )
     @update velocity = velocity - dt * state
     @update state = state + dt * velocity

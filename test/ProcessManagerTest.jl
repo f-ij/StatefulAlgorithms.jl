@@ -371,12 +371,12 @@ end
     @test isempty(only(slots(manager)).worker.buffer)
 end
 
-@StepAlgorithm function ManagerProcessAccumulator(@managed(value = Ref(start), buffer = Int[]); @inputs((; start = 0)))
+@StepAlgorithm function ManagerProcessAccumulator(@managed(value = Ref(start), buffer = Int[]); @init((; start = 0)))
     push!(buffer, value[])
     return
 end
 
-@StepAlgorithm function ManagerProcessMultiplier(@managed(value = Ref(start), buffer = Int[]); @inputs((; start = 0)))
+@StepAlgorithm function ManagerProcessMultiplier(@managed(value = Ref(start), buffer = Int[]); @init((; start = 0)))
     push!(buffer, 2 * value[])
     return
 end
@@ -924,7 +924,7 @@ end
 @StepAlgorithm function ManagerRuntimeJobStep(
     delta,
     @managed(total = base);
-    @inputs((; base = 0))
+    @init((; base = 0))
 )
     @update total += delta
 end

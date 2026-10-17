@@ -42,7 +42,7 @@ end
         a,
         @managed(c = b^2),
         @managed(b);
-        @inputs((; b = 1))
+        @init((; b = 1))
     )
         @update b = b + a
         @update c = c + b
@@ -61,15 +61,21 @@ end
     @test updated_names(CaptureInput) == (:b, :c)
 
     # Called directly, it returns its value.
-    boot_inputs = StatefulAlgorithms.step!(CaptureInput(), 2; @inputs((; b = 4)))
-    @test boot_inputs == 30
-
-    boot_init = StatefulAlgorithms.step!(CaptureInput(), 2; @init((; b = 4)))
-    @test boot_init == boot_inputs
+    @test StatefulAlgorithms.step!(CaptureInput(), 2; @init((; b = 4))) == 30
 end
 
-@testset "StepAlgorithm macro keeps @init declaration compatibility" begin
-    @StepAlgorithm function LegacyInputs(
+@testset "@inputs and @input are deprecated aliases of @init" begin
+    @test_logs (:warn, r"`@inputs\(\(; \.\.\.\)\)` is deprecated") @eval begin
+        @StepAlgorithm function DeprecatedInitAliasForTest(a, @managed(b); @inputs((; b = 2)))
+            return a + b
+        end
+    end
+    @test StatefulAlgorithms.init(DeprecatedInitAliasForTest(), (;)) == (; b = 2)
+    @test StatefulAlgorithms.step!(DeprecatedInitAliasForTest(), 1; @input((; b = 5))) == 6
+end
+
+@testset "StepAlgorithm macro: a @managed initializer reads @init values" begin
+    @StepAlgorithm function InitValues(
         a,
         @managed(c = b + 1),
         @managed(b);
@@ -78,11 +84,11 @@ end
         return (; total = a + b + c)
     end
 
-    prepared = StatefulAlgorithms.init(LegacyInputs(), (;))
+    prepared = StatefulAlgorithms.init(InitValues(), (;))
     @test prepared.b == 2
     @test prepared.c == 3
 
-    stepped = StatefulAlgorithms.step!(LegacyInputs(), (; a = 5, b = prepared.b, c = prepared.c))
+    stepped = StatefulAlgorithms.step!(InitValues(), (; a = 5, b = prepared.b, c = prepared.c))
     @test StatefulAlgorithms.step_value(stepped).total == 10
 end
 
@@ -92,7 +98,7 @@ end
         @managed(state),
         @managed(dt),
         @managed(velocity = 0.0);
-        @input((; dt = 0.1))
+        @init((; dt = 0.1))
     )
         @update state = state + dt + velocity + x
     end
@@ -111,7 +117,7 @@ end
     @StepAlgorithm function GroupedManaged(
         a,
         @managed(b, c = b + 1, d = nothing);
-        @inputs((; b = 2))
+        @init((; b = 2))
     )
         return (; total = a + b + c, d_value = d)
     end
@@ -152,7 +158,7 @@ end
             target,
             @managed(buffer = fill(seed, width));
             gain = 1,
-            @inputs((;))
+            @init((;))
         )
             total = target + sum(buffer) + gain + seed + width
             return (; total, seed, width)
@@ -231,7 +237,7 @@ end
 end
 
 abstract type SupertypeForMacroTest <: StepAlgorithm end
-@StepAlgorithm @inline function WithSupertypeForTest(x, @managed(total = start); @inputs((; start = 0.0))) <: SupertypeForMacroTest
+@StepAlgorithm @inline function WithSupertypeForTest(x, @managed(total = start); @init((; start = 0.0))) <: SupertypeForMacroTest
     @update total += x
     return total
 end

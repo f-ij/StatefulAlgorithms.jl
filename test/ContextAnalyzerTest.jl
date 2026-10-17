@@ -3,7 +3,7 @@ using StatefulAlgorithms
 
 StatefulAlgorithms.@StepAlgorithm function CaptureSeedForAnalyzerTest(
     @managed(history = Int[]);
-    @inputs((; seed::Int, scale::Float64 = 1.0))
+    @init((; seed::Int, scale::Float64 = 1.0))
 )
     push!(history, seed)
     return seed * scale

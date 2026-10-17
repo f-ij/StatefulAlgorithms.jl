@@ -10,7 +10,7 @@ using StatefulAlgorithms
         loss = Ref(0.0),
         nseen = Ref(0),
     );
-    @inputs((;))
+    @init((;))
 )
     current = params[]
     prediction = current.w * x[] + current.b

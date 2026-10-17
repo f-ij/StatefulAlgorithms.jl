@@ -152,7 +152,7 @@ The analyzer only sees what goes through the context/view surface.
 These forms work best:
 
 - `@StepAlgorithm` arguments: positional for required reads, keywords with defaults for optional reads
-- `@StepAlgorithm ... @inputs((; ...))` for init-only requirements
+- `@StepAlgorithm ... @init((; ...))` for init-only requirements
 
 In deprecated hand-written `init`/`step!` methods (and in `cleanup`):
 
