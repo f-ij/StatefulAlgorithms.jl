@@ -31,6 +31,7 @@ const TEST_FILES = [
     "SavingTest.jl",
     "ContextDeltaTest.jl",
     "ReturnsUpdatesTest.jl",
+    "ReLayoutTest.jl",
 ]
 
 #=
