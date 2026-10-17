@@ -1,5 +1,6 @@
 #=
-Extendable API of views: functions packages overload to change what a view shows or writes back for a stored value.
+Extendable API of views: functions packages overload to change what a view shows or writes back for a stored value,
+and what the context after a run (`final_context`) shows for it.
 =#
 
 """
@@ -21,3 +22,12 @@ storage wrapper that absorbs writes while keeping its place in the context adds 
 `returned` into its reference and stays itself).
 """
 @inline writeback_value(stored::S, returned::R) where {S, R} = returned
+
+"""
+    shown_value(stored) -> value
+
+The value the context after a run (`final_context`) shows for the value `stored`: `stored` itself by default. Unlike
+`view_value` there is no view and it never throws: a storage wrapper that may hold no value (a declared local's
+`Maybe`) shows `nothing` then, and otherwise unwraps one layer and calls `shown_value(inner)` again.
+"""
+@inline shown_value(stored::S) where {S} = stored

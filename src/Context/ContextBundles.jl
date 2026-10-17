@@ -110,7 +110,7 @@ stores does not change.
 """
 @inline function final_context(lc::LoopContext)
     runtime_context = @inline getruntime(lc)
-    returns = map(r -> map(_final_value, r), (@inline get_subcontext_returns(runtime_context)))
+    returns = map(r -> map(shown_value, r), (@inline get_subcontext_returns(runtime_context)))
     shown = @inline merge_into_subcontexts((@inline getpersistent(lc)), returns)
     shown = @inline _show_partition(shown, runtime_context, Inputs())
     shown = @inline _show_partition(shown, runtime_context, DeclaredLocals())
@@ -130,7 +130,7 @@ end
 
 """Returns a partition's values as the visible context shows them: captured returns unwrapped from their slots, the rest as stored."""
 _shown_values(::P, values::NT) where {P<:RuntimePartition, NT<:NamedTuple} = values
-_shown_values(::CapturedReturns, values::NT) where {NT<:NamedTuple} = map(_final_value, values)
+_shown_values(::CapturedReturns, values::NT) where {NT<:NamedTuple} = map(shown_value, values)
 
 """Returns the lifetime of the run being prepared. Only init can ask for it (to size buffers). A step that asks gets an error."""
 @inline bundle_lifetime(ic::InitContext) = init_lifetime(ic)
