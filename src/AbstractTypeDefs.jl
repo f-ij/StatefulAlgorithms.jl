@@ -228,8 +228,8 @@ end
 # inference follow nested `_step!` calls instead of cutting them as unbounded recursion.
 PlanWiringView(wiring::W) where {W<:PlanWiring} = PlanWiringView{W,W,Nothing}(wiring)
 
-"""The plan node a plan node runs in, as its `PlanWiring` type, or `Nothing` (see `PlanWiringView`)."""
-wiring_parent(::Type{<:PlanWiringView{Root, W, Parent}}) where {Root, W, Parent} = Parent
+"""Returns the `PlanWiring` type of the parent plan node (the node the current node runs in), or `Nothing` at the root (see `PlanWiringView`)."""
+read_parent_wiring_type(::Type{<:PlanWiringView{Root, W, Parent}}) where {Root, W, Parent} = Parent
 
 Base.iterate(la::ALA) where {ALA<:LoopSpec} = iterate(getalgos(la))
 

@@ -85,7 +85,7 @@ and the runtime context type(s) (one `LoopContext` type per type of a `Union`), 
 node runs in.
 """
 Base.@assume_effects :foldable _loop_context_type(@nospecialize(PersistentContextType), @nospecialize(RuntimeContextType), @nospecialize(WiringViewType)) =
-    Union{(LoopContext{PersistentContextType, R, wiring_parent(WiringViewType)} for R in Base.uniontypes(RuntimeContextType))...}
+    Union{(LoopContext{PersistentContextType, R, read_parent_wiring_type(WiringViewType)} for R in Base.uniontypes(RuntimeContextType))...}
 
 """The runtime context type(s) in the `LoopContext` types `loopcontext_types` a step returns; `Any` for anything else."""
 Base.@assume_effects :foldable function _runtime_context_types_of(@nospecialize(loopcontext_types))

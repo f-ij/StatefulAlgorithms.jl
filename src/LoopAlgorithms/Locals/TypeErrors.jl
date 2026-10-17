@@ -40,7 +40,7 @@ function _find_local_type_culprits!(culprits, ::Type{R}, check_type_changes, pla
         end
         namespace = getfield(getfield(plan, :namespaces), i)
         # What the step itself returns (before it is merged into the context), with the locals as in `R`.
-        returned = Core.Compiler.return_type(_infer_step_updates, Tuple{typeof(child), LoopContext{typeof(persistent_context), R, wiring_parent(typeof(child_wiring))}, typeof(child_wiring), typeof(namespace)})
+        returned = Core.Compiler.return_type(_infer_step_updates, Tuple{typeof(child), LoopContext{typeof(persistent_context), R, read_parent_wiring_type(typeof(child_wiring))}, typeof(child_wiring), typeof(namespace)})
         append!(culprits, _describe_local_type_problems(_describe_step(child, namespace), R, returned, typeof(child_wiring), check_type_changes))
     end
     return culprits
@@ -71,7 +71,7 @@ function _describe_local_type_problems(label, ::Type{R}, ::Type{Returned}, ::Typ
     check_type_changes || return String[]
     L = _get_locals_type(R)
     problems = String[]
-    for (name, slot) in pairs(scope_locals(node_scope(wiring_parent(W))))        # the locals this step can see: name => slot
+    for (name, slot) in pairs(scope_locals(node_scope(read_parent_wiring_type(W))))        # the locals this step can see: name => slot
         P = fieldtype(L, slot)
         P <: LocalProbe || continue
         first_type, empty = P.parameters[1], P.parameters[2]

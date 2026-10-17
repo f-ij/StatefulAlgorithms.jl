@@ -110,7 +110,7 @@ The runtime context type after one step from `RuntimeContextType`, inferring the
 `_add_step_write_types`). Used from the second round of typing on.
 """
 @inline _infer_runtime_context_type_after_whole_step(::Type{RuntimeContextType}, plan::PlanType, cursor::CursorType, persistent_context::PersistentContextType, wiring::WiringViewType, process::ProcessType, lifetime::LifetimeType) where {RuntimeContextType, PlanType, CursorType, PersistentContextType, WiringViewType, ProcessType, LifetimeType} =
-    _add_step_write_types(RuntimeContextType, Core.Compiler.return_type(_probe_step, Tuple{PlanType, CursorType, LoopContext{PersistentContextType, RuntimeContextType, wiring_parent(WiringViewType)}, WiringViewType, ProcessType, LifetimeType}))
+    _add_step_write_types(RuntimeContextType, Core.Compiler.return_type(_probe_step, Tuple{PlanType, CursorType, LoopContext{PersistentContextType, RuntimeContextType, read_parent_wiring_type(WiringViewType)}, WiringViewType, ProcessType, LifetimeType}))
 
 """Whether the declared locals of two runtime context types have the same types."""
 _has_same_locals(::Type{A}, ::Type{B}) where {A, B} = _get_locals_type(A) === _get_locals_type(B)
