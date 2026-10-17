@@ -30,8 +30,9 @@ module StatefulAlgorithms
     # include("Arena.jl")
 
 
-    include("AbstractProcesses.jl")
+    include("AbstractProcesses/AbstractProcesses.jl")
     include("Lifetime.jl")
+    include("AbstractProcesses/Interface.jl")   # after Lifetime.jl: the stop check takes a `Lifetime`
     include("ProcessEntities/ProcessEntities.jl")
 
 
