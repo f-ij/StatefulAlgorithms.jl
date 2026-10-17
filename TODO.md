@@ -76,6 +76,12 @@ Each was reproduced in the September 2026 code review unless marked *(unverified
 - [ ] `docs/src/user/threaded_process_managers.md:248`: there's no thread-safety contract saying which recipe callbacks may run concurrently.
 
 ## Tools and persistence
+- [ ] **Review the widgets in `src/Widgets/`.** For each widget, decide whether it is still useful (keep, fix or delete), then look for ways to expand the set. Uses outside `src/Widgets/` on 2026-10-17:
+  1. `ContextWrite`: used by the DSL (`src/CompositeDSL/`), tests and docs. Keep.
+  2. `Logger`: only in `test/ContextAnalyzerTest.jl` and two user docs pages.
+  3. `Integrator`, `RunFuncs`, `IsBitsStorage`: no uses outside the folder.
+  4. `Apply.jl`: empty file, and `Widgets.jl` does not include it.
+  5. Expansion: list widgets users would write by hand today (e.g. counters, recorders, conditional writes) and check whether each one fits as a widget or is better as an `@StepAlgorithm` example. Noted 2026-10-17.
 - [ ] `src/Tools.jl:184`: `est_remaining` throws when `progress == 0.0` (inline TODO).
 - [ ] `src/Tools.jl:176`: `progress()` reports 0.0 once a completed process is closed *(unverified)*.
 - [ ] `src/Tools.jl`: `closeprocess(c)` was meant to close the process from inside a step through `_runtime.process`; it never worked (`getglobals` on a process), and steps no longer see the process at all (see `_initial_runtime_context`). Remove it, or give steps a stop request instead.
