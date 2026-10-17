@@ -14,10 +14,10 @@ The runtime data stack has three layers:
 2. `reg::R`, the registry used for identity lookup.
 
 The initialized process owns a persistent `ProcessContext`. Loop execution also
-builds a separate runtime `ProcessContext`, normally with `:_captured_returns` and
-`:_inputs` subcontexts. Runtime inputs, the active process/lifetime handles, and
-demanded transient step returns live there instead of changing persistent state
-shape.
+builds a separate runtime `ProcessContext`: the run's inputs (`:_inputs`) and
+declared locals (`:_declared_locals`), and each return (`:_captured_returns`,
+`:_subcontext_returns`) from where it is assigned until its plan node ends. These
+live there instead of changing persistent state shape.
 
 Persistent contexts support these lookup forms:
 

@@ -105,8 +105,9 @@ is the run's result (`fetch(p)`, `p.lastresult`). It is the persistent context w
 2. the inputs, declared locals and captured returns are added as the subcontexts `_inputs`, `_declared_locals` and
    `_captured_returns`, in the order a run's runtime context has them
 
-A return shows the value of the last step that wrote it, or `nothing` if no step did. The persistent context the loop
-stores does not change.
+At the end of a run only the inputs and declared locals are left: a block's returns are removed when the block ends.
+Returns show only when it is built inside a run, by the routine stop checks. The persistent context the loop stores
+does not change.
 """
 @inline function final_context(lc::LoopContext)
     runtime_context = @inline getruntime(lc)

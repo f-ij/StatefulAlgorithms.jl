@@ -26,8 +26,10 @@ end
 """
     finalstep(la::LoopAlgorithm, final)
 
-Wrap `la` so `final(cleaned_context)` becomes the process result after the
-loop algorithm has finished and its normal `cleanup` step has run.
+Wrap `la` so `final(context)` becomes the process result after the loop
+algorithm has finished and its normal `cleanup` step has run. `context` is the
+final context (`final_context`): the cleaned persistent context with the run's
+inputs and declared locals.
 
 The wrapper is root-only: pass the returned `FinalizedAlgorithm` directly to a
 `Process` or to `resolve`. If it is placed inside another loop-algorithm

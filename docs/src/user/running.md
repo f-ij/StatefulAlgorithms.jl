@@ -82,9 +82,11 @@ In practice:
 - use either `context(p)` or `getcontext(p)` for the current stored process
   context; `getcontext(p, key)` additionally indexes it by `key`.
 
-For an ordinary process, the task result is the final cleanup-visible context.
-It also holds the run's runtime values (inputs, declared locals, captured and subcontext returns), which a root
-finalizer can consume.
+For an ordinary process, the task result is the final context: the cleaned
+persistent context with the runtime values still there at the end of the run, the
+inputs (`_inputs`) and the declared locals (`_declared_locals`). Returns are not
+in it: a block's returns end with the block. A root finalizer gets this context,
+so `@finally ctx -> ctx.result` hands a `local result` out of the run.
 The process itself stores only the cleaned persistent context, so use
 `context(p)` when you need the state that will be reused by a later run. A
 `FinalizedAlgorithm` can instead make `fetch(p)` return the finalizer function's
@@ -111,8 +113,9 @@ run(ip)
 `InlineProcess` also accepts `lifetime = 10_000` and converts it to a repeat
 count. For `Process`, use `repeats = 10_000` or `lifetime = Repeat(10_000)`.
 Unlike `Process`, `InlineProcess` stores a context that can be absorbed back
-into an algorithm, so the run's runtime values (inputs, declared locals, captured and subcontext returns) are
-stripped after the loop.
+into an algorithm, so the run's runtime values (inputs and declared locals) are
+stripped after the loop. `run(ip)` returns the same final context as `fetch(p)`
+does for a `Process` (or the finalizer's result).
 Like finished `Process` runs, this means the persistent context is the persistent
 context shape rather than the transient loop context.
 

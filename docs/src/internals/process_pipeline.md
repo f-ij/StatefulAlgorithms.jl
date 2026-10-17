@@ -69,10 +69,12 @@ while/for loop:
 loop(process, algo, context, lifetime, inputs)
 ```
 
-The loop puts `process` and `lifetime` in the runtime context's `:_captured_returns`
-subcontext. A non-empty validated input tuple is stored in its `:_inputs`
-subcontext. Demanded transient child returns are stored in owner-named runtime
-subcontexts. None of these fields are added to the persistent context.
+The runtime context starts with the run's inputs (`:_inputs`, when there are
+any) and declared locals (`:_declared_locals`). A step adds a return
+(`:_captured_returns`, or the owner's entry in `:_subcontext_returns`) where it is
+assigned, and the return is removed when its plan node ends, so every step gets
+and returns a runtime context of the same type. The process and the lifetime are
+not in it. None of these fields are added to the persistent context.
 
 Repeat and indefinite loops are defined in `src/Loops.jl`; generated loops live
 in `src/GeneratedCode/GeneratedLoops.jl`.
@@ -81,9 +83,8 @@ High-level structure:
 
 1. `before_while(process)`
 2. build or restore the per-run loop cursor and runtime context
-3. execute one initial scheduled step for a fresh run
-4. execute the remaining repeat/while body with tick/index increments
-5. either store paused state or run cleanup/final-result projection
+3. execute the repeat/while body with tick/index increments
+4. either store paused state or run cleanup/final-result projection
 
 Composite and routine steps receive an explicit loop cursor. Composite cursors
 own the interval counter for that run. Pausable process runs allocate routine
@@ -94,8 +95,8 @@ array.
 
 The completion paths distinguish stored state from the task result:
 
-1. Pausing skips cleanup, stores the persistent state plus runtime inputs needed
-   for resume, and keeps the loop cursor. Closing that paused process later runs
+1. Pausing skips cleanup, stores the persistent state plus the runtime inputs and
+   declared locals needed for resume, and keeps the loop cursor. Closing that paused process later runs
    cleanup and final projection.
 2. Natural completion or `close` runs cleanup while the runtime context is still
    visible. Mapped cleanup writes update persistent state; cleanup-only outputs
@@ -104,7 +105,8 @@ The completion paths distinguish stored state from the task result:
    context. Direct `run(la)` likewise returns a loop algorithm containing only
    that persistent state.
 4. The task result for an ordinary process is a temporary final-visible context:
-   cleaned persistent state plus runtime subcontexts still present at the end.
+   cleaned persistent state plus the runtime subcontexts still present at the end
+   (inputs and declared locals; returns have ended with their blocks).
    `FinalizedAlgorithm` instead passes that projection to its final function and
    returns the function's result.
 

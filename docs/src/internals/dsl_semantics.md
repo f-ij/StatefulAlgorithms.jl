@@ -174,7 +174,7 @@ Nothing runs; these decide where values go.
 | Statement | Meaning |
 |---|---|
 | `@include_if cond stmt` / `@include_if cond begin … end` | `cond` is evaluated at build; when false, the statements are left out entirely. |
-| `@finally f` | Root block only: after the last step, `f(context)` gives the run's result. It reads the root block's captured returns of the last step. |
+| `@finally f` | Root block only: after the last step, `f(context)` gives the run's result. `context` is the root's state with the run's inputs and declared locals: `context.name` reads a `local name`. Returns are not in it; they end with their block. |
 
 ## What a step's returns do
 
