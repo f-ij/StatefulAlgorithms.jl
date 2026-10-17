@@ -144,9 +144,8 @@ _throw_undef() = throw(UndefRefError())
 # A local declared without a value that no step ever writes keeps its `undef`.
 @inline view_value(view::V, ::UndefInitializer) where {V<:SubContextView} = _throw_undef()
 
-"""A return as `final_context` shows it: a slot as its value, or `nothing` while unset."""
-_final_value(x) = x
-_final_value(m::Maybe) = iszero(getfield(m, :isset)) ? nothing : getfield(m, :value)
+# Shown after the run (`final_context`): a `Maybe` shows as its value, or as `nothing` while unset.
+@inline shown_value(m::Maybe) = iszero(getfield(m, :isset)) ? nothing : shown_value(getfield(m, :value))
 
 """Write a step's returns `args` into the locals `old`: converted to each local's type, or widening a probe (section 4)."""
 @inline @generated function _write_locals(old::NT, args::A) where {NT<:NamedTuple, A<:NamedTuple}

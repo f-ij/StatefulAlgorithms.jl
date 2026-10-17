@@ -211,11 +211,11 @@ what is written to it. Returns a value; all of it is worked out while the run is
     no_writes_seen = _insert_probes(RuntimeContextType)
     first_round = _runtime_context_type_after_first_step(no_writes_seen, step...)
     if first_round === Nothing
-        has_untyped_locals && _throw_local_type_error(no_writes_seen, false, step...)
+        has_untyped_locals && _throw_uninferrable_step_error(no_writes_seen, step...)
         return runtime_context
     end
     second_round = _runtime_context_type_after_whole_step(first_round, step...)
-    has_untyped_locals && !_same_locals(first_round, second_round) && _throw_local_type_error(first_round, true, step...)
+    has_untyped_locals && !_same_locals(first_round, second_round) && _throw_local_type_change_error(first_round, step...)
     settled = second_round === first_round ? first_round :
         second_round === Nothing ? Nothing :
         _runtime_context_type_after_whole_step(second_round, step...) === second_round ? second_round : Nothing

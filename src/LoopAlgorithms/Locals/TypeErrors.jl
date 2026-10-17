@@ -4,32 +4,44 @@ name the steps (algorithms and calls) that cause it. Only runs to build the erro
 =#
 
 """
-Throw the error for a failed local typing round, naming the steps that cause it: inference is repeated for each step
-on its own, with the locals as in `R`. While `checking`, a step that writes a local with another type than its first
-is reported with both types; in either round, a step whose return cannot be inferred is reported.
+Throw the error for a first typing round that could not infer the plan's step (locals as in `R`, all probes without
+writes): names each step whose return cannot be inferred.
 """
-function _throw_local_type_error(::Type{R}, checking::Bool, plan, cursor, persistent_context, wiring, process, lifetime) where {R<:ProcessContext}
+_throw_uninferrable_step_error(::Type{R}, step...) where {R<:ProcessContext} = _throw_with_culprits(R, false,
+    "The type of a local declared without a value (or as `nothing`) cannot be found: the plan's step cannot be inferred. Declare the locals with a type (`local x::Float64`).", step...)
+
+"""
+Throw the error for a local that changed type after its first value (locals as in `R`, the first round's types):
+names each step that writes a local with another type than its first, with both types.
+"""
+_throw_local_type_change_error(::Type{R}, step...) where {R<:ProcessContext} = _throw_with_culprits(R, true,
+    "A local declared without a value (or as `nothing`) changes type after its first value, but no single step could be pinned down. For now this is not allowed: such a local takes the type of its first value and has to keep it. Declare the locals with a type (`local x::Float64`).", step...)
+
+"""
+Throw an error naming the steps that cause it, found by inferring each step on its own with the locals as in `R`;
+`fallback` when no single step is found. A step whose return cannot be inferred is always named; one that changes a
+local's type only when `check_type_changes`.
+"""
+function _throw_with_culprits(::Type{R}, check_type_changes::Bool, fallback::String, plan, cursor, persistent_context, wiring, process, lifetime) where {R<:ProcessContext}
     culprits = String[]
-    _find_local_type_culprits!(culprits, R, checking, plan, cursor, persistent_context, wiring, process, lifetime)
-    isempty(culprits) && push!(culprits, checking ?
-        "A local declared without a value (or as `nothing`) changes type after its first value, but no single step could be pinned down. For now this is not allowed: such a local takes the type of its first value and has to keep it. Declare the locals with a type (`local x::Float64`)." :
-        "The type of a local declared without a value (or as `nothing`) cannot be found: the plan's step cannot be inferred. Declare the locals with a type (`local x::Float64`).")
+    _find_local_type_culprits!(culprits, R, check_type_changes, plan, cursor, persistent_context, wiring, process, lifetime)
+    isempty(culprits) && push!(culprits, fallback)
     error(join(culprits, "\n\n"))
 end
 
-function _find_local_type_culprits!(culprits, ::Type{R}, checking, plan::AbstractPlan, cursor, persistent_context, wiring, process, lifetime) where {R}
+function _find_local_type_culprits!(culprits, ::Type{R}, check_type_changes, plan::AbstractPlan, cursor, persistent_context, wiring, process, lifetime) where {R}
     for i in 1:length(getalgos(plan))
         child = getalgo(plan, i)
         child_cursor = child_loop_cursor(cursor, Val(i))
         child_wiring = child_wiring_view(wiring, Val(i))
         if child isa AbstractPlan
-            _find_local_type_culprits!(culprits, R, checking, child, child_cursor, persistent_context, child_wiring, process, lifetime)
+            _find_local_type_culprits!(culprits, R, check_type_changes, child, child_cursor, persistent_context, child_wiring, process, lifetime)
             continue
         end
         namespace = getfield(getfield(plan, :namespaces), i)
         # What the step itself returns (before it is merged into the context), with the locals as in `R`.
         returned = Core.Compiler.return_type(_infer_step_updates, Tuple{typeof(child), LoopContext{typeof(persistent_context), R, wiring_parent(typeof(child_wiring))}, typeof(child_wiring), typeof(namespace)})
-        append!(culprits, _describe_local_type_problems(_describe_step(child, namespace), R, returned, typeof(child_wiring), checking))
+        append!(culprits, _describe_local_type_problems(_describe_step(child, namespace), R, returned, typeof(child_wiring), check_type_changes))
     end
     return culprits
 end
@@ -46,17 +58,17 @@ _describe_step(child, namespace::Namespace) = string("`", namesymbol(namespace),
 end
 
 """
-Describe the problems of one step (`label`) as error paragraphs: a step whose return cannot be inferred, or (while
-`checking`) a step that takes a local as input and emits it with a type that does not fit the local's first type.
+Describe the problems of one step (`label`) as error paragraphs: a step whose return cannot be inferred, or (when
+`check_type_changes`) a step that takes a local as input and emits it with a type that does not fit the local's first type.
 `returned` is the inferred type of what the step returns; `W` its wiring view, whose visible locals map the names the
 step uses to the locals' `_declared_locals` slots.
 """
-function _describe_local_type_problems(label, ::Type{R}, ::Type{Returned}, ::Type{W}, checking::Bool) where {R, Returned, W}
+function _describe_local_type_problems(label, ::Type{R}, ::Type{Returned}, ::Type{W}, check_type_changes::Bool) where {R, Returned, W}
     returns = Returned === Union{} ? () : Base.uniontypes(Returned)
     if !all(T -> T === Nothing || T <: NamedTuple, returns)
         return [string(label, ": the type it emits cannot be inferred (it returns ", Returned, "), so the type of the locals it writes cannot be found either. Make the step return one type, or declare those locals with a type (`local x::Float64` in a DSL block).")]
     end
-    checking || return String[]
+    check_type_changes || return String[]
     L = _get_locals_type(R)
     problems = String[]
     for (name, slot) in pairs(scope_locals(node_scope(wiring_parent(W))))        # the locals this step can see: name => slot
