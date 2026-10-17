@@ -39,7 +39,7 @@ using StatefulAlgorithms
     @test !isnothing(other_name)
     @test isempty(StatefulAlgorithms.getoptions(resolved, StatefulAlgorithms.Route))
 
-    sharedcontexts, sharedvars = StatefulAlgorithms._resolve_options(resolved)
+    sharedcontexts, sharedvars = StatefulAlgorithms._resolved_wiring_by_target(resolved)
     @test StatefulAlgorithms.contextname(only(sharedcontexts[source_name])) == target_name
     @test StatefulAlgorithms.contextname(only(sharedcontexts[target_name])) == source_name
 
@@ -99,8 +99,8 @@ using StatefulAlgorithms
     target_name = StatefulAlgorithms.static_findkey(shared_registry, PrepTarget)
     other_name = StatefulAlgorithms.static_findkey(shared_registry, PrepOther)
 
-    sharedcontexts1, sharedvars1 = StatefulAlgorithms._resolve_options(resolved1)
-    sharedcontexts2, sharedvars2 = StatefulAlgorithms._resolve_options(resolved2)
+    sharedcontexts1, sharedvars1 = StatefulAlgorithms._resolved_wiring_by_target(resolved1)
+    sharedcontexts2, sharedvars2 = StatefulAlgorithms._resolved_wiring_by_target(resolved2)
 
     @test haskey(sharedcontexts1, source_name)
     @test StatefulAlgorithms.contextname(only(sharedcontexts1[source_name])) == target_name

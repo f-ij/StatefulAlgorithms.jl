@@ -175,8 +175,46 @@ function _inspection_registry_entries(la::LA) where {LA<:AbstractLoopAlgorithm}
     return _inspection_entries(all_algos(reg))
 end
 
+"""Resolve a plan and return its resolved `(shares, routes)`, each grouped by target namespace."""
+@inline function _resolved_wiring_by_target(la::LA) where {LA<:LoopSpec}
+    resolved = resolve(la)
+    return _resolved_wiring_by_target(getwiring(resolved))
+end
+
+"""Collect resolved share and route maps from plan wiring for inspection."""
+function _resolved_wiring_by_target(wiring::PlanWiring)
+    share_map = (;)
+    route_map = (;)
+    for target in propertynames(global_wiring(wiring))
+        bucket = getproperty(global_wiring(wiring), target)
+        share_map = (; share_map..., target => _append_unique_wiring_values(get(share_map, target, ()), shares(bucket)))
+        route_map = (; route_map..., target => _append_unique_wiring_values(get(route_map, target, ()), routes(bucket)))
+    end
+    for bucket in child_wiring(wiring)
+        if bucket isa PlanWiring
+            child_share_map, child_route_map = _resolved_wiring_by_target(bucket)
+            for target in propertynames(child_share_map)
+                share_map = (; share_map..., target => _append_unique_wiring_values(get(share_map, target, ()), getproperty(child_share_map, target)))
+            end
+            for target in propertynames(child_route_map)
+                route_map = (; route_map..., target => _append_unique_wiring_values(get(route_map, target, ()), getproperty(child_route_map, target)))
+            end
+            continue
+        end
+        for route in routes(bucket)
+            target = to_match_by(route)
+            route_map = (; route_map..., target => _append_unique_wiring_values(get(route_map, target, ()), (route,)))
+        end
+        for share in shares(bucket)
+            target = second_match_by(share)
+            share_map = (; share_map..., target => _append_unique_wiring_values(get(share_map, target, ()), (share,)))
+        end
+    end
+    return share_map, route_map
+end
+
 function _inspection_resolved_sharing(la::LA) where {LA<:AbstractLoopAlgorithm}
-    sharedcontexts, sharedvars = _resolve_options(la)
+    sharedcontexts, sharedvars = _resolved_wiring_by_target(la)
     shares = InspectionShare[]
     routes = InspectionRoute[]
 
