@@ -279,7 +279,7 @@ Restored 2026-10-09 from `fix/type-stability` (`e1dcbbf`, now tag `archive/type-
   - [ ] `AbstractSubContext` has one subtype (`SubContext`) and is used nowhere else. Keep it only if something should dispatch on it.
 
 ## Cleanup: `src/Context/View/Locations.jl` (noted 2026-10-17)
-- [ ] One `getproperty` method for `VarLocation{:state}` and `VarLocation{:runtime}`: both can read through `getproperty_fromsubcontext`, which already picks the partition (`getvar_expressions_and_varnames` does this for the transform case). The `:runtime` method repeats `_read_partition(::RuntimePartition, ...)`.
+- [ ] One `getproperty` method for `VarLocation{:state}` and `VarLocation{:runtime}`: both can read through `partition_getproperty`, which already picks the partition (`getvar_expressions_and_varnames` does this for the transform case). The `:runtime` method repeats `_read_partition(::RuntimePartition, ...)`.
 - [ ] Then fold `_assigned_value` into `_read_partition(::RuntimePartition, ...)`, its only caller left: check `haskey(values, varname)` there, where `varname` is a type parameter. Today the check only folds away because `_assigned_value` is inlined: a `@noinline` copy of it infers `Union{...}` of all the partition's field types (the `Symbol` is not constant-propagated). Keep `_throw_unassigned` for its error message.
 - [ ] Remove `create_merge_tuples_expr`: nothing in `src/`, `test/` or `ext/` calls it.
 - [ ] Remove the commented-out `getproperty(::SubContextView, ::Symbol)` block and its TODO ("Do we really need the generated version?").
@@ -298,3 +298,10 @@ Restored 2026-10-09 from `fix/type-stability` (`e1dcbbf`, now tag `archive/type-
 11. [ ] Optional, after the `Routines/` folder move: put the routine half of Step.jl in `Routines/Step.jl`.
 12. [ ] Outside Step.jl: `_push_per_algorithm_inference_exprs!` (`Outputs.jl`) writes the child setup by hand and checks `<: AbstractPlan` instead of `_steps_inline`; use `_child_setup_exprs`.
 13. [ ] Check (not verified): children on a schedule (`@every n`) are stepped through `_step_children!`, which calls `_step!`, not inline. A nested composite or routine under `@every` is then the same method called with a larger runtime context type, which the header says is avoided; `return_type` may answer non-concrete, `_conditional_step` then takes the `Target === Nothing` path and the context type is not stable. Write a test with a nested plan under `@every`, check `@inferred` / `code_warntype`; if it fails, write the branch body inline (`_plan_step_exprs`) inside an `if`.
+
+## Cleanup: `src/LoopAlgorithms/Outputs.jl`
+- [ ] Clean up the file (noted 2026-10-17); it reads convoluted and its docstrings are unclear. Returns no longer get a `Maybe` field before the loop (they exist from the line that writes them to the end of their plan node); `Maybe` is only for declared locals without a value. What is left over from the old design:
+  1. The word "slot": `_merge_slots`, `_merge_slots_expr`, `_unwrap_slot_type`, and the comments in `Context/ContextBundles.jl:132` ("captured returns unwrapped from their slots") and `AbstractTypeDefs.jl:18,194,205` ("the slot it is stored in", "the slots entering a plan node makes unset"). Name things by what they are (a `Maybe` field, a storage name, the returns a node strips).
+  2. `_merge_slots` is still called for returns (`Context/RuntimeContext.jl:45,61`), where no field is a `Maybe` any more, so there it does what `merge` does. Use `merge` for returns; keep the `Maybe`-aware merge only for declared locals, under a name that says what it does.
+  3. The file name: "output" is the wrong word (these are returns), and most of the file is typing declared locals before the loop. Rename the file (or move the declared-local typing next to `Locals/Locals.jl`).
+  4. Docstrings: say first what each function returns, then why.
