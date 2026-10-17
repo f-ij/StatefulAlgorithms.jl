@@ -113,8 +113,6 @@ ContextExchange(; period::Real = 0.0) = ContextExchange{:_exchange}(Float64(peri
 @inline Base.getkey(exchange::ContextExchange) = getkey(typeof(exchange))
 @inline Base.getkey(::Type{<:ContextExchange{Key}}) where {Key} = Key
 @inline getalgo(exchange::ContextExchange) = exchange
-"""An exchange steps itself."""
-@inline _get_steppable_algo(exchange::ContextExchange) = exchange
 @inline getalgos(exchange::ContextExchange) = (exchange,)
 @inline setcontextkey(exchange::ContextExchange, key::Symbol) =
     ContextExchange{key}(exchange_period(exchange))
