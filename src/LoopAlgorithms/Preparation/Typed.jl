@@ -41,7 +41,7 @@ function _resolve_plan_wiring_tree_typed(la::LA, registry::NameSpaceRegistry, in
     # Resolve nested plans first. Their own `PlanWiring` then becomes the
     # child-indexed value passed to that child during parent stepping.
     funcs = _resolve_child_plans(getalgos(la), registry, combined_global)
-    # A new name, not `la = ...`: `la` is captured by the closure above, and a captured variable that is reassigned
+    # A new name, not `la = ...`: `la` is captured by the closure below, and a captured variable that is reassigned
     # is boxed (`Core.Box`), which makes every use of it uninferable.
     rebuilt = rebuild_loopalgorithm_funcs(la, funcs)
 
@@ -76,11 +76,11 @@ end
 @inline _resolve_child_plan(child::C, ::R, ::G) where {C, R<:NameSpaceRegistry, G<:NamedTuple} = child
 
 """
-The scope of a plan node of type `LA` and the slots entering it makes unset, `(Sc, (; returns, owners))` (see
-`_resolve_scopes_typed`, `PlanWiring`). `Outer` is the scope the node is in, `path` its position as child indices.
-Not specialized: it runs while code is generated and reads types only.
+Compute the scope `Sc` of a plan node of type `LA`, and the slots that entering the node clears, `(; returns, owners)`.
+Returns `(Sc, resets)` (see `_resolve_scopes_typed`, `PlanWiring`). `Outer` is the scope the node is in, `path` its
+position as child indices. Not specialized: it runs while code is generated and reads types only.
 """
-Base.@nospecializeinfer function _node_scope(@nospecialize(LA::Type), @nospecialize(Outer::Type), @nospecialize(path::Tuple))
+Base.@nospecializeinfer function _compute_node_scope(@nospecialize(LA::Type), @nospecialize(Outer::Type), @nospecialize(path::Tuple))
     at = join(path, ".")
     F = fieldtype(LA, :funcs)
     NS = fieldtype(LA, :namespaces)
@@ -131,20 +131,20 @@ that assigns a local or a return of an enclosing node updates it, as an assignme
 variable of the enclosing function.
 
 The inferred `_resolve_scopes`. Generated: the scope goes into the plan's type, so it is computed from the types
-(`_node_scope`) and the result is inferred.
+(`_compute_node_scope`) and the result is inferred.
 """
 @generated function _resolve_scopes_typed(la::LA, ::Type{Outer}, ::Val{Path}) where {LA<:AbstractPlan, Outer<:Scope, Path}
-    Sc, resets = _node_scope(LA, Outer, Path)
+    Sc, resets = _compute_node_scope(LA, Outer, Path)
     F = fieldtype(LA, :funcs)
-    funcs = [fieldtype(F, i) <: LoopSpec ? :(_resolve_scopes_typed(getalgo(la, $i), $Sc, $(Val((Path..., i))))) : :(getalgo(la, $i))
-             for i in 1:fieldcount(F)]
-    children = [fieldtype(F, i) <: LoopSpec ? :(getwiring(getfield(funcs, $i))) : :(_scope_routes_to_storage(getfield(child_wiring(wiring), $i), $Sc))
+    children = [fieldtype(F, i) <: LoopSpec ? :(_resolve_scopes_typed(getalgo(la, $i), $Sc, $(Val((Path..., i))))) : :(getalgo(la, $i))
                 for i in 1:fieldcount(F)]
+    child_wirings = [fieldtype(F, i) <: LoopSpec ? :(getwiring(getfield(funcs, $i))) : :(_scope_routes_to_storage(getfield(child_wiring(wiring), $i), $Sc))
+                     for i in 1:fieldcount(F)]
     return quote
         wiring = getwiring(la)
-        funcs = ($(funcs...),)
+        funcs = ($(children...),)
         rebuilt = rebuild_loopalgorithm_funcs(la, funcs)
-        children = ($(children...),)
-        return setfield(rebuilt, :wiring, PlanWiring(global_wiring(wiring), children, getfield(wiring, :locals), $Sc, $(Val(resets))))
+        wirings = ($(child_wirings...),)
+        return setfield(rebuilt, :wiring, PlanWiring(global_wiring(wiring), wirings, getfield(wiring, :locals), $Sc, $(Val(resets))))
     end
 end
