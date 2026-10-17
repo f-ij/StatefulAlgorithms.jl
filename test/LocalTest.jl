@@ -98,9 +98,9 @@ end
     # Writing `nothing` again after a value is allowed, like in a Julia loop.
     final = run(InlineProcess(CompositeAlgorithm(Blinker, UnionReader, (1, 1), Declaration(declared), Route(:_declared_locals => Blinker, :reading => :reading), Route(:_declared_locals => UnionReader, :reading => :reading)); repeats = 6))
     @test final[UnionReader].acc == 0.0 + 2.0 + 4.0
-    # `@update reading = isodd(n) ? nothing : x` does not infer to a concrete type,
-    # so an untyped local cannot be typed from it: declare the type instead.
-    @test_throws ErrorException run(InlineProcess(CompositeAlgorithm(Blinker, UnionReader, (1, 1), Declaration(reading = nothing), Route(:_declared_locals => Blinker, :reading => :reading), Route(:_declared_locals => UnionReader, :reading => :reading)); repeats = 6))
+    # The same with `reading = nothing`: the first value gives the type, and `nothing` can be written again.
+    final = run(InlineProcess(CompositeAlgorithm(Blinker, UnionReader, (1, 1), Declaration(reading = nothing), Route(:_declared_locals => Blinker, :reading => :reading), Route(:_declared_locals => UnionReader, :reading => :reading)); repeats = 6))
+    @test final[UnionReader].acc == 0.0 + 2.0 + 4.0
 end
 
 @testset "undef locals take the type of their first value" begin
@@ -112,7 +112,7 @@ end
     # Written in the first step.
     final = run(InlineProcess(CompositeAlgorithm(SlotSensor, SlotReader, (1, 1), Local(:reading), Route(:_declared_locals => SlotSensor, :reading => :reading), Route(:_declared_locals => SlotReader, :reading => :reading)); repeats = 10))
     @test final[SlotReader].acc == 55.0
-    @test fieldtype(typeof(StatefulAlgorithms.get_declared_locals(final)), :reading) <: StatefulAlgorithms.Maybe{Float64}
+    @test fieldtype(typeof(StatefulAlgorithms.get_declared_locals(final)), :reading) === Float64   # the first value replaced `undef`
     # First written at step 10 (scheduled later): the loop continues with the new type.
     final = run(InlineProcess(CompositeAlgorithm(SlotSensor, SlotReader, (10, 10), Local(:reading), Route(:_declared_locals => SlotSensor, :reading => :reading), Route(:_declared_locals => SlotReader, :reading => :reading)); repeats = 30))
     @test final[SlotReader].acc == 1.0 + 2.0 + 3.0
@@ -135,7 +135,7 @@ end
     plan = CompositeAlgorithm(LateSensor, GuardedReader, (1, 1), Local(:reading), Route(:_declared_locals => LateSensor, :reading => :reading), Route(:_declared_locals => GuardedReader, :reading => :reading))
     final = run(InlineProcess(plan; repeats = 8))
     @test final[GuardedReader].acc == 5.0 + 6.0 + 7.0 + 8.0
-    @test fieldtype(typeof(StatefulAlgorithms.get_declared_locals(final)), :reading) <: StatefulAlgorithms.Maybe{Float64}
+    @test fieldtype(typeof(StatefulAlgorithms.get_declared_locals(final)), :reading) === Float64
 
     # Once written, the loop allocates nothing per step.
     small = InlineProcess(plan; repeats = 1_000); large = InlineProcess(plan; repeats = 101_000)
@@ -147,16 +147,16 @@ end
     final = run(InlineProcess(CompositeAlgorithm(LateSensor, GuardedReader, (1, 1), Local(:reading), Route(:_declared_locals => LateSensor, :reading => :reading), Route(:_declared_locals => GuardedReader, :reading => :reading)); repeats = 4))
     @test final[GuardedReader].acc == 0.0
 
-    # Like a Julia variable, the type comes from every value written: here an `Int` and a
-    # `Float64` from two writers, promoted to `Float64` before the run starts.
+    # The first value gives the type: here an `Int`, so the `Float64` the second writer emits is converted to it,
+    # which fails for 2.5 (declare `Local(:reading => Float64)` to take both).
     struct IntWriter <: ProcessAlgorithm end
     struct FractionWriter <: ProcessAlgorithm end
     StatefulAlgorithms.init(::IntWriter, context) = (;)
     StatefulAlgorithms.step!(::IntWriter, context) = (; reading = 1)
     StatefulAlgorithms.init(::FractionWriter, context) = (;)
     StatefulAlgorithms.step!(::FractionWriter, context) = (; reading = 2.5)
-    final = run(InlineProcess(CompositeAlgorithm(IntWriter, FractionWriter, (1, 2), Local(:reading), Route(:_declared_locals => IntWriter, :reading => :reading), Route(:_declared_locals => FractionWriter, :reading => :reading)); repeats = 3))
-    @test fieldtype(typeof(StatefulAlgorithms.get_declared_locals(final)), :reading) <: StatefulAlgorithms.Maybe{Float64}
+    @test_throws InexactError run(InlineProcess(CompositeAlgorithm(IntWriter, FractionWriter, (1, 2), Local(:reading), Route(:_declared_locals => IntWriter, :reading => :reading), Route(:_declared_locals => FractionWriter, :reading => :reading)); repeats = 3))
+    final = run(InlineProcess(CompositeAlgorithm(IntWriter, FractionWriter, (1, 2), Local(:reading => Float64), Route(:_declared_locals => IntWriter, :reading => :reading), Route(:_declared_locals => FractionWriter, :reading => :reading)); repeats = 3))
     @test StatefulAlgorithms.get_declared_locals(final).reading.value === 1.0
 end
 
@@ -185,21 +185,13 @@ end
     final = run(InlineProcess(CompositeAlgorithm(KeepLowest, (1,), Declaration(best = nothing), Route(:_declared_locals => KeepLowest, :best => :best)); repeats = 5))
     @test StatefulAlgorithms.get_declared_locals(final).best isa StatefulAlgorithms.Maybe{Float64}
 
-    # Starts as a Float64, then written as a String: an error before the run, naming the local.
-    err = try
-        run(InlineProcess(CompositeAlgorithm(ChangesType, (1,), Declaration(x = nothing), Route(:_declared_locals => ChangesType, :x => :x)); repeats = 3)); nothing
-    catch e
-        e
-    end
-    @test err isa ErrorException
-    message = sprint(showerror, err)
-    @test occursin("`ChangesType_1` (ChangesType) takes the local `x` as input with type Float64 and emits it with a different type, String", message)
+    # Starts as a Float64, then written as a String: the String cannot be converted to the local's type.
+    @test_throws MethodError run(InlineProcess(CompositeAlgorithm(ChangesType, (1,), Declaration(x = nothing), Route(:_declared_locals => ChangesType, :x => :x)); repeats = 3))
 end
 
 @testset "Outputs have one type in every step" begin
     # `y` is written every 3 steps, so it is `nothing` until step 3. A call passes it on as the captured return `v`,
-    # which is then `nothing` in some steps and a Float64 in others; its slot is typed before the run as
-    # Union{Nothing, Float64}, so the runtime context keeps one type.
+    # which is then `nothing` in some steps and a Float64 in others.
     produced = Ref(0)
     produce() = (produced[] += 1; Float64(produced[]))
     pass_on(x) = x

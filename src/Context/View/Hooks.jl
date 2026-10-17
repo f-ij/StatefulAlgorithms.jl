@@ -5,8 +5,8 @@ what a write to a stored value does (`write_value`), and what the context after 
 (`_follow_reads`, `_follow_writes`).
 
 Each function here has the default every stored value gets. A storage wrapper extends the hooks in a
-`HookExtensions.jl` next to it: LoopAlgorithms/Redirect (`RedirectedVar`), LoopAlgorithms/Locals (`Maybe`,
-`LocalProbe`), InputInterface (`InteractiveVar`).
+`HookExtensions.jl` next to it: LoopAlgorithms/Redirect (`RedirectedVar`), LoopAlgorithms/Locals (`Maybe`),
+InputInterface (`InteractiveVar`).
 =#
 
 ##########################################

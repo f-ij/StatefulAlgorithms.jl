@@ -105,7 +105,7 @@ its returns are reset on the same steps its readers run.
 | `@state x = v` / `@state x` / `@state name begin … end` | A state field of the block (key `_state_1`, `_state_2`, ... per construction, or `name`). With a value, `v` is evaluated at each `init`; without one, `init` must supply it. |
 | `@input x` / `@input x::T` / `@input x = v` | A per-run input, given as a keyword to `run`, checked before the loop starts. Assigning it is an error. |
 | `@CompositeAlgorithm name(a, b::T = v) begin … end` | A header: assigns the plan to `name`, and each argument is an `@input` of the block (`a`, `b::T = v`). Keyword arguments too. |
-| `local x` | A declared local without a value: its type is the type of what is first assigned to it (decided before the run). Reading it before that is an `UndefRefError`. |
+| `local x` | A declared local without a value: its first assignment gives it its type, as in Julia (the loop continues with that type). Reading it before that is an `UndefRefError`. |
 | `local x::T` | A declared local of type `T` without a value. |
 | `@alias a = Algo(…)` | Names an algorithm for later statements: `a(…)` runs it, `a.field` reads its field. |
 | `(; a, b) = @state(X)` | From here on, `a` and `b` name the fields `a`, `b` of `X`'s state (`X` an alias or an algorithm of the block). `@state(X).a` reads one inline. |

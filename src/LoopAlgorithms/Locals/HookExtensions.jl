@@ -1,7 +1,6 @@
 #=
 How declared locals extend the base of reading and writing stored values (Context/View/Hooks.jl): a `Maybe` reads
-and shows as its value, or as `nothing` / an error while unset; a `LocalProbe` reads as a value of its type so far,
-for inference.
+and shows as its value, or as `nothing` / an error while unset.
 =#
 
 _throw_undef() = throw(UndefRefError())
@@ -18,10 +17,3 @@ _throw_undef() = throw(UndefRefError())
 # Shown after the run (`final_context`): a `Maybe` shows as its value, or as `nothing` while unset.
 @inline shown_value(m::Maybe) = iszero(getfield(m, :isset)) ? nothing : shown_value(getfield(m, :value))
 
-# Inference only (Locals.jl section 4): a probe reads as a value of the local's type so far.
-@inline read_value(view::V, ::LocalProbe{T, UndefInitializer}) where {T, V<:SubContextView} =
-    T === Union{} ? _throw_undef() : DirectRead{T}(_pretend_value(T))
-@inline read_value(view::V, ::LocalProbe{T, Nothing}) where {T, V<:SubContextView} =
-    DirectRead{Union{Nothing, T}}(_pretend_value(Union{Nothing, T}))
-"""Return a value that inference treats as being of type `T`."""
-_pretend_value(::Type{T}) where {T} = Base.inferencebarrier(nothing)::T
