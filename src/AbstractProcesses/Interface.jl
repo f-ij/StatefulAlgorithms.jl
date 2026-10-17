@@ -16,12 +16,15 @@ getlidx(p::AbstractProcess) = loopint(p)
 """
     _process_breakcondition(lifetime, process, context) -> Bool
 
-Whether the process stops (`breakcondition` of its lifetime: for `Repeat`, a pause or close, `!shouldrun(process)`), as
-checked inside a routine: after every repeat of a child. Repeats can run for a very long time, so a pause or close of a
-`Process` must be seen between any two of them, not once per child. See `shouldrun(::Process)`. The child's own stop
-condition is `_routine_breakcondition`.
+Whether the process stops: checked by the process loop after every step, and inside a routine after every repeat of a
+child. By default (`Repeat`, `Indefinite`), when the process is paused or closed (`!shouldrun(process)`). A lifetime
+with its own stop condition (`Until`, `AtLeast`, ...) adds a method next to its definition (`Lifetime.jl`) that also
+checks that condition, read from `context`.
+
+Repeats can run for a very long time, so a pause or close of a `Process` must be seen between any two of them, not once
+per child. See `shouldrun(::Process)`. A routine child's own stop condition is `_routine_breakcondition`.
 """
 @inline _process_breakcondition(lifetime::LT, process::P, context::C) where {LT<:Lifetime,P<:AbstractProcess,C} =
-    @inline breakcondition(lifetime, process, context)
+    @inline !shouldrun(process)
 
 export loopidx, loopint, getlidx, inc!
