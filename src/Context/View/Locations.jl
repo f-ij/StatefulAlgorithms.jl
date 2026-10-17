@@ -1,5 +1,5 @@
 ##########################################
-########## Variable Locations ############
+########## Where each name is stored #####
 ##########################################
 
 # This is the basis for the viewsystem. Variables in and out get mapped to locations in the full context
@@ -122,6 +122,10 @@ end
 
 this_instance_type(::Type{<:SubContextView{B, SubKey, T}}) where {B, SubKey, T} = T
 
+##########################################
+########## All locations of a view #######
+##########################################
+
 """
 Everything the view sees, as `(; name => VarLocation)`: see the note above for the kinds and which name wins.
 """
@@ -153,44 +157,132 @@ function _compute_location(::Type{SCT}, name::Symbol) where {SCT<:SubContextView
     return nothing, subcontext_name
 end
 
-###########################################
-########### Getting Properties  ###########
-###########################################
+##########################################
+########## Names a view sees #############
+##########################################
 
 @inline Base.keys(scv::SCV) where SCV <: SubContextView = @inline propertynames(@inline get_all_locations(scv))
 @inline Base.propertynames(scv::SCV) where SCV <: SubContextView = @inline propertynames(@inline get_all_locations(scv))
 @inline Base.haskey(scv::SCV, name::Symbol) where SCV <: SubContextView = @inline haskey(get_all_locations(scv), name)
 @inline getregistry(scv::SCV) where SCV <: SubContextView = getregistry(getpersistent(scv))
 
-"""
-Return the named tuple of runtime values filed under `subcontextname`.
+@inline @generated function Base.haskey(scv::SCV, v::Val{name}) where {name} where SCV <: SubContextView
+    location, subcontext_name = _compute_location(SCV, name)
+    has_key = !isnothing(location)
+    return :( $has_key )
+end
 
-If `subcontextname` is one of the runtime context's fields (`_captured_returns`, `_subcontext_returns`,
-`_declared_locals`, `_inputs`), that is the field's contents. Otherwise `subcontextname` is a namespace, and it is what
-that namespace's algorithm returned this step besides its state (empty if nothing).
-"""
-@inline function _runtime_values(runtime_context::ProcessContext, ::Val{subcontextname}) where {subcontextname}
-    subcontexts = @inline get_subcontexts(runtime_context)
-    haskey(subcontexts, subcontextname) && return getdata(getproperty(subcontexts, subcontextname))
-    outputs = @inline get_subcontext_returns(runtime_context)
-    return haskey(outputs, subcontextname) ? getproperty(outputs, subcontextname) : (;)
+@inline function Base.get(scv::SCV, name::Symbol, default) where SCV <: SubContextView
+    if haskey(scv, name)
+        return getproperty(scv, Val(name))
+    else
+        return default
+    end
+end
+
+@inline Base.@constprop :aggressive Base.getproperty(sct::SubContextView, v::Symbol) = getproperty(sct, Val(v))
+@inline Base.@constprop :aggressive Base.getindex(sct::SubContextView, v::Symbol) = getproperty(sct, Val(v))
+
+# """
+# Equivalent to getproperty(sct, Val(name)), but allows for inlining and constant propagation on the name argument
+# """
+# TODO: Do we really need the generated version?
+# function Base.getproperty(sct::SubContextView, symb::S) where S <: Symbol
+#     locations = get_all_locations(sct)
+#     subcontext_name = algo_to_subcontext_names(sct, symb)
+#     varlocation = @inline getproperty(locations, subcontext_name)
+#     return @inline getproperty(sct, varlocation)
+# end
+
+@inline @generated function Base.getproperty(sct::SubContextView{B, SubKey}, v::Val{key}) where {B<:ContextBundle, SubKey, key}    
+
+    target_location, subcontextname = _compute_location(sct, key)
+    if !isnothing(target_location)
+        return quote 
+            $(LineNumberNode(@__LINE__, @__FILE__))
+            @inline getproperty(sct, $target_location) 
+        end
+    end
+    available = keys(_compute_all_locations(sct))
+    mapped = subcontextname === key ? "" : " (mapped to $(subcontextname))"
+    return quote
+        $(LineNumberNode(@__LINE__, @__FILE__))
+        error("Variable ", $(QuoteNode(key)), $mapped, " requested from ", sct, " in View: ", $(QuoteNode(SubKey)),
+              ", but not supplied to context. Available names are: ", $available, " \n Context: ", getpersistent(sct))
+    end
+end
+
+@inline @generated function Base.iterate(scv::SCV, state = 1) where SCV <: SubContextView
+    locations = get_all_locations(scv)
+    _keys = keys(locations)
+    return quote 
+        if state > length($_keys)
+            return nothing
+        else
+            return (($_keys[state], getproperty(scv, getproperty($locations, $_keys[state]))), state + 1)
+        end
+    end
+end
+
+##########################################
+########## Reading a location ############
+##########################################
+
+@inline @generated function Base.getproperty(sct::SCV, vl::VarLocation{:state}) where SCV <: SubContextView
+    target_subcontext = get_subcontextname(vl)
+    target_variable = get_originalname(vl)
+    if isnothing(getfunc(vl)) && target_variable isa Symbol
+        return quote
+            return @inline getproperty_fromsubcontext(sct, Val($(QuoteNode(target_subcontext))), Val($(QuoteNode(target_variable))))
+        end
+    end
+
+    assign_exprs, varsymbols = getvar_expressions_and_varnames(vl)
+    fexpr = funcexpr(vl, varsymbols...)
+    
+    return  quote
+        $(assign_exprs...)
+        return $(fexpr)
+    end
 end
 
 """
-    _assigned_value(values, name)
-
-Return `values.name`, the runtime value `name` in one partition of the runtime context. An error when it is not
-there: a return read in a step where nothing assigned it (assigned by a child on a schedule, read in the other
-steps). Whether it is there is known from the type, so the check costs nothing.
+Read a routed runtime variable from the runtime context.
 """
-@inline _assigned_value(values::NamedTuple, name::Symbol) = haskey(values, name) ? getfield(values, name) : _throw_unassigned(name)
+@inline @generated function Base.getproperty(sct::SCV, vl::VarLocation{:runtime}) where SCV <: SubContextView
+    target_subcontext = get_subcontextname(vl)
+    target_variables = get_originalname(vl)
+    if isnothing(getfunc(vl)) && target_variables isa Symbol
+        return quote
+            return @inline view_value(sct, _assigned_value(_runtime_values(getbundle(sct), Val($(QuoteNode(target_subcontext)))), $(QuoteNode(target_variables))))
+        end
+    end
 
-@noinline _throw_unassigned(name::Symbol) = error("`$name` has no value in this step: it is assigned by a step that does not run in every step (on a schedule). Declare it first (`local $name` in a DSL block, `Local` in a plan) to keep its last value between steps.")
+    varnames = target_variables isa Tuple ? target_variables : (target_variables,)
+    varsymbols = ntuple(i -> gensym(:runtime_var), length(varnames))
+    assign_exprs = [
+        :($(varsymbols[i]) = @inline view_value(sct, _assigned_value(_runtime_values(getbundle(sct), Val($(QuoteNode(target_subcontext)))), $(QuoteNode(varnames[i])))))
+        for i in eachindex(varnames)
+    ]
+    fexpr = funcexpr(vl, varsymbols...)
 
-"""Resolve a replaced field through its stored backing location."""
-@inline function view_value(view::V, value::R) where {VL<:VarLocation, R<:ReplacedVar{VL}, V<:SubContextView}
-    return @inline view_value(view, getproperty(view, getfield(value, :varlocation)))
+    return quote
+        $(assign_exprs...)
+        return $(fexpr)
+    end
 end
+
+@inline @generated function Base.getproperty(sct::SCV, vl::VarLocation{:injected}) where SCV <: SubContextView
+    target_variable = get_originalname(vl)
+    return quote
+        injected = getinjected(sct)
+        return @inline getproperty(injected, $(QuoteNode(target_variable)))
+    end
+end
+
+##########################################
+########## Reading a partition ###########
+##########################################
 
 @inline function getproperty_fromsubcontext(
     scv::SCV,
@@ -245,119 +337,41 @@ that are hidden from algorithm code during normal reads.
     haskey(runtime_values, varname) && return @inline getfield(runtime_values, varname)
     error("Variable `$subcontextname.$varname` is not available in state or runtime context.")
 end
-@inline function Base.get(scv::SCV, name::Symbol, default) where SCV <: SubContextView
-    if haskey(scv, name)
-        return getproperty(scv, Val(name))
-    else
-        return default
-    end
-end
 
-@inline Base.@constprop :aggressive Base.getproperty(sct::SubContextView, v::Symbol) = getproperty(sct, Val(v))
-@inline Base.@constprop :aggressive Base.getindex(sct::SubContextView, v::Symbol) = getproperty(sct, Val(v))
+"""
+Return the named tuple of runtime values filed under `subcontextname`.
 
-# """
-# Equivalent to getproperty(sct, Val(name)), but allows for inlining and constant propagation on the name argument
-# """
-# TODO: Do we really need the generated version?
-# function Base.getproperty(sct::SubContextView, symb::S) where S <: Symbol
-#     locations = get_all_locations(sct)
-#     subcontext_name = algo_to_subcontext_names(sct, symb)
-#     varlocation = @inline getproperty(locations, subcontext_name)
-#     return @inline getproperty(sct, varlocation)
-# end
-
-@inline @generated function Base.getproperty(sct::SCV, vl::VarLocation{:state}) where SCV <: SubContextView
-    target_subcontext = get_subcontextname(vl)
-    target_variable = get_originalname(vl)
-    if isnothing(getfunc(vl)) && target_variable isa Symbol
-        return quote
-            return @inline getproperty_fromsubcontext(sct, Val($(QuoteNode(target_subcontext))), Val($(QuoteNode(target_variable))))
-        end
-    end
-
-    assign_exprs, varsymbols = getvar_expressions_and_varnames(vl)
-    fexpr = funcexpr(vl, varsymbols...)
-    
-    return  quote
-        $(assign_exprs...)
-        return $(fexpr)
-    end
+If `subcontextname` is one of the runtime context's fields (`_captured_returns`, `_subcontext_returns`,
+`_declared_locals`, `_inputs`), that is the field's contents. Otherwise `subcontextname` is a namespace, and it is what
+that namespace's algorithm returned this step besides its state (empty if nothing).
+"""
+@inline function _runtime_values(runtime_context::ProcessContext, ::Val{subcontextname}) where {subcontextname}
+    subcontexts = @inline get_subcontexts(runtime_context)
+    haskey(subcontexts, subcontextname) && return getdata(getproperty(subcontexts, subcontextname))
+    outputs = @inline get_subcontext_returns(runtime_context)
+    return haskey(outputs, subcontextname) ? getproperty(outputs, subcontextname) : (;)
 end
 
 """
-Read a routed runtime variable from the runtime context.
+    _assigned_value(values, name)
+
+Return `values.name`, the runtime value `name` in one partition of the runtime context. An error when it is not
+there: a return read in a step where nothing assigned it (assigned by a child on a schedule, read in the other
+steps). Whether it is there is known from the type, so the check costs nothing.
 """
-@inline @generated function Base.getproperty(sct::SCV, vl::VarLocation{:runtime}) where SCV <: SubContextView
-    target_subcontext = get_subcontextname(vl)
-    target_variables = get_originalname(vl)
-    if isnothing(getfunc(vl)) && target_variables isa Symbol
-        return quote
-            return @inline view_value(sct, _assigned_value(_runtime_values(getbundle(sct), Val($(QuoteNode(target_subcontext)))), $(QuoteNode(target_variables))))
-        end
-    end
+@inline _assigned_value(values::NamedTuple, name::Symbol) = haskey(values, name) ? getfield(values, name) : _throw_unassigned(name)
 
-    varnames = target_variables isa Tuple ? target_variables : (target_variables,)
-    varsymbols = ntuple(i -> gensym(:runtime_var), length(varnames))
-    assign_exprs = [
-        :($(varsymbols[i]) = @inline view_value(sct, _assigned_value(_runtime_values(getbundle(sct), Val($(QuoteNode(target_subcontext)))), $(QuoteNode(varnames[i])))))
-        for i in eachindex(varnames)
-    ]
-    fexpr = funcexpr(vl, varsymbols...)
+@noinline _throw_unassigned(name::Symbol) = error("`$name` has no value in this step: it is assigned by a step that does not run in every step (on a schedule). Declare it first (`local $name` in a DSL block, `Local` in a plan) to keep its last value between steps.")
 
-    return quote
-        $(assign_exprs...)
-        return $(fexpr)
-    end
+"""Resolve a replaced field through its stored backing location."""
+@inline function view_value(view::V, value::R) where {VL<:VarLocation, R<:ReplacedVar{VL}, V<:SubContextView}
+    return @inline view_value(view, getproperty(view, getfield(value, :varlocation)))
 end
-
-@inline @generated function Base.getproperty(sct::SCV, vl::VarLocation{:injected}) where SCV <: SubContextView
-    target_variable = get_originalname(vl)
-    return quote
-        injected = getinjected(sct)
-        return @inline getproperty(injected, $(QuoteNode(target_variable)))
-    end
-end
-
-@inline @generated function Base.haskey(scv::SCV, v::Val{name}) where {name} where SCV <: SubContextView
-    location, subcontext_name = _compute_location(SCV, name)
-    has_key = !isnothing(location)
-    return :( $has_key )
-end
-
-@inline @generated function Base.getproperty(sct::SubContextView{B, SubKey}, v::Val{key}) where {B<:ContextBundle, SubKey, key}    
-
-    target_location, subcontextname = _compute_location(sct, key)
-    if !isnothing(target_location)
-        return quote 
-            $(LineNumberNode(@__LINE__, @__FILE__))
-            @inline getproperty(sct, $target_location) 
-        end
-    end
-    available = keys(_compute_all_locations(sct))
-    mapped = subcontextname === key ? "" : " (mapped to $(subcontextname))"
-    return quote
-        $(LineNumberNode(@__LINE__, @__FILE__))
-        error("Variable ", $(QuoteNode(key)), $mapped, " requested from ", sct, " in View: ", $(QuoteNode(SubKey)),
-              ", but not supplied to context. Available names are: ", $available, " \n Context: ", getpersistent(sct))
-    end
-end
-
-
-@inline @generated function Base.iterate(scv::SCV, state = 1) where SCV <: SubContextView
-    locations = get_all_locations(scv)
-    _keys = keys(locations)
-    return quote 
-        if state > length($_keys)
-            return nothing
-        else
-            return (($_keys[state], getproperty(scv, getproperty($locations, $_keys[state]))), state + 1)
-        end
-    end
-end
-
 
 ##########################################
+########## Unused ########################
+##########################################
+
 """
 From a pair of a namedtuple intended to merge into context from a view
 And all locations in the view
