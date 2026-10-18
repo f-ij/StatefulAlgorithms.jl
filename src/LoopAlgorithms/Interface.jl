@@ -58,8 +58,18 @@ Base.@nospecializeinfer function rebuild_plan(@nospecialize(plan::AbstractPlan),
 end
 
 """
-Return a copy of `plan` whose children are `funcs`; every other field is the same (`setfield`). Inferred, so the typed
-code uses it; the untyped steps of `resolve` use `rebuild_plan`.
+    rebuild_plan_typed(plan, funcs::Tuple, wiring) -> plan copy
+
+The inferred `rebuild_plan`, used by the typed resolve (Resolving/Typed.jl): the same copy, built with `setfield`, so a
+caller that knows the plan type gets the copy's type at compile time. A plan type that defines its own `rebuild_plan`
+defines this one too.
+"""
+@inline rebuild_plan_typed(plan::P, funcs::F, wiring::W) where {P<:AbstractPlan, F<:Tuple, W} =
+    setfield(setfield(plan, :funcs, funcs), :wiring, wiring)
+
+"""
+Return a copy of `plan` whose children are `funcs`; every other field is the same (`setfield`). Inferred; used where
+only the children change (step 1 of `resolve`, the DSL).
 """
 @inline rebuild_loopalgorithm_funcs(plan::P, funcs::F) where {P<:AbstractPlan, F} = setfield(plan, :funcs, funcs)
 

@@ -34,16 +34,13 @@ function _resolve_plan_wiring_tree_typed(la::LA, registry::NameSpaceRegistry, in
     own_global = _resolve_wiring_grouped(registry, global_wiring(raw_wiring))
     combined_global = _merge_global_wiring(inherited_global, own_global)
     funcs = _resolve_child_plans_typed(getalgos(la), registry, combined_global)
-    # A new name, not `la = ...`: `la` is captured by the closure below, and a captured variable that is reassigned
-    # is boxed (`Core.Box`), which makes every use of it uninferable.
-    rebuilt = rebuild_loopalgorithm_funcs(la, funcs)
 
     resolved_children = ntuple(Val(length(funcs))) do i
         child = funcs[i]
         if child isa LoopSpec
             return getwiring(child)
         end
-        target = plan_child_namespace(rebuilt, i)
+        target = plan_child_namespace(la, i)
         bucket = _retarget_owner_routes(getfield(child_wiring(raw_wiring), i), target)
         target_global = get(combined_global, target, Wiring())
         target_child = get(_resolve_wiring_grouped(registry, bucket), target, Wiring())
@@ -51,7 +48,7 @@ function _resolve_plan_wiring_tree_typed(la::LA, registry::NameSpaceRegistry, in
         return resolved
     end
 
-    return setfield(rebuilt, :wiring, PlanWiring(combined_global, resolved_children, own_locals))
+    return rebuild_plan_typed(la, funcs, PlanWiring(combined_global, resolved_children, own_locals))
 end
 
 # The children with the wiring of every nested plan resolved, the others as they are. Tuple recursion, not a closure in
@@ -120,8 +117,7 @@ The inferred `_resolve_scopes` (Scopes.jl, which explains scopes); `path` is the
     return quote
         wiring = getwiring(la)
         funcs = ($(children...),)
-        rebuilt = rebuild_loopalgorithm_funcs(la, funcs)
         wirings = ($(child_wirings...),)
-        return setfield(rebuilt, :wiring, PlanWiring(global_wiring(wiring), wirings, getfield(wiring, :locals), $Sc, $(Val(resets))))
+        return rebuild_plan_typed(la, funcs, PlanWiring(global_wiring(wiring), wirings, getfield(wiring, :locals), $Sc, $(Val(resets))))
     end
 end
