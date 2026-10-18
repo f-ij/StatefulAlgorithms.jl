@@ -46,11 +46,6 @@ algotypes(ca::Union{CompositeAlgorithm{FT}, Type{<:CompositeAlgorithm{FT}}}) whe
 statetypes(::Union{CompositeAlgorithm{T,I,NS,W,id,S}, Type{<:CompositeAlgorithm{T,I,NS,W,id,S}}}) where {T,I,NS,W,id,S} = S.parameters
 subalgotypes(ca::CompositeAlgorithm{FT}) where FT = FT.parameters
 subalgotypes(::Type{CA}) where {FT, CA<:CompositeAlgorithm{FT}} = FT.parameters
-@inline getstates(ca::CompositeAlgorithm) = getfield(ca, :states)
-
-
-getwiring(ca::CompositeAlgorithm) = getfield(ca, :wiring)
-getoptions(ca::CompositeAlgorithm) = getfield(ca, :options)
 
 getid(ca::Union{CompositeAlgorithm{T,I,NS,W,id}, Type{<:CompositeAlgorithm{T,I,NS,W,id}}}) where {T,I,NS,W,id} = id
 setid(ca::CA, id = uuid4()) where {CA<:CompositeAlgorithm} = setparameter(ca, 5, id)
@@ -102,7 +97,6 @@ id(ca::Union{CompositeAlgorithm{T,I,NS,W,id}, Type{<:CompositeAlgorithm{T,I,NS,W
 Base.length(ca::CompositeAlgorithm) = length(getalgos(ca))
 Base.eachindex(ca::CompositeAlgorithm) = eachindex(getalgos(ca))
 getalgo(ca::CompositeAlgorithm, idx) = getalgos(ca)[idx]
-getalgos(ca::CompositeAlgorithm) = getfield(ca, :funcs)
 hasflag(ca::CompositeAlgorithm, flag) = flag in getfield(ca, :flags)
 track_algo(ca::CompositeAlgorithm) = hasflag(ca, :trackalgo)
 """

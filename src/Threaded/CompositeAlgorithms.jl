@@ -29,11 +29,7 @@ function setwiring(tca::ThreadedCompositeAlgorithm, wiring)
     return setfield(tca, :wiring, wiring)
 end
 
-@inline getalgos(tca::ThreadedCompositeAlgorithm) = getfield(tca, :funcs)
-@inline getstates(tca::ThreadedCompositeAlgorithm) = getfield(tca, :states)
 statetypes(::Union{ThreadedCompositeAlgorithm{T,I,NS,W,id,S}, Type{<:ThreadedCompositeAlgorithm{T,I,NS,W,id,S}}}) where {T,I,NS,W,id,S} = S.parameters
-@inline getwiring(tca::ThreadedCompositeAlgorithm) = getfield(tca, :wiring)
-@inline getoptions(tca::ThreadedCompositeAlgorithm) = getfield(tca, :options)
 
 subalgorithms(tca::ThreadedCompositeAlgorithm) = getalgos(tca)
 subalgotypes(tca::ThreadedCompositeAlgorithm{FT}) where {FT} = FT.parameters

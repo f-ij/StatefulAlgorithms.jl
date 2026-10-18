@@ -15,14 +15,13 @@ Resolving a plan: everything that can only be decided once the whole composition
    captured returns its children see by name (`Scope`), and routes that read them point at
    their slots.
 
-Steps 1 and 2 are in Registry.jl, step 3 in Wiring.jl, step 4 in Scopes.jl. `resolve` and the other entry points are
-below. NormalizeIds.jl makes plans that differ only in `Unique` ids one plan type, Interfaces.jl is what a plan type
-provides while it is resolved, and Typed.jl is the inferred version of the steps.
+Steps 1 and 2 are in Registering.jl, step 3 in Wiring.jl, step 4 in Scopes.jl. `resolve` and the other entry points
+are below. NormalizeIds.jl makes plans that differ only in `Unique` ids one plan type, and Typed.jl is the inferred
+version of the steps. What a plan type provides (its getters, `rebuild_plan`) is in LoopAlgorithms/Interface.jl.
 =#
 
-include("Interfaces.jl")
 include("NormalizeIds.jl")
-include("Registry.jl")
+include("Registering.jl")
 include("Wiring.jl")
 include("Scopes.jl")
 include("Typed.jl")          # the inferred resolve, `_resolve_typed`

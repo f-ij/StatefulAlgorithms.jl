@@ -1,3 +1,4 @@
+include("Interface.jl")         # what every plan type provides
 include("Matching.jl")
 include("WithWiring.jl")          # before the plan code, which takes `WithWiring` children
 include("Callable/Callable.jl")   # before the plan code, which takes `Callable` children
