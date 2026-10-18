@@ -72,7 +72,7 @@ Base.@nospecializeinfer function _compute_node_scope_typed(@nospecialize(LA::Typ
     locals = _scoped_names(scope_locals(Outer), fieldnames(fieldtype(fieldtype(LA, :wiring), :locals)), at)
     read = _find_returns_read_in_plan_typed(LA)
     captured = Tuple(unique(Symbol[n for i in 1:fieldcount(F) for n in callable_return_names(fieldtype(F, i))
-                                   if n in read && !_has_name(locals, n) && !_has_name(scope_returns(Outer), n)]))
+                                   if n in read && !_haskey_untyped(locals, n) && !_haskey_untyped(scope_returns(Outer), n)]))
     Sc = Scope{locals, _scoped_names(scope_returns(Outer), captured, at)}
     owners = Tuple(unique(Symbol[namesymbol(fieldtype(NS, i)) for i in 1:fieldcount(F)
                                  if !(fieldtype(F, i) <: LoopSpec) && context_partition(Val(namesymbol(fieldtype(NS, i)))) isa NamespacePartition]))

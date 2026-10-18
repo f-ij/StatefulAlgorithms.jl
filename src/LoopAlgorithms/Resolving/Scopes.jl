@@ -70,7 +70,7 @@ Base.@nospecializeinfer function _compute_node_scope(@nospecialize(la::AbstractP
     captured = Symbol[]
     for i in 1:nfields(algos)
         for name in callable_return_names(typeof(getfield(algos, i)))
-            name in read && !_has_name(locals, name) && !_has_name(outer_returns, name) &&
+            name in read && !_haskey_untyped(locals, name) && !_haskey_untyped(outer_returns, name) &&
                 !(name in captured) && push!(captured, name)
         end
     end
@@ -112,7 +112,11 @@ Base.@nospecializeinfer function _find_returns_read_in_plan(@nospecialize(la::Ab
     end
     return names
 end
-_has_name(@nospecialize(nt::NamedTuple), name::Symbol) = Base.fieldindex(typeof(nt), name, false) != 0
+"""
+Return whether the named tuple `nt` has the field `name`: `haskey(nt, name)`, compiled once instead of once per
+named-tuple type, for code that runs on types as values (resolve, code generation).
+"""
+_haskey_untyped(@nospecialize(nt::NamedTuple), name::Symbol) = Base.fieldindex(typeof(nt), name, false) != 0
 _append_unique!(names::Vector{Symbol}, @nospecialize(new)) = (for name in new; name in names || push!(names, name); end; names)
 """Find the names one route reads from the captured returns: none unless it reads from `_captured_returns`."""
 _find_returns_read_by_route(::Route) = ()
