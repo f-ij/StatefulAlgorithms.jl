@@ -9,8 +9,8 @@ ids to `SimpleId(1..N)` in order of first appearance and then calls the normal c
 ever sees the sequential ids, so it is compiled once. The registry and the loop do not change.
 
 The idea is now in the package: `src/LoopAlgorithms/Resolving/NormalizeIds.jl`. This folder keeps the measurements only. The
-scripts named below (and their `Project.toml`) were deleted on 2026-10-18; they are in git at tag `archive/unique-ids` (`b0f21db`),
-under `perf/unique_ids/`. They were written against the package of 2026-10-04 and no longer run against the current code.
+scripts named below (and their `Project.toml`) were deleted on 2026-10-18. Their last version is in commit `2c4ddff`, under
+`perf/unique_ids/` (the original ones of 2026-10-04 also at tag `archive/unique-ids`). They no longer run against the current code.
 
 ## Results
 
