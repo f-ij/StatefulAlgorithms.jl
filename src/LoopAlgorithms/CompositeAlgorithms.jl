@@ -41,7 +41,6 @@ function setwiring(ca::CompositeAlgorithm, wiring)
     return setfield(ca, :wiring, wiring)
 end
 
-subalgorithms(ca::CompositeAlgorithm) = getalgos(ca)
 algotypes(ca::Union{CompositeAlgorithm{FT}, Type{<:CompositeAlgorithm{FT}}}) where FT = FT.parameters
 statetypes(::Union{CompositeAlgorithm{T,I,NS,W,id,S}, Type{<:CompositeAlgorithm{T,I,NS,W,id,S}}}) where {T,I,NS,W,id,S} = S.parameters
 subalgotypes(ca::CompositeAlgorithm{FT}) where FT = FT.parameters
@@ -96,7 +95,6 @@ id(ca::Union{CompositeAlgorithm{T,I,NS,W,id}, Type{<:CompositeAlgorithm{T,I,NS,W
 # getnames(ca::CompositeAlgorithm{T, I, N}) where {T, I, N} = N
 Base.length(ca::CompositeAlgorithm) = length(getalgos(ca))
 Base.eachindex(ca::CompositeAlgorithm) = eachindex(getalgos(ca))
-getalgo(ca::CompositeAlgorithm, idx) = getalgos(ca)[idx]
 hasflag(ca::CompositeAlgorithm, flag) = flag in getfield(ca, :flags)
 track_algo(ca::CompositeAlgorithm) = hasflag(ca, :trackalgo)
 """

@@ -31,7 +31,6 @@ end
 
 statetypes(::Union{ThreadedCompositeAlgorithm{T,I,NS,W,id,S}, Type{<:ThreadedCompositeAlgorithm{T,I,NS,W,id,S}}}) where {T,I,NS,W,id,S} = S.parameters
 
-subalgorithms(tca::ThreadedCompositeAlgorithm) = getalgos(tca)
 subalgotypes(tca::ThreadedCompositeAlgorithm{FT}) where {FT} = FT.parameters
 subalgotypes(::Type{TCA}) where {FT, TCA<:ThreadedCompositeAlgorithm{FT}} = FT.parameters
 
@@ -70,7 +69,6 @@ id(tca::Union{ThreadedCompositeAlgorithm{T,I,NS,W,id}, Type{<:ThreadedCompositeA
 
 Base.length(tca::ThreadedCompositeAlgorithm) = length(getalgos(tca))
 Base.eachindex(tca::ThreadedCompositeAlgorithm) = eachindex(getalgos(tca))
-getalgo(tca::ThreadedCompositeAlgorithm, idx) = getalgos(tca)[idx]
 
 @generated function inc!(cursor::CompositeLoopCursor, tca::ThreadedCompositeAlgorithm)
     _lcm = lcm(intervals(tca)...)

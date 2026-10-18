@@ -851,6 +851,20 @@ function _static_tuple_index(values::Tuple, needle)
     return nothing
 end
 
+"""
+Return the index of the type parameter of `T` that field `i` is declared as (`struct S{A}; x::A; end`: 1 for `x`), or
+`nothing` when the field's declared type is not a bare type parameter.
+"""
+Base.@nospecializeinfer function _field_parameter_index(@nospecialize(T::DataType), i::Int)
+    body = Base.unwrap_unionall(T.name.wrapper)
+    declared = body.types[i]
+    declared isa TypeVar || return nothing
+    for j in eachindex(body.parameters)
+        body.parameters[j] === declared && return j
+    end
+    return nothing
+end
+
 @inline setfield(s::S, name::Symbol, val::V) where {S,V} = @inline setfield(s, Val(name), val)
 @inline @generated function setfield(s::S, name::Val{FieldName}, val::V) where {S,V, FieldName}
     fieldnames = Base.fieldnames(S)

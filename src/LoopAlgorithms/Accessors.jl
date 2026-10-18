@@ -49,6 +49,9 @@ Base.isempty(wiring::PlanWiring) =
 @inline context(cla::LoopAlgorithm) = getpersistentcontext(cla)
 
 @inline getalgos(cla::LoopAlgorithm) = getalgos(getplan(cla))
+"""Return a copy of `cla` whose plan has the children `funcs`."""
+@inline rebuild_loopalgorithm_funcs(cla::LoopAlgorithm, funcs::F) where {F} =
+    setfield(cla, :plan, rebuild_loopalgorithm_funcs(getplan(cla), funcs))
 @inline getalgo(cla::LoopAlgorithm, idx) = getalgo(getplan(cla), idx)
 @inline getwiring(cla::LoopAlgorithm) = getwiring(getplan(cla))
 @inline subalgorithms(cla::LoopAlgorithm) = subalgorithms(getplan(cla))

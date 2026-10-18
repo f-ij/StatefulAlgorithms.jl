@@ -4,8 +4,9 @@ Normalizing the random ids of `Unique` handles around `resolve`.
 `Unique(f)` puts a random UUID in the handle's type (`SimpleId{uuid}()`), so every re-run of the same user code
 gives a plan of a new type, and the whole typed `resolve` compiles again. For a plan with such ids, `resolve` does:
 
-    normalized = normalize_ids(la)        # SimpleId{uuid} -> NormalizedId{k, R}, k = order of first appearance;
-                                          # a handle keeps its original id in its `reconstructor` field
+    normalized, found = normalize_ids(la) # SimpleId{uuid} -> NormalizedId{k, R}, k = order of first appearance;
+                                          # a handle keeps its original id in its `reconstructor` field;
+                                          # `found`: whether there was any (if not, `la` is resolved as it is)
     resolved = _resolve_plan(normalized)  # compiled once per plan shape
     restore_original_ids(resolved)        # every normalized handle back to the original one
 
@@ -16,39 +17,6 @@ last step puts the original ones back there, so a handle the user still holds is
 
 All of this runs on values held as `Any`, with `@nospecialize`, so it does not compile per uuid.
 =#
-
-"""
-    _has_unique_handles(x) -> Bool
-
-Whether `x` holds a `Unique` handle (an `IdentifiableAlgo` whose id is a `SimpleId` with a random UUID): among a plan's
-children (recursively, also inside a handle that wraps a plan), its states, its options, stored inits and overrides,
-and its routes and shares. Stops at the first one found.
-
-Reads fields and type parameters only, so it compiles nothing per handle type. A `Unique` handle it does not reach
-(inside a `Package`, for example) only means that plan is resolved with its random ids, which is correct but compiles
-again on every re-run.
-"""
-Base.@nospecializeinfer function _has_unique_handles(@nospecialize(x))::Bool
-    if x isa IdentifiableAlgo
-        id = typeof(x).parameters[2]
-        id isa SimpleId && typeof(id).parameters[1] isa UUID && return true
-        return _has_unique_handles(getfield(x, :func))
-    elseif x isa LoopAlgorithm
-        return _has_unique_handles(getfield(x, :plan)) ||
-               _has_unique_handles(getfield(x, :options)) || _has_unique_handles(getfield(x, :inits)) ||
-               _has_unique_handles(getfield(x, :overrides))
-    elseif x isa FinalizedAlgorithm
-        return _has_unique_handles(getfield(x, :inner))
-    elseif x isa AbstractPlan
-        return _has_unique_handles(getfield(x, :funcs)) || _has_unique_handles(getfield(x, :wiring)) ||
-               _has_unique_handles(getfield(x, :states)) || _has_unique_handles(getfield(x, :options))
-    elseif x isa Union{Tuple, NamedTuple, PlanWiring, Wiring, Route, Share}
-        for i in 1:nfields(x)
-            _has_unique_handles(getfield(x, i)) && return true
-        end
-    end
-    return false
-end
 
 ############################
 ###### NORMALIZING ######
@@ -119,19 +87,21 @@ struct _CannotNormalize <: Exception
 end
 
 """
-    normalize_ids(la)
+    normalize_ids(la) -> (normalized, found)
 
 Replace every random `Unique` id in `la` by `NormalizedId{k, R}`, numbered in order of first appearance; each
 normalized handle keeps its original id in its `reconstructor` field. The same plan shape with other uuids gives the
-same normalized type. When a mutable object in the plan would change type it gives up and returns `la` unchanged;
-that plan then resolves with its original ids, which is correct but compiles per uuid.
+same normalized type. `found` is whether any id was replaced. When a mutable object in the plan would change type it
+gives up and returns `(la, false)`; that plan then resolves with its original ids, which is correct but compiles per
+uuid.
 """
 Base.@nospecializeinfer function normalize_ids(@nospecialize(la))
+    normalizer = _IdNormalizer()
     try
-        return _normalize_value(_IdNormalizer(), la)
+        return _normalize_value(normalizer, la), !isempty(normalizer.ordinals)
     catch e
         e isa _CannotNormalize || rethrow()
-        return la
+        return la, false
     end
 end
 
@@ -160,8 +130,8 @@ end
 
 """
 Rebuild `v` with every normalized handle replaced by the original one (`reconstruct_id` on its reconstructor). Only
-the parts of `v` whose type contains a normalized id are rebuilt; a struct type parameter that is the type of a
-rebuilt field gets that field's new type.
+the parts of `v` whose type contains a normalized id are rebuilt; the type parameter that a rebuilt field is declared as
+(`_field_parameter_index`) becomes that field's new type.
 """
 function _restore_value(@nospecialize(v), cache::IdDict{Any, Bool})
     T = typeof(v)
@@ -181,12 +151,13 @@ function _restore_value(@nospecialize(v), cache::IdDict{Any, Bool})
         fields[i] = new
         new === old && continue
         changed = true
-        for j in eachindex(params)
-            params[j] === typeof(old) && (params[j] = typeof(new))
-        end
+        v isa Union{Tuple, NamedTuple} && continue
+        j = _field_parameter_index(T, i)
+        isnothing(j) || (params[j] = typeof(new))
     end
     changed || return v
     v isa Tuple && return Core._apply_iterate(iterate, tuple, fields)
+    v isa NamedTuple && return NamedTuple{T.parameters[1]}(Core._apply_iterate(iterate, tuple, fields))
     return ccall(:jl_new_structv, Any, (Any, Ptr{Any}, UInt32), Core.apply_type(T.name.wrapper, params...), fields, n)
 end
 

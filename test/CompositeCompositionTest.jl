@@ -191,6 +191,6 @@ cc_bump(n) = n + 1
         finalstep(CompositeAlgorithm(FinalCounter, (1,)), context -> context[FinalCounter].count),
     )
     for plan in plans
-        @test StatefulAlgorithms.isresolved(@inferred StatefulAlgorithms._resolve_typed(plan))
+        @test StatefulAlgorithms.isresolved(@inferred StatefulAlgorithms._resolve_plan_typed(plan))
     end
 end

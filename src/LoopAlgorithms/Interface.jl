@@ -22,6 +22,10 @@ its intervals or repeats).
 @inline getwiring(plan::P) where {P<:AbstractPlan} = getfield(plan, :wiring)
 """Return the options of `plan`."""
 @inline getoptions(plan::P) where {P<:AbstractPlan} = getfield(plan, :options)
+"""Return child `idx` of `plan`."""
+@inline getalgo(plan::P, idx::I) where {P<:AbstractPlan, I} = getalgos(plan)[idx]
+"""Return the children of `plan`, as `getalgos`."""
+@inline subalgorithms(plan::P) where {P<:AbstractPlan} = getalgos(plan)
 
 ###############################################################################
 # A copy with new children and wiring, while a plan is resolved
@@ -40,9 +44,9 @@ rely on being inlined or on its argument types being known while compiling.
 """
     rebuild_plan(plan, funcs::Tuple, wiring) -> plan copy
 
-A copy of `plan` whose children are `funcs` and whose wiring is `wiring`; every other field is the same. A type
-parameter of the plan that was the type of the old children or old wiring becomes the type of the new value (as
-`setfield` does), so the copy's type follows its new contents.
+A copy of `plan` whose children are `funcs` and whose wiring is `wiring`; every other field is the same. The type
+parameter that the `funcs` or `wiring` field is declared as becomes the type of the new value, so the copy's type
+follows its new contents.
 
 Default: calls the plan type's constructor with all its fields, in field order. Correct for any plan type that stores
 `funcs` and `wiring` as fields and whose constructor takes all fields in order (Julia's default constructor). A plan
@@ -54,9 +58,15 @@ Base.@nospecializeinfer function rebuild_plan(@nospecialize(plan::AbstractPlan),
 end
 
 """
-`s` with the fields `names` set to `values`, built by `s`'s type's constructor called with all fields in order; a type
-parameter of `s` that was the type of a replaced field becomes the type of the new value. Used by the defaults above;
-works on types as values, so it is compiled once, not once per plan type.
+Return a copy of `plan` whose children are `funcs`; every other field is the same (`setfield`). Inferred, so the typed
+code uses it; the untyped steps of `resolve` use `rebuild_plan`.
+"""
+@inline rebuild_loopalgorithm_funcs(plan::P, funcs::F) where {P<:AbstractPlan, F} = setfield(plan, :funcs, funcs)
+
+"""
+Return `s` with the fields `names` set to `values`, built by `s`'s type's constructor called with all fields in order;
+the type parameter that a replaced field is declared as (`_field_parameter_index`) becomes the type of the new value.
+Used by the defaults above; works on types as values, so it is compiled once, not once per plan type.
 """
 Base.@nospecializeinfer function _with_fields(@nospecialize(s), names::Tuple{Vararg{Symbol}}, @nospecialize(values::Tuple))
     T = typeof(s)
@@ -64,14 +74,9 @@ Base.@nospecializeinfer function _with_fields(@nospecialize(s), names::Tuple{Var
     fields = Any[getfield(s, i) for i in 1:nfields(s)]
     for k in 1:length(names)
         i = Base.fieldindex(T, names[k])
-        old = fieldtype(T, i)
         new = getfield(values, k)
-        for j in eachindex(params)
-            if params[j] == old
-                params[j] = typeof(new)
-                break
-            end
-        end
+        j = _field_parameter_index(T, i)
+        isnothing(j) || (params[j] = typeof(new))
         fields[i] = new
     end
     return Core.apply_type(T.name.wrapper, params...)(fields...)

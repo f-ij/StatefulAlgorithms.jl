@@ -34,8 +34,6 @@ function setwiring(r::Routine, wiring)
     return setfield(r, :wiring, wiring)
 end
 
-@inline getalgo(r::Routine, idx) = getalgos(r)[idx]
-@inline subalgorithms(r::Routine) = getalgos(r)
 statetypes(::Union{Routine{T,R,NS,W,id,S}, Type{<:Routine{T,R,NS,W,id,S}}}) where {T,R,NS,W,id,S} = S.parameters
 
 

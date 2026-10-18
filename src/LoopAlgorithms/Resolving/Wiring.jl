@@ -10,13 +10,9 @@ one `NamedTuple{Tuple(keys)}(Tuple(values))` instead, as `_scoped_names` does.
 # 3. Wiring
 ############################################################################################
 
-# Resolves the wiring of the whole tree (3.), then its scopes (4.).
-@inline function resolve_plan_wiring(la::LoopAlgorithm, registry::NameSpaceRegistry)
-    return setfield(la, :plan, _resolve_scopes(_resolve_plan_wiring_tree(getplan(la), registry, (;)), NoScope, ""))
-end
-
 """
-Resolve a plan tree and inlay inherited global wiring into concrete children.
+Resolve a plan tree and inlay inherited global wiring into concrete children. Also records, in the `PlanWiring` type,
+the namespaces of the algorithms directly in each node (`owners` of its resets; step 4 adds the returns).
 
 Runs once per plan on the plan as a value (`@nospecialize`, loops instead of closures): this function is compiled once,
 and only the wiring helpers it calls compile for the registry and wiring types they get. `_resolve_plan_wiring_tree_typed`
@@ -44,6 +40,7 @@ Base.@nospecializeinfer function _resolve_plan_wiring_tree(@nospecialize(la::Abs
 
     old_children = getfield(raw_wiring, :child_wiring)
     children = Vector{Any}(undef, n)
+    owners = Symbol[]
     for i in 1:n
         child = funcs[i]
         if child isa LoopSpec
@@ -51,6 +48,7 @@ Base.@nospecializeinfer function _resolve_plan_wiring_tree(@nospecialize(la::Abs
             continue
         end
         target = _child_namespace_untyped(la, i)
+        context_partition(Val(target)) isa NamespacePartition && !(target in owners) && push!(owners, target)
         # Wires attached to this child (`WithWiring`) point at the child itself until now;
         # give them its namespace so they resolve like any route into it.
         bucket = _retarget_owner_routes(getfield(old_children, i), target)
@@ -63,9 +61,16 @@ Base.@nospecializeinfer function _resolve_plan_wiring_tree(@nospecialize(la::Abs
     end
 
     children_ = Tuple(children)
-    W = Core.apply_type(PlanWiring, typeof(combined_global), typeof(children_), typeof(own_locals), NoScope, (; returns = (), owners = ()))
+    W = Core.apply_type(PlanWiring, typeof(combined_global), typeof(children_), typeof(own_locals), NoScope, (; returns = (), owners = Tuple(owners)))
     return rebuild_plan(la, Tuple(funcs), W(combined_global, children_, own_locals))
 end
+
+"""
+Return the context name of child `i` of `plan`, which is not a nested plan, read from its `Namespace` type as a value
+(`plan_child_namespace` reads the same, inferred).
+"""
+Base.@nospecializeinfer _child_namespace_untyped(@nospecialize(plan::AbstractPlan), i::Int) =
+    typeof(getfield(getfield(plan, :namespaces), i)).parameters[1]::Symbol
 
 #=
 Wiring grouped by target: a named tuple from target namespace to the `Wiring` (routes and
@@ -98,9 +103,6 @@ function _resolve_wiring_grouped(registry::NameSpaceRegistry, wiring::Wiring)
         Wiring(get(route_groups, key, ()), get(share_groups, key, ()))
     end
 end
-
-"""Return already grouped global wiring unchanged."""
-_resolve_wiring_grouped(::NameSpaceRegistry, grouped::NamedTuple) = grouped
 
 """Merge grouped global wiring, with right-side route aliases occluding left."""
 function _merge_global_wiring(left::NamedTuple, right::NamedTuple)

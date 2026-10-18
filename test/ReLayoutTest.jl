@@ -33,7 +33,7 @@ rl_nested(k) = CompositeAlgorithm(CompositeAlgorithm(Unique(RLCounter()), Callab
 function rl_phase_types(plan)
     resolved = resolve(plan)
     return (; plan = typeof(plan),
-              resolving = typeof(StatefulAlgorithms.normalize_ids(plan)),
+              resolving = typeof(first(StatefulAlgorithms.normalize_ids(plan))),
               resolved = typeof(resolved),
               initialized = typeof(StatefulAlgorithms.init(resolved)))
 end
@@ -58,6 +58,6 @@ end
 
 @testset "The untyped and the typed resolve give the same type" begin
     for plan in (rl_values(0), rl_nested(0))
-        @test typeof(resolve(plan)) === typeof(StatefulAlgorithms._resolve_typed(plan))
+        @test typeof(resolve(plan)) === typeof(StatefulAlgorithms._resolve_plan_typed(plan))
     end
 end

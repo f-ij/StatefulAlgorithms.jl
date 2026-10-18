@@ -24,7 +24,7 @@ include("NormalizeIds.jl")
 include("Registering.jl")
 include("Wiring.jl")
 include("Scopes.jl")
-include("Typed.jl")          # the inferred resolve, `_resolve_typed`
+include("Typed.jl")          # the inferred resolve, `_resolve_plan_typed`
 
 """
 Materialize a loop algorithm for context construction.
@@ -38,12 +38,12 @@ its inner loop is materialized.
 `resolve` itself is compiled once (its result is not inferred; a caller gets `Any`). Plans with `Unique` handles have
 their random ids normalized first, so the same layout with new ids is the same plan type and compiles nothing again
 (NormalizeIds.jl). The steps are then run by `_resolve_plan`, compiled once per plan type. The inferred version, for a
-caller that knows the plan type, is `_resolve_typed` (Typed.jl).
+caller that knows the plan type, is `_resolve_plan_typed` (Typed.jl).
 """
 Base.@nospecializeinfer function resolve(@nospecialize(la::LoopSpec))
-    _has_unique_handles(la) || return _resolve_plan(la)
-    # return restore_original_ids(_resolve_plan(normalize_ids(la)))
-    return normalize_ids(la) |> _resolve_plan |> restore_original_ids
+    normalized, found = normalize_ids(la)
+    found || return _resolve_plan(la)
+    return normalized |> _resolve_plan |> restore_original_ids
 end
 
 """
@@ -51,9 +51,7 @@ Run the steps of resolving `la` (see the top of this file) and return the resolv
 (after id normalization, see `resolve`), so the steps it calls are compiled together with it; the steps themselves
 walk the plan untyped.
 """
-# TODO (2026-10-17 review): `@inline` here has no effect: its only caller, `resolve`, is `@nospecializeinfer`, so the
-# call is dynamic.
-@inline function _resolve_plan(la::LA) where {LA<:LoopSpec}
+function _resolve_plan(la::LA) where {LA<:LoopSpec}
     if la isa FinalizedAlgorithm
         return finalstep(_resolve_plan(inneralgorithm(la)), finalfunction(la))
     end
@@ -65,10 +63,18 @@ walk the plan untyped.
     end
 
     registry, keyed_la = setup_registry_and_keyed_algos(la)   # 1. keys and namespaces
-    keyed_la = _attach_registry(keyed_la, registry)            # 2. share the registry
-    keyed_la = resolve_plan_wiring(keyed_la, registry)         # 3. and 4. routes, shares, scopes
-    # The `RootOption`s of the plan tree stay on the root wrapper.
-    return setoptions(keyed_la, _root_options(la))
+    return _resolve_keyed_plan(keyed_la, registry)
+end
+
+"""
+Run steps 2 to 4 on `keyed_la`, a root wrapper that step 1 gave keys to with `registry`, and return it resolved, with the
+`RootOption`s of its plan tree on it.
+"""
+function _resolve_keyed_plan(keyed_la::LA, registry::R) where {LA<:LoopAlgorithm, R<:NameSpaceRegistry}
+    keyed_la = _attach_registry(keyed_la, registry)                      # 2. share the registry
+    plan = _resolve_plan_wiring_tree(getplan(keyed_la), registry, (;))   # 3. routes, shares
+    plan = _resolve_scopes(plan, NoScope, "")                            # 4. scopes
+    return setoptions(setfield(keyed_la, :plan, plan), _root_options(keyed_la))
 end
 
 """
@@ -84,11 +90,7 @@ Meant for multi-stage runs: prepare several algorithms at once, then run each se
 function resolve(la1::LA1, la2::LA2, las::Vararg{LoopSpec}) where {LA1<:LoopSpec, LA2<:LoopSpec}
     loopalgorithms = (la1, la2, las...)
     registry, keyed_loopalgorithms = _build_shared_registry_and_keyed_algos(loopalgorithms)
-    return map(keyed_loopalgorithms) do resolved
-        resolved = _attach_registry(resolved, registry)
-        resolved = resolve_plan_wiring(resolved, registry)
-        setoptions(resolved, _root_options(resolved))
-    end
+    return map(keyed -> _resolve_keyed_plan(keyed, registry), keyed_loopalgorithms)
 end
 
 @inline resolve(loopalgorithms::Tuple{Vararg{LoopSpec}}) = resolve(loopalgorithms...)
@@ -106,17 +108,4 @@ function _build_shared_registry_and_keyed_algos(loopalgorithms::LAS) where {LAS<
         keyed_loopalgorithms = (keyed_loopalgorithms..., keyed)
     end
     return registry, keyed_loopalgorithms
-end
-
-# Replace the children of a plan, of the plan inside a wrapper, or inside a finalized algorithm. Used by every step.
-@inline function rebuild_loopalgorithm_funcs(la::LA, funcs::F) where {LA<:LoopSpec, F}
-    return setfield(la, :funcs, funcs)
-end
-
-@inline function rebuild_loopalgorithm_funcs(la::LoopAlgorithm, funcs::F) where {F}
-    return setfield(la, :plan, rebuild_loopalgorithm_funcs(getplan(la), funcs))
-end
-
-@inline function rebuild_loopalgorithm_funcs(fa::FA, funcs::F) where {FA<:FinalizedAlgorithm, F}
-    return finalstep(rebuild_loopalgorithm_funcs(inneralgorithm(fa), funcs), finalfunction(fa))
 end
