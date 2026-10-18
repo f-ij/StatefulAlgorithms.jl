@@ -42,7 +42,7 @@ state, as `(; Sensor_1 = (; extra = ...), ...)`.
 Return `pc` with values merged into its captured returns.
 """
 @inline function _merge_into_captured_returns(pc::ProcessContext, args::NamedTuple)
-    runtime = @inline _merge_slots(get_captured_returns(pc), args)
+    runtime = @inline merge(get_captured_returns(pc), args)
     return @inline with_subcontext(pc, Val(:_captured_returns), SubContext{:_captured_returns}(runtime))
 end
 
@@ -58,7 +58,7 @@ function merge_runtime_return end
 @inline function merge_runtime_return(runtime_context::C, ::Val{owner}, args::A) where {C<:ProcessContext,owner,A<:NamedTuple}
     returns = @inline get_subcontext_returns(runtime_context)
     old_data = haskey(returns, owner) ? getproperty(returns, owner) : (;)
-    new_returns = @inline merge(returns, NamedTuple{(owner,)}(((@inline _merge_slots(old_data, args)),)))
+    new_returns = @inline merge(returns, NamedTuple{(owner,)}(((@inline merge(old_data, args)),)))
     return @inline with_subcontext(runtime_context, Val(:_subcontext_returns), SubContext{:_subcontext_returns}(new_returns))
 end
 
@@ -66,7 +66,7 @@ end
 @inline merge_runtime_return(runtime_context::C, ::Val{:_captured_returns}, args::A) where {C<:ProcessContext,A<:NamedTuple} =
     @inline _merge_into_captured_returns(runtime_context, args)
 
-"""Declared locals keep their declared field types when written."""
+"""Declared locals: each written as `_write_locals` says (a placeholder is replaced, a typed local converts)."""
 @inline function merge_runtime_return(runtime_context::C, ::Val{:_declared_locals}, args::A) where {C<:ProcessContext,A<:NamedTuple}
     locals = @inline _write_locals(get_declared_locals(runtime_context), args)
     return @inline with_subcontext(runtime_context, Val(:_declared_locals), SubContext{:_declared_locals}(locals))
