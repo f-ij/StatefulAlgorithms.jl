@@ -272,11 +272,12 @@ Base.@constprop :aggressive @inline @generated function _step!(ca::PlanType, cur
 end
 
 """
-Keep the code after it on its own branch: an empty `asm sideeffect` emits no instructions, but LLVM may not compute what
-follows it before the condition is known. It is marked as touching only memory no Julia object lives in
-(`inaccessiblemem`), so values held in memory (a process's counters, a cursor) need not be reloaded after it. Without it, LLVM turns a scheduled block (`@every`, `@interval`) into a
-`select` computed every step, which puts the schedule check on the dependency chain of the values the block writes; a
-schedule is regular, so the branch is predicted and the block costs only on its steps.
+Keep the code after it on its own branch. An empty `asm sideeffect` emits no instructions, but LLVM may not compute
+what follows it before the condition is known. Without it, LLVM turns a scheduled block (`@every`, `@interval`) into a
+`select`: the block is computed every step and the next step waits for the schedule check. As a jump, the CPU's branch
+predictor learns the taken/not-taken pattern, which repeats exactly for a fixed interval, so the block costs only on
+the steps it runs. The asm is marked as touching only memory no Julia object lives in (`inaccessiblemem`), so values
+held in memory (a process's counters, a cursor) need not be reloaded after it.
 """
 @inline _keep_branch() = Base.llvmcall(("""
     define void @entry() #0 {
