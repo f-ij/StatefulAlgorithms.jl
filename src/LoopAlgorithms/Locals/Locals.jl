@@ -133,22 +133,22 @@ A local declared without a type (`local x`, or a `nothing` starting value) holds
 write, which replaces it: the field gets the type of the value written (for a `nothing` local, a `Maybe` of it, which
 reads as `nothing` when `nothing` is written again), so the runtime context changes type, once. The loop continues
 with the new type (`_repeat_steps`, Loops.jl), and a block on a schedule gives the local the written type when it ran
-and the placeholder when it did not (`_conditional_loopcontext_type`, Step.jl). Later writes are converted to that
-type, as for a local declared with one.
+and the placeholder when it did not (`_compute_conditional_loopcontext_type`, Step.jl). Later writes are converted to
+that type, as for a local declared with one.
 =#
 
 """Whether a local's field type `T` is the placeholder of a local declared without a type."""
 _is_untyped_local(::Type{T}) where {T} = T === UndefInitializer || T === Nothing
 
-"""The value a placeholder local (field type `Empty`) holds after its first write of `value` (an expression) of type `V`."""
-_first_write_expr(::Type{UndefInitializer}, ::Type{V}, value) where {V} = value
-_first_write_expr(::Type{Nothing}, ::Type{V}, value) where {V} = V === Nothing ? value : :($(make_maybe_type(V, Nothing))($value))
+"""Build the expression for what a placeholder local (field type `Empty`) holds after its first write of `value` (an expression) of type `V`."""
+_build_first_write_expr(::Type{UndefInitializer}, ::Type{V}, value) where {V} = value
+_build_first_write_expr(::Type{Nothing}, ::Type{V}, value) where {V} = V === Nothing ? value : :($(make_maybe_type(V, Nothing))($value))
 
 """Write a step's returns `args` into the locals `old`: a placeholder is replaced by the value, anything else is converted to the local's type."""
 @inline @generated function _write_locals(old::NT, args::A) where {NT<:NamedTuple, A<:NamedTuple}
     values = map(fieldnames(NT)) do name
         !(name in fieldnames(A)) && return :(getfield(old, $(QuoteNode(name))))
-        _is_untyped_local(fieldtype(NT, name)) && return _first_write_expr(fieldtype(NT, name), fieldtype(A, name), :(getfield(args, $(QuoteNode(name)))))
+        _is_untyped_local(fieldtype(NT, name)) && return _build_first_write_expr(fieldtype(NT, name), fieldtype(A, name), :(getfield(args, $(QuoteNode(name)))))
         return :(convert($(fieldtype(NT, name)), getfield(args, $(QuoteNode(name)))))
     end
     return :(NamedTuple{$(fieldnames(NT))}(($(values...),)))

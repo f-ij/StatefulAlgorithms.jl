@@ -189,7 +189,8 @@ end
 Run steps `i` to `repeats(lifetime)` (until the process's stop check holds) and return the carried fields and the
 runtime context after the last one. The steps run in a loop compiled for the runtime context's type; when a step
 returns another type (a local declared without a type gets its first value, Locals.jl), the remaining steps continue in
-a call compiled for that type, so the loop stays type-stable.
+a call compiled for that type, so the loop stays type-stable. Inlined into `loop` (as separate code, Routine plans ran
+up to 1.9x slower); the call for a new type stays a call.
 """
 @inline function _repeat_steps(i::IndexType, carried::CarriedType, runtime_context::RuntimeContextType, step_plan::PlanType, step_cursor::CursorType, persistent_context::PersistentContextType, step_wiring::WiringViewType, process::ProcessType, lifetime::LifetimeType) where {IndexType<:Integer, CarriedType, RuntimeContextType, PlanType, CursorType, PersistentContextType, WiringViewType, ProcessType, LifetimeType}
     for j in i:(@inline repeats(lifetime))

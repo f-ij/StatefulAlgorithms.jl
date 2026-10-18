@@ -293,18 +293,18 @@ held in memory (a process's counters, a cursor) need not be reloaded after it.
 Return `lc` after `_step!` of each child in order when `run` is `true`, else `lc` unchanged. `children`, `cursors`,
 `wirings` and `namespaces` are tuples, one entry per child.
 
-Both results are converted to one type, `_conditional_loopcontext_type`, so the code after the branch has one type,
-except a local declared without a type that the steps give their first value: it has the written type when they ran
-and its placeholder when not. When inference cannot tell which `LoopContext` type the steps return, no type is chosen:
-each result is returned as it is, and the call's return type is their union. The steps run on their own branch
-(`_keep_branch`).
+Both results are converted to one type (`_compute_conditional_loopcontext_type`), so the code after the branch has
+one type, except a local declared without a type that the steps give their first value: it has the written type when
+they ran and its placeholder when not. When inference cannot tell which `LoopContext` type the steps return, no type is
+chosen: each result is returned as it is, and the call's return type is their union. The steps run on their own
+branch (`_keep_branch`).
 """
 @inline function _conditional_step(run::Bool, children::ChildrenType, cursors::CursorsType, lc::LoopContextType, wirings::WiringViewsType, namespaces::NamespacesType, process::ProcessType, lifetime::LifetimeType) where {ChildrenType<:Tuple, CursorsType<:Tuple, LoopContextType<:LoopContext, WiringViewsType<:Tuple, NamespacesType<:Tuple, ProcessType, LifetimeType}
     Stepped = Core.Compiler.return_type(_step_children!, Tuple{LoopContextType, ChildrenType, CursorsType, WiringViewsType, NamespacesType, ProcessType, LifetimeType})
-    Target = _conditional_loopcontext_type(LoopContextType, Stepped, true)
-    Target === Nothing && return run ? (_keep_branch(); @inline _step_children!(lc, children, cursors, wirings, namespaces, process, lifetime)) : lc
-    run && (_keep_branch(); return @inline _as_conditional((@inline _step_children!(lc, children, cursors, wirings, namespaces, process, lifetime)), Target))
-    return @inline _as_conditional(lc, _conditional_loopcontext_type(LoopContextType, Stepped, false))
+    RanType = _compute_conditional_loopcontext_type(LoopContextType, Stepped, true)
+    RanType === Nothing && return run ? (_keep_branch(); @inline _step_children!(lc, children, cursors, wirings, namespaces, process, lifetime)) : lc
+    run && (_keep_branch(); return @inline _as_conditional((@inline _step_children!(lc, children, cursors, wirings, namespaces, process, lifetime)), RanType))
+    return @inline _as_conditional(lc, _compute_conditional_loopcontext_type(LoopContextType, Stepped, false))
 end
 
 """Return `lc` after `_step!` of each child in turn; the arguments are tuples as in `_conditional_step`."""
@@ -319,14 +319,14 @@ Return the `LoopContext` type that `_conditional_step` converts its result to wh
 
 `Before` is the type before the branch, `Stepped` the type after the steps. The result has the persistent context of
 `Stepped` and the runtime fields of `Before`, each with the union of its type in `Before` and in `Stepped`, except a
-local declared without a type (`_joined_fields`). Fields the steps added are left out.
+local declared without a type (`_join_fields`). Fields the steps added are left out.
 """
-Base.@assume_effects :foldable function _conditional_loopcontext_type(@nospecialize(Before), @nospecialize(Stepped), ran::Bool)
+Base.@assume_effects :foldable function _compute_conditional_loopcontext_type(@nospecialize(Before), @nospecialize(Stepped), ran::Bool)
     (Stepped isa DataType && Stepped <: LoopContext && isconcretetype(Stepped)) || return Nothing
     before = fieldtype(runtime_type(Before), :subcontexts)
     after = fieldtype(runtime_type(Stepped), :subcontexts)
     parts = map(fieldnames(before), fieldtypes(before)) do name, S
-        SubContext{name, _joined_fields(getdatatype(S), getdatatype(fieldtype(after, name)), ran, name === :_declared_locals)}
+        SubContext{name, _join_fields(getdatatype(S), getdatatype(fieldtype(after, name)), ran, name === :_declared_locals)}
     end
     runtime = ProcessContext{NamedTuple{fieldnames(before), Tuple{parts...}}, fieldtype(runtime_type(Stepped), :reg)}
     return LoopContext{persistent_type(Stepped), runtime, Stepped.parameters[3]}
@@ -337,19 +337,19 @@ Return a named tuple type with the field names of `old`, each field typed as the
 `new`. A field that is a named tuple in both is joined field by field instead. Fields only `new` has are left out.
 Among `locals` (the declared locals), one declared without a type (its placeholder `undef` or `nothing`) gets its type
 in `new` when the steps `ran`, else keeps the placeholder, so its first value overwrites it instead of making a union
-(Locals.jl, section 3).
+(Locals.jl, section 3); `locals` applies to the top level only, the declared locals themselves.
 """
-function _joined_fields(@nospecialize(old), @nospecialize(new), ran::Bool, locals::Bool)
+function _join_fields(@nospecialize(old), @nospecialize(new), ran::Bool, locals::Bool)
     types = map(fieldnames(old), fieldtypes(old)) do name, T
         N = fieldtype(new, name)
         locals && _is_untyped_local(T) && return ran ? N : T
-        T <: NamedTuple && N <: NamedTuple ? _joined_fields(T, N, ran, locals) : Union{T, N}
+        T <: NamedTuple && N <: NamedTuple ? _join_fields(T, N, ran, false) : Union{T, N}
     end
     return NamedTuple{fieldnames(old), Tuple{types...}}
 end
 
 """
-Return `lc` converted to `Target` (from `_conditional_loopcontext_type`): only the runtime fields `Target` has, each
+Return `lc` converted to `Target` (from `_compute_conditional_loopcontext_type`): only the runtime fields `Target` has, each
 converted to its field type there. Returns `lc` itself when it already has type `Target`.
 """
 @inline @generated function _as_conditional(lc::LoopContextType, ::Type{Target}) where {LoopContextType<:LoopContext, Target}
