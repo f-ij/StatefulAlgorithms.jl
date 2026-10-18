@@ -8,12 +8,9 @@ Idea (prototyped here at user level, no package changes): put a type-erased entr
 ids to `SimpleId(1..N)` in order of first appearance and then calls the normal constructor dynamically. Everything behind the entry only
 ever sees the sequential ids, so it is compiled once. The registry and the loop do not change.
 
-```bash
-julia --project=perf/unique_ids -e 'using Pkg; Pkg.instantiate()'
-julia --project=perf/unique_ids perf/unique_ids/proto_normalize.jl   # unnamed duplicates: wall time per call
-julia --project=perf/unique_ids perf/unique_ids/proto_typed.jl       # type-stable vs type-erased normalizer, compile time
-julia --project=perf/unique_ids perf/unique_ids/proto_routes.jl      # a held handle used in a Route
-```
+The idea is now in the package: `src/LoopAlgorithms/Resolving/NormalizeIds.jl`. This folder keeps the measurements only. The
+scripts named below (and their `Project.toml`) were deleted on 2026-10-18; they are in git at tag `archive/unique-ids` (`b0f21db`),
+under `perf/unique_ids/`. They were written against the package of 2026-10-04 and no longer run against the current code.
 
 ## Results
 
@@ -39,7 +36,7 @@ re-executed. "compile" is Julia's cumulative compile-time counter for the whole 
 
 ## Full measurement (measure_ids.jl, one fresh Julia process per approach and layout)
 
-`julia --project=perf/unique_ids perf/unique_ids/measure_ids.jl <today|erased|erased_route|typed|fixed> <plain|route>`.
+Script arguments were `<today|erased|erased_route|typed|fixed> <plain|route>`.
 Compile milliseconds (Julia's compile-time counter; wall time is within 0.2 ms of it). "first run" is a cold compile; "same handles again"
 reuses the handles three times; "new uuids" builds fresh `Unique`s in the same positions four times (min to max over the four). Raw lines
 are in `results_compile_ms.txt`.
