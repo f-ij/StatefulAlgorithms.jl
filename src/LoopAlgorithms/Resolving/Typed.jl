@@ -1,5 +1,5 @@
 #=
-The inferred resolve: the same steps as `resolve` (Constructor.jl), written so that Julia infers the whole pipeline for
+The inferred resolve: the same steps as `resolve` (Resolving.jl), written so that Julia infers the whole pipeline for
 a concrete plan type and a caller that knows the plan type gets the resolved type at compile time. `resolve` does not
 use it: inferring and compiling the pipeline as one function costs more for the first resolve of a plan than the
 untyped steps, and gives nothing to a caller that gets `Any` from `resolve` anyway.

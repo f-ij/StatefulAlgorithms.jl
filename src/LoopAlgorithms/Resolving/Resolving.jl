@@ -1,1 +1,122 @@
-include("Constructor.jl")
+export resolve
+
+#=
+Resolving a plan: everything that can only be decided once the whole composition is known.
+
+1. Registry: every algorithm and state in the tree gets a key (`Sensor_1`, `Sensor_2`, ...).
+   Children are replaced by their raw algorithm and the key goes into the plan's `namespaces`.
+   Calls (`Callable`) have no identity: they are not registered and share `:_captured_returns`.
+   Nested wrappers (`LoopAlgorithm`, `FinalizedAlgorithm`) are replaced by their plan, so after this step every
+   nested child that is a `LoopSpec` is an `AbstractPlan`.
+2. The registry is attached to the root wrapper.
+3. Wiring: route/share endpoints become context keys, and plan-wide wiring is copied into each
+   child's slot.
+4. Scopes: each plan node records (in its `PlanWiring` type) its scope, the declared locals and
+   captured returns its children see by name (`Scope`), and routes that read them point at
+   their slots.
+
+Steps 1 and 2 are in Registry.jl, step 3 in Wiring.jl, step 4 in Scopes.jl. `resolve` and the other entry points are
+below. NormalizeIds.jl makes plans that differ only in `Unique` ids one plan type, Interfaces.jl is what a plan type
+provides while it is resolved, and Typed.jl is the inferred version of the steps.
+=#
+
+include("Interfaces.jl")
+include("NormalizeIds.jl")
+include("Registry.jl")
+include("Wiring.jl")
+include("Scopes.jl")
+include("Typed.jl")          # the inferred resolve, `_resolve_typed`
+
+"""
+Materialize a loop algorithm for context construction.
+
+This wraps bare plan nodes in a concrete `LoopAlgorithm`, builds a registry,
+keys the child algorithms, resolves the route/share wiring against that
+registry, and collects the `RootOption`s of the plan tree. The returned value is always a runtime wrapper unless the input was a
+`FinalizedAlgorithm`, in which case the finalized outer shape is preserved and
+its inner loop is materialized.
+
+`resolve` itself is compiled once (its result is not inferred; a caller gets `Any`). Plans with `Unique` handles have
+their random ids normalized first, so the same layout with new ids is the same plan type and compiles nothing again
+(NormalizeIds.jl). The steps are then run by `_resolve_plan`, compiled once per plan type. The inferred version, for a
+caller that knows the plan type, is `_resolve_typed` (Typed.jl).
+"""
+Base.@nospecializeinfer function resolve(@nospecialize(la::LoopSpec))
+    _has_unique_handles(la) || return _resolve_plan(la)
+    return restore_original_ids(_resolve_plan(normalize_ids(la)))
+end
+
+"""
+Run the steps of resolving `la` (see the top of this file) and return the resolved plan. Compiled for the plan's type
+(after id normalization, see `resolve`), so the steps it calls are compiled together with it; the steps themselves
+walk the plan untyped.
+"""
+# TODO (2026-10-17 review): `@inline` here has no effect: its only caller, `resolve`, is `@nospecializeinfer`, so the
+# call is dynamic.
+@inline function _resolve_plan(la::LA) where {LA<:LoopSpec}
+    if la isa FinalizedAlgorithm
+        return finalstep(_resolve_plan(inneralgorithm(la)), finalfunction(la))
+    end
+    if !(la isa LoopAlgorithm)
+        return _resolve_plan(LoopAlgorithm(la))
+    end
+    if isresolved(la)
+        return la
+    end
+
+    registry, keyed_la = setup_registry_and_keyed_algos(la)   # 1. keys and namespaces
+    keyed_la = _attach_registry(keyed_la, registry)            # 2. share the registry
+    keyed_la = resolve_plan_wiring(keyed_la, registry)         # 3. and 4. routes, shares, scopes
+    # The `RootOption`s of the plan tree stay on the root wrapper.
+    return setoptions(keyed_la, _root_options(la))
+end
+
+"""
+    resolve(la1, la2, las...)
+    resolve((la1, la2, las...))
+
+Resolve several loop algorithms against one shared registry and return them resolved, in the same order. Their
+algorithms get keys that do not clash across them (the second algorithm's `Sensor` is `Sensor_2`, not another
+`Sensor_1`).
+
+Meant for multi-stage runs: prepare several algorithms at once, then run each separately, each in its own process.
+"""
+function resolve(la1::LA1, la2::LA2, las::Vararg{LoopSpec}) where {LA1<:LoopSpec, LA2<:LoopSpec}
+    loopalgorithms = (la1, la2, las...)
+    registry, keyed_loopalgorithms = _build_shared_registry_and_keyed_algos(loopalgorithms)
+    return map(keyed_loopalgorithms) do resolved
+        resolved = _attach_registry(resolved, registry)
+        resolved = resolve_plan_wiring(resolved, registry)
+        setoptions(resolved, _root_options(resolved))
+    end
+end
+
+@inline resolve(loopalgorithms::Tuple{Vararg{LoopSpec}}) = resolve(loopalgorithms...)
+
+"""Build one registry for several loop algorithms and return it with each algorithm's keyed plan tree."""
+# TODO: unlike `resolve(la)`, this is compiled for every combination of plan types (no unspecialized entry), skips the
+# `isresolved` check and `Unique` id normalization (so each new id compiles it again), and a `FinalizedAlgorithm`
+# argument fails (`LoopAlgorithm(::FinalizedAlgorithm)` has no method). Route it through the same steps as `resolve(la)`.
+function _build_shared_registry_and_keyed_algos(loopalgorithms::LAS) where {LAS<:Tuple}
+    registry = NameSpaceRegistry()
+    keyed_loopalgorithms = ()
+    for la in loopalgorithms
+        resolved = la isa LoopAlgorithm ? la : LoopAlgorithm(la)
+        registry, keyed = setup_registry_and_keyed_algos(resolved, registry)
+        keyed_loopalgorithms = (keyed_loopalgorithms..., keyed)
+    end
+    return registry, keyed_loopalgorithms
+end
+
+# Replace the children of a plan, of the plan inside a wrapper, or inside a finalized algorithm. Used by every step.
+@inline function rebuild_loopalgorithm_funcs(la::LA, funcs::F) where {LA<:LoopSpec, F}
+    return setfield(la, :funcs, funcs)
+end
+
+@inline function rebuild_loopalgorithm_funcs(la::LoopAlgorithm, funcs::F) where {F}
+    return setfield(la, :plan, rebuild_loopalgorithm_funcs(getplan(la), funcs))
+end
+
+@inline function rebuild_loopalgorithm_funcs(fa::FA, funcs::F) where {FA<:FinalizedAlgorithm, F}
+    return finalstep(rebuild_loopalgorithm_funcs(inneralgorithm(fa), funcs), finalfunction(fa))
+end
