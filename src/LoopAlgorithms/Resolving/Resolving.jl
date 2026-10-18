@@ -42,7 +42,8 @@ caller that knows the plan type, is `_resolve_typed` (Typed.jl).
 """
 Base.@nospecializeinfer function resolve(@nospecialize(la::LoopSpec))
     _has_unique_handles(la) || return _resolve_plan(la)
-    return restore_original_ids(_resolve_plan(normalize_ids(la)))
+    # return restore_original_ids(_resolve_plan(normalize_ids(la)))
+    return normalize_ids(la) |> _resolve_plan |> restore_original_ids
 end
 
 """
