@@ -137,6 +137,9 @@ end
     outer = CompositeAlgorithm(inner, NROther, (1, 1))
 
     @test only(getoptions(resolve(outer))) isa Replace   # collected from the nested plan
+    # A nested plan given a name (`insert` allows it) is a wrapper, not a plan, until `resolve` unwraps it.
+    named = insert(CompositeAlgorithm(NROther, (1,)), 2, StatefulAlgorithms.IdentifiableAlgo(inner, :named))
+    @test only(getoptions(resolve(named))) isa Replace
     c = StatefulAlgorithms.context(run(outer; repeats = 3))
     @test c[NRSink].seen == c[NRSource].x == 4.0         # the sink's `y` is the source's `x`
 end
