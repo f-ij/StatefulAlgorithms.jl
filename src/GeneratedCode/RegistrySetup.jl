@@ -5,7 +5,7 @@ The registry of the whole tree of `la`, and `la` with every child replaced by it
 in its plan's `namespaces` (step 1 of `resolve`).
 
 Generated: which entry types the registry has, which algorithm goes where under which key, the multipliers and the
-lookup keys are all decided by `la`'s type, so they are worked out once while compiling (`setup_registry_code`, the
+lookup keys are all decided by `la`'s type, so they are worked out once while compiling (`generate_registry_setup`, the
 same walk as on values, run on the types; `setup_registry_generator`). The compiled code only reads the algorithms out
 of `la` and puts them in place, and creates each entry type's multipliers and lookup table anew. A plan whose layout
 needs its values (a state merge, an object that is not an `IdentifiableAlgo` handle, a plan type not read from its
@@ -22,12 +22,12 @@ function setup_registry_and_keyed_algos end
     setup_registry_generator(world, source, self, LA) -> CodeInfo
 
 The body of `setup_registry_and_keyed_algos` for a plan of type `LA`, as a `CodeInfo` that depends on the rule methods
-it asked (`codeinfo_with_rule_edges`): `setup_registry_code(LA)`, or a call to `setup_registry_from_values(la)` when a
-rule method it asked was added or changed after this package was loaded (`rules_answered_alike`).
+it asked (`codeinfo_with_rule_edges`): `generate_registry_setup(LA)`, or a call to `setup_registry_from_values(la)` when
+a rule method it asked was added or changed after this package was loaded (`rules_answered_alike`).
 """
 function setup_registry_generator(world::UInt, source::Method, @nospecialize(self), @nospecialize(LA))
     rule_calls = Any[]
-    body = Base.ScopedValues.with(() -> setup_registry_code(LA), RULE_CALLS => rule_calls)
+    body = Base.ScopedValues.with(() -> generate_registry_setup(LA), RULE_CALLS => rule_calls)
     # A rule method this generator cannot see (defined after it, see `rules_answered_alike`): set up at run time.
     rules_answered_alike(rule_calls, world) || (body = :(setup_registry_from_values(la)))
     return codeinfo_with_rule_edges(world, source, Core.svec(:var"#self#", :la), body, rule_calls)

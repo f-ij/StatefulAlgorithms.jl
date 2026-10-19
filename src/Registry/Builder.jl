@@ -85,7 +85,7 @@ Interfaces.jl.
 `algo` can be a `KnownByType`: it must then be a handle (`IdentifiableAlgo`), whose type decides everything.
 """
 Base.@nospecializeinfer function add!(b::RegistryBuilder, @nospecialize(algo), @nospecialize(multiplier))
-    T = type_of(algo)
+    T = read_type(algo)
     T <: NameSpaceRegistry && error("Cannot add a NameSpaceRegistry to another NameSpaceRegistry")
     T === Nothing && error("Trying to add `nothing` to a registry")
     algo isa KnownByType && !(isconcretetype(T) && T <: IdentifiableAlgo) && throw(NeedsValues())
@@ -132,7 +132,7 @@ Base.@nospecializeinfer function find_same(entry::TypeEntryBuilder, @nospecializ
     end
     added = added_matcher(algo isa KnownByType ? algo.type : algo)
     for i in eachindex(entry.algos)
-        entry.matchers[i] isa MatcherNotComputed && (entry.matchers[i] = entry_matcher(type_of(entry.algos[i])))
+        entry.matchers[i] isa MatcherNotComputed && (entry.matchers[i] = entry_matcher(read_type(entry.algos[i])))
         same_algorithm(added, entry.matchers[i]) && return i
     end
     return nothing
@@ -151,7 +151,7 @@ Base.@nospecializeinfer function add_again!(entry::TypeEntryBuilder, idx::Int, @
     if has_given_key(entry.algos[idx]) && has_given_key(algo)
         @assert key_of(entry.algos[idx]) == key_of(algo) "Trying to add an entry with name $(key_of(algo)) but an entry with the same type already exists with name $(key_of(entry.algos[idx]))"
     end
-    if merges_into(type_of(entry.algos[idx]), type_of(algo))
+    if merges_into(read_type(entry.algos[idx]), read_type(algo))
         # A merge combines the values; from the types it is only known that one happens.
         algo isa KnownByType && throw(NeedsValues())
         replace_algo!(entry, idx, merge(entry.algos[idx], algo))
@@ -177,10 +177,10 @@ keyed by `Autokey`. For a `KnownByType` handle, returns a `KnownByType` of the k
 """
 Base.@nospecializeinfer function with_autokey(@nospecialize(algo), i::Int)
     algo isa KnownByType || algo isa IdentifiableAlgo || return Autokey(algo, i)
-    p = type_of(algo).parameters    # {F, Id, VarAliases, AlgoName, ContextKey, R}
+    p = read_type(algo).parameters    # {F, Id, VarAliases, AlgoName, ContextKey, R}
     p[5] == Symbol() || return algo
     KT = Core.apply_type(IdentifiableAlgo, p[1], p[2], p[3], p[4], autokey(p[1], i), p[6])
-    func, reconstructor = field_of(algo, :func), field_of(algo, :reconstructor)
+    func, reconstructor = read_field(algo, :func), read_field(algo, :reconstructor)
     algo isa KnownByType || return KT(func, reconstructor)
     return KnownByType(KT, Expr(:call, KT, func.expr, reconstructor.expr), Any[func, reconstructor])
 end
@@ -251,7 +251,7 @@ Base.@nospecializeinfer function registry_code(b::RegistryBuilder)
     entry_types = Vector{Any}(undef, n)
     entry_exprs = Vector{Any}(undef, n)
     for (i, entry) in enumerate(b.entries)
-        E = Tuple{Any[type_of(x) for x in entry.algos]...}
+        E = Tuple{Any[read_type(x) for x in entry.algos]...}
         entry_types[i] = RegistryTypeEntry{entry.type, E}
         entry_exprs[i] = Expr(:call, entry_types[i], Expr(:tuple, Any[x.expr for x in entry.algos]...),
             Expr(:ref, Float64, entry.multipliers...), lookup_table_code(entry.lookup))

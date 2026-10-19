@@ -105,7 +105,7 @@ Base.@nospecializeinfer function _build_shared_registry_and_keyed_algos(@nospeci
     keyed = Vector{Any}(undef, nfields(loopalgorithms))
     for i in eachindex(keyed)
         la = getfield(loopalgorithms, i)
-        keyed[i] = add_tree!(builder, la isa LoopAlgorithm ? la : LoopAlgorithm(la))
+        keyed[i] = register_tree!(builder, la isa LoopAlgorithm ? la : LoopAlgorithm(la))
     end
     return registry(builder), Tuple(keyed)
 end

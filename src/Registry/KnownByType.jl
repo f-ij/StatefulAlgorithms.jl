@@ -34,16 +34,16 @@ values, at run time.
 struct NeedsValues <: Exception end
 
 """The type of `x`: of the value, or the type a `KnownByType` stands for."""
-type_of(@nospecialize(x)) = x isa KnownByType ? x.type : typeof(x)
+read_type(@nospecialize(x)) = x isa KnownByType ? x.type : typeof(x)
 
 """
-    field_of(x, f) -> field
+    read_field(x, f) -> field
 
 Field `f` (a name or an index) of `x`: the value's field, or for a `KnownByType` a `KnownByType` of the field (its
 declared type, read with `getfield` from `x`). A field whose value decides something must have a concrete declared
 type: see `require_concrete`.
 """
-Base.@nospecializeinfer function field_of(@nospecialize(x), f::Union{Symbol, Int})
+Base.@nospecializeinfer function read_field(@nospecialize(x), f::Union{Symbol, Int})
     x isa KnownByType || return getfield(x, f)
     if !isnothing(x.fields)
         return x.fields[f isa Int ? f : Base.fieldindex(x.type, f)]
@@ -52,7 +52,7 @@ Base.@nospecializeinfer function field_of(@nospecialize(x), f::Union{Symbol, Int
 end
 
 """The number of fields of `x` (of the type a `KnownByType` stands for)."""
-nfields_of(@nospecialize(x)) = x isa KnownByType ? fieldcount(x.type) : nfields(x)
+count_fields(@nospecialize(x)) = x isa KnownByType ? fieldcount(x.type) : nfields(x)
 
 """
     require_concrete(x) -> x
@@ -62,16 +62,16 @@ Returns `x`; throws `NeedsValues` for a `KnownByType` whose type is not concrete
 require_concrete(@nospecialize(x)) = (x isa KnownByType && !isconcretetype(x.type) && throw(NeedsValues()); x)
 
 """
-    tuple_of(xs, like) -> tuple
+    build_tuple(xs, like) -> tuple
 
 The tuple of `xs`: a tuple of the values, or, when `like` is a `KnownByType`, a `KnownByType` of the tuple built from
 the `KnownByType`s `xs`.
 """
-Base.@nospecializeinfer function tuple_of(xs::Vector{Any}, @nospecialize(like))
+Base.@nospecializeinfer function build_tuple(xs::Vector{Any}, @nospecialize(like))
     like isa KnownByType || return Tuple(xs)
-    types = Any[type_of(x) for x in xs]
+    types = Any[read_type(x) for x in xs]
     return KnownByType(Tuple{types...}, Expr(:tuple, Any[x.expr for x in xs]...), xs)
 end
 
 """The constant `v`; a `KnownByType` of it when `like` is one."""
-constant_like(@nospecialize(v), @nospecialize(like)) = like isa KnownByType ? KnownByType(typeof(v), QuoteNode(v)) : v
+quote_constant(@nospecialize(v), @nospecialize(like)) = like isa KnownByType ? KnownByType(typeof(v), QuoteNode(v)) : v

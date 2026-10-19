@@ -7,24 +7,24 @@ wrapper (`_attach_registry`, Accessors.jl; step 1 leaves no nested wrappers).
 child of a plan is then stored raw (without its identity wrapper), and its key goes into the plan's `namespaces`.
 
 The walk works on values (`setup_registry_from_values`), or on the plan's type, with `KnownByType`s
-(`setup_registry_code`): the code generated from that only reads the algorithms out of the plan.
+(`generate_registry_setup`): the code generated from that only reads the algorithms out of the plan.
 =#
 
 """
     setup_registry_from_values(la) -> (registry, keyed la)
 
 The registry of the whole tree of `la`, and `la` with every child replaced by its raw algorithm and its key recorded in
-its plan's `namespaces`, worked out on the values (`add_tree!`, then `registry`). Compiled once, not per plan. Used
-when the layout cannot be worked out from the plan's type (see `setup_registry_code`).
+its plan's `namespaces`, worked out on the values (`register_tree!`, then `registry`). Compiled once, not per plan. Used
+when the layout cannot be worked out from the plan's type (see `generate_registry_setup`).
 """
 @noinline Base.@nospecializeinfer function setup_registry_from_values(@nospecialize(la::LoopAlgorithm))
     builder = RegistryBuilder()
-    keyed_la = add_tree!(builder, la)
+    keyed_la = register_tree!(builder, la)
     return registry(builder), keyed_la
 end
 
 """
-    setup_registry_code(LA) -> Expr
+    generate_registry_setup(LA) -> Expr
 
 The body of `setup_registry_and_keyed_algos` for a `LoopAlgorithm` of type `LA` (the argument is named `la`): code that
 returns `(registry, keyed la)` as `setup_registry_from_values(la)` does. The same walk, run on `LA`'s types, decides the
@@ -33,10 +33,10 @@ creating the multipliers and lookup tables anew. When a step needs the values (`
 `setup_registry_from_values(la)`; any other error of the walk is thrown, so a bug on the types path does not silently
 move a plan to the run-time path.
 """
-Base.@nospecializeinfer function setup_registry_code(@nospecialize(LA))
+Base.@nospecializeinfer function generate_registry_setup(@nospecialize(LA))
     builder = RegistryBuilder()
     keyed = try
-        add_tree!(builder, KnownByType(LA, :la))
+        register_tree!(builder, KnownByType(LA, :la))
     catch err
         err isa NeedsValues || rethrow()
         return :(setup_registry_from_values(la))
@@ -49,63 +49,63 @@ end
 ###############################################################################
 
 """
-    add_tree!(builder, la) -> keyed la
+    register_tree!(builder, la) -> keyed la
 
-Adds the whole tree of the `LoopAlgorithm` `la` to `builder`: its states first (`add_states!`), then its algorithms
-(`add_children!`). Returns `la` with its plan keyed. `la` can be a `KnownByType`.
+Adds the whole tree of the `LoopAlgorithm` `la` to `builder`: its states first (`register_states!`), then its algorithms
+(`register_children!`). Returns `la` with its plan keyed. `la` can be a `KnownByType`.
 """
-Base.@nospecializeinfer function add_tree!(b::RegistryBuilder, @nospecialize(la))
-    add_states!(b, la)
-    plan = add_children!(b, plan_of(la), 1.0)
+Base.@nospecializeinfer function register_tree!(b::RegistryBuilder, @nospecialize(la))
+    register_states!(b, la)
+    plan = register_children!(b, read_plan(la), 1.0)
     return replace_fields(la, (:plan,), (plan,))
 end
 
 """
-    add_states!(builder, la)
+    register_states!(builder, la)
 
 Adds the states of `la` and of every plan nested in it (also a named one, `unwrap_named_plan`) to `builder`, each with
 multiplier 1, in the order of `flat_states`. States belong to the context, not to a step, so they are registered once and first.
 """
-Base.@nospecializeinfer function add_states!(b::RegistryBuilder, @nospecialize(la))
-    type_of(la) <: LoopSpec || return nothing
+Base.@nospecializeinfer function register_states!(b::RegistryBuilder, @nospecialize(la))
+    read_type(la) <: LoopSpec || return nothing
     # Tuples are read with `getfield`, not iterated: iterating compiles once per tuple type.
-    states = states_of(la)
-    if type_of(states) <: Tuple
-        for i in 1:nfields_of(states)
-            add!(b, field_of(states, i), 1.0)
+    states = read_states(la)
+    if read_type(states) <: Tuple
+        for i in 1:count_fields(states)
+            add!(b, read_field(states, i), 1.0)
         end
-    elseif type_of(states) !== Nothing
+    elseif read_type(states) !== Nothing
         add!(b, states, 1.0)
     end
-    children = children_of(la)
-    for i in 1:nfields_of(children)
-        add_states!(b, unwrap_named_plan(require_concrete(field_of(children, i))))
+    children = read_children(la)
+    for i in 1:count_fields(children)
+        register_states!(b, unwrap_named_plan(require_concrete(read_field(children, i))))
     end
     return nothing
 end
 
 """
-    add_children!(builder, node, multiplier) -> keyed node
+    register_children!(builder, node, multiplier) -> keyed node
 
-Adds the children of a plan node to `builder`, first to last (`add_child!`). Each child's multiplier (how often it runs
-per root step) is `multiplier` times its own interval/repeat factor. Returns the plan with raw children and per child its
-context name as a `Namespace` type (`Namespace{:Counter_1}`, or `Namespace{nothing}` for a nested plan) in its
-`namespaces`. Only plans get here: `add_child!` unwraps nested wrappers.
+Adds the children of a plan node to `builder`, first to last (`register_child!`). Each child's multiplier (how often it
+runs per root step) is `multiplier` times its own interval/repeat factor. Returns the plan with raw children and per
+child its context name as a `Namespace` type (`Namespace{:Counter_1}`, or `Namespace{nothing}` for a nested plan) in its
+`namespaces`. Only plans get here: `register_child!` unwraps nested wrappers.
 """
-Base.@nospecializeinfer function add_children!(b::RegistryBuilder, @nospecialize(node), @nospecialize(multiplier))
-    funcs = children_of(node)
-    mults = multipliers_of(node)
-    n = nfields_of(funcs)
+Base.@nospecializeinfer function register_children!(b::RegistryBuilder, @nospecialize(node), @nospecialize(multiplier))
+    funcs = read_children(node)
+    mults = read_multipliers(node)
+    n = count_fields(funcs)
     raws = Vector{Any}(undef, n)
     namespaces = Vector{Any}(undef, n)
     for i in 1:n
-        raws[i], namespaces[i] = add_child!(b, field_of(funcs, i), multiplier * getfield(mults, i))
+        raws[i], namespaces[i] = register_child!(b, read_field(funcs, i), multiplier * getfield(mults, i))
     end
-    return replace_fields(node, (:funcs, :namespaces), (tuple_of(raws, node), tuple_of(namespaces, node)))
+    return replace_fields(node, (:funcs, :namespaces), (build_tuple(raws, node), build_tuple(namespaces, node)))
 end
 
 """
-    add_child!(builder, child, multiplier) -> (raw child, namespace)
+    register_child!(builder, child, multiplier) -> (raw child, namespace)
 
 Adds one child to `builder`. Returns the child as its plan stores it afterwards, and its context name as a
 `Namespace`: a call (`Callable`) has no identity and is not registered (its `fixed_namespace`); a nested plan (also
@@ -113,28 +113,28 @@ one wrapped in a `LoopAlgorithm` or `FinalizedAlgorithm`, or given a name, which
 has its children added instead (`_unwrap_nested_plan`); any other algorithm or state is keyed by the registry (`add!`)
 and stored raw, without its identity wrapper.
 """
-Base.@nospecializeinfer function add_child!(b::RegistryBuilder, @nospecialize(child), @nospecialize(multiplier))
-    T = type_of(require_concrete(child))
+Base.@nospecializeinfer function register_child!(b::RegistryBuilder, @nospecialize(child), @nospecialize(multiplier))
+    T = read_type(require_concrete(child))
     if T <: Callable
         # On types: every call's `fixed_namespace`.
         name = child isa KnownByType ? _CALLS_NAMESPACE : fixed_namespace(child)
-        return child, constant_like(Core.apply_type(Namespace, name)(), child)
+        return child, quote_constant(Core.apply_type(Namespace, name)(), child)
     end
     if T <: LoopSpec
         # A nested `FinalizedAlgorithm` has its final step dropped with a warning: only on the values.
         T <: FinalizedAlgorithm && child isa KnownByType && throw(NeedsValues())
-        inner = T <: LoopAlgorithm ? plan_of(child) : T <: FinalizedAlgorithm ? _unwrap_nested_plan(child) : child
-        return add_children!(b, inner, multiplier), constant_like(Namespace{nothing}(), child)
+        inner = T <: LoopAlgorithm ? read_plan(child) : T <: FinalizedAlgorithm ? _unwrap_nested_plan(child) : child
+        return register_children!(b, inner, multiplier), quote_constant(Namespace{nothing}(), child)
     end
     # A named nested plan. Construction rejects `:name => plan`, but `IdentifiableAlgo(plan, :name)` and
     # `insert(la, i, :name => plan)` get here; the name is dropped and the plan is added as an unnamed one.
     # TODO (TODO.md, "named plans as context slices"): record the name here as `:name => (child SCKeys...)`.
     if T <: AbstractIdentifiableAlgo{<:LoopSpec}
-        return add_child!(b, unwrap_named_plan(child), multiplier)
+        return register_child!(b, unwrap_named_plan(child), multiplier)
     end
     keyed = add!(b, child, multiplier)
-    raw = child isa KnownByType ? field_of(keyed, :func) : getalgo(keyed)
-    return raw, constant_like(Core.apply_type(Namespace, key_of(keyed))(), child)
+    raw = child isa KnownByType ? read_field(keyed, :func) : getalgo(keyed)
+    return raw, quote_constant(Core.apply_type(Namespace, key_of(keyed))(), child)
 end
 
 """
@@ -144,11 +144,11 @@ Returns the plan inside a named nested plan (an `AbstractIdentifiableAlgo` of a 
 types only an `IdentifiableAlgo` is read (its `func` field); another handle type throws `NeedsValues`.
 """
 Base.@nospecializeinfer function unwrap_named_plan(@nospecialize(child))
-    T = type_of(child)
+    T = read_type(child)
     T <: AbstractIdentifiableAlgo{<:LoopSpec} || return child
     child isa KnownByType || return getalgo(child)
     T <: IdentifiableAlgo || throw(NeedsValues())
-    return field_of(child, :func)
+    return read_field(child, :func)
 end
 
 """
@@ -171,26 +171,26 @@ throws `NeedsValues`.
 const FieldPlan = Union{Routine, CompositeAlgorithm}
 
 """The plan inside the `LoopAlgorithm` `la` (`getplan`)."""
-plan_of(@nospecialize(la)) = la isa KnownByType ? require_concrete(field_of(la, :plan)) : getplan(la)
+read_plan(@nospecialize(la)) = la isa KnownByType ? require_concrete(read_field(la, :plan)) : getplan(la)
 
 """The children of `la` (`getalgos`)."""
-Base.@nospecializeinfer function children_of(@nospecialize(la))
+Base.@nospecializeinfer function read_children(@nospecialize(la))
     la isa KnownByType || return getalgos(la)
-    la.type <: LoopAlgorithm && return children_of(plan_of(la))
+    la.type <: LoopAlgorithm && return read_children(read_plan(la))
     la.type <: FieldPlan || throw(NeedsValues())
-    return require_concrete(field_of(la, :funcs))
+    return require_concrete(read_field(la, :funcs))
 end
 
 """The states of `la` (`getstates`)."""
-Base.@nospecializeinfer function states_of(@nospecialize(la))
+Base.@nospecializeinfer function read_states(@nospecialize(la))
     la isa KnownByType || return getstates(la)
-    la.type <: LoopAlgorithm && return states_of(plan_of(la))
+    la.type <: LoopAlgorithm && return read_states(read_plan(la))
     la.type <: FieldPlan || throw(NeedsValues())
-    return require_concrete(field_of(la, :states))
+    return require_concrete(read_field(la, :states))
 end
 
 """How often each child of `la` runs per run of `la` (`multipliers`), a tuple of numbers."""
-Base.@nospecializeinfer function multipliers_of(@nospecialize(la))
+Base.@nospecializeinfer function read_multipliers(@nospecialize(la))
     la isa KnownByType || return multipliers(la)
     la.type <: FieldPlan || throw(NeedsValues())
     return multipliers(la.type)

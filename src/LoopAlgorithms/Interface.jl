@@ -84,14 +84,14 @@ by the defaults above and the registry walk; works on types as values, so it is 
 code calls its constructor on `s`'s other fields and the new values.
 """
 Base.@nospecializeinfer function replace_fields(@nospecialize(s), names::Tuple{Vararg{Symbol}}, @nospecialize(values::Tuple))
-    T = type_of(s)
+    T = read_type(s)
     params = Any[T.parameters...]
-    fields = Any[field_of(s, i) for i in 1:nfields_of(s)]
+    fields = Any[read_field(s, i) for i in 1:count_fields(s)]
     for k in 1:length(names)
         i = Base.fieldindex(T, names[k])
         new = getfield(values, k)
         j = _field_parameter_index(T, i)
-        isnothing(j) || (params[j] = type_of(new))
+        isnothing(j) || (params[j] = read_type(new))
         fields[i] = new
     end
     NT = Core.apply_type(T.name.wrapper, params...)

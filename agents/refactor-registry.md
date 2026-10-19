@@ -21,9 +21,10 @@ Measured on this branch at a4c581f, machine otherwise quiet. Raw files next to t
   now a thin wrapper), `registry(builder)` (on values), `registry_code(builder)` (the code that builds it, for the
   generated path).
 - Registry/KnownByType.jl: a value known only by its type while a layout is worked out from types, with
-  `field_of`, `tuple_of`, ... that read it the same way as a value.
-- LoopAlgorithms/Preparation/RegistrySetup.jl: the walk over a plan: `add_tree!`, `add_states!`, `add_children!`,
-  `add_child!`; `setup_registry_from_values` (run time) and `setup_registry_code` (from types).
+  `read_field`, `build_tuple`, ... that read it the same way as a value.
+- LoopAlgorithms/Resolving/Registering.jl: the walk over a plan: `register_tree!`, `register_states!`,
+  `register_children!`, `register_child!`; `setup_registry_from_values` (run time) and `generate_registry_setup` (from
+  types).
 - GeneratedCode/RegistrySetup.jl: the generated `setup_registry_and_keyed_algos`; GeneratedCode/RuleDependencies.jl:
   makes the generated code depend on the rule methods it asked (redefining one regenerates it; a rule method defined
   after loading makes that plan use the run-time path).
