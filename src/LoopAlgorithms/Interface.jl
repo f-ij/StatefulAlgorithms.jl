@@ -6,8 +6,9 @@ A plan stores its children in `funcs`, its states in `states`, its route/share w
 options in `options`, and, once resolved, its children's context names in `namespaces` (one `Namespace` type per
 child). The getters below read those fields; a plan type that stores them differently defines its own methods.
 
-Each plan type defines `multipliers(plan)`: how often each child runs per run of the plan, a tuple of numbers (from
-its intervals or repeats).
+Each plan type defines `multipliers(plan)` and `multipliers(typeof(plan))`: how often each child runs per run of the
+plan, a tuple of numbers (from its intervals or repeats). The type method is used when the registry is set up from the
+plan's type (Resolving/Registering.jl).
 =#
 
 ###############################################################################

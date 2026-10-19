@@ -83,6 +83,7 @@ const RB_TYPED_PLANS = Pair{String,Any}[
     "nested composite" => CompositeAlgorithm(CompositeAlgorithm(RBCount, RBScale, (1, 2)), RBSrc, (1, 1)),
     "Routine in Routine" => Routine(Routine(RBCount, RBScale, (1, 2)), RBSrc, (3, 1)),
     "Routine in composite" => CompositeAlgorithm(Routine(RBCount, RBScale, (2, 1)), RBCount, (1, 2)),
+    "threaded" => ThreadedCompositeAlgorithm(RBCount, Routine(RBCount, RBScale, (2, 1)), (1, 3)),
     "same algorithm twice" => CompositeAlgorithm(RBCount, Routine(RBCount, RBScale, (2, 1)), (1, 3)),
     "given key first" => CompositeAlgorithm(:a => RBSrc, RBSrc, RBCount, (1, 2, 1)),
     "given key replaces autokey" => CompositeAlgorithm(RBSrc, RBCount, :a => RBSrc, (1, 1, 3)),

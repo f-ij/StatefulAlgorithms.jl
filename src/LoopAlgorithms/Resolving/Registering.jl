@@ -164,11 +164,10 @@ _unwrap_nested_plan(fa::FinalizedAlgorithm) = _unwrap_nested_plan(_strip_nested_
 # The parts of a plan the walk reads
 ###############################################################################
 #=
-From a value or from a `KnownByType`. On types, only `LoopAlgorithm` wrappers and the plan types whose children,
-states and multipliers are known to be their fields and type (`Routine`, `CompositeAlgorithm`) are read; any other
-throws `NeedsValues`.
+From a value or from a `KnownByType`. On types, a `LoopAlgorithm` wrapper or a plan is read as the plan interface
+(LoopAlgorithms/Interface.jl) describes it: children in `funcs`, states in `states`, and `multipliers` of the plan's
+type; anything else throws `NeedsValues`.
 =#
-const FieldPlan = Union{Routine, CompositeAlgorithm}
 
 """The plan inside the `LoopAlgorithm` `la` (`getplan`)."""
 read_plan(@nospecialize(la)) = la isa KnownByType ? require_concrete(read_field(la, :plan)) : getplan(la)
@@ -177,7 +176,7 @@ read_plan(@nospecialize(la)) = la isa KnownByType ? require_concrete(read_field(
 Base.@nospecializeinfer function read_children(@nospecialize(la))
     la isa KnownByType || return getalgos(la)
     la.type <: LoopAlgorithm && return read_children(read_plan(la))
-    la.type <: FieldPlan || throw(NeedsValues())
+    la.type <: AbstractPlan || throw(NeedsValues())
     return require_concrete(read_field(la, :funcs))
 end
 
@@ -185,13 +184,13 @@ end
 Base.@nospecializeinfer function read_states(@nospecialize(la))
     la isa KnownByType || return getstates(la)
     la.type <: LoopAlgorithm && return read_states(read_plan(la))
-    la.type <: FieldPlan || throw(NeedsValues())
+    la.type <: AbstractPlan || throw(NeedsValues())
     return require_concrete(read_field(la, :states))
 end
 
 """How often each child of `la` runs per run of `la` (`multipliers`), a tuple of numbers."""
 Base.@nospecializeinfer function read_multipliers(@nospecialize(la))
     la isa KnownByType || return multipliers(la)
-    la.type <: FieldPlan || throw(NeedsValues())
+    la.type <: AbstractPlan || throw(NeedsValues())
     return multipliers(la.type)
 end
