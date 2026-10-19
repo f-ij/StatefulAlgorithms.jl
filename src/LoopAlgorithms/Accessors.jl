@@ -132,7 +132,7 @@ end
 end
 
 Base.@constprop :aggressive @inline function Base.getproperty(ca::LA, name::Symbol) where {LA<:LoopSpec}
-    keyloc = findkey(ca, name)
+    keyloc = findkeyposition(ca, name)
     isnothing(keyloc) && error("No algorithm or state with name $(name) found in LoopAlgorithm $(ca)")
     return ca[keyloc]
 end

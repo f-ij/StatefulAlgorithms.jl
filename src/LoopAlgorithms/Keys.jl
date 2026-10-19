@@ -101,7 +101,7 @@ end
     return Expr(:tuple, (QuoteNode(name) for name in names)...)
 end
 
-function _findkey(loop, key::Symbol, prefix::Tuple)
+function _findkeyposition(loop, key::Symbol, prefix::Tuple)
     children = getalgos(loop)
     for idx in eachindex(children)
         child = children[idx]
@@ -110,7 +110,7 @@ function _findkey(loop, key::Symbol, prefix::Tuple)
 
         nested = _nested_loop(child)
         if !isnothing(nested)
-            location = _findkey(nested, key, (prefix..., idx))
+            location = _findkeyposition(nested, key, (prefix..., idx))
             isnothing(location) || return location
         end
     end
@@ -123,7 +123,7 @@ function _findkey(loop, key::Symbol, prefix::Tuple)
     return nothing
 end
 
-function _findkey(::Type{LA}, key::Symbol, prefix::Tuple) where {LA<:LoopSpec}
+function _findkeyposition(::Type{LA}, key::Symbol, prefix::Tuple) where {LA<:LoopSpec}
     child_types = algotypes(LA)
     for idx in eachindex(child_types)
         child_type = child_types[idx]
@@ -132,7 +132,7 @@ function _findkey(::Type{LA}, key::Symbol, prefix::Tuple) where {LA<:LoopSpec}
 
         nested = _nested_loop(child_type)
         if !isnothing(nested)
-            location = _findkey(nested, key, (prefix..., idx))
+            location = _findkeyposition(nested, key, (prefix..., idx))
             isnothing(location) || return location
         end
     end
@@ -146,10 +146,10 @@ function _findkey(::Type{LA}, key::Symbol, prefix::Tuple) where {LA<:LoopSpec}
 end
 
 """Return the `KeyLocation` for `key`, or `nothing` if the key is not visible."""
-@inline findkey(loop::LA, key::Symbol) where {LA<:LoopSpec} = _findkey(_key_source(loop), key, ())
-@inline findkey(::Type{LA}, key::Symbol) where {LA<:LoopSpec} = _findkey(_key_source(LA), key, ())
-@inline Base.haskey(loop::LA, key::Symbol) where {LA<:LoopSpec} = !isnothing(findkey(loop, key))
-@inline Base.haskey(::Type{LA}, key::Symbol) where {LA<:LoopSpec} = !isnothing(findkey(LA, key))
+@inline findkeyposition(loop::LA, key::Symbol) where {LA<:LoopSpec} = _findkeyposition(_key_source(loop), key, ())
+@inline findkeyposition(::Type{LA}, key::Symbol) where {LA<:LoopSpec} = _findkeyposition(_key_source(LA), key, ())
+@inline Base.haskey(loop::LA, key::Symbol) where {LA<:LoopSpec} = !isnothing(findkeyposition(loop, key))
+@inline Base.haskey(::Type{LA}, key::Symbol) where {LA<:LoopSpec} = !isnothing(findkeyposition(LA, key))
 
 function _getindex_keylocation(current, path::Tuple)
     child = _key_children(current)[first(path)]

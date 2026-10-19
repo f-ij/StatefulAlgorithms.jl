@@ -3,7 +3,7 @@
     index = nothing
     entries = NSR.parameters[1].parameters
     for i in 1:length(entries)
-        if T <: gettype(entries[i])
+        if T <: getentrytype(entries[i])
             index = i
             break
         end
@@ -18,9 +18,9 @@ end
 @inline @generated function static_findfirst_match(rte::RegistryTypeEntry{T,S}, v::Val{value}) where {T,S,value}
     # A loop, not `findfirst` with a closure: the closure captures `value` and compiles for every value.
     idx = nothing
-    entries = entry_types(rte)
-    for i in 1:length(entries)
-        if match(value, entries[i])
+    algotypes = getalgotypes(rte)
+    for i in 1:length(algotypes)
+        if match(value, algotypes[i])
             idx = i
             break
         end

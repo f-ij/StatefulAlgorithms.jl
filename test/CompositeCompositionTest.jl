@@ -70,12 +70,12 @@ end
     outer = @CompositeAlgorithm begin
         inner
     end
-    loc = StatefulAlgorithms.findkey(outer, :dynamics)
+    loc = StatefulAlgorithms.findkeyposition(outer, :dynamics)
 
     @test :dynamics in keys(outer)
     @test :dynamics in propertynames(outer)
     @test !isnothing(loc)
-    @test !isnothing(StatefulAlgorithms.findkey(typeof(outer), :dynamics))
+    @test !isnothing(StatefulAlgorithms.findkeyposition(typeof(outer), :dynamics))
     @test StatefulAlgorithms.getkey(outer.dynamics) == :dynamics
     @test outer[loc] === outer.dynamics
 

@@ -63,8 +63,8 @@ RegistryBuilder() = RegistryBuilder(TypeEntryBuilder[])
 function RegistryBuilder(reg::NameSpaceRegistry)
     b = RegistryBuilder()
     for rte in getentries(reg)
-        algos = Any[getentries(rte)...]
-        push!(b.entries, TypeEntryBuilder(gettype(rte), algos, copy(getmultipliers(rte)), BuilderLookup(getdynamiclookup(rte)),
+        algos = Any[getalgos(rte)...]
+        push!(b.entries, TypeEntryBuilder(getentrytype(rte), algos, copy(getmultipliers(rte)), BuilderLookup(getdynamiclookup(rte)),
             Any[MatcherNotComputed() for _ in algos]))
     end
     return b

@@ -15,7 +15,7 @@ Where an algorithm is in a registry, as a type: entry type `T`, position `idx` w
 """
 struct RegistryLocation{T, Int} end
 RegistryLocation(T, idx) = RegistryLocation{T, idx}()
-gettype(loc::RegistryLocation{T, idx}) where {T, idx} = T
+getentrytype(loc::RegistryLocation{T, idx}) where {T, idx} = T
 getidx(loc::RegistryLocation{T, idx}) where {T, idx} = idx
 
 """The registry's entries, one `RegistryTypeEntry` per entry type, in order."""
@@ -32,7 +32,7 @@ Base.length(reg::NameSpaceRegistry) = length(getentries(reg))
 
 """The registry's entry types (`Lin`, ...) as a tuple type, `Tuple{Lin, ...}`; for a registry or its type."""
 @inline entrytypes(reg::Union{NameSpaceRegistry{T}, Type{NameSpaceRegistry{T}}}) where {T} =
-    Tuple{map(gettype, typeentry_types(reg))...}
+    Tuple{map(getentrytype, typeentry_types(reg))...}
 
 """
     find_typeidx(registry, x) -> index or nothing
@@ -58,7 +58,7 @@ function get_type_entries(reg::NameSpaceRegistry, obj)
         error("Unknown algo/type referenced in registry lookup, for registry: $reg.\n" *
               "Requested type: $assigned_t\n" *
               "Requested value: $obj\n" *
-              "Available entry types: $(map(gettype, typeentry_types(reg)))\n" *
+              "Available entry types: $(map(getentrytype, typeentry_types(reg)))\n" *
               "If this came from a Share or Route, the referenced algo/type is not registered." )
     end
     return getentries(reg)[idx]
@@ -125,13 +125,13 @@ end
     if isnothing(idx)
         return nothing
     end
-    return getentries(entries)[idx]
+    return getalgos(entries)[idx]
 end
 
 """Where `val` is in `reg`, found by its matcher, as a `RegistryLocation` (index `nothing` when not found)."""
 @inline function static_findfirst_match(reg::NameSpaceRegistry, val)
     entries = get_type_entries(reg, val)
-    T = gettype(entries)
+    T = getentrytype(entries)
     idx = static_findfirst_match(entries, val)
     if isnothing(idx)
         return RegistryLocation(T, nothing)
@@ -218,9 +218,9 @@ end
     T = nothing
     found_idx = nothing
     for entry in typeentry_types(reg)
-        fidx = findkey(entry, key)
+        fidx = findkeyposition(entry, key)
         if !isnothing(fidx)
-            T = gettype(entry)
+            T = getentrytype(entry)
             found_idx = fidx
             break
         end
@@ -245,9 +245,9 @@ end
 function static_get_multiplier(reg::NameSpaceRegistry, val)
     loc = static_findfirst_match(reg, val)
     if isnothing(getidx(loc))
-        error("Found other values of type $(gettype(loc)), but no match found for value: $val in registry: $reg")
+        error("Found other values of type $(getentrytype(loc)), but no match found for value: $val in registry: $reg")
     end
-    type_entries = get_type_entries(reg, gettype(loc))
+    type_entries = get_type_entries(reg, getentrytype(loc))
     return getmultiplier(type_entries, getidx(loc))
 end
 
@@ -271,12 +271,12 @@ end
 
 """All algorithms in `reg` as the registry stores them (keyed), states first, then in entry order."""
 function all_algos(reg::NameSpaceRegistry)
-    return flat_collect_broadcast(getentries, getentries(reg))
+    return flat_collect_broadcast(getalgos, getentries(reg))
 end
 
 """All algorithms in `reg` that have a key, in order; for a registry or its type."""
 function all_named_algos(reg::Union{NameSpaceRegistry, Type{<:NameSpaceRegistry}})
-    flat_collect_broadcast(getentries, getentries(reg))
+    flat_collect_broadcast(getalgos, getentries(reg))
 end
 
 """Iterates over the registry's entries (`RegistryTypeEntry`s), in order."""
@@ -289,7 +289,7 @@ function Base.iterate(reg::NameSpaceRegistry, state = 1)
 end
 
 function Base.show(io::IO, reg::NameSpaceRegistry)
-    println(io, "NameSpaceRegistry with types: ", map(gettype, typeentry_types(reg)))
+    println(io, "NameSpaceRegistry with types: ", map(getentrytype, typeentry_types(reg)))
     if isempty(getentries(reg))
         print(io, "  (empty)")
         return

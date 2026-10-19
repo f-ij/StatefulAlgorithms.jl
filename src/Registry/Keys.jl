@@ -10,8 +10,8 @@ end
     return :($allkeys_flat)
 end
 
-@inline findkey(reg::Union{NSR, Type{NSR}}, key::Symbol) where NSR<:NameSpaceRegistry = findkey(reg, Val(key))
-@inline @generated function findkey(reg::Union{NSR, Type{NSR}}, ::Val{K}) where {NSR<:NameSpaceRegistry, K}
+@inline findkeyposition(reg::Union{NSR, Type{NSR}}, key::Symbol) where NSR<:NameSpaceRegistry = findkeyposition(reg, Val(key))
+@inline @generated function findkeyposition(reg::Union{NSR, Type{NSR}}, ::Val{K}) where {NSR<:NameSpaceRegistry, K}
     _separated_keys = separated_keys(NSR)
     firstkeyidx = findfirst(ks -> K in ks, _separated_keys)
     if isnothing(firstkeyidx)
@@ -24,7 +24,7 @@ end
 
 @inline Base.haskey(reg::Union{NSR, Type{NSR}}, key::Symbol) where NSR<:NameSpaceRegistry = haskey(NSR, Val(key))
 @inline @generated function Base.haskey(reg::Union{NSR, Type{NSR}}, key::Val{K}) where {NSR<:NameSpaceRegistry, K}
-    keyloc = findkey(NSR, K)
+    keyloc = findkeyposition(NSR, K)
     if isnothing(keyloc[1])
         return false
     else
@@ -33,7 +33,7 @@ end
 end
 
 Base.@constprop :aggressive @inline function Base.getproperty(reg::NameSpaceRegistry, key::Symbol)
-    keyloc = findkey(reg, Val(key))
+    keyloc = findkeyposition(reg, Val(key))
     if isnothing(keyloc[1])
         error("Key $key not found in registry $reg with keys $(keys(reg))")
     else

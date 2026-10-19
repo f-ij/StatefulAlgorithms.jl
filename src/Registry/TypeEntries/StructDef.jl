@@ -7,10 +7,10 @@ One entry of a registry: the algorithms of entry type `T` (`Lin`), as a tuple `a
 `isbits`. The multipliers and the lookup table can be changed in place.
 """
 struct RegistryTypeEntry{T,E}
-    entries::E
+    algos::E
     multipliers::Vector{Float64}
     dynamic_lookup::Dict{LookupKey,Int}
 end
 
 RegistryTypeEntry{T}() where {T} = RegistryTypeEntry{T,Tuple{}}((), Float64[], Dict{LookupKey,Int}())
-RegistryTypeEntry{T}(entries::E, multipliers, lookup) where {T,E} = RegistryTypeEntry{T,E}(entries, multipliers, lookup)
+RegistryTypeEntry{T}(algos::E, multipliers, lookup) where {T,E} = RegistryTypeEntry{T,E}(algos, multipliers, lookup)

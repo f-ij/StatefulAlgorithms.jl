@@ -5,13 +5,13 @@ table (`dynamic_lookup`, for other values).
 =#
 
 """The entry's algorithms (keyed handles), as a tuple; for an entry type, the tuple of their types."""
-@inline getentries(rte::RegistryTypeEntry) = getfield(rte, :entries)
-@inline getentries(rtetype::Type{<:RegistryTypeEntry{T,S}}) where {T,S} = tuple(S.parameters...)
+@inline getalgos(rte::RegistryTypeEntry) = getfield(rte, :algos)
+@inline getalgos(rtetype::Type{<:RegistryTypeEntry{T,S}}) where {T,S} = tuple(S.parameters...)
 """The types of the entry type's algorithms (a `svec`)."""
-entry_types(rte::Type{<:RegistryTypeEntry{T,E}}) where {T,E} = E.parameters
+getalgotypes(rte::Type{<:RegistryTypeEntry{T,E}}) where {T,E} = E.parameters
 """The entry type (`Lin`) of an entry or of its type."""
-gettype(rte::Type{<:RegistryTypeEntry{T}}) where T = T
-gettype(rte::RegistryTypeEntry) = gettype(typeof(rte))
+getentrytype(rte::Type{<:RegistryTypeEntry{T}}) where T = T
+getentrytype(rte::RegistryTypeEntry) = getentrytype(typeof(rte))
 
 """The runtime lookup table of the entry (lookup key => position)."""
 @inline getdynamiclookup(rte::RegistryTypeEntry) = getfield(rte, :dynamic_lookup)
@@ -42,27 +42,27 @@ function Base.getindex(te::RegistryTypeEntry, obj)
     if isstaticallyfindable(obj)
         return static_get(te, obj)
     end
-    entry = dynamic_get(te, obj)
-    isnothing(entry) && throw_not_in_entry(te, obj)
-    return entry
+    algo = dynamic_get(te, obj)
+    isnothing(algo) && throw_not_in_entry(te, obj)
+    return algo
 end
 
 """`te[idx]`: the `idx`-th algorithm of the entry."""
 function Base.getindex(te::RegistryTypeEntry, idx::Int)
-    getentries(te)[idx]
+    getalgos(te)[idx]
 end
 
 """The algorithm `val` as the entry stores it, found by its matcher; errors when it is not there."""
 @inline function static_get(rte::RegistryTypeEntry, val::V) where V 
     idx = static_findfirst_match(rte, val)
     isnothing(idx) && throw_not_in_entry(rte, val)
-    return getentries(rte)[idx]
+    return getalgos(rte)[idx]
 end
 
 """Throws the error for `val` not being in the entry: its matcher and the entry's algorithms and their matchers.
 Not inlined, so the message is not built into the callers."""
 @noinline function throw_not_in_entry(rte::RegistryTypeEntry, val)
-    error("No matching entry found for value: $val with matcher $(match_by(val))\nin RegistryTypeEntry of type $(gettype(rte))\nwith entries: $(getentries(rte))\nand matchers $(match_by.(getentries(rte)))")
+    error("No matching algorithm found for value: $val with matcher $(match_by(val))\nin RegistryTypeEntry of type $(getentrytype(rte))\nwith algorithms: $(getalgos(rte))\nand matchers $(match_by.(getalgos(rte)))")
 end
 
 """The algorithm `val` as the entry stores it, found through the runtime lookup table, or `nothing`."""
@@ -71,7 +71,7 @@ end
     if isnothing(idx)
         return nothing
     end
-    return getentries(rte)[idx]
+    return getalgos(rte)[idx]
 end
 
 ###############################################################################
@@ -80,15 +80,15 @@ end
 
 """The keys of the entry's algorithms (`Lin_1`, ...), in order, as a constant tuple; for an entry or its type."""
 @inline @generated function Base.keys(entry::Union{RTE, Type{<:RTE}}) where RTE<:RegistryTypeEntry
-    keys = getkey.(getentries(RTE))
+    keys = getkey.(getalgos(RTE))
     return :($keys)
 end
 
 """The position of the algorithm with key `key` in the entry, or `nothing`; for an entry or its type."""
-@inline findkey(te::Union{RTE, Type{<:RTE}}, key::Symbol) where RTE <: RegistryTypeEntry = findkey(te, Val(key))
-@inline @generated function findkey(te::Union{RTE, Type{<:RTE}}, ::Val{key}) where {RTE <: RegistryTypeEntry, key}
-    entries = getentries(RTE)
-    idx = findfirst(x -> getkey(x) == key, entries)
+@inline findkeyposition(te::Union{RTE, Type{<:RTE}}, key::Symbol) where RTE <: RegistryTypeEntry = findkeyposition(te, Val(key))
+@inline @generated function findkeyposition(te::Union{RTE, Type{<:RTE}}, ::Val{key}) where {RTE <: RegistryTypeEntry, key}
+    algotypes = getalgos(RTE)
+    idx = findfirst(x -> getkey(x) == key, algotypes)
     if isnothing(idx)
         return :(nothing)
     else
@@ -96,15 +96,18 @@ end
     end
 end
 
-@inline _registry_findall_type(::Type{E}) where {E} = E
-@inline _registry_findall_type(::Type{<:AbstractIdentifiableAlgo{F}}) where {F} = F
-@inline _registry_findall_matches(::Type{E}, ::Type{T}) where {E, T} = _registry_findall_type(E) <: T
+"""The algorithm type of `E`: the type a handle wraps, or `E` itself."""
+@inline _unwrap_algotype(::Type{E}) where {E} = E
+@inline _unwrap_algotype(::Type{<:AbstractIdentifiableAlgo{F}}) where {F} = F
+"""Whether the algorithm type of `E` (`_unwrap_algotype`) is a subtype of `T`."""
+@inline _matches_algotype(::Type{E}, ::Type{T}) where {E, T} = _unwrap_algotype(E) <: T
 
-@inline _registry_findall_type_entries(::Type{T}, ::Tuple{}) where {T} = ()
-@inline function _registry_findall_type_entries(::Type{T}, entries::Tuple) where {T}
-    head = first(entries)
-    tail_matches = _registry_findall_type_entries(T, Base.tail(entries))
-    return _registry_findall_matches(typeof(head), T) ? (head, tail_matches...) : tail_matches
+"""The algorithms in `algos` whose algorithm type is a subtype of `T` (`_matches_algotype`), in order."""
+@inline _filter_by_algotype(::Type{T}, ::Tuple{}) where {T} = ()
+@inline function _filter_by_algotype(::Type{T}, algos::Tuple) where {T}
+    head = first(algos)
+    tail_matches = _filter_by_algotype(T, Base.tail(algos))
+    return _matches_algotype(typeof(head), T) ? (head, tail_matches...) : tail_matches
 end
 
 """
@@ -114,30 +117,30 @@ The entry's algorithms whose algorithm type is a subtype of `T`, as stored (keye
 type of the algorithm it wraps.
 """
 @inline Base.findall(::Type{T}, te::RegistryTypeEntry) where {T} =
-    _registry_findall_type_entries(T, getentries(te))
+    _filter_by_algotype(T, getalgos(te))
 
 function Base.show(io::IO, rte::RegistryTypeEntry{T}) where {T}
     println(io, "RegistryTypeEntry for type: $(T)")
-    if length(getentries(rte)) == 0
+    if length(getalgos(rte)) == 0
     else
-        entries = getentries(rte)
+        algos = getalgos(rte)
         limit = get(io, :limit, false)
-        n = length(entries)
+        n = length(algos)
         head = 3
         tail = 2
         if !limit || n <= head + tail + 1
-            for (idx, entry) in enumerate(entries)
-                println(io, "\t", idx, " \t => ", entry, " x ", getmultiplier(rte,idx))
+            for (idx, algo) in enumerate(algos)
+                println(io, "\t", idx, " \t => ", algo, " x ", getmultiplier(rte,idx))
             end
         else
             for idx in 1:head
-                entry = entries[idx]
-                println(io, "\t", idx, " \t => ", entry, " x ", getmultiplier(rte,idx))
+                algo = algos[idx]
+                println(io, "\t", idx, " \t => ", algo, " x ", getmultiplier(rte,idx))
             end
             println(io, "\t...")
             for idx in (n - tail + 1):n
-                entry = entries[idx]
-                println(io, "\t", idx, " \t => ", entry, " x ", getmultiplier(rte,idx))
+                algo = algos[idx]
+                println(io, "\t", idx, " \t => ", algo, " x ", getmultiplier(rte,idx))
             end
         end
     end

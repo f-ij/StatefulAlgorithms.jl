@@ -1147,7 +1147,7 @@ end
         resolved_skipped = resolve(skipped)
         @test length(StatefulAlgorithms.getalgos(resolved_skipped)) == 1
         @test StatefulAlgorithms.intervals(resolved_skipped) == (StatefulAlgorithms.Interval(1),)
-        @test isnothing(StatefulAlgorithms.findkey(resolved_skipped, :DSLSourceAlgo_1))
+        @test isnothing(StatefulAlgorithms.findkeyposition(resolved_skipped, :DSLSourceAlgo_1))
 
         p_skipped = Process(resolved_skipped, repeat = 1)
         StatefulAlgorithms.run(p_skipped)
@@ -1163,7 +1163,7 @@ end
 
         resolved_included = resolve(included)
         @test length(StatefulAlgorithms.getalgos(resolved_included)) == 3   # with the capture of its return
-        @test !isnothing(StatefulAlgorithms.findkey(resolved_included, :DSLSourceAlgo_1))
+        @test !isnothing(StatefulAlgorithms.findkeyposition(resolved_included, :DSLSourceAlgo_1))
 
         p_included = Process(resolved_included, repeat = 1)
         StatefulAlgorithms.run(p_included)
