@@ -136,6 +136,21 @@ end
     @test merged[:rbshared].a == 1 && merged[:rbshared].b == 2
 end
 
+rb_plus_one(x) = x + 1.0
+
+@testset "Registry build: the states of a named nested plan are registered" begin
+    inner = @CompositeAlgorithm begin
+        @state x = 0.0
+        x = rb_plus_one(x)
+    end
+    # A nested plan given a name (`insert` allows it): its states are registered as an unnamed plan's are.
+    named = insert(CompositeAlgorithm(RBCount, (1,)), 2, IdentifiableAlgo(inner, :named))
+    la = rb_loopalgorithm(named)
+    @test rb_same_setup(RB.setup_registry_and_keyed_algos(la), RB.setup_registry_from_values(la))
+    @test RB.all_keys(RB.getregistry(resolve(named))) == (:_state_1, :RBCount_1)
+    @test RB.context(run(named; repeats = 3))[:_state_1].x == 3.0
+end
+
 @testset "Registry build: `add` and `RegistryBuilder`" begin
     handle = IdentifiableAlgo(RBCount())
     reg, keyed = RB.add(RB.NameSpaceRegistry(), handle, 2.0)

@@ -61,8 +61,8 @@ end
 """
     add_states!(builder, la)
 
-Adds the states of `la` and of every plan nested in it (not those inside handles) to `builder`, each with multiplier 1,
-in the order of `flat_states`. States belong to the context, not to a step, so they are registered once and first.
+Adds the states of `la` and of every plan nested in it (also a named one, `unwrap_named_plan`) to `builder`, each with
+multiplier 1, in the order of `flat_states`. States belong to the context, not to a step, so they are registered once and first.
 """
 Base.@nospecializeinfer function add_states!(b::RegistryBuilder, @nospecialize(la))
     type_of(la) <: LoopSpec || return nothing
@@ -77,7 +77,7 @@ Base.@nospecializeinfer function add_states!(b::RegistryBuilder, @nospecialize(l
     end
     children = children_of(la)
     for i in 1:nfields_of(children)
-        add_states!(b, require_concrete(field_of(children, i)))
+        add_states!(b, unwrap_named_plan(require_concrete(field_of(children, i))))
     end
     return nothing
 end
@@ -128,12 +128,25 @@ Base.@nospecializeinfer function add_child!(b::RegistryBuilder, @nospecialize(ch
     # `insert(la, i, :name => plan)` get here; the name is dropped and the plan is added as an unnamed one.
     # TODO (TODO.md, "named plans as context slices"): record the name here as `:name => (child SCKeys...)`.
     if T <: AbstractIdentifiableAlgo{<:LoopSpec}
-        child isa KnownByType && !(T <: IdentifiableAlgo) && throw(NeedsValues())
-        return add_child!(b, child isa KnownByType ? field_of(child, :func) : getalgo(child), multiplier)
+        return add_child!(b, unwrap_named_plan(child), multiplier)
     end
     keyed = add!(b, child, multiplier)
     raw = child isa KnownByType ? field_of(keyed, :func) : getalgo(keyed)
     return raw, constant_like(Core.apply_type(Namespace, key_of(keyed))(), child)
+end
+
+"""
+    unwrap_named_plan(child) -> plan or child
+
+Returns the plan inside a named nested plan (an `AbstractIdentifiableAlgo` of a plan); any other child unchanged. On
+types only an `IdentifiableAlgo` is read (its `func` field); another handle type throws `NeedsValues`.
+"""
+Base.@nospecializeinfer function unwrap_named_plan(@nospecialize(child))
+    T = type_of(child)
+    T <: AbstractIdentifiableAlgo{<:LoopSpec} || return child
+    child isa KnownByType || return getalgo(child)
+    T <: IdentifiableAlgo || throw(NeedsValues())
+    return field_of(child, :func)
 end
 
 """
