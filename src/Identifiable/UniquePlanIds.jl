@@ -380,11 +380,14 @@ end
 
 # The registry with `DoubleMatcher`s for the registry in `ref`, made once per registry: the contexts of one plan share
 # their registry `Ref`, so later calls only rewrap. A registry without `Unique` handles is its own (`ref` itself).
-const _HELD_REGISTRIES = WeakKeyDict{Base.RefValue, Base.RefValue}()
+# The values are boxed (`Ref{Any}`): the cache's methods are then compiled once, not for every new registry type.
+const _HELD_REGISTRIES = WeakKeyDict{Base.RefValue, Base.RefValue{Any}}()
 const _HELD_REGISTRIES_LOCK = ReentrantLock()
 Base.@nospecializeinfer function _held_registry_ref(@nospecialize(ref::Base.RefValue))
-    return @lock _HELD_REGISTRIES_LOCK get!(_HELD_REGISTRIES, ref) do
-        reg = registry_matchers(ref[])
-        reg === ref[] ? ref : new_instance(Core.apply_type(Base.RefValue, typeof(reg)), reg)
-    end
+    boxed = @lock _HELD_REGISTRIES_LOCK get!(() -> _held_registry_box(ref), _HELD_REGISTRIES, ref)
+    return boxed[]
+end
+Base.@nospecializeinfer function _held_registry_box(@nospecialize(ref::Base.RefValue))
+    reg = registry_matchers(ref[])
+    return Ref{Any}(reg === ref[] ? ref : new_instance(Core.apply_type(Base.RefValue, typeof(reg)), reg))
 end
