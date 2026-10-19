@@ -16,6 +16,22 @@ The functions take algorithms and types as values (`@nospecialize`), so they are
 =#
 
 """
+    RuntimeLookupKey(id, expr)
+
+A runtime lookup key known only at run time, while a layout is worked out from types: the key of a normalized handle
+comes from its `reconstructor` value (`dynamic_lookup_key`), which `expr` reads. Equal for the same normalized id `id`.
+"""
+struct RuntimeLookupKey
+    id::Any
+    expr::Any
+end
+Base.isequal(a::RuntimeLookupKey, b::RuntimeLookupKey) = isequal(a.id, b.id)
+Base.hash(a::RuntimeLookupKey, h::UInt) = hash(a.id, hash(RuntimeLookupKey, h))
+
+"""A builder's lookup table: as a registry entry's (`LookupKey` => index), plus the keys only known at run time."""
+const BuilderLookup = Dict{Union{LookupKey,RuntimeLookupKey},Int}
+
+"""
     TypeEntryBuilder(type)
 
 One entry type of a `RegistryBuilder`: the entry type `type` (`Lin`), its keyed algorithms in order, their
@@ -26,10 +42,10 @@ struct TypeEntryBuilder
     type::Any
     algos::Vector{Any}
     multipliers::Vector{Float64}
-    lookup::Dict{LookupKey,Int}
+    lookup::BuilderLookup
     matchers::Vector{Any}
 end
-TypeEntryBuilder(@nospecialize(type)) = TypeEntryBuilder(type, Any[], Float64[], Dict{LookupKey,Int}(), Any[])
+TypeEntryBuilder(@nospecialize(type)) = TypeEntryBuilder(type, Any[], Float64[], BuilderLookup(), Any[])
 
 struct MatcherNotComputed end   # an entry whose matcher is not computed yet
 
@@ -48,7 +64,7 @@ function RegistryBuilder(reg::NameSpaceRegistry)
     b = RegistryBuilder()
     for rte in getentries(reg)
         algos = Any[getentries(rte)...]
-        push!(b.entries, TypeEntryBuilder(gettype(rte), algos, copy(getmultipliers(rte)), copy(getdynamiclookup(rte)),
+        push!(b.entries, TypeEntryBuilder(gettype(rte), algos, copy(getmultipliers(rte)), BuilderLookup(getdynamiclookup(rte)),
             Any[MatcherNotComputed() for _ in algos]))
     end
     return b
@@ -180,20 +196,7 @@ has_autokey(@nospecialize(x)) = x isa KnownByType ? is_autokey(algotype(x.type),
 has_given_key(@nospecialize(x)) = has_key(x) && !has_autokey(x)
 
 """
-    RuntimeLookupKey(id, expr)
-
-A runtime lookup key known only at run time, while a layout is worked out from types: the key of a normalized handle
-comes from its `reconstructor` value (`dynamic_lookup_key`), which `expr` reads. Equal for the same normalized id `id`.
-"""
-struct RuntimeLookupKey
-    id::Any
-    expr::Any
-end
-Base.isequal(a::RuntimeLookupKey, b::RuntimeLookupKey) = isequal(a.id, b.id)
-Base.hash(a::RuntimeLookupKey, h::UInt) = hash(a.id, hash(RuntimeLookupKey, h))
-
-"""
-    lookup_key(algo) -> LookupKey
+    lookup_key(algo) -> LookupKey or RuntimeLookupKey
 
 The key of `algo` in its entry's runtime lookup table (`dynamic_lookup_key`). For a `KnownByType`, worked out from its
 type, as `dynamic_lookup_key` does for a value; for a normalized handle (`IdReconstructor`), a `RuntimeLookupKey`.
@@ -201,8 +204,8 @@ type, as `dynamic_lookup_key` does for a value; for a normalized handle (`IdReco
 Base.@nospecializeinfer function lookup_key(@nospecialize(algo))
     algo isa KnownByType || return dynamic_lookup_key(algo)
     T = algo.type
-    T.parameters[6] <: IdReconstructor && return LookupKey(RuntimeLookupKey(id(T), algo.expr))
-    return LookupKey(_lowered_matcher(entry_matcher(T)))
+    T.parameters[6] <: IdReconstructor && return RuntimeLookupKey(id(T), algo.expr)
+    return LookupKey(lower_matcher(entry_matcher(T)))
 end
 
 """
@@ -230,7 +233,7 @@ Base.@nospecializeinfer function registry(b::RegistryBuilder)
     typeentries = Vector{Any}(undef, length(b.entries))
     for (i, entry) in enumerate(b.entries)
         algos = Tuple(entry.algos)
-        typeentries[i] = RegistryTypeEntry{entry.type, typeof(algos)}(algos, entry.multipliers, entry.lookup)
+        typeentries[i] = RegistryTypeEntry{entry.type, typeof(algos)}(algos, entry.multipliers, Dict{LookupKey,Int}(entry.lookup))
     end
     all_entries = Tuple(typeentries)
     return NameSpaceRegistry{typeof(all_entries)}(all_entries)
@@ -257,14 +260,14 @@ Base.@nospecializeinfer function registry_code(b::RegistryBuilder)
 end
 
 """The code that creates the lookup table `lookup` of a builder on types: its fixed keys as constants, plus the keys read at run time."""
-Base.@nospecializeinfer function lookup_table_code(lookup::Dict{LookupKey,Int})
+Base.@nospecializeinfer function lookup_table_code(lookup::BuilderLookup)
     fixed_keys, fixed_idxs = LookupKey[], Int[]
     runtime = Any[]
     for (k, i) in lookup
-        if k.key isa RuntimeLookupKey
-            push!(runtime, Expr(:call, setindex!, :d, i, Expr(:call, dynamic_lookup_key, k.key.expr)))
+        if k isa RuntimeLookupKey
+            push!(runtime, Expr(:call, setindex!, :d, i, Expr(:call, dynamic_lookup_key, k.expr)))
         else
-            push!(fixed_keys, k); push!(fixed_idxs, i)
+            push!(fixed_keys, k::LookupKey); push!(fixed_idxs, i)
         end
     end
     filled = Expr(:call, lookup_table, Tuple(fixed_keys), Tuple(fixed_idxs))

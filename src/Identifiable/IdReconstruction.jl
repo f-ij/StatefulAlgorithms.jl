@@ -1,6 +1,5 @@
 #=
-Ids that are different on every run, how to take them apart and rebuild them, and how they are lowered to a
-`Symbol` for a registry's runtime lookup table (keys in Registry/LookupKey.jl).
+Ids that are different on every run, and how to take them apart and rebuild them.
 
 `Unique(f)` gives a handle a random `SimpleId{uuid}()`, so the handle's type is new on every run. `resolve` replaces
 such ids by `NormalizedId{k, R}()` (NormalizeIds.jl) and keeps what is needed to rebuild the original id in the
@@ -50,19 +49,3 @@ Stands in for the `N`-th random id of a plan (in order of first appearance) whil
 of its own, so it cannot clash with ids users choose.
 """
 struct NormalizedId{N, R} <: AbstractMatcher{N} end
-
-"""
-    _lowered_matcher(matcher)
-
-The matcher as a lookup-table key: an id that is different on every run (`SimpleId`, `ObjectIDMatcher`) becomes the
-`Symbol` from `_lowered_id_key`, any other matcher is returned as it is. Used by `dynamic_lookup_key`.
-"""
-_lowered_matcher(matcher) = matcher
-_lowered_matcher(id::Union{SimpleId, ObjectIDMatcher})::Symbol = _lowered_id_key(deconstruct_id(id)...)
-
-"""
-    _lowered_id_key(IdType, data) -> Symbol
-
-A `Symbol` naming the id type and its data, e.g. `Symbol("StatefulAlgorithms.SimpleId{Base.UUID}_9e27…")`.
-"""
-_lowered_id_key(IdType, data)::Symbol = Symbol(parentmodule(IdType), ".", nameof(IdType), "{", typeof(data), "}_", data)
