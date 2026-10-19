@@ -157,10 +157,10 @@ end
     right = IdentifiableAlgo(right_state, :_state)
     other_key = IdentifiableAlgo(other_state, :other_state)
 
-    @test registry_allowmerge(left)
-    @test registry_allowmerge(right)
-    @test registry_allowmerge(left, right)
-    @test !registry_allowmerge(left, other_key)
+    @test registry_allowmerge(getalgo(left))
+    @test registry_allowmerge(getalgo(right))
+    @test StatefulAlgorithms.handles_merge(typeof(left), typeof(right))
+    @test !StatefulAlgorithms.handles_merge(typeof(left), typeof(other_key))
 
     merged = merge(left, right)
     @test getkey(merged) == :_state
