@@ -30,6 +30,7 @@ Base.length(reg::NameSpaceRegistry) = length(getentries(reg))
 """The types of the registry's entries (`RegistryTypeEntry{Lin, ...}`, ...), as a tuple; for a registry or its type."""
 @inline typeentry_types(reg::Union{NameSpaceRegistry{T}, Type{NameSpaceRegistry{T}}}) where {T} = tuple(T.parameters...)
 
+# TODO: check whether this is dead: grep finds no callers (2026-10-19); check generated code, a call probe and other branches.
 """The registry's entry types (`Lin`, ...) as a tuple type, `Tuple{Lin, ...}`; for a registry or its type."""
 @inline entrytypes(reg::Union{NameSpaceRegistry{T}, Type{NameSpaceRegistry{T}}}) where {T} =
     Tuple{map(getentrytype, typeentry_types(reg))...}
