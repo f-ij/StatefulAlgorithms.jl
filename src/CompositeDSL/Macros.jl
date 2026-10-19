@@ -1,3 +1,11 @@
+"""
+    _dsl_input(ex) -> expression
+
+The expression for a value a DSL block takes from the user's code (an entity, an owner of a route or state): `ex`
+escaped and stripped of `Unique` uuids (`strip_unique`), so nothing the block compiles sees them.
+"""
+_dsl_input(ex) = :(StatefulAlgorithms.strip_unique($(esc(ex))))
+
 """Create a `GeneralState` value directly."""
 macro state(args...)
     fields = _dsl_collect_state_fields(args)

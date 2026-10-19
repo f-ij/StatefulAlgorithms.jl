@@ -22,6 +22,18 @@ end
 
 abstract type AbstractMatcher{A} end
 getmatchers(m::AbstractMatcher{A}) where {A} = A
+# A matcher type, as the type-level id of a handle whose matcher carries data (`static_id`), matches as itself.
+match_by(T::Type{<:AbstractMatcher}) = T
+
+"""
+    static_id(matcher) -> value or type
+
+The part of a handle's matcher that goes into the handle's type (`IdentifiableAlgo`'s `Id` parameter): a matcher
+without fields (`SimpleId{x}()`) is its own type-level id; a matcher that carries data (`UniquePlanId`) has its type
+there and its value in the handle's `matcher` field. Any other id (a type, an `isbits` value) is itself.
+"""
+static_id(id) = id
+static_id(m::AbstractMatcher) = Base.issingletontype(typeof(m)) ? m : typeof(m)
 struct SimpleId{id} <: AbstractMatcher{id} end
 SimpleId() = SimpleId{uuid4()}()
 SimpleId(id) = SimpleId{id}()
@@ -147,3 +159,73 @@ end
 function Base.:(==)(mm1::MultiMatcher{A}, mm2::MultiMatcher{B}) where {A,B}
     return any(x -> any(y -> x == y, getmatchers(mm2)), getmatchers(mm1))
 end
+
+"""
+    UniquePlanId{N}(origin::UUID)
+
+The matcher of a `Unique` handle. `origin` (data) is the uuid drawn when the handle was made; `N` (type) is:
+- `origin` itself on the handle the user holds (`Unique(f)`), so that handle is a key known from its type alone;
+- `nothing` once a constructor took the handle (`strip_unique`), so constructors compile once for every handle;
+- the handle's number `k` in its plan (1, 2, ...), given when the plan is built (`number_unique_ids`).
+Two values are the same handle when their `origin`s are equal; at the type level (a handle's `Id` parameter) they
+match when their `N`s are equal.
+"""
+struct UniquePlanId{N} <: AbstractMatcher{N}
+    origin::UUID
+end
+UniquePlanId(origin::UUID) = UniquePlanId{origin}(origin)
+
+"""The `N` of a `UniquePlanId` (value or type): its uuid, `nothing`, or its number in its plan."""
+plan_number(::Union{UniquePlanId{N}, Type{UniquePlanId{N}}}) where {N} = N
+"""The uuid a `UniquePlanId` was drawn with."""
+origin(id::UniquePlanId) = getfield(id, :origin)
+
+Base.:(==)(a::UniquePlanId, b::UniquePlanId) = origin(a) == origin(b)
+Base.:(==)(a::UniquePlanId, ::Type{UniquePlanId{N}}) where {N} = !isnothing(N) && plan_number(a) == N
+Base.:(==)(T::Type{<:UniquePlanId}, b::UniquePlanId) = b == T
+Base.hash(a::UniquePlanId, h::UInt) = hash(origin(a), hash(UniquePlanId, h))
+
+"""
+    DoubleMatcher(first, second)
+
+Matches what either of two matchers matches. The registry stores a resolved `Unique` handle with
+`DoubleMatcher(UniquePlanId{k}(uuid), UniquePlanId{uuid}(uuid))` (`registry_matcher`): code of the plan finds it by its
+number `k`, the handle the user holds by its uuid, both from types alone.
+"""
+struct DoubleMatcher{A, B} <: AbstractMatcher{Tuple{A, B}}
+    first::A
+    second::B
+end
+matcher_parts(m::DoubleMatcher) = (getfield(m, :first), getfield(m, :second))
+matcher_parts(::Type{DoubleMatcher{A, B}}) where {A, B} = (A, B)
+
+const _AnyDoubleMatcher = Union{DoubleMatcher, Type{<:DoubleMatcher}}
+_double_matches(d, x) = (parts = matcher_parts(d); parts[1] == x || parts[2] == x)
+Base.:(==)(d::DoubleMatcher, x) = _double_matches(d, x)
+Base.:(==)(x, d::DoubleMatcher) = _double_matches(d, x)
+Base.:(==)(d::DoubleMatcher, e::DoubleMatcher) = _double_matches(d, matcher_parts(e)[1]) || _double_matches(d, matcher_parts(e)[2])
+Base.:(==)(d::Type{<:DoubleMatcher}, x::Type{<:UniquePlanId}) = _double_matches(d, x)
+Base.:(==)(x::Type{<:UniquePlanId}, d::Type{<:DoubleMatcher}) = _double_matches(d, x)
+Base.:(==)(d::Type{<:DoubleMatcher}, x::UniquePlanId) = _double_matches(d, x)
+Base.:(==)(x::UniquePlanId, d::Type{<:DoubleMatcher}) = _double_matches(d, x)
+Base.:(==)(d::Type{<:DoubleMatcher}, e::Type{<:DoubleMatcher}) = d === e || any(p -> _double_matches(d, p), matcher_parts(e))
+
+"""
+    MatchAnyOf(matchers::Tuple)
+
+Matches what any of `matchers` matches, held as data (a `MatchAny` holds them in its type). Used for a state merged
+from several (`@merge`), whose matchers may carry data (`UniquePlanId`); its type holds only their types.
+"""
+struct MatchAnyOf{T<:Tuple} <: AbstractMatcher{T}
+    matchers::T
+end
+matcher_parts(m::MatchAnyOf) = getfield(m, :matchers)
+matcher_parts(::Type{MatchAnyOf{T}}) where {T} = Tuple(T.parameters)
+_any_matches(m, x) = any(p -> p == x, matcher_parts(m))
+Base.:(==)(m::MatchAnyOf, x) = _any_matches(m, x)
+Base.:(==)(x, m::MatchAnyOf) = _any_matches(m, x)
+Base.:(==)(m::MatchAnyOf, n::MatchAnyOf) = any(p -> _any_matches(m, p), matcher_parts(n))
+Base.:(==)(m::Type{<:MatchAnyOf}, x::Union{UniquePlanId, Type{<:UniquePlanId}}) = _any_matches(m, x)
+Base.:(==)(x::Union{UniquePlanId, Type{<:UniquePlanId}}, m::Type{<:MatchAnyOf}) = _any_matches(m, x)
+Base.:(==)(m::MatchAnyOf, d::DoubleMatcher) = any(p -> _double_matches(d, p), matcher_parts(m))
+Base.:(==)(d::DoubleMatcher, m::MatchAnyOf) = m == d

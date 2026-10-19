@@ -23,11 +23,8 @@ RB.init(::RBDst, c) = (; acc = 0.0)
 RB.step!(::RBDst, c) = (; acc = c.acc + c.u)
 rb_half(x) = 0.5 * x
 
-"""The `LoopAlgorithm` `resolve` sets up the registry of: the plan wrapped, finalized plans unwrapped, ids normalized."""
-function rb_loopalgorithm(plan)
-    la = plan isa RB.FinalizedAlgorithm ? RB.LoopAlgorithm(RB.inneralgorithm(plan)) : RB.LoopAlgorithm(plan)
-    return first(RB.normalize_ids(la))
-end
+"""The `LoopAlgorithm` `resolve` sets up the registry of: the plan wrapped, finalized plans unwrapped."""
+rb_loopalgorithm(plan) = plan isa RB.FinalizedAlgorithm ? RB.LoopAlgorithm(RB.inneralgorithm(plan)) : RB.LoopAlgorithm(plan)
 
 """Whether the compiled `setup_registry_and_keyed_algos` for `la` sets the registry up at run time."""
 rb_uses_runtime_path(la) =

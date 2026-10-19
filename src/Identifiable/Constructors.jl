@@ -5,7 +5,7 @@ Set an explicit name for an algorithm
 @inline function IdentifiableAlgo(f::F, contextkey::Symbol, id = nothing; customname = Symbol(), aliases...) where F
     if f isa AbstractIdentifiableAlgo # Don't wrap a IdentifiableAlgo again, just setid
         # return IdentifiableAlgo(getalgo(f), contextkey, id(f); aliases...)
-        if !isnothing(id) && !isnothing(id(f))
+        if !isnothing(id) && !isnothing(StatefulAlgorithms.id(f))
             error("Trying to wrap an IdentifiableAlgo with a new id")
         end
         return setcontextkey(f, contextkey)
@@ -20,6 +20,8 @@ Set an explicit name for an algorithm
     f = instantiate(f) # Don't wrap a type
     aliases = VarAliases(;aliases...)
 
+    # An id that is all type-level (the usual case) keeps the typed construction; one carrying data goes untyped.
+    static_id(id) === id || return identifiable_with_id(f, id, aliases, customname, contextkey)
     IdentifiableAlgo{typeof(f), id, aliases, customname, contextkey}(f)::IdentifiableAlgo{typeof(f), id, aliases, customname, contextkey}
 end
 
@@ -68,10 +70,18 @@ function Identified(f::F; customname = Symbol(), aliases...) where F
     IdentifiableAlgo{F, objectid(f), VarAliases(;aliases...), customname, Symbol()}(f)
 end
 
+"""
+    Unique(f; customname, aliases...)
+
+A handle of `f` with an identity of its own: two `Unique(f)` are two algorithms, each with its own state. Its matcher
+is `UniquePlanId{uuid}(uuid)` with a fresh uuid, so the handle is a key known from its type (`context[handle]`). A
+constructor strips the uuid from the type (`strip_unique`) and the plan numbers its handles (`number_unique_ids`), so
+plans built from new `Unique`s have the same types.
+"""
 function Unique(f; customname = Symbol(), aliases...)
     f = instantiate(f)
     if !isbits(f)
         f = deepcopy(f) # Mutable types match by identity
     end
-    IdentifiableAlgo{typeof(f), SimpleId(), VarAliases(;aliases...), customname, Symbol()}(f)
+    identifiable_with_id(f, UniquePlanId(uuid4()), VarAliases(;aliases...), customname, Symbol())
 end

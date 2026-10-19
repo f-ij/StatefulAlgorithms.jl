@@ -1,7 +1,7 @@
 #=
 Keys of a registry entry's runtime lookup table (`RegistryTypeEntry.dynamic_lookup`), which finds the algorithms that
 are not found by their type (`isstaticallyfindable` is false). The id-specific part of a key, lowering random ids to a
-`Symbol`, is in Identifiable/IdReconstruction.jl (`_lowered_matcher`, `_lowered_id_key`).
+`Symbol`, is in Identifiable/LoweredIds.jl (`_lowered_matcher`, `_lowered_id_key`).
 =#
 
 """
@@ -31,11 +31,8 @@ The key under which `obj` is stored in a registry's runtime lookup table (`Regis
 
 Ids that are different on every run are lowered to a `Symbol` naming the id's type and data, for example
 `Symbol("StatefulAlgorithms.SimpleId{Base.UUID}_9e27…")`: a new uuid then gives a new key of the same type `Symbol`,
-so storing it compiles nothing, and different id types cannot collide. A normalized handle gets the key of its
-original id, so the table is right during `resolve` already. Any other matcher is used as it is.
+so storing it compiles nothing, and different id types cannot collide. A `Unique` handle is keyed by its uuid, the same
+for every form of its `UniquePlanId` (held by the user, stripped, numbered, or in the registry's `DoubleMatcher`). Any
+other matcher is used as it is.
 """
 dynamic_lookup_key(obj) = LookupKey(_lowered_matcher(match_by(obj)))
-
-function dynamic_lookup_key(sa::IdentifiableAlgo{F, Id, VA, AlgoName, Key, R}) where {F, Id, VA, AlgoName, Key, R<:IdReconstructor}
-    return LookupKey(_lowered_id_key(reconstructor_idtype(R), getfield(getfield(sa, :reconstructor), :data)))
-end

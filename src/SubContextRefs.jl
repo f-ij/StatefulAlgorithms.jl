@@ -37,6 +37,22 @@ function scref_match(ref)
     return typeof(ValMatcher(matcher))
 end
 
+"""
+    same_scref(a, b) -> Bool
+
+Whether two SCRefs name the same subcontext before they are in one plan: compared by their matchers' data where they
+carry it (`UniquePlanId`: by uuid, since separately built plans number their handles alike), else by `scref_match`.
+An SCRef can also be a matcher type, as a route keeps an endpoint without its object.
+"""
+same_scref(a, b) = _scref_identity(a) == _scref_identity(b)
+function _scref_identity(ref)
+    ref isa Symbol && return ref
+    ref isa Type && ref <: AbstractMatcher && return ref
+    m = ref isa Type ? nothing : match_by(ref)
+    m isa Union{UniquePlanId, MatchAnyOf} && return m
+    return scref_match(ref)
+end
+
 """The object part of an SCRef, kept until the plan is resolved; `nothing` when it is already an SCKey."""
 scref_object(ref) = ref isa Symbol ? nothing : ref
 
@@ -104,6 +120,11 @@ _typematcher_target(::Type{<:TypeMatcher{T}}) where {T} = T
 
 """Return whether a matcher value has the same type-level identity as a stored matcher."""
 _matcher_matches(value, match) = value isa match
+# A handle type's matcher (`match_by(Child)`) can be a matcher type (`static_id`): its `UniquePlanId{k}` type.
+_matcher_matches(value::Type, match) = value <: match
+# A matcher holding several (the registry's `DoubleMatcher`, a merged state's `MatchAnyOf`) matches if any part does.
+_matcher_matches(value::Union{DoubleMatcher, MatchAnyOf, Type{<:DoubleMatcher}, Type{<:MatchAnyOf}}, match) =
+    any(m -> _matcher_matches(m, match), matcher_parts(value))
 _matcher_matches(value, ::Type{<:ValMatcher{V}}) where {V} = value == V || value isa ValMatcher{V}
 # A state merged from several (`@merge`) is matched by any of their ids.
 _matcher_matches(value::MatchAny, match) = any(m -> _matcher_matches(m, match), getmatchers(value))

@@ -26,9 +26,12 @@ gettype(rte::RegistryTypeEntry) = gettype(typeof(rte))
 # Finding an algorithm
 ###############################################################################
 
-"""The position of `val` in the entry, found by its matcher (`match_by`), or `nothing`."""
+"""
+The position of `val` in the entry, found by its matcher (`match_by`), or `nothing`. The type-level part of the matcher
+(`static_id`) is what is matched, so a matcher carrying data (`UniquePlanId`) compiles once per type, not per value.
+"""
 @inline function static_findfirst_match(rte::RegistryTypeEntry, val)
-    id = @inline match_by(val)
+    id = @inline static_id(match_by(val))
     @inline static_findfirst_match(rte, Val(id))
 end
 # `static_findfirst_match(rte, Val(matcher))` is generated: GeneratedCode/Registry.jl.

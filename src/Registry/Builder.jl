@@ -161,12 +161,12 @@ keyed by `Autokey`. For a `KnownByType` handle, returns a `KnownByType` of the k
 """
 Base.@nospecializeinfer function with_autokey(@nospecialize(algo), i::Int)
     algo isa KnownByType || algo isa IdentifiableAlgo || return Autokey(algo, i)
-    p = type_of(algo).parameters    # {F, Id, VarAliases, AlgoName, ContextKey, R}
+    p = type_of(algo).parameters    # {F, Id, VarAliases, AlgoName, ContextKey, M}
     p[5] == Symbol() || return algo
     KT = Core.apply_type(IdentifiableAlgo, p[1], p[2], p[3], p[4], autokey(p[1], i), p[6])
-    func, reconstructor = field_of(algo, :func), field_of(algo, :reconstructor)
-    algo isa KnownByType || return KT(func, reconstructor)
-    return KnownByType(KT, Expr(:call, KT, func.expr, reconstructor.expr), Any[func, reconstructor])
+    func, matcher = field_of(algo, :func), field_of(algo, :matcher)
+    algo isa KnownByType || return KT(func, matcher)
+    return KnownByType(KT, Expr(:call, KT, func.expr, matcher.expr), Any[func, matcher])
 end
 
 # Keys of an algorithm: of the value, or, for a `KnownByType` (always a handle), from its type.
@@ -182,8 +182,9 @@ has_given_key(@nospecialize(x)) = has_key(x) && !has_autokey(x)
 """
     RuntimeLookupKey(id, expr)
 
-A runtime lookup key known only at run time, while a layout is worked out from types: the key of a normalized handle
-comes from its `reconstructor` value (`dynamic_lookup_key`), which `expr` reads. Equal for the same normalized id `id`.
+A runtime lookup key known only at run time, while a layout is worked out from types: the key of a `Unique` handle
+comes from the uuid in its `matcher` value (`dynamic_lookup_key`), which `expr` reads. Equal for the same id `id` (the
+handle's `UniquePlanId{k}` type).
 """
 struct RuntimeLookupKey
     id::Any
@@ -196,12 +197,13 @@ Base.hash(a::RuntimeLookupKey, h::UInt) = hash(a.id, hash(RuntimeLookupKey, h))
     lookup_key(algo) -> LookupKey
 
 The key of `algo` in its entry's runtime lookup table (`dynamic_lookup_key`). For a `KnownByType`, worked out from its
-type, as `dynamic_lookup_key` does for a value; for a normalized handle (`IdReconstructor`), a `RuntimeLookupKey`.
+type, as `dynamic_lookup_key` does for a value; for a handle whose matcher carries data (`UniquePlanId`), a
+`RuntimeLookupKey`.
 """
 Base.@nospecializeinfer function lookup_key(@nospecialize(algo))
     algo isa KnownByType || return dynamic_lookup_key(algo)
     T = algo.type
-    T.parameters[6] <: IdReconstructor && return LookupKey(RuntimeLookupKey(id(T), algo.expr))
+    T.parameters[6] <: UniquePlanId && return LookupKey(RuntimeLookupKey(id(T), algo.expr))
     return LookupKey(_lowered_matcher(entry_matcher(T)))
 end
 

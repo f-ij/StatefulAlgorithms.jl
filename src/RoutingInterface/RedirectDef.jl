@@ -53,6 +53,9 @@ function Redirect(
     }(from_ref, to_ref)
 end
 
+# The endpoint matchers (parameters 1, 2) are those of the endpoint fields `from`, `to` (Identifiable/UniquePlanIds.jl).
+scref_derived_params(::Type{<:Redirect}) = (1 => 1, 2 => 2)
+
 """Construct a resolved redirect from its type parameters."""
 function Redirect{Fmatch, Tmatch, varnames, aliases, Nothing, Nothing}() where {Fmatch, Tmatch, varnames, aliases}
     _assert_resolved_endpoint(Fmatch, "Redirect origin")

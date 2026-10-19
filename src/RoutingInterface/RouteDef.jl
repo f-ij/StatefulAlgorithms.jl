@@ -57,6 +57,9 @@ Base.@nospecializeinfer function Route(
     }(from_ref, to_ref)
 end
 
+# The endpoint matchers (parameters 1, 2) are those of the endpoint fields `from`, `to` (Identifiable/UniquePlanIds.jl).
+scref_derived_params(::Type{<:Route}) = (1 => 1, 2 => 2)
+
 """Construct a resolved route from its type parameters."""
 function Route{Fmatch, Tmatch, FT, RFT, varnames, aliases, Nothing, Nothing}() where {Fmatch, Tmatch, FT, RFT, varnames, aliases}
     _assert_resolved_endpoint(Fmatch, "Route origin")

@@ -15,12 +15,13 @@ Resolving a plan: everything that can only be decided once the whole composition
    captured returns its children see by name (`Scope`), and routes that read them point at
    their slots.
 
+5. Registry matchers: the registry stores each `Unique` handle with its `DoubleMatcher` (`registry_matchers`,
+   Identifiable/UniquePlanIds.jl), so the handle the user holds finds its entry.
+
 Steps 1 and 2 are in Registering.jl, step 3 in Wiring.jl, step 4 in Scopes.jl. `resolve` and the other entry points
-are below. NormalizeIds.jl makes plans that differ only in `Unique` ids one plan type, and Typed.jl is the inferred
-version of the steps. What a plan type provides (its getters, `rebuild_plan`) is in LoopAlgorithms/Interface.jl.
+are below. Typed.jl is the inferred version of the steps. What a plan type provides (its getters, `rebuild_plan`) is in LoopAlgorithms/Interface.jl.
 =#
 
-include("NormalizeIds.jl")
 include("Registering.jl")
 include("Wiring.jl")
 include("Scopes.jl")
@@ -35,16 +36,13 @@ registry, and collects the `RootOption`s of the plan tree. The returned value is
 `FinalizedAlgorithm`, in which case the finalized outer shape is preserved and
 its inner loop is materialized.
 
-`resolve` itself is compiled once (its result is not inferred; a caller gets `Any`). Plans with `Unique` handles have
-their random ids normalized first, so the same layout with new ids is the same plan type and compiles nothing again
-(NormalizeIds.jl). The steps are then run by `_resolve_plan`, compiled once per plan type. The inferred version, for a
-caller that knows the plan type, is `_resolve_plan_typed` (Typed.jl).
+`resolve` itself is compiled once (its result is not inferred; a caller gets `Any`). The steps are run by
+`_resolve_plan`, compiled once per plan type; a plan's `Unique` handles are numbered when it is built
+(`number_unique_ids`), so the same layout with new handles is the same plan type and compiles nothing again. Only the
+last step, which puts the handles' uuids into the registry (`registry_matchers`), works per uuid, untyped. The inferred
+version, for a caller that knows the plan type, is `_resolve_plan_typed` (Typed.jl).
 """
-Base.@nospecializeinfer function resolve(@nospecialize(la::LoopSpec))
-    normalized, found = normalize_ids(la)
-    found || return _resolve_plan(la)
-    return normalized |> _resolve_plan |> restore_original_ids
-end
+Base.@nospecializeinfer resolve(@nospecialize(la::LoopSpec)) = registry_matchers(_resolve_plan(la))
 
 """
 Run the steps of resolving `la` (see the top of this file) and return the resolved plan. Compiled for the plan's type
@@ -88,17 +86,17 @@ algorithms get keys that do not clash across them (the second algorithm's `Senso
 Meant for multi-stage runs: prepare several algorithms at once, then run each separately, each in its own process.
 """
 function resolve(la1::LA1, la2::LA2, las::Vararg{LoopSpec}) where {LA1<:LoopSpec, LA2<:LoopSpec}
-    loopalgorithms = (la1, la2, las...)
+    # Each plan numbered its `Unique` handles on its own; one registry needs one numbering over all of them.
+    loopalgorithms = number_unique_ids((la1, la2, las...))
     registry, keyed_loopalgorithms = _build_shared_registry_and_keyed_algos(loopalgorithms)
-    return map(keyed -> _resolve_keyed_plan(keyed, registry), keyed_loopalgorithms)
+    return registry_matchers(map(keyed -> _resolve_keyed_plan(keyed, registry), keyed_loopalgorithms))
 end
 
 @inline resolve(loopalgorithms::Tuple{Vararg{LoopSpec}}) = resolve(loopalgorithms...)
 
 """Build one registry for several loop algorithms and return it with each algorithm's keyed plan tree."""
 # TODO: unlike `resolve(la)`, the `resolve(la1, la2, ...)` calling this is compiled for every combination of plan types
-# (no unspecialized entry), skips the `isresolved` check and `Unique` id normalization (so each new id compiles it
-# again), and a `FinalizedAlgorithm` argument fails (`LoopAlgorithm(::FinalizedAlgorithm)` has no method). Route it
+# (no unspecialized entry), skips the `isresolved` check, and a `FinalizedAlgorithm` argument fails (`LoopAlgorithm(::FinalizedAlgorithm)` has no method). Route it
 # through the same steps as `resolve(la)`.
 Base.@nospecializeinfer function _build_shared_registry_and_keyed_algos(@nospecialize(loopalgorithms::Tuple))
     builder = RegistryBuilder()

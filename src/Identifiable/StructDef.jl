@@ -22,13 +22,30 @@ Algorithm assigned to a namespace in a context
     AlgoName can be used when fusing multiple algorithms to give them custom names
 
 """
-struct IdentifiableAlgo{F, Id, VarAliases, AlgoName, Key, R} <: AbstractIdentifiableAlgo{F, Id, VarAliases, AlgoName, Key}
+struct IdentifiableAlgo{F, Id, VarAliases, AlgoName, Key, M} <: AbstractIdentifiableAlgo{F, Id, VarAliases, AlgoName, Key}
     func::F
-    # `nothing` (`R = Nothing`, no extra bytes), or an `IdReconstructor` when `Id` is a `NormalizedId` that `resolve`
-    # put in place of a random id; it holds what is needed to rebuild the original id (IdReconstruction.jl).
-    reconstructor::R
+    # The matcher as data when it carries data (`UniquePlanId`): `Id` is then its type (`static_id`). `nothing`
+    # (`M = Nothing`, no extra bytes) for every other id, which `Id` holds itself.
+    matcher::M
 end
 
-# Every handle except a normalized one: no reconstructor.
+# A handle whose id is all in its type.
 IdentifiableAlgo{F, Id, VarAliases, AlgoName, Key}(func) where {F, Id, VarAliases, AlgoName, Key} =
     IdentifiableAlgo{F, Id, VarAliases, AlgoName, Key, Nothing}(func, nothing)
+
+"""
+    identifiable_with_id(func, id, aliases, algoname, key) -> IdentifiableAlgo
+
+The handle of `func` with id `id`: `static_id(id)` in its type, and `id` in its `matcher` field when it carries data.
+"""
+Base.@nospecializeinfer function identifiable_with_id(@nospecialize(func), @nospecialize(id), @nospecialize(aliases), @nospecialize(algoname), @nospecialize(key))
+    sid = static_id(id)
+    field = sid === id ? nothing : id
+    return Core.apply_type(IdentifiableAlgo, typeof(func), sid, aliases, algoname, key, typeof(field))(func, field)
+end
+
+"""The handle `sa` with matcher `id` (`identifiable_with_id`); everything else is kept."""
+Base.@nospecializeinfer function setmatcher(@nospecialize(sa::IdentifiableAlgo), @nospecialize(id))
+    p = typeof(sa).parameters
+    return identifiable_with_id(getfield(sa, :func), id, p[3], p[4], p[5])
+end
