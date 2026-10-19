@@ -1,7 +1,14 @@
 export Process, getallocator, getnewallocator, getcontext, getticks
 
 
-mutable struct Process{F,LT,C} <: AbstractProcess
+"""
+    ProcessCore{F, LT, C}
+
+The mutable part of a `Process`: its plan (`F`, with the registry SA works with, whose `Unique` handles are numbered),
+its lifetime, counters, flags and task. The loop gets this object, so its type, and so the compiled loop, is the same for
+every new set of `Unique` handles. Every method on `AnyProcess` works on it and on the `Process` around it.
+"""
+mutable struct ProcessCore{F,LT,C} <: AbstractProcess
     id::UUID
     algo::F
     lifetime::Lifetime
@@ -24,14 +31,44 @@ mutable struct Process{F,LT,C} <: AbstractProcess
     threadid::Int
 end
 
-@setterGetter Process lock shouldrun runtime_context
+@setterGetter ProcessCore lock shouldrun runtime_context
+
 """
-    getloopcursor(p::Process)
+    Process{F, LT, C, R}
+
+What `Process(...)` returns: the `ProcessCore` (field `core`, all other fields are read and written through to it) and,
+as `R`, the type of the registry handed to the user (`with_held_ids`), in which the `Unique` handles the user holds are
+keys found from types. `context(p)` is inferred from `p`'s type; the loop runs on the core.
+"""
+struct Process{F,LT,C,R} <: AbstractProcess
+    core::ProcessCore{F,LT,C}
+    held_registry::R    # the registry `Ref` handed to the user (`with_held_ids`), or `nothing`
+end
+const AnyProcess = Union{Process, ProcessCore}
+
+"""The `ProcessCore` of a process (itself for a core)."""
+@inline getcore(p::Process) = getfield(p, :core)
+@inline getcore(p::ProcessCore) = p
+@inline Base.getproperty(p::Process, name::Symbol) = getproperty(getcore(p), name)
+@inline Base.getproperty(p::Process, name::Symbol, order::Symbol) = getproperty(getcore(p), name, order)
+@inline Base.setproperty!(p::Process, name::Symbol, value) = setproperty!(getcore(p), name, value)
+@inline Base.setproperty!(p::Process, name::Symbol, value, order::Symbol) = setproperty!(getcore(p), name, value, order)
+Base.propertynames(p::Process) = fieldnames(ProcessCore)
+# The getters and setters `@setterGetter` made for the core, for the process around it.
+for name in fieldnames(ProcessCore)
+    name in (:lock, :shouldrun, :runtime_context) && continue
+    @eval @inline $name(p::Process) = $name(getcore(p))
+    @eval @inline $(Symbol(name, :!))(p::Process, val) = $(Symbol(name, :!))(getcore(p), val)
+    @eval @inline $name(p::Process, val) = $name(getcore(p), val)
+end
+"""
+    getloopcursor(p::AnyProcess)
 
 Return the loop cursor stored by a paused run, always as the plan's cursor type `C`.
 Throws a `TypeError` when no cursor is stored.
 """
-@inline getloopcursor(p::Process{F,LT,C}) where {F,LT,C} = p.loop_cursor::C
+@inline getloopcursor(p::ProcessCore{F,LT,C}) where {F,LT,C} = p.loop_cursor::C
+@inline getloopcursor(p::Process) = getloopcursor(getcore(p))
 
 """
 Get value of run of a process, denoting wether it should run or not
@@ -41,19 +78,19 @@ time, so the check must stay per repeat: checking only once per routine child (o
 pause or close wait for the child's remaining repeats and kill interactivity. The check costs a little per repeat
 and keeps the compiler from writing a routine's repeats out one after another (perf/README.md shows the cost).
 """
-shouldrun(p::Process) = @atomic :monotonic p.shouldrun   # atomic (no ordering barrier): re-read every step, so pause/close are seen
+shouldrun(p::AnyProcess) = @atomic :monotonic p.shouldrun   # atomic (no ordering barrier): re-read every step, so pause/close are seen
 """
 Set value of run of a process, denoting wether it should run or not
 """
-shouldrun(p::Process, val) = @atomic p.shouldrun = val
+shouldrun(p::AnyProcess, val) = @atomic p.shouldrun = val
 
 # Loop counting
-@inline looptick!(p::Process) = (p.tickidx = p.tickidx + UInt(1))
-@inline tick!(p::Process) = (p.tickidx = p.tickidx + UInt(1))
-@inline getticks(p::Process) = p.tickidx
-@inline reset_ticks!(p::Process) = (p.tickidx = UInt(1))
+@inline looptick!(p::AnyProcess) = (p.tickidx = p.tickidx + UInt(1))
+@inline tick!(p::AnyProcess) = (p.tickidx = p.tickidx + UInt(1))
+@inline getticks(p::AnyProcess) = p.tickidx
+@inline reset_ticks!(p::AnyProcess) = (p.tickidx = UInt(1))
 
-@inline function _process_state_label(p::Process)
+@inline function _process_state_label(p::AnyProcess)
     if ispaused(p)
         return "Paused"
     elseif isrunning(p)
@@ -65,7 +102,7 @@ shouldrun(p::Process, val) = @atomic p.shouldrun = val
     end
 end
 
-@inline function _process_algo_summary(p::Process)
+@inline function _process_algo_summary(p::AnyProcess)
     return sprint(summary, getalgo(p))
 end
 
@@ -177,14 +214,25 @@ function _finish_process_constructor_with_context(algo::A, prepared_context::PC,
 
     # p = Process(uuid1(), context, td, timeout, nothing, UInt(1), UInt(1), Threads.ReentrantLock(), false, true, nothing, nothing, Arena(), RuntimeListeners(), 0)
     C = typeof(loop_cursor(getplan(algo), Val(true)))
-    p = Process{typeof(algo),typeof(lifetime),C}(uuid1(), algo, lifetime, nothing, nothing, timeout, nothing, UInt(1), UInt(1), Threads.ReentrantLock(), false, true, nothing, nothing, nothing, RuntimeListeners(), 0)
+    core = ProcessCore{typeof(algo),typeof(lifetime),C}(uuid1(), algo, lifetime, nothing, nothing, timeout, nothing, UInt(1), UInt(1), Threads.ReentrantLock(), false, true, nothing, nothing, nothing, RuntimeListeners(), 0)
 
-    register_process!(p)
-    schedule_loop_precompile!(p, lifetime)
-    @DebugMode "Created process with id $(p.id), now preparing data"
-    
-    finalizer(remove_process!, p)
-    return p
+    register_process!(core)
+    schedule_loop_precompile!(core, lifetime)
+    @DebugMode "Created process with id $(core.id), now preparing data"
+
+    finalizer(remove_process!, core)
+    return _wrap_process(core)
+end
+
+"""
+The `Process` around `core`: its `R` is the type of the registry handed to the user (`_held_registry_ref`), `Nothing`
+when the context has none. Made without compiling a constructor per type (a new `R` for every set of `Unique` handles).
+"""
+Base.@nospecializeinfer function _wrap_process(@nospecialize(core::ProcessCore))
+    ref = registryref(getpersistentcontext(getalgo(core)))
+    held = ref isa Base.RefValue ? _held_registry_ref(ref) : nothing
+    T = typeof(core).parameters
+    return new_instance(Core.apply_type(Process, T[1], T[2], T[3], typeof(held)), core, held)
 end
 
 @inline function _process_constructor_algo(algo::LA, ::Nothing, inputs_overrides::Tuple{}, lifetime::LT) where {LA<:LoopSpec, LT}
@@ -207,11 +255,11 @@ function Process(func, repeats::Int; overrides = tuple(), timeout = 1.0, context
     return Process(func, overrides_tuple...; repeats = repeats, timeout, context)
 end
 
-Base.:(==)(p1::Process, p2::Process) = p1.id == p2.id
+Base.:(==)(p1::AnyProcess, p2::AnyProcess) = p1.id == p2.id
 
-getalgo(p::P) where {P<:Process} = p.algo
+getalgo(p::P) where {P<:AnyProcess} = p.algo
 """The process's context as SA works with it: its registry stores `Unique` handles numbered (see `context`)."""
-function _context(p::P) where {P<:Process}
+function _context(p::P) where {P<:AnyProcess}
     runtime_context = p.runtime_context
     return isnothing(runtime_context) ? getpersistentcontext(getalgo(p)) : runtime_context
 end
@@ -222,7 +270,17 @@ end
 The process's context, with the `Unique` handles the user holds as keys found from types (`with_held_ids`):
 `context(p)[handle]`.
 """
-Base.@nospecializeinfer context(@nospecialize(p::Process)) = with_held_ids(_context(p))
+Base.@nospecializeinfer context(@nospecialize(p::AnyProcess)) = with_held_ids(_context(p))
+
+# For a `Process`, the registry type handed to the user is `R`, so the context is inferred from `p`'s type while the
+# typed context is current (as `context` is on a process without `Unique` handles).
+function context(p::Process{F,LT,C,R}) where {F,LT,C,R}
+    runtime_context = getcore(p).runtime_context
+    isnothing(runtime_context) || return with_held_ids(runtime_context)
+    return _held_context(getpersistentcontext(getalgo(p)), getfield(p, :held_registry))
+end
+@inline _held_context(c::ProcessContext, ::Nothing) = c
+@inline _held_context(c::ProcessContext{D}, held::R) where {D, R} = ProcessContext{D,R}(get_subcontexts(c), held)
 
 """
 Store one live process context in the dynamic runtime slot.
@@ -231,7 +289,7 @@ Use this while a `Process` is still resumable, for example after a pause or
 before a run with per-call lifetime changes. The stored value may intentionally
 deviate from the lifecycle context carried in `p.algo`.
 """
-@inline function _store_runtime_context!(p::P, c::C) where {P<:Process, C}
+@inline function _store_runtime_context!(p::P, c::C) where {P<:AnyProcess, C}
     context(p, c)
     return c
 end
@@ -244,7 +302,7 @@ context, the lifecycle wrapper in `p.algo` is rebuilt so later runs keep using
 the typed fast path. Only genuine shape changes fall back to the dynamic
 `runtime_context` slot.
 """
-@inline function commit_context!(p::P, c::C) where {P<:Process, C}
+@inline function commit_context!(p::P, c::C) where {P<:AnyProcess, C}
     algo = getalgo(p)
     persistent_context = getpersistentcontext(algo)
 
@@ -259,49 +317,49 @@ the typed fast path. Only genuine shape changes fall back to the dynamic
     return c
 end
 
-function context(p::P, c::C) where {P<:Process, C}
+function context(p::P, c::C) where {P<:AnyProcess, C}
     p.runtime_context = c
     return c
 end
 
-@inline _has_typed_runtime_context(p::P) where {P<:Process} = isnothing(p.runtime_context)
-@inline _typed_runtime_context(p::P) where {P<:Process} = getpersistentcontext(getalgo(p))
+@inline _has_typed_runtime_context(p::P) where {P<:AnyProcess} = isnothing(p.runtime_context)
+@inline _typed_runtime_context(p::P) where {P<:AnyProcess} = getpersistentcontext(getalgo(p))
 
-function getcontext(p::Process)
+function getcontext(p::AnyProcess)
     return context(p)
 end
 
-getcontext(p::Process, context) = getcontext(p)[context]
-set_starttime!(p::Process) = p.starttime = time_ns()
-set_endtime!(p::Process) = p.endtime = time_ns()
-reset_times!(p::Process) = (p.starttime = nothing; p.endtime = nothing)
+getcontext(p::AnyProcess, context) = getcontext(p)[context]
+set_starttime!(p::AnyProcess) = p.starttime = time_ns()
+set_endtime!(p::AnyProcess) = p.endtime = time_ns()
+reset_times!(p::AnyProcess) = (p.starttime = nothing; p.endtime = nothing)
 
 runtimelisteners(::Any) = nothing
-runtimelisteners(p::Process) = p.rls
+runtimelisteners(p::AnyProcess) = p.rls
 
-isthreaded(p::Process) = true
+isthreaded(p::AnyProcess) = true
 
 """
 different loopfunction can be passed to the process through overrides
 """
-function getloopfunc(p::Process)
+function getloopfunc(p::AnyProcess)
     loop
 end
 
 
 
 
-# function Base.finalizer(p::Process)
+# function Base.finalizer(p::AnyProcess)
 #     quit(p)
 #     delete!(processlist, p.id)
 # end
 
-function runtime(p::Process)
+function runtime(p::AnyProcess)
     @assert !isnothing(p.starttime) "Process has not started"
     return runtime_ns(p) / 1e9
 end
 
-function runtime_ns(p::Process)
+function runtime_ns(p::AnyProcess)
     @assert !isnothing(p.starttime) "Process has not started"
     timens = isnothing(p.endtime) ? time_ns() - p.starttime : p.endtime - p.starttime
     return Int(timens)
@@ -309,7 +367,7 @@ end
 export runtime_ns, runtime
 
 # Exact time the process stopped in hh:mm:ss
-function stop_time(p::Process)
+function stop_time(p::AnyProcess)
     if isdone(p)
         return Dates.format(Dates.DateTime(p.endtime), "HH:MM:SS")
     else
@@ -317,7 +375,7 @@ function stop_time(p::Process)
     end
 end
 
-function createfrom!(p1::Process, p2::Process)
+function createfrom!(p1::AnyProcess, p2::AnyProcess)
     p1.algo = p2.algo
     commit_context!(p1, context(p2))
     p1.loop_cursor = nothing
@@ -336,14 +394,14 @@ function timedwait(p, timeout = wait_timeout)
     return isdone(p)
 end
 
-@inline lock(p::Process) = lock(p.lock)
-@inline lock(f, p::Process) = lock(f, p.lock)
-@inline unlock(p::Process) =  unlock(p.lock)
+@inline lock(p::AnyProcess) = lock(p.lock)
+@inline lock(f, p::AnyProcess) = lock(f, p.lock)
+@inline unlock(p::AnyProcess) =  unlock(p.lock)
 
 """
 Runs the prepared task of a process on a thread
 """
-function makeloop!(p::Process, inputs::NamedTuple = (;); threaded = true, loopfunc::LF = loop) where {LF}
+function makeloop!(p::AnyProcess, inputs::NamedTuple = (;); threaded = true, loopfunc::LF = loop) where {LF}
     if _has_typed_runtime_context(p)
         runtime_context = _typed_runtime_context(p)
         return _makeloop!(p, inputs, lifetime(p), runtime_context; threaded, loopfunc)
@@ -352,7 +410,7 @@ function makeloop!(p::Process, inputs::NamedTuple = (;); threaded = true, loopfu
     end
 end
 
-function makeloop!(p::Process, inputs::NamedTuple, lt; threaded = true, loopfunc::LF = loop) where {LF}
+function makeloop!(p::AnyProcess, inputs::NamedTuple, lt; threaded = true, loopfunc::LF = loop) where {LF}
     if _has_typed_runtime_context(p)
         return _makeloop!(p, inputs, lt, _typed_runtime_context(p); threaded, loopfunc)
     else
@@ -360,13 +418,13 @@ function makeloop!(p::Process, inputs::NamedTuple, lt; threaded = true, loopfunc
     end
 end
 
-@noinline _makeloop_dynamic!(p::Process, inputs::NamedTuple; threaded = true, loopfunc::LF = loop) where {LF} =
+@noinline _makeloop_dynamic!(p::AnyProcess, inputs::NamedTuple; threaded = true, loopfunc::LF = loop) where {LF} =
     _makeloop!(p, inputs, lifetime(p), _context(p); threaded, loopfunc)
 
-@noinline _makeloop_dynamic!(p::Process, inputs::NamedTuple, lt; threaded = true, loopfunc::LF = loop) where {LF} =
+@noinline _makeloop_dynamic!(p::AnyProcess, inputs::NamedTuple, lt; threaded = true, loopfunc::LF = loop) where {LF} =
     _makeloop!(p, inputs, lt, _context(p); threaded, loopfunc)
 
-function _makeloop!(p::Process, inputs::NamedTuple, lt, base_context; threaded = true, loopfunc::LF = loop) where {LF}
+function _makeloop!(p::AnyProcess, inputs::NamedTuple, lt, base_context; threaded = true, loopfunc::LF = loop) where {LF}
     @atomic p.paused = false
     @atomic p.shouldrun = true
     p.lastresult = nothing
@@ -376,7 +434,7 @@ function _makeloop!(p::Process, inputs::NamedTuple, lt, base_context; threaded =
     return _makeloop_prepared!(p, func, base_context, lt, inputs; threaded, loopfunc)
 end
 
-function _makeloop_prepared!(p::P, func::F, runtime_context::C, lt::LT, inputs::I; threaded::Bool = true, loopfunc::LF = loop, resume::R = Resuming{false}()) where {P<:Process, F, C, LT, I<:NamedTuple, LF, R<:Resuming}
+function _makeloop_prepared!(p::P, func::F, runtime_context::C, lt::LT, inputs::I; threaded::Bool = true, loopfunc::LF = loop, resume::R = Resuming{false}()) where {P<:AnyProcess, F, C, LT, I<:NamedTuple, LF, R<:Resuming}
     wait_loop_precompile!(p, func, runtime_context, lt, inputs, resume; loopfunc)
     # `@noinline`: the loop is compiled as its own function with `p` as an argument, so LLVM knows `p` can be read and
     # keeps counters such as `p.tickidx` in a register (inlined into the task closure, it wrote them to memory every repeat).
@@ -388,7 +446,7 @@ function _makeloop_prepared!(p::P, func::F, runtime_context::C, lt::LT, inputs::
     return p
 end
 
-function _resume_paused_loop!(p::Process; threaded = true)
+function _resume_paused_loop!(p::AnyProcess; threaded = true)
     wait(p)
     @atomic p.shouldrun = true
     p.lastresult = nothing
@@ -399,7 +457,7 @@ function _resume_paused_loop!(p::Process; threaded = true)
     return _makeloop_prepared!(p, func, runtime_context, lt, (;); threaded, resume = Resuming{true}())
 end
 
-makeloop!(p::Process, lt::Lifetime; threaded = true, loopfunc::LF = loop) where {LF} =
+makeloop!(p::AnyProcess, lt::Lifetime; threaded = true, loopfunc::LF = loop) where {LF} =
     makeloop!(p, (;), lt; threaded, loopfunc)
 
 """
@@ -421,7 +479,7 @@ It does not change `process.runtime_context`, `process.task`, or
 `process.lastresult`. It does not clear or replace values stored in
 `context(process)`.
 """
-function reset!(p::Process)
+function reset!(p::AnyProcess)
     reset_loopidx!(p)
     reset_ticks!(p)
     p.loop_cursor = nothing
@@ -435,10 +493,10 @@ end
 
 ### LINKING
 
-link_process!(p1::Process, p2::Process) = push!(p1.linked_processes, p2)
-unlink_process!(p1::Process, p2::Process) = filter!(x -> x != p2, p1.linked_processes)
+link_process!(p1::AnyProcess, p2::AnyProcess) = push!(p1.linked_processes, p2)
+unlink_process!(p1::AnyProcess, p2::AnyProcess) = filter!(x -> x != p2, p1.linked_processes)
 
-function Base.show(io::IO, p::Process)
+function Base.show(io::IO, p::AnyProcess)
     if !isnothing(p.task) && p.task._isexception
         print(io, "Error in process")
         return display(p.task)
@@ -448,11 +506,11 @@ function Base.show(io::IO, p::Process)
     return nothing
 end
 
-function Base.summary(io::IO, p::Process)
+function Base.summary(io::IO, p::AnyProcess)
     print(io, "Process(", _process_algo_summary(p), ")")
 end
 
-function Base.show(io::IO, ::MIME"text/plain", p::Process)
+function Base.show(io::IO, ::MIME"text/plain", p::AnyProcess)
     if !isnothing(p.task) && p.task._isexception
         print(io, "Error in process")
         return display(p.task)

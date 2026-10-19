@@ -97,7 +97,7 @@ end
 """
 Gives the maximum loop index for a process
 """
-function maximum_loopidx(p::Process)
+function maximum_loopidx(p::AnyProcess)
     return repeats(p)
 end
 
@@ -157,7 +157,7 @@ Return the fraction of the configured finite repeat bound already executed.
 The value is clamped to `[0, 1]`. Indefinite lifetimes report `0.0`, while a
 completed zero-repeat process reports `1.0`.
 """
-function progress(p::Process)
+function progress(p::AnyProcess)
     total = maximum_loopidx(p)
     isfinite(total) || return 0.0
     total > 0 || return isdone(p) ? 1.0 : 0.0
@@ -169,7 +169,7 @@ end
 """
 Gives an estimate of the remaining time for the process
 """
-function est_remaining(p::Process)
+function est_remaining(p::AnyProcess)
     # TODO: progress can now be 0.0 (before the first step, or after close), so rt / prog is Inf and floor(Int, Inf) throws InexactError.
     prog = progress(p)
     rt = runtime(p)
@@ -185,7 +185,7 @@ function est_remaining(p::Process)
     println("Of which remaining: $hours:$minutes:$seconds")
 end
 
-function incs_per_sec(p::Process)
+function incs_per_sec(p::AnyProcess)
     loopidx(p) / runtime(p)
 end
 

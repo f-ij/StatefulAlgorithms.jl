@@ -22,7 +22,7 @@ with its own stop condition (`Until`, `AtLeast`, ...) adds a method next to its 
 checks that condition, read from `context`.
 
 Repeats can run for a very long time, so a pause or close of a `Process` must be seen between any two of them, not once
-per child. See `shouldrun(::Process)`. A routine child's own stop condition is `_routine_breakcondition`.
+per child. See `shouldrun(::AnyProcess)`. A routine child's own stop condition is `_routine_breakcondition`.
 """
 @inline _process_breakcondition(lifetime::LT, process::P, context::C) where {LT<:Lifetime,P<:AbstractProcess,C} =
     @inline !shouldrun(process)

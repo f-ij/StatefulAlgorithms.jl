@@ -535,7 +535,7 @@ end
 #===================================================================================================================
 Section: printing. `show` of a Process, a plan (plain and resolved), a context and an InlineProcess, as the REPL
 does after each line.
-Unique: first `show(io, MIME"text/plain"(), ::Process)` −0.095 s (user), −0.15 s in all for the user scenario; the
+Unique: first `show(io, MIME"text/plain"(), ::AnyProcess)` −0.095 s (user), −0.15 s in all for the user scenario; the
 rest of that call (≈0.065 s) is compiled for every new Process type. Cost: +0.1 s precompile, +0.6 MB.
 ===================================================================================================================#
 #== section: show ==#
