@@ -122,8 +122,9 @@ _typematcher_target(::Type{<:TypeMatcher{T}}) where {T} = T
 _matcher_matches(value, match) = value isa match
 # A handle type's matcher (`match_by(Child)`) can be a matcher type (`static_id`): its `UniquePlanId{k}` type.
 _matcher_matches(value::Type, match) = value <: match
-# A merged state's matcher (`MatchAnyOf`) matches if any of its parts does.
-_matcher_matches(value::Union{MatchAnyOf, Type{<:MatchAnyOf}}, match) = any(m -> _matcher_matches(m, match), matcher_parts(value))
+# A matcher holding several (the registry's `DoubleMatcher`, a merged state's `MatchAnyOf`) matches if any part does.
+_matcher_matches(value::Union{DoubleMatcher, MatchAnyOf, Type{<:DoubleMatcher}, Type{<:MatchAnyOf}}, match) =
+    any(m -> _matcher_matches(m, match), matcher_parts(value))
 # A held `Unique` handle (`UniquePlanId{uuid}`, as a `Var` of it stores it) names the entry with that uuid.
 _matcher_matches(value::UniquePlanId, ::Type{UniquePlanId{N}}) where {N} = N isa UUID ? origin(value) == N : value isa UniquePlanId{N}
 _matcher_matches(value, ::Type{<:ValMatcher{V}}) where {V} = value == V || value isa ValMatcher{V}

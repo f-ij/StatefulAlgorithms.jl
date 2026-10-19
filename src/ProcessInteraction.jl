@@ -65,7 +65,7 @@ function _cleanup_paused_process!(p::Process, fetched_result)
     # A paused task already stored its live runtime context when the loop exited.
     # `close` turns that paused lifecycle into a final one, so cleanup must run
     # here because the loop will not re-enter `after_while`.
-    cleanup_context = fetched_result isa AbstractContext ? fetched_result : context(p)
+    cleanup_context = fetched_result isa AbstractContext ? fetched_result : _context(p)
     cleanup_runtime_context = @inline _initial_runtime_context(get_inputs(cleanup_context), get_declared_locals(cleanup_context))
     cleanup_state_context = @inline _paused_state_context(cleanup_context)
     cleaned = @inline cleanup(getalgo(p), LoopContext(cleanup_state_context, cleanup_runtime_context))
@@ -89,7 +89,7 @@ function Base.close(p::Process)
     try
         wait(p)
         if !isnothing(p.task)
-            fetched_result = fetch(p)
+            fetched_result = _fetch(p)
             p.lastresult = fetched_result
         end
 
@@ -182,7 +182,7 @@ afterwards.
 """
 function reinit(p::Process, target; inputs = (;), overrides = (;))
     pause(p)
-    commit_context!(p, initcontext(context(p), target; inputs, overrides))
+    commit_context!(p, initcontext(_context(p), target; inputs, overrides))
     run(p)
     return true
 end
@@ -210,10 +210,10 @@ end
 #     end    
 # end
 
-"""
-Fetch the return value of a process
-"""
-@inline Base.fetch(@nospecialize(p::Process)) = if !isnothing(p.task) fetch(p.task) else p.lastresult end
+"""The run's result as SA works with it (see `fetch`)."""
+@inline _fetch(@nospecialize(p::Process)) = if !isnothing(p.task) fetch(p.task) else p.lastresult end
+"""Fetch the return value of a process; a context comes with the `Unique` handles the user holds as keys found from types (`with_held_ids`)."""
+Base.@nospecializeinfer Base.fetch(@nospecialize(p::Process)) = with_held_ids(_fetch(p))
 
 """
 Quit all processes in the process list

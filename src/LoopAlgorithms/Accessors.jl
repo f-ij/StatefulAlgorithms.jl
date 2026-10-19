@@ -46,7 +46,8 @@ Base.isempty(wiring::PlanWiring) =
 @inline getpersistentcontext(cla::LoopAlgorithm) = getfield(cla, :context)
 @inline getstoredinits(cla::LoopAlgorithm) = getfield(cla, :inits)
 @inline getstoredoverrides(cla::LoopAlgorithm) = getfield(cla, :overrides)
-@inline context(cla::LoopAlgorithm) = getpersistentcontext(cla)
+"""The plan's persistent context, with the `Unique` handles the user holds as keys found from types (`with_held_ids`)."""
+Base.@nospecializeinfer context(@nospecialize(cla::LoopAlgorithm)) = with_held_ids(getpersistentcontext(cla))
 
 @inline getalgos(cla::LoopAlgorithm) = getalgos(getplan(cla))
 """Return a copy of `cla` whose plan has the children `funcs`."""

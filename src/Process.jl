@@ -210,10 +210,19 @@ end
 Base.:(==)(p1::Process, p2::Process) = p1.id == p2.id
 
 getalgo(p::P) where {P<:Process} = p.algo
-function context(p::P) where {P<:Process}
+"""The process's context as SA works with it: its registry stores `Unique` handles numbered (see `context`)."""
+function _context(p::P) where {P<:Process}
     runtime_context = p.runtime_context
     return isnothing(runtime_context) ? getpersistentcontext(getalgo(p)) : runtime_context
 end
+
+"""
+    context(p)
+
+The process's context, with the `Unique` handles the user holds as keys found from types (`with_held_ids`):
+`context(p)[handle]`.
+"""
+Base.@nospecializeinfer context(@nospecialize(p::Process)) = with_held_ids(_context(p))
 
 """
 Store one live process context in the dynamic runtime slot.
@@ -352,10 +361,10 @@ function makeloop!(p::Process, inputs::NamedTuple, lt; threaded = true, loopfunc
 end
 
 @noinline _makeloop_dynamic!(p::Process, inputs::NamedTuple; threaded = true, loopfunc::LF = loop) where {LF} =
-    _makeloop!(p, inputs, lifetime(p), StatefulAlgorithms.context(p); threaded, loopfunc)
+    _makeloop!(p, inputs, lifetime(p), _context(p); threaded, loopfunc)
 
 @noinline _makeloop_dynamic!(p::Process, inputs::NamedTuple, lt; threaded = true, loopfunc::LF = loop) where {LF} =
-    _makeloop!(p, inputs, lt, StatefulAlgorithms.context(p); threaded, loopfunc)
+    _makeloop!(p, inputs, lt, _context(p); threaded, loopfunc)
 
 function _makeloop!(p::Process, inputs::NamedTuple, lt, base_context; threaded = true, loopfunc::LF = loop) where {LF}
     @atomic p.paused = false
@@ -385,7 +394,7 @@ function _resume_paused_loop!(p::Process; threaded = true)
     p.lastresult = nothing
 
     func = getalgo(p)
-    runtime_context = StatefulAlgorithms.context(p)
+    runtime_context = _context(p)
     lt = lifetime(p)
     return _makeloop_prepared!(p, func, runtime_context, lt, (;); threaded, resume = Resuming{true}())
 end
@@ -458,7 +467,7 @@ function Base.show(io::IO, ::MIME"text/plain", p::Process)
     algo_lines = _process_nested_show_lines(io, getalgo(p))
     _print_process_nested_field(io, "├── ", "│   ", :algo, algo_lines)
 
-    context_lines = _process_context_show_lines(io, context(p))
+    context_lines = _process_context_show_lines(io, _context(p))
     _print_process_nested_field(io, "└── ", "    ", :context, context_lines)
 
     return nothing

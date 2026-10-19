@@ -58,3 +58,14 @@ end
         @test typeof(resolve(plan)) === typeof(StatefulAlgorithms._resolve_plan_typed(plan))
     end
 end
+
+@testset "A Unique handle the user holds is a key found from types" begin
+    held = Unique(RLCounter())
+    p = Process(CompositeAlgorithm(held, Unique(RLCounter()), (1, 1)); repeats = 3)
+    run(p); wait(p)
+    c = StatefulAlgorithms.context(p)
+    read_x(c, h) = c[h].x
+    @test (@inferred read_x(c, held)) == 3.0
+    T = only(Base.return_types(getindex, (typeof(c), typeof(held))))
+    @test isconcretetype(T)
+end

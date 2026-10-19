@@ -193,6 +193,6 @@ function merges_into(@nospecialize(E), @nospecialize(N))
 end
 
 # An id given to a handle (`Unique`, a block's `@state`), as opposed to one it matches by (its type, its key). `id(E)`
-# of a handle type is the type of a `UniquePlanId`.
+# of a handle type is the type of a `UniquePlanId` (or of the registry's `DoubleMatcher` of one).
 _is_given_id(@nospecialize(id)) = id isa SimpleId || id isa UniquePlanId ||
-    (id isa Type && id <: UniquePlanId)
+    (id isa Type && (id <: UniquePlanId || id <: DoubleMatcher))
