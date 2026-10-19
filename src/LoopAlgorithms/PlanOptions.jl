@@ -68,10 +68,15 @@ end
 The route/share wiring of one plan as constructor input that keeps its scope: plan-wide routes and shares as they are,
 and those of one child as `LocalPlanOption(child, route)`. `setwiring` (or a constructor) rebuilds the same wiring from
 it, which `collect_wiring` alone cannot: it loses which child a route belonged to.
+
+Only for an unresolved plan. After `resolve` the plan-wide wiring is keyed by registry names, holds a share once per
+target and, in a nested plan, also the parent plans' wiring; rebuilt from that, shares would double and parent wiring
+would be copied into the children.
 """
 function collect_scoped_wiring(plan::AbstractPlan)
     wiring = getwiring(plan)
     plan_wide = global_wiring(wiring)
+    plan_wide isa Wiring || error("`collect_scoped_wiring` needs an unresolved plan: a resolved plan's wiring cannot be turned back into constructor input. Use the unresolved plan, then call resolve again.")
     scoped = (routes(plan_wide)..., shares(plan_wide)...)
     funcs = getalgos(plan)
     buckets = child_wiring(wiring)
@@ -115,67 +120,6 @@ end
 
 """Return route/share wiring wrapped by a child-scoped plan option."""
 @inline _unwrap_local_option(option::LocalPlanOption) = getfield(option, :option)
-
-
-function _scoped_wiring_matches_child_type(::Type{Child}, ::Type{Owner}, ::Type{Option}) where {Child, Owner, Option}
-    if Option <: Route
-        return child_matches_scref(Child, to_match_by(Option))
-    end
-    if Owner === Any || Owner === DataType || Owner === UnionAll
-        return false
-    end
-    return match(Child, Owner)
-end
-
-@generated function _scoped_wiring_matches_child(::Val{I}, funcs::Funcs, ::LocalPlanOption{Owner, Option}) where {I, Funcs<:Tuple, Owner, Option}
-    I > fieldcount(Funcs) && return :(Val(false))
-    _scoped_wiring_matches_child_type(fieldtype(Funcs, I), Owner, Option) && return :(Val(true))
-    if !(Option <: Route)
-        return :(Val(:runtime))
-    end
-    return :(Val(false))
-end
-
-@inline _push_child_wiring_option(::Val{true}, idx, funcs, option::LocalPlanOption, tail::Tail) where {Tail<:Tuple} =
-    (_unwrap_local_option(option), tail...)
-
-@inline _push_child_wiring_option(::Val{false}, idx, funcs, option::LocalPlanOption, tail::Tail) where {Tail<:Tuple} = tail
-
-@inline function _push_child_wiring_option(::Val{:runtime}, idx::Val{I}, funcs::Funcs, option::LocalPlanOption, tail::Tail) where {I, Funcs<:Tuple, Tail<:Tuple}
-    child = getfield(funcs, I)
-    owner = getfield(option, :owner)
-    if match(child, owner)
-        return (_unwrap_local_option(option), tail...)
-    end
-
-    scoped_wiring = _unwrap_local_option(option)
-    if scoped_wiring isa Share
-        if child_matches_scref(child, first_match_by(scoped_wiring)) ||
-           child_matches_scref(child, second_match_by(scoped_wiring))
-            return (scoped_wiring, tail...)
-        end
-    end
-    return tail
-end
-
-@inline function _wiring_options_for_child(idx::Val{I}, funcs::Funcs, options::Options) where {I, Funcs<:Tuple, Options<:Tuple}
-    isempty(options) && return ()
-    tail = _wiring_options_for_child(idx, funcs, Base.tail(options))
-    option = getfield(options, 1)
-    return _wiring_options_for_child(idx, funcs, option, tail)
-end
-
-@inline _wiring_options_for_child(idx, funcs, option::LocalPlanOption, tail::Tail) where {Tail<:Tuple} =
-    _push_child_wiring_option(_scoped_wiring_matches_child(idx, funcs, option), idx, funcs, option, tail)
-
-@inline _wiring_options_for_child(idx, funcs, option, tail::Tail) where {Tail<:Tuple} = tail
-
-"""Return the concrete `Wiring` bucket for one child position."""
-@inline function _child_wiring_bucket(options::Options) where {Options<:Tuple}
-    routes = typefilter(Route, options)
-    shares = typefilter(Share, options)
-    return Wiring(routes, shares)
-end
 
 """Return the wiring value passed to one child before registry resolution."""
 @inline function _select_child_wiring(child, bucket::Wiring)
@@ -271,58 +215,6 @@ Base.@nospecializeinfer function _drop_wiring_options_untyped(@nospecialize(opti
     end
     return Tuple(kept)
 end
-
-#=
-Generated child-wiring builder kept here while testing whether constructor-side
-specialization is worth it. Early measurements show the runtime builder is
-cheaper for large DSL construction, and it still stores concrete wiring in the
-constructed plan.
-
-@inline @generated function _build_child_wiring(funcs::Funcs, options::Options) where {Funcs<:Tuple, Options<:Tuple}
-    if fieldcount(Funcs) * fieldcount(Options) > _PLAN_CHILD_WIRING_GENERATED_PRODUCT_LIMIT
-        return :(StatefulAlgorithms._build_child_wiring(funcs, options))
-    end
-
-    runtime_checks = Any[]
-    for option_idx in 1:fieldcount(Options)
-        option_type = fieldtype(Options, option_idx)
-        option_type <: LocalPlanOption || continue
-        owner = option_type.parameters[1]
-        option = option_type.parameters[2]
-
-        assigned = any(i -> _scoped_wiring_matches_child_type(fieldtype(Funcs, i), owner, option), 1:fieldcount(Funcs))
-        runtime_assigned = !(option <: Route)
-        if !assigned
-            if runtime_assigned
-                push!(runtime_checks, quote
-                    _candidate_wiring = _unwrap_local_option(getfield(options, $option_idx))
-                    _assigned = false
-                    for _bucket in _raw_buckets
-                        _assigned |= any(==(_candidate_wiring), routes(_bucket)) || any(==(_candidate_wiring), shares(_bucket))
-                    end
-                    _assigned || error("Child-scoped wiring $(getfield(options, $option_idx)) could not be assigned to any child in plan funcs $(funcs).")
-                end)
-                continue
-            end
-            return :(error("Child-scoped wiring $(getfield(options, $option_idx)) could not be assigned to any child in plan funcs $(funcs)."))
-        end
-    end
-
-    raw_expr = Expr(:tuple, (:(@inline _child_wiring_bucket(@inline _wiring_options_for_child(Val($i), funcs, options))) for i in 1:fieldcount(Funcs))...)
-    child_expr = Expr(:tuple, (:(@inline _select_child_wiring(getfield(funcs, $i), getfield(_raw_buckets, $i))) for i in 1:fieldcount(Funcs))...)
-    if isempty(runtime_checks)
-        return quote
-            _raw_buckets = $raw_expr
-            $child_expr
-        end
-    end
-    return quote
-        _raw_buckets = $raw_expr
-        $(runtime_checks...)
-        $child_expr
-    end
-end
-=#
 
 """Flatten the raw wiring values stored by a plan for constructor rebuilds."""
 @inline function _flatten_plan_wiring(plan_wiring::Wiring, child_wiring::ChildWiring) where {ChildWiring<:Tuple}

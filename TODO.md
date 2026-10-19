@@ -305,3 +305,21 @@ Restored 2026-10-09 from `fix/type-stability` (`e1dcbbf`, now tag `archive/type-
 11. [ ] Optional, after the `Routines/` folder move: put the routine half of Step.jl in `Routines/Step.jl`.
 12. [ ] Outside Step.jl: `_push_per_algorithm_inference_exprs!` (`Outputs.jl`) writes the child setup by hand and checks `<: AbstractPlan` instead of `_steps_inline`; use `_child_setup_exprs`.
 13. [ ] Check (not verified): children on a schedule (`@every n`) are stepped through `_step_children!`, which calls `_step!`, not inline. A nested composite or routine under `@every` is then the same method called with a larger runtime context type, which the header says is avoided; `return_type` may answer non-concrete, `_conditional_step` then takes the `Target === Nothing` path and the context type is not stable. Write a test with a nested plan under `@every`, check `@inferred` / `code_warntype`; if it fails, write the branch body inline (`_plan_step_exprs`) inside an `if`.
+
+## Cleanup: `src/LoopAlgorithms/PlanOptions.jl` (noted 2026-10-19)
+1. [ ] **Say in the types that a `WithWiring` wire is a route.** `_append_withwiring_wires` appends every wire of a `WithWiring` to its child's *routes* (`Wiring((routes(bucket)..., wires...), shares(bucket))`), so a `Share` passed as a wire would be stored as a route. Today none can be: the public constructor takes `wires::Route...`, `From` makes routes, and the DSL passes routes only. But the field is `wires::Tuple` and the two-argument constructor `WithWiring(child, wires::Tuple)` takes any tuple. Either check `all(w -> w isa Route, wires)` in that constructor, or leave it as is if nothing else will ever build one.
+2. [ ] **`_rebuild_with_states_options` reads a plan's fields and type parameters by position.** It rebuilds `plan` (for `setstates` / `setoptions`) as `P.name.wrapper{params[1:5]..., typeof(states), typeof(options)}(getfield(plan, 1), ..., getfield(plan, 4), states, options)`. That is correct only while every plan type (`CompositeAlgorithm`, `Routine`, `ThreadedCompositeAlgorithm`) declares its fields as funcs, schedule, namespaces, wiring, states, options and its type parameters with states and options last. A plan type that adds a field or reorders them gets wrong values in wrong fields, with no error. Positional because the second field is named `intervals` on two types and `repeats` on `Routine`, and `setfield` (`Functions.jl`) cannot be used: it finds the type parameter to replace by comparing values (`fieldtype(S, name)` against `S.parameters`), which picks the wrong one when two parameters are equal, e.g. states and options both `Tuple{}` (not verified). Fix: take the type variables from the struct definition, where they are unambiguous, and read the other fields by name:
+   ```julia
+   @generated function _rebuild_with_states_options(plan::P, states::S, options::O) where {P<:AbstractPlan, S, O}
+       body = Base.unwrap_unionall(P.name.wrapper)       # the struct with its TypeVars
+       S_var, O_var = fieldtype(body, :states), fieldtype(body, :options)
+       params = map(zip(body.parameters, P.parameters)) do (var, value)
+           var === S_var ? S : var === O_var ? O : value
+       end
+       fields = map(fieldnames(P)) do name
+           name === :states ? :states : name === :options ? :options : :(getfield(plan, $(QuoteNode(name))))
+       end
+       return :($(P.name.wrapper){$(params...)}($(fields...)))
+   end
+   ```
+   Compiled once per plan type, as now. The same TypeVar lookup would fix the value comparison in `setfield`.
