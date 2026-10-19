@@ -38,7 +38,6 @@ function IdReconstructor(id)
     return IdReconstructor{IdType, typeof(data)}(data)
 end
 
-reconstructor_idtype(::Type{<:IdReconstructor{IdType}}) where {IdType} = IdType
 reconstruct_id(r::IdReconstructor{IdType}) where {IdType} = reconstruct_id(IdType, getfield(r, :data))
 
 """

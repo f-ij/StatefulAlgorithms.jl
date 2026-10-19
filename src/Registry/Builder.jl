@@ -18,8 +18,8 @@ The functions take algorithms and types as values (`@nospecialize`), so they are
 """
     RuntimeLookupKey(id, expr)
 
-A runtime lookup key known only at run time, while a layout is worked out from types: the key of a normalized handle
-comes from its `reconstructor` value (`dynamic_lookup_key`), which `expr` reads. Equal for the same normalized id `id`.
+Stands in for the lookup key of a normalized handle while a layout is worked out from types: that key comes from the
+handle's `reconstructor` value (`dynamic_lookup_key`), which `expr` reads at run time. Equal for the same normalized id `id`.
 """
 struct RuntimeLookupKey
     id::Any
