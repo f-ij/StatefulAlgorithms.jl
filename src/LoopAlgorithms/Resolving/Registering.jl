@@ -29,14 +29,16 @@ end
 The body of `setup_registry_and_keyed_algos` for a `LoopAlgorithm` of type `LA` (the argument is named `la`): code that
 returns `(registry, keyed la)` as `setup_registry_from_values(la)` does. The same walk, run on `LA`'s types, decides the
 whole registry and the keyed plan; the code returned only reads the algorithms out of `la` and puts them in place,
-creating the multipliers and lookup tables anew. When a step needs the values (`NeedsValues`), or the walk throws (an
-error the values would give too), the code returned calls `setup_registry_from_values(la)`.
+creating the multipliers and lookup tables anew. When a step needs the values (`NeedsValues`), the code returned calls
+`setup_registry_from_values(la)`; any other error of the walk is thrown, so a bug on the types path does not silently
+move a plan to the run-time path.
 """
 Base.@nospecializeinfer function setup_registry_code(@nospecialize(LA))
     builder = RegistryBuilder()
     keyed = try
         add_tree!(builder, KnownByType(LA, :la))
-    catch
+    catch err
+        err isa NeedsValues || rethrow()
         return :(setup_registry_from_values(la))
     end
     return Expr(:tuple, registry_code(builder), keyed.expr)
@@ -70,10 +72,10 @@ Base.@nospecializeinfer function add_states!(b::RegistryBuilder, @nospecialize(l
     states = states_of(la)
     if type_of(states) <: Tuple
         for i in 1:nfields_of(states)
-            add!(b, field_of(states, i), 1)
+            add!(b, field_of(states, i), 1.0)
         end
     elseif type_of(states) !== Nothing
-        add!(b, states, 1)
+        add!(b, states, 1.0)
     end
     children = children_of(la)
     for i in 1:nfields_of(children)
