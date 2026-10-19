@@ -309,8 +309,10 @@ runtime expression that wraps the entity in `IdentifiableAlgo` when a stable DSL
 name is known, and leaves it unchanged when no name was declared.
 """
 function _dsl_known_owner_expr(entity_expr, name::Symbol)
-    name == Symbol() && return entity_expr
-    return :(StatefulAlgorithms._composite_dsl_owner($entity_expr, $(QuoteNode(name))))
+    # Stripped of `Unique` uuids (`strip_unique`), as every value the block takes from the user's code.
+    stripped = :(StatefulAlgorithms.strip_unique($entity_expr))
+    name == Symbol() && return stripped
+    return :(StatefulAlgorithms._composite_dsl_owner($stripped, $(QuoteNode(name))))
 end
 
 """Return the key-safe owner value used by `Var` selectors emitted from the DSL."""

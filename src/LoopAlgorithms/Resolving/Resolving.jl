@@ -42,7 +42,10 @@ its inner loop is materialized.
 last step, which puts the handles' uuids into the registry (`registry_matchers`), works per uuid, untyped. The inferred
 version, for a caller that knows the plan type, is `_resolve_plan_typed` (Typed.jl).
 """
-Base.@nospecializeinfer resolve(@nospecialize(la::LoopSpec)) = registry_matchers(_resolve_plan(la))
+Base.@nospecializeinfer function resolve(@nospecialize(la::LoopSpec))
+    la isa LoopAlgorithm && isresolved(la) && return la    # its type holds the handles' uuids: nothing to compile for it
+    return registry_matchers(_resolve_plan(la))
+end
 
 """
 Run the steps of resolving `la` (see the top of this file) and return the resolved plan. Compiled for the plan's type

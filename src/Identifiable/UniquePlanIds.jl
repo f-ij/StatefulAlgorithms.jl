@@ -163,9 +163,9 @@ end
 ################################################
 
 struct _StripIds end
-rewrite_id(::_StripIds, id::UniquePlanId) = plan_number(id) isa UUID ? UniquePlanId{nothing}(origin(id)) : id
+rewrite_id(::_StripIds, @nospecialize(id::UniquePlanId)) = plan_number(id) isa UUID ? UniquePlanId{nothing}(origin(id)) : id
 # An id only a type holds keeps its uuid: without a value next to it, the uuid is all there is to number it by.
-rewrite_type_number(::_StripIds, N) = N
+rewrite_type_number(::_StripIds, @nospecialize(N)) = N
 
 """
     strip_unique(x) -> x
@@ -201,9 +201,9 @@ end
 
 _number!(r::_NumberIds, u::UUID) = get!(r.numbers, u, length(r.numbers) + 1)
 
-rewrite_id(r::_NumberIds, id::UniquePlanId) = UniquePlanId{_number!(r, origin(id))}(origin(id))
+rewrite_id(r::_NumberIds, @nospecialize(id::UniquePlanId)) = UniquePlanId{_number!(r, origin(id))}(origin(id))
 
-function rewrite_type_number(r::_NumberIds, N)
+function rewrite_type_number(r::_NumberIds, @nospecialize(N))
     N isa UUID && return _number!(r, N)
     k = get(r.scope, N, nothing)
     isnothing(k) && (k = get(r.fallback, N, nothing))
@@ -302,7 +302,7 @@ end
 ################################################
 
 struct _RegistryIds end
-rewrite_id(::_RegistryIds, id::UniquePlanId) = registry_matcher(id)
+rewrite_id(::_RegistryIds, @nospecialize(id::UniquePlanId)) = registry_matcher(id)
 # Types only follow the handles' fields (a registry entry's handle types); nothing else in a registry holds an id.
 rewrite_param(::_RegistryIds, @nospecialize(p), cache::IdDict{Any, Bool}) = p
 
@@ -313,7 +313,7 @@ The matcher a registry stores a handle with, when `resolve` is done: for a numbe
 `DoubleMatcher(UniquePlanId{k}(uuid), UniquePlanId{uuid}(uuid))`; any other id as it is.
 """
 registry_matcher(id) = id
-function registry_matcher(id::UniquePlanId)
+function registry_matcher(@nospecialize(id::UniquePlanId))
     plan_number(id) isa Int || return id
     held = user_unique_id(origin(id))
     return new_instance(DoubleMatcher{typeof(id), typeof(held)}, id, held)
