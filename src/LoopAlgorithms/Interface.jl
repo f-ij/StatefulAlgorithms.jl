@@ -54,7 +54,7 @@ type that stores its children or wiring differently, or whose constructor takes 
 method.
 """
 Base.@nospecializeinfer function rebuild_plan(@nospecialize(plan::AbstractPlan), @nospecialize(funcs::Tuple), @nospecialize(wiring))
-    return with_fields(plan, (:funcs, :wiring), (funcs, wiring))
+    return replace_fields(plan, (:funcs, :wiring), (funcs, wiring))
 end
 
 """
@@ -74,7 +74,7 @@ only the children change (step 1 of `resolve`, the DSL).
 @inline rebuild_loopalgorithm_funcs(plan::P, funcs::F) where {P<:AbstractPlan, F} = setfield(plan, :funcs, funcs)
 
 """
-    with_fields(s, names, values) -> copy of s
+    replace_fields(s, names, values) -> copy of s
 
 `s` with the fields `names` set to `values`, built by `s`'s type's constructor called with all fields in order; the
 type parameter that a replaced field is declared as (`_field_parameter_index`) becomes the type of the new value. Used
@@ -83,7 +83,7 @@ by the defaults above and the registry walk; works on types as values, so it is 
 `s` can be a `KnownByType` (with `values` `KnownByType`s): the result is then a `KnownByType` of the new type, whose
 code calls its constructor on `s`'s other fields and the new values.
 """
-Base.@nospecializeinfer function with_fields(@nospecialize(s), names::Tuple{Vararg{Symbol}}, @nospecialize(values::Tuple))
+Base.@nospecializeinfer function replace_fields(@nospecialize(s), names::Tuple{Vararg{Symbol}}, @nospecialize(values::Tuple))
     T = type_of(s)
     params = Any[T.parameters...]
     fields = Any[field_of(s, i) for i in 1:nfields_of(s)]

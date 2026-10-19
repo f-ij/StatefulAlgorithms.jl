@@ -55,7 +55,7 @@ Adds the whole tree of the `LoopAlgorithm` `la` to `builder`: its states first (
 Base.@nospecializeinfer function add_tree!(b::RegistryBuilder, @nospecialize(la))
     add_states!(b, la)
     plan = add_children!(b, plan_of(la), 1.0)
-    return with_fields(la, (:plan,), (plan,))
+    return replace_fields(la, (:plan,), (plan,))
 end
 
 """
@@ -99,7 +99,7 @@ Base.@nospecializeinfer function add_children!(b::RegistryBuilder, @nospecialize
     for i in 1:n
         raws[i], namespaces[i] = add_child!(b, field_of(funcs, i), multiplier * getfield(mults, i))
     end
-    return with_fields(node, (:funcs, :namespaces), (tuple_of(raws, node), tuple_of(namespaces, node)))
+    return replace_fields(node, (:funcs, :namespaces), (tuple_of(raws, node), tuple_of(namespaces, node)))
 end
 
 """
