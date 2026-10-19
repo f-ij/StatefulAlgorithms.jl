@@ -45,7 +45,7 @@ using StatefulAlgorithms
     @test getkey(only(StatefulAlgorithms.getstates(with_state))) == :stateful
 
     with_option = addoption(outer, Share(EditAlgoC, EditAlgoA))
-    @test length(StatefulAlgorithms.wiring_values(with_option)) == length(StatefulAlgorithms.wiring_values(outer)) + 1
+    @test length(StatefulAlgorithms.collect_wiring(with_option)) == length(StatefulAlgorithms.collect_wiring(outer)) + 1
     @test only(get_shares(with_option)) isa Share
 
     left = IdentifiableAlgo(EditAlgoA(), :left)

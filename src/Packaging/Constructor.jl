@@ -37,7 +37,7 @@ end
 function Package(comp::CompositeAlgorithm, states::States, name = Symbol()) where {States<:Tuple}
     identifiable_funcs = getalgos(comp)
     package_intervals = intervals(comp)
-    routes = typefilter(Route, wiring_values(comp))
+    routes = typefilter(Route, collect_wiring(comp))
 
     # Package aliases are derived from the concrete endpoint objects retained
     # by unresolved routes. Resolution deliberately replaces those objects

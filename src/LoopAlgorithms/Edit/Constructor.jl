@@ -25,8 +25,8 @@ rebuilds need those buckets rehydrated as `LocalPlanOption` values; otherwise an
 edit such as `rename` or `addalgo` would flatten local routes into top-level
 routes and change execution semantics.
 """
-@inline _stored_constructor_options(la::LA) where {LA<:LoopSpec} = (wiring_values(la)..., getoptions(la)...)
-@inline _stored_constructor_options(la::Union{CompositeAlgorithm, Routine}) = (scoped_wiring_values(la)..., getoptions(la)...)
+@inline _stored_constructor_options(la::LA) where {LA<:LoopSpec} = (collect_wiring(la)..., getoptions(la)...)
+@inline _stored_constructor_options(la::Union{CompositeAlgorithm, Routine}) = (collect_scoped_wiring(la)..., getoptions(la)...)
 @inline _stored_constructor_options(la::LoopAlgorithm) = _stored_constructor_options(getplan(la))
 
 @inline function _rebuild_loopalgorithm(

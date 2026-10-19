@@ -39,7 +39,7 @@ Base.isempty(wiring::PlanWiring) =
 
 @inline getmultiplier(cla::LoopAlgorithm, obj) = getmultiplier(getregistry(cla), obj)
 @inline Base.getkey(cla::LoopAlgorithm, obj) = getkey(getregistry(cla), obj)
-"""The `RootOption`s of the whole plan tree, collected once by `resolve` (`_root_options`)."""
+"""The `RootOption`s of the whole plan tree, collected once by `resolve` (`_collect_root_options`)."""
 @inline getoptions(cla::LoopAlgorithm) = getfield(cla, :options)
 @inline getstates(cla::LoopAlgorithm) = getstates(getplan(cla))
 @inline getregistry(cla::LoopAlgorithm) = getfield(cla, :reg)
@@ -76,8 +76,8 @@ end
 @inline plan_child_namespace(la::LoopAlgorithm, idx::Int) = plan_child_namespace(getplan(la), idx)
 
 """The `Share`s / `Route`s in the wiring of `cla`'s plan (plan-wide and per child)."""
-get_shares(cla::LA) where {LA<:LoopSpec} = @inline filter_by_type(Share, wiring_values(cla))
-get_routes(cla::LA) where {LA<:LoopSpec} = @inline filter_by_type(Route, wiring_values(cla))
+get_shares(cla::LA) where {LA<:LoopSpec} = @inline filter_by_type(Share, collect_wiring(cla))
+get_routes(cla::LA) where {LA<:LoopSpec} = @inline filter_by_type(Route, collect_wiring(cla))
 
 @inline getoptions(la::LA, T::Type{O}) where {LA<:LoopSpec, O} = filter_by_type(O, getoptions(la))
 setoptions(la::LA, options) where {LA<:LoopSpec} = error("setoptions not implemented for $(typeof(la))")

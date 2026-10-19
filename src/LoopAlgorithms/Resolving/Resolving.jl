@@ -71,7 +71,7 @@ function _resolve_keyed_plan(keyed_la::LA, registry::R) where {LA<:LoopAlgorithm
     keyed_la = _attach_registry(keyed_la, registry)                      # 2. share the registry
     plan = _resolve_wiring(getplan(keyed_la), registry, (;))   # 3. routes, shares
     plan = _resolve_scopes(plan, NoScope, "")                            # 4. scopes
-    return setoptions(setfield(keyed_la, :plan, plan), _root_options(keyed_la))
+    return setoptions(setfield(keyed_la, :plan, plan), _collect_root_options(keyed_la))
 end
 
 """

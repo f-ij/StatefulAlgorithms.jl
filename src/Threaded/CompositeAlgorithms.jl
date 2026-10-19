@@ -25,7 +25,7 @@ ThreadedCompositeAlgorithm(args...) = parse_la_input(ThreadedCompositeAlgorithm,
 
 """Rebuild the route/share wiring of `tca` from `wiring` (`Route`s, `Share`s, `LocalPlanOption`s)."""
 function setwiring(tca::ThreadedCompositeAlgorithm, wiring)
-    wiring = PlanWiring(_plan_wiring(wiring), _plan_child_wiring(getalgos(tca), wiring))
+    wiring = PlanWiring(_build_plan_wiring(wiring), _build_child_wiring(getalgos(tca), wiring))
     return setfield(tca, :wiring, wiring)
 end
 

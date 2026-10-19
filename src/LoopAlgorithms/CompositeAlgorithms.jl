@@ -37,7 +37,7 @@ end
 """Rebuild the route/share wiring of `ca` from `wiring` (`Route`s, `Share`s, `LocalPlanOption`s)."""
 function setwiring(ca::CompositeAlgorithm, wiring)
     # Declared locals are part of the plan's wiring; rebuilding the routes and shares keeps them.
-    wiring = PlanWiring(_plan_wiring(wiring), _plan_child_wiring(getalgos(ca), wiring), getfield(getwiring(ca), :locals))
+    wiring = PlanWiring(_build_plan_wiring(wiring), _build_child_wiring(getalgos(ca), wiring), getfield(getwiring(ca), :locals))
     return setfield(ca, :wiring, wiring)
 end
 

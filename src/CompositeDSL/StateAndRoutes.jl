@@ -648,8 +648,8 @@ function _composite_dsl_rebind(plan::AbstractPlan, binds::Tuple)
             push!(children, funcs[i])
         end
     end
-    raw, child_buckets = _plan_children(Tuple(children), Tuple(options))
-    rewired = PlanWiring(_plan_wiring(Tuple(options)), child_buckets, getfield(wiring, :locals))
+    raw, child_buckets = _split_children_and_wiring(Tuple(children), Tuple(options))
+    rewired = PlanWiring(_build_plan_wiring(Tuple(options)), child_buckets, getfield(wiring, :locals))
     plan = setfield(rebuild_loopalgorithm_funcs(plan, raw), :wiring, rewired)
     # A block state left without fields is dropped.
     states = filter(s -> !_composite_dsl_is_empty_state(s), map(s -> _composite_dsl_unbind_state(s, binds), getstates(plan)))

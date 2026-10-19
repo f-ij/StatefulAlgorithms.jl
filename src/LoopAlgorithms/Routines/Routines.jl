@@ -30,7 +30,7 @@ end
 """Rebuild the route/share wiring of `r` from `wiring` (`Route`s, `Share`s, `LocalPlanOption`s)."""
 function setwiring(r::Routine, wiring)
     # Declared locals are part of the plan's wiring; rebuilding the routes and shares keeps them.
-    wiring = PlanWiring(_plan_wiring(wiring), _plan_child_wiring(getalgos(r), wiring), getfield(getwiring(r), :locals))
+    wiring = PlanWiring(_build_plan_wiring(wiring), _build_child_wiring(getalgos(r), wiring), getfield(getwiring(r), :locals))
     return setfield(r, :wiring, wiring)
 end
 

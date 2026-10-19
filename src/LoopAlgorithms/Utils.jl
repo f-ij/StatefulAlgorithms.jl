@@ -18,7 +18,7 @@ function update_keys(cla::LA, base_registry::NameSpaceRegistry) where {LA<:LoopS
     oldsfuncs = getalgos(cla)
     @DebugMode "Updating names for LoopAlgorithm: $cla using base registry: $base_registry"
     newfuncs = update_keys.(oldsfuncs, Ref(base_registry)) #Recursive replace LoopAlgorithm
-    oldwiring = scoped_wiring_values(getplan(cla))
+    oldwiring = collect_scoped_wiring(getplan(cla))
     newwiring = update_keys.(oldwiring, Ref(base_registry))
     oldstates = getstates(cla)
     newstates = update_keys.(oldstates, Ref(base_registry))

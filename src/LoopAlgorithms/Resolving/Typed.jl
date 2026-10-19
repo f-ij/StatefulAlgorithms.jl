@@ -24,7 +24,7 @@ When an untyped step is changed (e.g. to compile less), its inferred twin here i
     keyed_la = _attach_registry(keyed_la, registry)                             # 2. share the registry
     plan = _resolve_wiring_typed(getplan(keyed_la), registry, (;))    # 3. routes, shares
     plan = _resolve_scopes_typed(plan, NoScope, Val(()))                        # 4. scopes
-    return setoptions(setfield(keyed_la, :plan, plan), _root_options(keyed_la))
+    return setoptions(setfield(keyed_la, :plan, plan), _collect_root_options(keyed_la))
 end
 
 """
