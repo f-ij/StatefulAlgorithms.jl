@@ -279,7 +279,7 @@ Base.@nospecializeinfer context(@nospecialize(p::AnyProcess)) = with_held_ids(_c
 # type while the typed context is current (as `context` is on a process without `Unique` handles).
 function context(p::Process{F,LT,C,M}) where {F,LT,C,M}
     runtime_context = getcore(p).runtime_context
-    isnothing(runtime_context) || return with_held_ids(runtime_context, getfield(p, :keymap))
+    isnothing(runtime_context) || return with_held_ids(runtime_context, getfield(p, :keymap))::ProcessContext
     return _held_context(getpersistentcontext(getalgo(p)), getfield(p, :keymap))
 end
 @inline _held_context(c::ProcessContext, ::Nothing) = c

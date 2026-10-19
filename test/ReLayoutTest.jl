@@ -81,3 +81,12 @@ end
     # The process works with the context without the key map: same type as a fresh process's
     @test typeof(StatefulAlgorithms.getalgo(q)) === typeof(StatefulAlgorithms.getalgo(p))
 end
+
+@testset "context(p) of a Process is inferred, with the user's Unique keys" begin
+    held = Unique(RLCounter())
+    p = Process(CompositeAlgorithm(held, Unique(RLCounter()), (1, 1)); repeats = 2)
+    run(p); wait(p)
+    typed_x(p, h) = StatefulAlgorithms._held_context(StatefulAlgorithms.getpersistentcontext(StatefulAlgorithms.getalgo(p)), getfield(p, :keymap))[h].x
+    @test (@inferred typed_x(p, held)) == 2.0
+    @test StatefulAlgorithms.context(p)[held].x == 2.0
+end
