@@ -2,7 +2,7 @@
 Values known only by their type.
 
 The registry layout of a plan is worked out from the plan's type, before any plan value exists
-(`setup_registry_and_keyed_algos`). The same code that builds a registry from values (`add!`, the plan walk) then
+(`build_registry_and_key_plan`). The same code that builds a registry from values (`add!`, the plan walk) then
 gets `KnownByType`s instead of values: a type, and the code that gives the value at run time. The functions below
 read a field, count fields, or build a tuple the same way for a value and for a `KnownByType`, so that code is
 written once.

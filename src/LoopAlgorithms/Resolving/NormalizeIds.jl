@@ -29,7 +29,7 @@ struct _IdNormalizer
 end
 _IdNormalizer() = _IdNormalizer(Dict{UUID, Int}(), IdDict{Any, Any}())
 
-_ordinal!(r::_IdNormalizer, u::UUID) = get!(r.ordinals, u, length(r.ordinals) + 1)
+_number_uuid!(r::_IdNormalizer, u::UUID) = get!(r.ordinals, u, length(r.ordinals) + 1)
 
 # No closures, `map` or `all` below: a closure capturing a fresh type, or `map` over a fresh tuple type, compiles per uuid.
 function _normalize_type(r::_IdNormalizer, @nospecialize(T))
@@ -39,7 +39,7 @@ function _normalize_type(r::_IdNormalizer, @nospecialize(T))
     cached = get(r.types, T, nothing)
     isnothing(cached) || return cached
     normalized = if T <: SimpleId && T.parameters[1] isa UUID
-        NormalizedId{_ordinal!(r, T.parameters[1]), IdReconstructor{SimpleId, UUID}}
+        NormalizedId{_number_uuid!(r, T.parameters[1]), IdReconstructor{SimpleId, UUID}}
     else
         params = T.parameters
         newparams = Vector{Any}(undef, length(params))

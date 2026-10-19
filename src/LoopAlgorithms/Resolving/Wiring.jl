@@ -1,9 +1,9 @@
 #=
-URGENT (2026-10-17, from a review; not fixed yet): compile time. `_resolve_wiring_grouped` and `_merge_global_wiring`
+URGENT (2026-10-17, from a review; not fixed yet): compile time. `_resolve_and_group_wiring` and `_merge_global_wiring`
 build their named tuples by tuple recursion and splatting (`(; combined..., key => value)` in `_append_combined_keys`).
 Called from the `@nospecialize` step 3, each call is a runtime dispatch, and besides compiling for each registry and
 wiring type they compile one method instance per intermediate named-tuple type. Build `Symbol[]`/`Any[]` vectors and
-one `NamedTuple{Tuple(keys)}(Tuple(values))` instead, as `_scoped_names` does.
+one `NamedTuple{Tuple(keys)}(Tuple(values))` instead, as `_add_scoped_names` does.
 =#
 
 ############################################################################################
@@ -11,21 +11,22 @@ one `NamedTuple{Tuple(keys)}(Tuple(values))` instead, as `_scoped_names` does.
 ############################################################################################
 
 """
-Resolve a plan tree and inlay inherited global wiring into concrete children. Also records, in the `PlanWiring` type,
+Resolve the wiring of a plan tree, and copy into each child that is not a plan the global wiring, inherited or the
+node's own, aimed at its namespace. Also records, in the `PlanWiring` type,
 the namespaces of the algorithms directly in each node (`owners` of its resets; step 4 adds the returns).
 
 Runs once per plan on the plan as a value (`@nospecialize`, loops instead of closures): this function is compiled once,
-and only the wiring helpers it calls compile for the registry and wiring types they get. `_resolve_plan_wiring_tree_typed`
+and only the wiring helpers it calls compile for the registry and wiring types they get. `_resolve_wiring_typed`
 (Typed.jl) is the inferred version.
 """
-Base.@nospecializeinfer function _resolve_plan_wiring_tree(@nospecialize(la::AbstractPlan), @nospecialize(registry::NameSpaceRegistry), @nospecialize(inherited_global::NamedTuple))
+Base.@nospecializeinfer function _resolve_wiring(@nospecialize(la::AbstractPlan), @nospecialize(registry::NameSpaceRegistry), @nospecialize(inherited_global::NamedTuple))
     raw_wiring = getfield(la, :wiring)
     own_locals = getfield(raw_wiring, :locals)
 
     # Global wiring is grouped by resolved target namespace once per plan node.
-    # Child buckets below receive the relevant global wiring already inlaid, so
+    # Child buckets below receive the relevant global wiring already merged in, so
     # `step!` never has to merge plan-global and child-specific wiring.
-    own_global = _resolve_wiring_grouped(registry, getfield(raw_wiring, :global_wiring))
+    own_global = _resolve_and_group_wiring(registry, getfield(raw_wiring, :global_wiring))
     combined_global = _merge_global_wiring(inherited_global, own_global)
 
     # Resolve nested plans first. Their own `PlanWiring` then becomes the
@@ -35,7 +36,7 @@ Base.@nospecializeinfer function _resolve_plan_wiring_tree(@nospecialize(la::Abs
     funcs = Vector{Any}(undef, n)
     for i in 1:n
         child = getfield(algos, i)
-        funcs[i] = child isa LoopSpec ? _resolve_plan_wiring_tree(child, registry, combined_global) : child
+        funcs[i] = child isa LoopSpec ? _resolve_wiring(child, registry, combined_global) : child
     end
 
     old_children = getfield(raw_wiring, :child_wiring)
@@ -47,7 +48,10 @@ Base.@nospecializeinfer function _resolve_plan_wiring_tree(@nospecialize(la::Abs
             children[i] = getfield(child, :wiring)
             continue
         end
-        target = _child_namespace_untyped(la, i)
+        target = _read_child_namespace(la, i)
+        # TODO: `Val(target)` on a run-time name compiles `context_partition(::Val)` once per namespace name (2 names: 2
+        # new method instances) and dispatches at run time; `_compute_node_scope_typed` (Typed.jl) does the same. Mark the
+        # `::Val` fallback in Context/ContextPartitions.jl `@nospecialize`, or check the `Symbol` directly.
         context_partition(Val(target)) isa NamespacePartition && !(target in owners) && push!(owners, target)
         # Wires attached to this child (`WithWiring`) point at the child itself until now;
         # give them its namespace so they resolve like any route into it.
@@ -56,7 +60,7 @@ Base.@nospecializeinfer function _resolve_plan_wiring_tree(@nospecialize(la::Abs
         # Concrete children receive a single resolved `Wiring`: inherited global
         # wiring for their namespace, occluded by child-scoped routes.
         target_global = get(combined_global, target, Wiring())
-        target_child = get(_resolve_wiring_grouped(registry, bucket), target, Wiring())
+        target_child = get(_resolve_and_group_wiring(registry, bucket), target, Wiring())
         children[i] = merge_wiring(target_global, target_child)
     end
 
@@ -69,7 +73,7 @@ end
 Return the context name of child `i` of `plan`, which is not a nested plan, read from its `Namespace` type as a value
 (`plan_child_namespace` reads the same, inferred).
 """
-Base.@nospecializeinfer _child_namespace_untyped(@nospecialize(plan::AbstractPlan), i::Int) =
+Base.@nospecializeinfer _read_child_namespace(@nospecialize(plan::AbstractPlan), i::Int) =
     typeof(getfield(getfield(plan, :namespaces), i)).parameters[1]::Symbol
 
 #=
@@ -96,7 +100,7 @@ mapped to `combine(key)`.
 end
 
 """Resolve a `Wiring` bucket and group it by target namespace."""
-function _resolve_wiring_grouped(registry::NameSpaceRegistry, wiring::Wiring)
+function _resolve_and_group_wiring(registry::NameSpaceRegistry, wiring::Wiring)
     share_groups = resolve_options(registry, shares(wiring)...)
     route_groups = resolve_options(registry, routes(wiring)...)
     return _combine_by_key(share_groups, route_groups) do key

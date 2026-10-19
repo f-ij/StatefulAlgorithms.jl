@@ -2,22 +2,22 @@
 Steps 1 and 2 of `resolve`: the registry of a plan, and the plan keyed; the registry is then attached to the root
 wrapper (`_attach_registry`, Accessors.jl; step 1 leaves no nested wrappers).
 
-`setup_registry_and_keyed_algos(la) -> (registry, keyed la)` (GeneratedCode/RegistrySetup.jl) walks the whole tree of
+`build_registry_and_key_plan(la) -> (registry, keyed la)` (GeneratedCode/RegistrySetup.jl) walks the whole tree of
 `la` once: the states first, then every algorithm, each added to one `RegistryBuilder` with its multiplier. Each
 child of a plan is then stored raw (without its identity wrapper), and its key goes into the plan's `namespaces`.
 
-The walk works on values (`setup_registry_from_values`), or on the plan's type, with `KnownByType`s
+The walk works on values (`build_registry_from_values`), or on the plan's type, with `KnownByType`s
 (`generate_registry_setup`): the code generated from that only reads the algorithms out of the plan.
 =#
 
 """
-    setup_registry_from_values(la) -> (registry, keyed la)
+    build_registry_from_values(la) -> (registry, keyed la)
 
 The registry of the whole tree of `la`, and `la` with every child replaced by its raw algorithm and its key recorded in
 its plan's `namespaces`, worked out on the values (`register_tree!`, then `registry`). Compiled once, not per plan. Used
 when the layout cannot be worked out from the plan's type (see `generate_registry_setup`).
 """
-@noinline Base.@nospecializeinfer function setup_registry_from_values(@nospecialize(la::LoopAlgorithm))
+@noinline Base.@nospecializeinfer function build_registry_from_values(@nospecialize(la::LoopAlgorithm))
     builder = RegistryBuilder()
     keyed_la = register_tree!(builder, la)
     return registry(builder), keyed_la
@@ -26,11 +26,11 @@ end
 """
     generate_registry_setup(LA) -> Expr
 
-The body of `setup_registry_and_keyed_algos` for a `LoopAlgorithm` of type `LA` (the argument is named `la`): code that
-returns `(registry, keyed la)` as `setup_registry_from_values(la)` does. The same walk, run on `LA`'s types, decides the
+The body of `build_registry_and_key_plan` for a `LoopAlgorithm` of type `LA` (the argument is named `la`): code that
+returns `(registry, keyed la)` as `build_registry_from_values(la)` does. The same walk, run on `LA`'s types, decides the
 whole registry and the keyed plan; the code returned only reads the algorithms out of `la` and puts them in place,
 creating the multipliers and lookup tables anew. When a step needs the values (`NeedsValues`), the code returned calls
-`setup_registry_from_values(la)`; any other error of the walk is thrown, so a bug on the types path does not silently
+`build_registry_from_values(la)`; any other error of the walk is thrown, so a bug on the types path does not silently
 move a plan to the run-time path.
 """
 Base.@nospecializeinfer function generate_registry_setup(@nospecialize(LA))
@@ -39,7 +39,7 @@ Base.@nospecializeinfer function generate_registry_setup(@nospecialize(LA))
         register_tree!(builder, KnownByType(LA, :la))
     catch err
         err isa NeedsValues || rethrow()
-        return :(setup_registry_from_values(la))
+        return :(build_registry_from_values(la))
     end
     return Expr(:tuple, registry_code(builder), keyed.expr)
 end

@@ -23,9 +23,9 @@ Measured on this branch at a4c581f, machine otherwise quiet. Raw files next to t
 - Registry/KnownByType.jl: a value known only by its type while a layout is worked out from types, with
   `read_field`, `build_tuple`, ... that read it the same way as a value.
 - LoopAlgorithms/Resolving/Registering.jl: the walk over a plan: `register_tree!`, `register_states!`,
-  `register_children!`, `register_child!`; `setup_registry_from_values` (run time) and `generate_registry_setup` (from
+  `register_children!`, `register_child!`; `build_registry_from_values` (run time) and `generate_registry_setup` (from
   types).
-- GeneratedCode/RegistrySetup.jl: the generated `setup_registry_and_keyed_algos`; GeneratedCode/RuleDependencies.jl:
+- GeneratedCode/RegistrySetup.jl: the generated `build_registry_and_key_plan`; GeneratedCode/RuleDependencies.jl:
   makes the generated code depend on the rule methods it asked (redefining one regenerates it; a rule method defined
   after loading makes that plan use the run-time path).
 - Registry/Registries.jl, TypeEntries/: reading a registry and its entries (finding, keys, multipliers, listing).

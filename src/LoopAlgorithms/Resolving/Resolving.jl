@@ -24,16 +24,15 @@ include("NormalizeIds.jl")
 include("Registering.jl")
 include("Wiring.jl")
 include("Scopes.jl")
-include("Typed.jl")          # the inferred resolve, `_resolve_plan_typed`
+include("Typed.jl")          # the inferred resolve, `_resolve_plan_typed`; preserved, though `resolve` does not use it
 
 """
-Materialize a loop algorithm for context construction.
+    resolve(la) -> resolved la
 
-This wraps bare plan nodes in a concrete `LoopAlgorithm`, builds a registry,
-keys the child algorithms, resolves the route/share wiring against that
-registry, and collects the `RootOption`s of the plan tree. The returned value is always a runtime wrapper unless the input was a
-`FinalizedAlgorithm`, in which case the finalized outer shape is preserved and
-its inner loop is materialized.
+Resolve a loop algorithm or a bare plan (the steps at the top of this file) and return it resolved: a `LoopAlgorithm`
+with its registry attached, its children keyed, its wiring and scopes resolved, and the `RootOption`s of its plan tree
+on it. A bare plan is wrapped in a `LoopAlgorithm` first; a `FinalizedAlgorithm` stays one, with its inner loop
+resolved. An already resolved `la` is returned as it is.
 
 `resolve` itself is compiled once (its result is not inferred; a caller gets `Any`). Plans with `Unique` handles have
 their random ids normalized first, so the same layout with new ids is the same plan type and compiles nothing again
@@ -41,15 +40,16 @@ their random ids normalized first, so the same layout with new ids is the same p
 caller that knows the plan type, is `_resolve_plan_typed` (Typed.jl).
 """
 Base.@nospecializeinfer function resolve(@nospecialize(la::LoopSpec))
+    isresolved(la) && return la             # before `normalize_ids`, which walks the whole plan
     normalized, found = normalize_ids(la)
     found || return _resolve_plan(la)
     return normalized |> _resolve_plan |> restore_original_ids
 end
 
 """
-Run the steps of resolving `la` (see the top of this file) and return the resolved plan. Compiled for the plan's type
-(after id normalization, see `resolve`), so the steps it calls are compiled together with it; the steps themselves
-walk the plan untyped.
+Run the steps of resolving the unresolved `la` (see the top of this file) and return the resolved plan. Compiled for
+the plan's type (after id normalization, see `resolve`), so the steps it calls are compiled together with it; the steps
+themselves walk the plan untyped.
 """
 function _resolve_plan(la::LA) where {LA<:LoopSpec}
     if la isa FinalizedAlgorithm
@@ -58,11 +58,8 @@ function _resolve_plan(la::LA) where {LA<:LoopSpec}
     if !(la isa LoopAlgorithm)
         return _resolve_plan(LoopAlgorithm(la))
     end
-    if isresolved(la)
-        return la
-    end
 
-    registry, keyed_la = setup_registry_and_keyed_algos(la)   # 1. keys and namespaces
+    registry, keyed_la = build_registry_and_key_plan(la)   # 1. keys and namespaces
     return _resolve_keyed_plan(keyed_la, registry)
 end
 
@@ -72,7 +69,7 @@ Run steps 2 to 4 on `keyed_la`, a root wrapper that step 1 gave keys to with `re
 """
 function _resolve_keyed_plan(keyed_la::LA, registry::R) where {LA<:LoopAlgorithm, R<:NameSpaceRegistry}
     keyed_la = _attach_registry(keyed_la, registry)                      # 2. share the registry
-    plan = _resolve_plan_wiring_tree(getplan(keyed_la), registry, (;))   # 3. routes, shares
+    plan = _resolve_wiring(getplan(keyed_la), registry, (;))   # 3. routes, shares
     plan = _resolve_scopes(plan, NoScope, "")                            # 4. scopes
     return setoptions(setfield(keyed_la, :plan, plan), _root_options(keyed_la))
 end
@@ -86,10 +83,11 @@ algorithms get keys that do not clash across them (the second algorithm's `Senso
 `Sensor_1`).
 
 Meant for multi-stage runs: prepare several algorithms at once, then run each separately, each in its own process.
+Nothing in the package calls it yet; it is kept for making separate plans runnable separately (see the TODO below).
 """
 function resolve(la1::LA1, la2::LA2, las::Vararg{LoopSpec}) where {LA1<:LoopSpec, LA2<:LoopSpec}
     loopalgorithms = (la1, la2, las...)
-    registry, keyed_loopalgorithms = _build_shared_registry_and_keyed_algos(loopalgorithms)
+    registry, keyed_loopalgorithms = _build_shared_registry_and_key_plans(loopalgorithms)
     return map(keyed -> _resolve_keyed_plan(keyed, registry), keyed_loopalgorithms)
 end
 
@@ -100,7 +98,7 @@ end
 # (no unspecialized entry), skips the `isresolved` check and `Unique` id normalization (so each new id compiles it
 # again), and a `FinalizedAlgorithm` argument fails (`LoopAlgorithm(::FinalizedAlgorithm)` has no method). Route it
 # through the same steps as `resolve(la)`.
-Base.@nospecializeinfer function _build_shared_registry_and_keyed_algos(@nospecialize(loopalgorithms::Tuple))
+Base.@nospecializeinfer function _build_shared_registry_and_key_plans(@nospecialize(loopalgorithms::Tuple))
     builder = RegistryBuilder()
     keyed = Vector{Any}(undef, nfields(loopalgorithms))
     for i in eachindex(keyed)

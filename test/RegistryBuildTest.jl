@@ -3,8 +3,8 @@ using StatefulAlgorithms
 
 const RB = StatefulAlgorithms
 
-# Building a plan's registry (step 1 of `resolve`): `setup_registry_and_keyed_algos` works the layout out from the
-# plan's type while compiling (the generated path), or from the values at run time (`setup_registry_from_values`).
+# Building a plan's registry (step 1 of `resolve`): `build_registry_and_key_plan` works the layout out from the
+# plan's type while compiling (the generated path), or from the values at run time (`build_registry_from_values`).
 
 @StepAlgorithm function RBCount(@managed(n = 0))
     @update n = n + 1
@@ -29,9 +29,9 @@ function rb_loopalgorithm(plan)
     return first(RB.normalize_ids(la))
 end
 
-"""Whether the compiled `setup_registry_and_keyed_algos` for `la` sets the registry up at run time."""
+"""Whether the compiled `build_registry_and_key_plan` for `la` sets the registry up at run time."""
 rb_uses_runtime_path(la) =
-    occursin("setup_registry_from_values", string(Base.code_typed(RB.setup_registry_and_keyed_algos, (typeof(la),))[1][1].code))
+    occursin("build_registry_from_values", string(Base.code_typed(RB.build_registry_and_key_plan, (typeof(la),))[1][1].code))
 
 """Whether two `(registry, keyed la)` results are the same: types, keys, multipliers and lookup tables."""
 function rb_same_setup(a, b)
@@ -122,7 +122,7 @@ end
     for (name, plan) in [RB_TYPED_PLANS; "merged named states" => RB_MERGE_PLAN]
         @testset "$name" begin
             la = rb_loopalgorithm(plan)
-            @test rb_same_setup(RB.setup_registry_and_keyed_algos(la), RB.setup_registry_from_values(la))
+            @test rb_same_setup(RB.build_registry_and_key_plan(la), RB.build_registry_from_values(la))
         end
     end
     # The registries themselves, for a few of them.
@@ -146,7 +146,7 @@ rb_plus_one(x) = x + 1.0
     # A nested plan given a name (`insert` allows it): its states are registered as an unnamed plan's are.
     named = insert(CompositeAlgorithm(RBCount, (1,)), 2, IdentifiableAlgo(inner, :named))
     la = rb_loopalgorithm(named)
-    @test rb_same_setup(RB.setup_registry_and_keyed_algos(la), RB.setup_registry_from_values(la))
+    @test rb_same_setup(RB.build_registry_and_key_plan(la), RB.build_registry_from_values(la))
     @test RB.all_keys(RB.getregistry(resolve(named))) == (:_state_1, :RBCount_1)
     @test RB.context(run(named; repeats = 3))[:_state_1].x == 3.0
 end
@@ -184,8 +184,8 @@ RB.autokey_basename(::Union{RBCustom, Type{<:RBCustom}}) = :Custom
     @test keys_of(renamed()) == (:Again_1, :RBCount_1)
     # A rule method defined before the first resolve: both paths agree.
     la = rb_loopalgorithm(CompositeAlgorithm(RBCustom, RBCustom, (1, 2)))
-    @test RB.all_keys(RB.setup_registry_and_keyed_algos(la)[1]) == (:Custom_1,)
-    @test rb_same_setup(RB.setup_registry_and_keyed_algos(la), RB.setup_registry_from_values(la))
+    @test RB.all_keys(RB.build_registry_and_key_plan(la)[1]) == (:Custom_1,)
+    @test rb_same_setup(RB.build_registry_and_key_plan(la), RB.build_registry_from_values(la))
     # Plans that ask no changed rule keep the generated path.
     @test !rb_uses_runtime_path(rb_loopalgorithm(CompositeAlgorithm(RBCount, RBScale, (1, 2))))
 end

@@ -5,6 +5,9 @@ use it: inferring and compiling the pipeline as one function costs more for the 
 untyped steps, and gives nothing to a caller that gets `Any` from `resolve` anyway.
 
 Steps 1 and 2 (registry, attaching it) are shared with `resolve`; steps 3 and 4 have typed versions here.
+
+Preserved on purpose: nothing in the package calls this yet, but it stays, in this file apart from the untyped steps.
+When an untyped step is changed (e.g. to compile less), its inferred twin here is kept.
 =#
 
 # Inferred: returns the concrete resolved type of `la`, which a caller that knows the plan type gets at compile time.
@@ -17,21 +20,21 @@ Steps 1 and 2 (registry, attaching it) are shared with `resolve`; steps 3 and 4 
         return la
     end
 
-    registry, keyed_la = setup_registry_and_keyed_algos(la)                    # 1. keys and namespaces
+    registry, keyed_la = build_registry_and_key_plan(la)                    # 1. keys and namespaces
     keyed_la = _attach_registry(keyed_la, registry)                             # 2. share the registry
-    plan = _resolve_plan_wiring_tree_typed(getplan(keyed_la), registry, (;))    # 3. routes, shares
+    plan = _resolve_wiring_typed(getplan(keyed_la), registry, (;))    # 3. routes, shares
     plan = _resolve_scopes_typed(plan, NoScope, Val(()))                        # 4. scopes
     return setoptions(setfield(keyed_la, :plan, plan), _root_options(keyed_la))
 end
 
 """
-The inferred `_resolve_plan_wiring_tree` (Wiring.jl, which explains the steps): resolve a plan tree and inlay inherited
+The inferred `_resolve_wiring` (Wiring.jl, which explains the steps): resolve a plan tree and inlay inherited
 global wiring into concrete children.
 """
-function _resolve_plan_wiring_tree_typed(la::LA, registry::NameSpaceRegistry, inherited_global::NamedTuple) where {LA<:AbstractPlan}
+function _resolve_wiring_typed(la::LA, registry::NameSpaceRegistry, inherited_global::NamedTuple) where {LA<:AbstractPlan}
     raw_wiring = getwiring(la)
     own_locals = getfield(raw_wiring, :locals)
-    own_global = _resolve_wiring_grouped(registry, global_wiring(raw_wiring))
+    own_global = _resolve_and_group_wiring(registry, global_wiring(raw_wiring))
     combined_global = _merge_global_wiring(inherited_global, own_global)
     funcs = _resolve_child_plans_typed(getalgos(la), registry, combined_global)
 
@@ -43,7 +46,7 @@ function _resolve_plan_wiring_tree_typed(la::LA, registry::NameSpaceRegistry, in
         target = plan_child_namespace(la, i)
         bucket = _retarget_owner_routes(getfield(child_wiring(raw_wiring), i), target)
         target_global = get(combined_global, target, Wiring())
-        target_child = get(_resolve_wiring_grouped(registry, bucket), target, Wiring())
+        target_child = get(_resolve_and_group_wiring(registry, bucket), target, Wiring())
         resolved = merge_wiring(target_global, target_child)
         return resolved
     end
@@ -52,12 +55,12 @@ function _resolve_plan_wiring_tree_typed(la::LA, registry::NameSpaceRegistry, in
 end
 
 # The children with the wiring of every nested plan resolved, the others as they are. Tuple recursion, not a closure in
-# `ntuple`: a recursive call to `_resolve_plan_wiring_tree_typed` from inside that closure is not inferred.
+# `ntuple`: a recursive call to `_resolve_wiring_typed` from inside that closure is not inferred.
 @inline _resolve_child_plans_typed(::Tuple{}, registry::R, inherited_global::G) where {R<:NameSpaceRegistry, G<:NamedTuple} = ()
 @inline _resolve_child_plans_typed(children::C, registry::R, inherited_global::G) where {C<:Tuple, R<:NameSpaceRegistry, G<:NamedTuple} =
     (_resolve_child_plan_typed(first(children), registry, inherited_global), _resolve_child_plans_typed(Base.tail(children), registry, inherited_global)...)
 @inline _resolve_child_plan_typed(child::C, registry::R, inherited_global::G) where {C<:LoopSpec, R<:NameSpaceRegistry, G<:NamedTuple} =
-    _resolve_plan_wiring_tree_typed(child, registry, inherited_global)
+    _resolve_wiring_typed(child, registry, inherited_global)
 @inline _resolve_child_plan_typed(child::C, ::R, ::G) where {C, R<:NameSpaceRegistry, G<:NamedTuple} = child
 
 """
@@ -69,11 +72,11 @@ Base.@nospecializeinfer function _compute_node_scope_typed(@nospecialize(LA::Typ
     at = join(path, ".")
     F = fieldtype(LA, :funcs)
     NS = fieldtype(LA, :namespaces)
-    locals = _scoped_names(scope_locals(Outer), fieldnames(fieldtype(fieldtype(LA, :wiring), :locals)), at)
+    locals = _add_scoped_names(scope_locals(Outer), fieldnames(fieldtype(fieldtype(LA, :wiring), :locals)), at)
     read = _find_returns_read_in_plan_typed(LA)
     captured = Tuple(unique(Symbol[n for i in 1:fieldcount(F) for n in callable_return_names(fieldtype(F, i))
                                    if n in read && !_haskey_untyped(locals, n) && !_haskey_untyped(scope_returns(Outer), n)]))
-    Sc = Scope{locals, _scoped_names(scope_returns(Outer), captured, at)}
+    Sc = Scope{locals, _add_scoped_names(scope_returns(Outer), captured, at)}
     owners = Tuple(unique(Symbol[namesymbol(fieldtype(NS, i)) for i in 1:fieldcount(F)
                                  if !(fieldtype(F, i) <: LoopSpec) && context_partition(Val(namesymbol(fieldtype(NS, i)))) isa NamespacePartition]))
     return Sc, (; returns = map(name -> make_storage_name(name, at), captured), owners)
@@ -112,7 +115,7 @@ The inferred `_resolve_scopes` (Scopes.jl, which explains scopes); `path` is the
     F = fieldtype(LA, :funcs)
     children = [fieldtype(F, i) <: LoopSpec ? :(_resolve_scopes_typed(getalgo(la, $i), $Sc, $(Val((Path..., i))))) : :(getalgo(la, $i))
                 for i in 1:fieldcount(F)]
-    child_wirings = [fieldtype(F, i) <: LoopSpec ? :(getwiring(getfield(funcs, $i))) : :(_scope_routes_to_storage(getfield(child_wiring(wiring), $i), $Sc))
+    child_wirings = [fieldtype(F, i) <: LoopSpec ? :(getwiring(getfield(funcs, $i))) : :(_point_routes_at_storage_typed(getfield(child_wiring(wiring), $i), $Sc))
                      for i in 1:fieldcount(F)]
     return quote
         wiring = getwiring(la)
@@ -120,4 +123,23 @@ The inferred `_resolve_scopes` (Scopes.jl, which explains scopes); `path` is the
         wirings = ($(child_wirings...),)
         return rebuild_plan_typed(la, funcs, PlanWiring(global_wiring(wiring), wirings, getfield(wiring, :locals), $Sc, $(Val(resets))))
     end
+end
+
+"""
+The inferred `_point_routes_at_storage` (Scopes.jl): the wiring with every route that reads a declared local or a
+captured return pointed at its slot in the scope `Sc`.
+"""
+_point_routes_at_storage_typed(wiring::Wiring, ::Type{Sc}) where {Sc<:Scope} =
+    Wiring(map(r -> _point_route_at_storage_typed(r, Sc), routes(wiring)), shares(wiring))
+_point_route_at_storage_typed(r::Route, ::Type) = r
+_point_route_at_storage_typed(r::Route{:_declared_locals, To, T, RT, V, A}, ::Type{Sc}) where {To, T, RT, V, A, Sc} =
+    Route{:_declared_locals, To, T, RT, _look_up_storage_names_typed(scope_locals(Sc), V, "local", "declared"), A, Nothing, Nothing}()
+_point_route_at_storage_typed(r::Route{:_captured_returns, To, T, RT, V, A}, ::Type{Sc}) where {To, T, RT, V, A, Sc} =
+    Route{:_captured_returns, To, T, RT, _look_up_storage_names_typed(scope_returns(Sc), V, "return", "captured by a call"), A, Nothing, Nothing}()
+
+"""The inferred `_look_up_storage_names` (Scopes.jl)."""
+_look_up_storage_names_typed(storage::NamedTuple, names::Tuple, kind, how) = map(name -> _look_up_storage_names_typed(storage, name, kind, how), names)
+function _look_up_storage_names_typed(storage::NamedTuple, name::Symbol, kind, how)
+    haskey(storage, name) || construction_error("A route reads the ", kind, " `", name, "`, which is not ", how, " in this plan or an enclosing one.")
+    return getproperty(storage, name)
 end
