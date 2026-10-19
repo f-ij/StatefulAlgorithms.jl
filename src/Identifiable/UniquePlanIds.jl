@@ -372,9 +372,19 @@ Base.@nospecializeinfer function with_held_ids(@nospecialize(x))
     x isa ProcessContext || return x
     ref = registryref(x)
     ref isa Base.RefValue || return x
-    reg = registry_matchers(ref[])
-    reg === ref[] && return x
-    newref = new_instance(Core.apply_type(Base.RefValue, typeof(reg)), reg)
+    newref = _held_registry_ref(ref)
+    newref === ref && return x
     subcontexts = get_subcontexts(x)
     return new_instance(Core.apply_type(ProcessContext, typeof(subcontexts), typeof(newref)), subcontexts, newref)
+end
+
+# The registry with `DoubleMatcher`s for the registry in `ref`, made once per registry: the contexts of one plan share
+# their registry `Ref`, so later calls only rewrap. A registry without `Unique` handles is its own (`ref` itself).
+const _HELD_REGISTRIES = WeakKeyDict{Base.RefValue, Base.RefValue}()
+const _HELD_REGISTRIES_LOCK = ReentrantLock()
+Base.@nospecializeinfer function _held_registry_ref(@nospecialize(ref::Base.RefValue))
+    return @lock _HELD_REGISTRIES_LOCK get!(_HELD_REGISTRIES, ref) do
+        reg = registry_matchers(ref[])
+        reg === ref[] ? ref : new_instance(Core.apply_type(Base.RefValue, typeof(reg)), reg)
+    end
 end
