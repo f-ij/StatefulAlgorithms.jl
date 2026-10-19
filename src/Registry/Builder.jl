@@ -1,16 +1,24 @@
 #=
 Building a registry.
 
-A `RegistryBuilder` collects the algorithms of a registry as plain values: per entry type its keyed algorithms
-(`Lin_1`, `Lin_2`, ...), their multipliers and the runtime lookup table. `add!` adds one algorithm, following the rules
-in Interfaces.jl; `registry` then creates the `NameSpaceRegistry` once. (Adding to a `NameSpaceRegistry` itself gives a
-registry of a new type after every add, which Julia compiles anew each time.)
+Why a builder: a `NameSpaceRegistry`'s type names every algorithm's type, so adding one algorithm to it gives a registry
+of a new type, and Julia compiles everything that touches it again; adding a plan's algorithms one by one would compile
+once per add. A `RegistryBuilder` is instead a scratch pad of plain vectors, the same type for every plan: per entry type
+(`TypeEntryBuilder`) its keyed algorithms (`Lin_1`, `Lin_2`, ...), their multipliers and its runtime lookup table
+(lookup key => position). `add!` puts one algorithm on it, following the rules in Interfaces.jl; the registry is built
+from it once, at the end.
 
 The builder works in two modes, with the same code:
-- on values: `add!` gets the algorithms, and `registry(builder)` builds the registry from them;
-- on types: `add!` gets `KnownByType`s (KnownByType.jl), and `registry_code(builder)` is the code that builds the
-  registry from the plan at run time. Every decision is then made from the types; a step that needs the values throws
-  `NeedsValues`.
+- on values, at run time: `add!` gets the algorithms, and `registry(builder)` builds the registry from them;
+- on types, while compiling (the generated `setup_registry_and_keyed_algos` sees only the plan's type): `add!` gets
+  `KnownByType`s (KnownByType.jl), an algorithm's type plus the code that reads the algorithm out of the plan at run
+  time, and `registry_code(builder)` is the code that builds the registry, the body of the generated function. Every
+  decision is then made from the types; a step that needs the values (a merge) throws `NeedsValues`, and the plan is
+  set up on values instead.
+
+Lookup keys (`lookup_key`): for a value, its runtime key (`dynamic_lookup_key`); for a `KnownByType`, the same key
+worked out from the type. A normalized handle's key needs its uuid, a value, so on types it is a `RuntimeLookupKey`
+placeholder, and `registry_code` writes a `dynamic_lookup_key` call that fills it in at run time.
 
 The functions take algorithms and types as values (`@nospecialize`), so they are compiled once, not once per plan.
 =#
