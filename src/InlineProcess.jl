@@ -97,6 +97,7 @@ end
     run_context = if isnothing(context)
         _context(p)
     else
+        context = strip_held_ids(context)
         @assert context isa contexttype(p) "Wrong context shape for this process\n Context is of type $(typeof(context)), but expected $(contexttype(p))."
         context
     end
@@ -121,6 +122,7 @@ end
     run_context = if isnothing(context)
         _context(p)
     else
+        context = strip_held_ids(context)
         @assert context isa contexttype(p) "Wrong context shape for this process\n Context is of type $(typeof(context)), but expected $(contexttype(p))."
         context
     end

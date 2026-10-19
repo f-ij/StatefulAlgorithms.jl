@@ -69,3 +69,15 @@ end
     T = only(Base.return_types(getindex, (typeof(c), typeof(held))))
     @test isconcretetype(T)
 end
+
+@testset "A context with the user's Unique keys can be given back to a Process" begin
+    held = Unique(RLCounter())
+    plan = CompositeAlgorithm(held, Unique(RLCounter()), (1, 1))
+    p = Process(plan; repeats = 2); run(p); wait(p)
+    c = StatefulAlgorithms.context(p)
+    @test c[held].x == 2.0
+    q = Process(plan; context = c, repeats = 3); run(q); wait(q)
+    @test StatefulAlgorithms.context(q)[held].x == 5.0
+    # The process works with the context without the key map: same type as a fresh process's
+    @test typeof(StatefulAlgorithms.getalgo(q)) === typeof(StatefulAlgorithms.getalgo(p))
+end

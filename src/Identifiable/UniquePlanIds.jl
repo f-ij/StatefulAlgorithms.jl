@@ -9,10 +9,9 @@ A `Unique(f)` handle carries `UniquePlanId{uuid}(uuid)` (Matching.jl). Its id go
    first appearance in the plan. A nested plan comes with its own numbers; they are renumbered into the new plan's,
    matched by uuid. The same code builds a plan of the same type for every new set of uuids.
 3. The registry stores each handle numbered, so the registry, the context, `init` and the loop have no uuid in their
-   types and compile once for every new set of handles. A context handed to the user (`context(p)`, `fetch(p)`) is
-   rewrapped by `with_held_ids`: its registry stores each handle with
-   `DoubleMatcher(UniquePlanId{k}(uuid), UniquePlanId{uuid}(uuid))` (`registry_matchers`), so the handle the user holds
-   is found from types, as a registry key is.
+   types and compile once for every new set of handles. A context handed to the user (`context(p)`, `fetch(p)`) carries
+   the plan's `UniqueKeyMap` (`k => uuid`) in its type (`with_held_ids`), so the handle the user holds is found from
+   types, as a registry key is: `context[handle]` numbers it while compiling and looks that up.
 
 All three are one rewrite (`rewrite_unique_ids`) over values held as `Any`, with `@nospecialize`: it rebuilds every
 part of a value whose type mentions a `UniquePlanId`, and gives each id its new form (`rewrite_id`) and each id that
@@ -300,94 +299,114 @@ function _scope_numbers!(scope::Dict{Any, Int}, found::Vector{Tuple{Any, UUID}},
 end
 
 ################################################
-#################   REGISTRY   #################
+#################   KEY MAP    #################
 ################################################
-
-struct _RegistryIds end
-rewrite_id(::_RegistryIds, @nospecialize(id::UniquePlanId)) = registry_matcher(id)
-# Types only follow the handles' fields (a registry entry's handle types); nothing else in a registry holds an id.
-rewrite_param(::_RegistryIds, @nospecialize(p), cache::IdDict{Any, Bool}) = p
-
-"""
-    registry_matcher(id) -> matcher
-
-The matcher a registry stores a handle with, when `resolve` is done: for a numbered `Unique` handle,
-`DoubleMatcher(UniquePlanId{k}(uuid), UniquePlanId{uuid}(uuid))`; any other id as it is.
-"""
-registry_matcher(id) = id
-function registry_matcher(@nospecialize(id::UniquePlanId))
-    plan_number(id) isa Int || return id
-    held = user_unique_id(origin(id))
-    return new_instance(DoubleMatcher{typeof(id), typeof(held)}, id, held)
-end
 
 """The matcher of the handle the user holds, `UniquePlanId{u}(u)`, made without compiling its constructor."""
 Base.@nospecializeinfer user_unique_id(u::UUID) = new_instance(UniquePlanId{u}, u)
 
 """
-    registry_matchers(resolved) -> resolved
+    UniqueKeyMap{P}
 
-`resolved` with every registry in it storing its `Unique` handles with their `registry_matcher`
-(`DoubleMatcher(UniquePlanId{k}(uuid), UniquePlanId{uuid}(uuid))`); the last step of `resolve`. Everything outside the
-registries (the plan) keeps the numbered ids. Untyped; compiles nothing per uuid.
+The numbers a plan gave its `Unique` handles, as type data: `P` is a tuple of `k => uuid` pairs, one per handle in the
+registry (`UniquePlanId{k}(uuid)`). A context handed to the user carries it (`HeldRegistry`), so a handle the user holds
+(`UniquePlanId{uuid}`) is turned into its numbered one while compiling (`numbered_handle`) and found from types.
 """
-Base.@nospecializeinfer registry_matchers(@nospecialize(resolved)) = _rewrite_registries(resolved, IdDict{Any, Bool}())
+struct UniqueKeyMap{P} end
 
-function _rewrite_registries(@nospecialize(v), cache::IdDict{Any, Bool})
-    v isa Type && return v
-    T = typeof(v)
-    _mentions_unique_ids(T, cache) || return v
-    v isa NameSpaceRegistry && return _rewrite_value(v, _RegistryIds(), cache)
-    (ismutable(v) || v isa UniquePlanId) && return v
-    n = nfields(v)
-    fields = Vector{Any}(undef, n)
-    changed = false
-    for i in 1:n
-        old = getfield(v, i)
-        fields[i] = _rewrite_registries(old, cache)
-        changed |= fields[i] !== old
+"""
+    HeldRegistry{RR, M}
+
+The registry field of a context handed to the user (`with_held_ids`): the registry `Ref` as SA works with it (`ref`,
+numbered handles only) and the plan's `UniqueKeyMap` `M`. Only the type is new for every set of `Unique` handles; the
+registry is the same object.
+"""
+struct HeldRegistry{RR, M}
+    ref::RR
+end
+@inline _unref(h::HeldRegistry) = getfield(h, :ref)[]
+
+"""
+    unique_key_map(registry) -> UniqueKeyMap or nothing
+
+The `UniqueKeyMap` of the `Unique` handles in `registry`, in the order of their numbers; `nothing` when it has none.
+Untyped.
+"""
+Base.@nospecializeinfer function unique_key_map(@nospecialize(reg))
+    pairs = Pair{Int, UUID}[]
+    for algo in all_algos(reg)
+        algo isa IdentifiableAlgo || continue
+        m = getfield(algo, :matcher)
+        m isa UniquePlanId && plan_number(m) isa Int && push!(pairs, plan_number(m) => origin(m))
     end
-    changed || return v
-    v isa Tuple && return Core._apply_iterate(iterate, tuple, fields)
-    v isa NamedTuple && return NamedTuple{T.parameters[1]}(Core._apply_iterate(iterate, tuple, fields))
-    params = Any[T.parameters...]
-    for i in 1:n
-        j = _field_parameter_index(T, i)
-        isnothing(j) || (params[j] = typeof(fields[i]))
-    end
-    return ccall(:jl_new_structv, Any, (Any, Ptr{Any}, UInt32), Core.apply_type(T.name.wrapper, params...), fields, n)
+    isempty(pairs) && return nothing
+    sort!(pairs; by = first)
+    return new_instance(Core.apply_type(UniqueKeyMap, Tuple(pairs)))
 end
 
 """
-    with_held_ids(x) -> x
+    numbered_handle(handle, UniqueKeyMap{P})
 
-The context `x` as it is handed to the user: its registry stores each `Unique` handle with
-`DoubleMatcher(UniquePlanId{k}(uuid), UniquePlanId{uuid}(uuid))` (`registry_matchers`), so a handle the user holds is
-found from types (`context[handle]`), like a registry key. The subcontexts are the same values, not copies. `init`,
-the loop and everything inside SA work with the context as it is (registry with `UniquePlanId{k}` only), whose type is
-the same for every new set of handles. Anything that is not a `ProcessContext`, or has no `Unique` handles, is returned
-as it is. Untyped: made at run time, compiling nothing per uuid.
+The handle the user holds as the plan numbered it: `UniquePlanId{uuid}` becomes `UniquePlanId{k}`, with `k` from the
+map, decided while compiling. Any other value, or a handle the map does not have, as it is.
 """
+@generated function numbered_handle(obj::IdentifiableAlgo{F, Id, VA, AN, Key, Mt}, ::Type{UniqueKeyMap{P}}) where {F, Id, VA, AN, Key, Mt, P}
+    Id <: UniquePlanId && plan_number(Id) isa UUID || return :(obj)
+    k = nothing
+    for pair in P
+        pair.second == plan_number(Id) && (k = pair.first; break)
+    end
+    isnothing(k) && return :(obj)
+    NId = UniquePlanId{k}
+    return :(IdentifiableAlgo{F, $NId, VA, AN, Key, $NId}(getfield(obj, :func), $NId(origin(getfield(obj, :matcher)))))
+end
+@inline numbered_handle(obj, ::Type) = obj
+
+"""
+    with_held_ids(x, keymap) -> x
+
+The context `x` as it is handed to the user: its registry field becomes a `HeldRegistry` carrying `keymap` (a
+`UniqueKeyMap`) in its type, so a `Unique` handle the user holds is found from types (`context[handle]`), like a registry
+key. Same subcontexts and registry, not copies. Anything that is not a `ProcessContext`, or without a map, as it is.
+Untyped: made at run time, compiling nothing per uuid.
+"""
+Base.@nospecializeinfer function with_held_ids(@nospecialize(x), @nospecialize(keymap))
+    x isa ProcessContext && !isnothing(keymap) || return x
+    ref = registryref(x)
+    ref isa Base.RefValue || return x
+    held = new_instance(Core.apply_type(HeldRegistry, typeof(ref), typeof(keymap)), ref)
+    subcontexts = get_subcontexts(x)
+    return new_instance(Core.apply_type(ProcessContext, typeof(subcontexts), typeof(held)), subcontexts, held)
+end
+
+"""`with_held_ids` with the map of `x`'s own registry (`unique_key_map`), made once per registry and cached."""
 Base.@nospecializeinfer function with_held_ids(@nospecialize(x))
     x isa ProcessContext || return x
     ref = registryref(x)
     ref isa Base.RefValue || return x
-    newref = _held_registry_ref(ref)
-    newref === ref && return x
-    subcontexts = get_subcontexts(x)
-    return new_instance(Core.apply_type(ProcessContext, typeof(subcontexts), typeof(newref)), subcontexts, newref)
+    return with_held_ids(x, cached_key_map(ref))
 end
 
-# The registry with `DoubleMatcher`s for the registry in `ref`, made once per registry: the contexts of one plan share
-# their registry `Ref`, so later calls only rewrap. A registry without `Unique` handles is its own (`ref` itself).
-# The values are boxed (`Ref{Any}`): the cache's methods are then compiled once, not for every new registry type.
-const _HELD_REGISTRIES = WeakKeyDict{Base.RefValue, Base.RefValue{Any}}()
-const _HELD_REGISTRIES_LOCK = ReentrantLock()
-Base.@nospecializeinfer function _held_registry_ref(@nospecialize(ref::Base.RefValue))
-    boxed = @lock _HELD_REGISTRIES_LOCK get!(() -> _held_registry_box(ref), _HELD_REGISTRIES, ref)
-    return boxed[]
+"""
+    strip_held_ids(x) -> x
+
+A context handed to the user, back as SA works with it (the registry `Ref` without its `UniqueKeyMap`); for a context
+the user passes back in (`Process(...; context)`), so nothing SA compiles has a uuid in its type.
+"""
+Base.@nospecializeinfer function strip_held_ids(@nospecialize(x))
+    x isa ProcessContext || return x
+    held = registryref(x)
+    held isa HeldRegistry || return x
+    ref = getfield(held, :ref)
+    subcontexts = get_subcontexts(x)
+    return new_instance(Core.apply_type(ProcessContext, typeof(subcontexts), typeof(ref)), subcontexts, ref)
 end
-Base.@nospecializeinfer function _held_registry_box(@nospecialize(ref::Base.RefValue))
-    reg = registry_matchers(ref[])
-    return Ref{Any}(reg === ref[] ? ref : new_instance(Core.apply_type(Base.RefValue, typeof(reg)), reg))
+
+# The `UniqueKeyMap` of the registry in `ref`, made once per registry (the contexts of one plan share their registry
+# `Ref`). The values are boxed (`Ref{Any}`), so the cache's methods compile once, not for every new map type.
+const _KEY_MAPS = WeakKeyDict{Base.RefValue, Base.RefValue{Any}}()
+const _KEY_MAPS_LOCK = ReentrantLock()
+Base.@nospecializeinfer function cached_key_map(@nospecialize(ref::Base.RefValue))
+    boxed = @lock _KEY_MAPS_LOCK get!(() -> Ref{Any}(unique_key_map(ref[])), _KEY_MAPS, ref)
+    return boxed[]
 end

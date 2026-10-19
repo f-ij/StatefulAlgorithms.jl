@@ -14,7 +14,6 @@ _lowered_matcher(matcher) = matcher
 _lowered_matcher(::SimpleId{data}) where {data} = _lowered_id_key(SimpleId, data)
 _lowered_matcher(::ObjectIDMatcher{data}) where {data} = _lowered_id_key(ObjectIDMatcher, data)
 _lowered_matcher(id::UniquePlanId)::Symbol = _lowered_id_key(UniquePlanId, origin(id))
-_lowered_matcher(id::DoubleMatcher) = _lowered_matcher(matcher_parts(id)[1])
 
 """
     _lowered_id_key(IdType, data) -> Symbol
