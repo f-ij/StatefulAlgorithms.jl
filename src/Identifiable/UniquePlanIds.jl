@@ -8,11 +8,11 @@ A `Unique(f)` handle carries `UniquePlanId{uuid}(uuid)` (Matching.jl). Its id go
 2. `number_unique_ids` (when a plan is built, `_build_plan`): `UniquePlanId{k}(uuid)`, `k` = 1, 2, ... in order of
    first appearance in the plan. A nested plan comes with its own numbers; they are renumbered into the new plan's,
    matched by uuid. The same code builds a plan of the same type for every new set of uuids.
-3. `registry_matchers` (the last step of `resolve`): the registry stores each handle with
-   `DoubleMatcher(UniquePlanId{k}(uuid), UniquePlanId{uuid}(uuid))`, so the plan's code finds it by `k` and the handle
-   the user holds finds it by its uuid, both from types alone.
+3. The registry stores each handle numbered, so no registry, context or loop has a uuid in its type: they compile once
+   for every new set of handles. The plan's code finds a handle by its number `k`, from types; a handle the user holds
+   (`UniquePlanId{uuid}`) finds it by its uuid in the registry's runtime lookup table (`static_findfirst_match`).
 
-All three are one rewrite (`rewrite_unique_ids`) over values held as `Any`, with `@nospecialize`: it rebuilds every
+Both are one rewrite (`rewrite_unique_ids`) over values held as `Any`, with `@nospecialize`: it rebuilds every
 part of a value whose type mentions a `UniquePlanId`, and gives each id its new form (`rewrite_id`) and each id that
 only a type holds (a `Var`) its new number (`rewrite_type_number`). It compiles nothing per uuid.
 =#
@@ -25,8 +25,8 @@ only a type holds (a `Var`) its new number (`rewrite_type_number`). It compiles 
     new_instance(T, fields...) -> T
 
 A value of the concrete type `T` with `fields` (of exactly its field types), made without calling a constructor. A new
-type's default constructor is compiled on first call, about 1.5 ms each; `Unique` handles, the routes that hold them and
-their registry matchers are new types for every uuid, so they are made with this.
+type's default constructor is compiled on first call, about 1.5 ms each; `Unique` handles and the routes that hold them
+are new types for every uuid, so they are made with this.
 """
 Base.@nospecializeinfer function new_instance(@nospecialize(T::DataType), @nospecialize(fields...))
     n = length(fields)
@@ -297,61 +297,5 @@ function _scope_numbers!(scope::Dict{Any, Int}, found::Vector{Tuple{Any, UUID}},
     return scope
 end
 
-################################################
-#################   REGISTRY   #################
-################################################
-
-struct _RegistryIds end
-rewrite_id(::_RegistryIds, @nospecialize(id::UniquePlanId)) = registry_matcher(id)
-# Types only follow the handles' fields (a registry entry's handle types); nothing else in a registry holds an id.
-rewrite_param(::_RegistryIds, @nospecialize(p), cache::IdDict{Any, Bool}) = p
-
-"""
-    registry_matcher(id) -> matcher
-
-The matcher a registry stores a handle with, when `resolve` is done: for a numbered `Unique` handle,
-`DoubleMatcher(UniquePlanId{k}(uuid), UniquePlanId{uuid}(uuid))`; any other id as it is.
-"""
-registry_matcher(id) = id
-function registry_matcher(@nospecialize(id::UniquePlanId))
-    plan_number(id) isa Int || return id
-    held = user_unique_id(origin(id))
-    return new_instance(DoubleMatcher{typeof(id), typeof(held)}, id, held)
-end
-
 """The matcher of the handle the user holds, `UniquePlanId{u}(u)`, made without compiling its constructor."""
 Base.@nospecializeinfer user_unique_id(u::UUID) = new_instance(UniquePlanId{u}, u)
-
-"""
-    registry_matchers(resolved) -> resolved
-
-`resolved` with every registry in it storing its `Unique` handles with their `registry_matcher`
-(`DoubleMatcher(UniquePlanId{k}(uuid), UniquePlanId{uuid}(uuid))`); the last step of `resolve`. Everything outside the
-registries (the plan) keeps the numbered ids. Untyped; compiles nothing per uuid.
-"""
-Base.@nospecializeinfer registry_matchers(@nospecialize(resolved)) = _rewrite_registries(resolved, IdDict{Any, Bool}())
-
-function _rewrite_registries(@nospecialize(v), cache::IdDict{Any, Bool})
-    v isa Type && return v
-    T = typeof(v)
-    _mentions_unique_ids(T, cache) || return v
-    v isa NameSpaceRegistry && return _rewrite_value(v, _RegistryIds(), cache)
-    (ismutable(v) || v isa UniquePlanId) && return v
-    n = nfields(v)
-    fields = Vector{Any}(undef, n)
-    changed = false
-    for i in 1:n
-        old = getfield(v, i)
-        fields[i] = _rewrite_registries(old, cache)
-        changed |= fields[i] !== old
-    end
-    changed || return v
-    v isa Tuple && return Core._apply_iterate(iterate, tuple, fields)
-    v isa NamedTuple && return NamedTuple{T.parameters[1]}(Core._apply_iterate(iterate, tuple, fields))
-    params = Any[T.parameters...]
-    for i in 1:n
-        j = _field_parameter_index(T, i)
-        isnothing(j) || (params[j] = typeof(fields[i]))
-    end
-    return ccall(:jl_new_structv, Any, (Any, Ptr{Any}, UInt32), Core.apply_type(T.name.wrapper, params...), fields, n)
-end

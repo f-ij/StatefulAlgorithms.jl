@@ -30,8 +30,8 @@ What a general state matches by: its id when it has one (a block's `@state`, one
 (a named state, `@state name begin … end`, which every state with that key shares).
 """
 match_by(ia::Union{IdentifiableAlgo{<:GeneralState}, Type{<:IdentifiableAlgo{<:GeneralState}}}) = _general_state_match(id(ia), getkey(ia))
-@inline _general_state_match(id::Union{SimpleId, UniquePlanId, DoubleMatcher, MatchAny, MatchAnyOf}, key) = id
-@inline _general_state_match(id::Type{<:Union{UniquePlanId, DoubleMatcher, MatchAnyOf}}, key) = id
+@inline _general_state_match(id::Union{SimpleId, UniquePlanId, MatchAny, MatchAnyOf}, key) = id
+@inline _general_state_match(id::Type{<:Union{UniquePlanId, MatchAnyOf}}, key) = id
 @inline _general_state_match(id, key) = ValMatcher(key)
 
 """A block's `@state` is named `_state_1`, `_state_2`, … in the context."""

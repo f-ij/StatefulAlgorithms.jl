@@ -15,9 +15,6 @@ Resolving a plan: everything that can only be decided once the whole composition
    captured returns its children see by name (`Scope`), and routes that read them point at
    their slots.
 
-5. Registry matchers: the registry stores each `Unique` handle with its `DoubleMatcher` (`registry_matchers`,
-   Identifiable/UniquePlanIds.jl), so the handle the user holds finds its entry.
-
 Steps 1 and 2 are in Registering.jl, step 3 in Wiring.jl, step 4 in Scopes.jl. `resolve` and the other entry points
 are below. Typed.jl is the inferred version of the steps. What a plan type provides (its getters, `rebuild_plan`) is in LoopAlgorithms/Interface.jl.
 =#
@@ -38,13 +35,12 @@ its inner loop is materialized.
 
 `resolve` itself is compiled once (its result is not inferred; a caller gets `Any`). The steps are run by
 `_resolve_plan`, compiled once per plan type; a plan's `Unique` handles are numbered when it is built
-(`number_unique_ids`), so the same layout with new handles is the same plan type and compiles nothing again. Only the
-last step, which puts the handles' uuids into the registry (`registry_matchers`), works per uuid, untyped. The inferred
-version, for a caller that knows the plan type, is `_resolve_plan_typed` (Typed.jl).
+(`number_unique_ids`), so the same layout with new handles is the same plan type, and so are its registry and context:
+nothing compiles again. The inferred version, for a caller that knows the plan type, is `_resolve_plan_typed` (Typed.jl).
 """
 Base.@nospecializeinfer function resolve(@nospecialize(la::LoopSpec))
-    la isa LoopAlgorithm && isresolved(la) && return la    # its type holds the handles' uuids: nothing to compile for it
-    return registry_matchers(_resolve_plan(la))
+    la isa LoopAlgorithm && isresolved(la) && return la
+    return _resolve_plan(la)
 end
 
 """
@@ -92,7 +88,7 @@ function resolve(la1::LA1, la2::LA2, las::Vararg{LoopSpec}) where {LA1<:LoopSpec
     # Each plan numbered its `Unique` handles on its own; one registry needs one numbering over all of them.
     loopalgorithms = number_unique_ids((la1, la2, las...))
     registry, keyed_loopalgorithms = _build_shared_registry_and_keyed_algos(loopalgorithms)
-    return registry_matchers(map(keyed -> _resolve_keyed_plan(keyed, registry), keyed_loopalgorithms))
+    return map(keyed -> _resolve_keyed_plan(keyed, registry), keyed_loopalgorithms)
 end
 
 @inline resolve(loopalgorithms::Tuple{Vararg{LoopSpec}}) = resolve(loopalgorithms...)

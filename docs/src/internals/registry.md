@@ -53,10 +53,10 @@ The uuid is in the handle's type only on the handle the user holds. Inside plans
 2. Building a plan numbers its handles (`number_unique_ids`): `UniquePlanId{k}(uuid)`, in order of first appearance;
    a nested plan is renumbered into the new plan's numbers, matched by uuid. Plans built from the same code with new
    `Unique`s have the same type, so constructing and resolving compile once.
-3. The last step of `resolve` (`registry_matchers`) stores each handle in the registry with
-   `DoubleMatcher(UniquePlanId{k}(uuid), UniquePlanId{uuid}(uuid))`: the plan's code finds it by `k`, the held handle by
-   its uuid, both from types. The registry, and so the context and the loop, have the uuids in their types: `init` and
-   the loop compile again for new `Unique`s.
+3. The registry stores each handle numbered, as the plan has it. No registry, context or loop has a uuid in its type,
+   so `init` and the loop compile once for every new set of `Unique`s. The plan's code finds a handle by its number `k`,
+   from types; a handle the user holds (`context[handle]`, `Init(handle; ...)`, `Var(handle, :x)`) is found by its uuid
+   in the registry's runtime lookup table (`static_findfirst_match`, `src/Registry/TypeEntries/Methods.jl`).
 
 This is the mechanism used when you need multiple logically separate instances of the same algorithm in one composition.
 

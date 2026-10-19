@@ -166,7 +166,8 @@ end
 The matcher of a `Unique` handle. `origin` (data) is the uuid drawn when the handle was made; `N` (type) is:
 - `origin` itself on the handle the user holds (`Unique(f)`), so that handle is a key known from its type alone;
 - `nothing` once a constructor took the handle (`strip_unique`), so constructors compile once for every handle;
-- the handle's number `k` in its plan (1, 2, ...), given when the plan is built (`number_unique_ids`).
+- the handle's number `k` in its plan (1, 2, ...), given when the plan is built (`number_unique_ids`); the registry
+  stores the handle so, and a held handle finds it by its uuid (`is_held_unique_id`).
 Two values are the same handle when their `origin`s are equal; at the type level (a handle's `Id` parameter) they
 match when their `N`s are equal.
 """
@@ -185,30 +186,6 @@ Base.:(==)(a::UniquePlanId, ::Type{UniquePlanId{N}}) where {N} = !isnothing(N) &
 Base.:(==)(T::Type{<:UniquePlanId}, b::UniquePlanId) = b == T
 Base.hash(a::UniquePlanId, h::UInt) = hash(origin(a), hash(UniquePlanId, h))
 
-"""
-    DoubleMatcher(first, second)
-
-Matches what either of two matchers matches. The registry stores a resolved `Unique` handle with
-`DoubleMatcher(UniquePlanId{k}(uuid), UniquePlanId{uuid}(uuid))` (`registry_matcher`): code of the plan finds it by its
-number `k`, the handle the user holds by its uuid, both from types alone.
-"""
-struct DoubleMatcher{A, B} <: AbstractMatcher{Tuple{A, B}}
-    first::A
-    second::B
-end
-matcher_parts(m::DoubleMatcher) = (getfield(m, :first), getfield(m, :second))
-matcher_parts(::Type{DoubleMatcher{A, B}}) where {A, B} = (A, B)
-
-const _AnyDoubleMatcher = Union{DoubleMatcher, Type{<:DoubleMatcher}}
-_double_matches(d, x) = (parts = matcher_parts(d); parts[1] == x || parts[2] == x)
-Base.:(==)(d::DoubleMatcher, x) = _double_matches(d, x)
-Base.:(==)(x, d::DoubleMatcher) = _double_matches(d, x)
-Base.:(==)(d::DoubleMatcher, e::DoubleMatcher) = _double_matches(d, matcher_parts(e)[1]) || _double_matches(d, matcher_parts(e)[2])
-Base.:(==)(d::Type{<:DoubleMatcher}, x::Type{<:UniquePlanId}) = _double_matches(d, x)
-Base.:(==)(x::Type{<:UniquePlanId}, d::Type{<:DoubleMatcher}) = _double_matches(d, x)
-Base.:(==)(d::Type{<:DoubleMatcher}, x::UniquePlanId) = _double_matches(d, x)
-Base.:(==)(x::UniquePlanId, d::Type{<:DoubleMatcher}) = _double_matches(d, x)
-Base.:(==)(d::Type{<:DoubleMatcher}, e::Type{<:DoubleMatcher}) = d === e || any(p -> _double_matches(d, p), matcher_parts(e))
 
 """
     MatchAnyOf(matchers::Tuple)
@@ -227,5 +204,7 @@ Base.:(==)(x, m::MatchAnyOf) = _any_matches(m, x)
 Base.:(==)(m::MatchAnyOf, n::MatchAnyOf) = any(p -> _any_matches(m, p), matcher_parts(n))
 Base.:(==)(m::Type{<:MatchAnyOf}, x::Union{UniquePlanId, Type{<:UniquePlanId}}) = _any_matches(m, x)
 Base.:(==)(x::Union{UniquePlanId, Type{<:UniquePlanId}}, m::Type{<:MatchAnyOf}) = _any_matches(m, x)
-Base.:(==)(m::MatchAnyOf, d::DoubleMatcher) = any(p -> _double_matches(d, p), matcher_parts(m))
-Base.:(==)(d::DoubleMatcher, m::MatchAnyOf) = m == d
+
+"""Whether `id` is the matcher of a `Unique` handle the user holds (`UniquePlanId{uuid}`), found by its uuid at run time."""
+is_held_unique_id(id) = false
+is_held_unique_id(id::UniquePlanId) = plan_number(id) isa UUID
