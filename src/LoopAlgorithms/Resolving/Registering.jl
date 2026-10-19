@@ -191,6 +191,16 @@ end
 """How often each child of `la` runs per run of `la` (`multipliers`), a tuple of numbers."""
 Base.@nospecializeinfer function read_multipliers(@nospecialize(la))
     la isa KnownByType || return multipliers(la)
-    la.type <: AbstractPlan || throw(NeedsValues())
-    return multipliers(la.type)
+    T = la.type
+    T <: AbstractPlan || throw(NeedsValues())
+    # A `Routine`'s lifetimes or a composite's intervals are read from the type parameter, not with `multipliers(T)`,
+    # which compiles once per plan type. Any other plan type answers `multipliers(T)` (LoopAlgorithms/Interface.jl).
+    T <: Union{Routine, CompositeAlgorithm} || return multipliers(T)
+    specs = T.parameters[2]
+    ms = Vector{Any}(undef, length(specs))
+    for i in 1:length(specs)
+        s = getfield(specs, i)
+        ms[i] = T <: Routine ? _routine_schedule_multiplier(s) : 1 / getinterval(s)
+    end
+    return Tuple(ms)
 end

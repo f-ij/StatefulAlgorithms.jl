@@ -116,10 +116,12 @@ entry_matcher(@nospecialize(T)) = ask_rule(match_by, T)
     same_algorithm(added, entry) -> Bool
 
 Whether the matcher of an added algorithm (`added_matcher`) and that of an entry (`entry_matcher`) say they are the
-same algorithm: `added == entry`, with concrete types (algorithms often match by their type, `Lin{1}`) equal only if
-identical.
+same algorithm: `added == entry`, with concrete types (algorithms often match by their type, `Lin{1}`) and normalized
+ids equal only if identical.
 """
 function same_algorithm(@nospecialize(added), @nospecialize(entry))
+    # `==` of two `NormalizedId`s is `===`; calling `==` would compile it once per pair of id types.
+    added isa NormalizedId && entry isa NormalizedId && return added === entry
     if added isa DataType && isconcretetype(added) && entry isa DataType && isconcretetype(entry)
         return added === entry
     end
