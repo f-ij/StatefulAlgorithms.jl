@@ -45,7 +45,8 @@ Base.@nospecializeinfer function Route(
 
     from_ref = scref_object(from)
     to_ref = scref_object(to)
-    return Route{
+    # `new_instance`: a route from a held `Unique` handle is a new type for every uuid.
+    return new_instance(Route{
         scref_match(from),
         scref_match(to),
         transform,
@@ -54,7 +55,7 @@ Base.@nospecializeinfer function Route(
         aliases,
         typeof(from_ref),
         typeof(to_ref),
-    }(from_ref, to_ref)
+    }, from_ref, to_ref)
 end
 
 # The endpoint matchers (parameters 1, 2) are those of the endpoint fields `from`, `to` (Identifiable/UniquePlanIds.jl).

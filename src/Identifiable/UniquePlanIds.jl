@@ -22,6 +22,22 @@ only a type holds (a `Var`) its new number (`rewrite_type_number`). It compiles 
 ################################################
 
 """
+    new_instance(T, fields...) -> T
+
+A value of the concrete type `T` with `fields` (of exactly its field types), made without calling a constructor. A new
+type's default constructor is compiled on first call, about 1.5 ms each; `Unique` handles, the routes that hold them and
+their registry matchers are new types for every uuid, so they are made with this.
+"""
+Base.@nospecializeinfer function new_instance(@nospecialize(T::DataType), @nospecialize(fields...))
+    n = length(fields)
+    v = Vector{Any}(undef, n)
+    for i in 1:n
+        v[i] = fields[i]
+    end
+    return ccall(:jl_new_structv, Any, (Any, Ptr{Any}, UInt32), T, v, n)
+end
+
+"""
     rewrite_unique_ids(v, rewrite) -> v with its `UniquePlanId`s rewritten
 
 Rebuilds every part of `v` whose type mentions a `UniquePlanId`: each id value becomes `rewrite_id(rewrite, id)`, each
@@ -297,7 +313,14 @@ The matcher a registry stores a handle with, when `resolve` is done: for a numbe
 `DoubleMatcher(UniquePlanId{k}(uuid), UniquePlanId{uuid}(uuid))`; any other id as it is.
 """
 registry_matcher(id) = id
-registry_matcher(id::UniquePlanId) = plan_number(id) isa Int ? DoubleMatcher(id, UniquePlanId(origin(id))) : id
+function registry_matcher(id::UniquePlanId)
+    plan_number(id) isa Int || return id
+    held = user_unique_id(origin(id))
+    return new_instance(DoubleMatcher{typeof(id), typeof(held)}, id, held)
+end
+
+"""The matcher of the handle the user holds, `UniquePlanId{u}(u)`, made without compiling its constructor."""
+Base.@nospecializeinfer user_unique_id(u::UUID) = new_instance(UniquePlanId{u}, u)
 
 """
     registry_matchers(resolved) -> resolved

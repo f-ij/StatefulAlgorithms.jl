@@ -41,7 +41,8 @@ The handle of `func` with id `id`: `static_id(id)` in its type, and `id` in its 
 Base.@nospecializeinfer function identifiable_with_id(@nospecialize(func), @nospecialize(id), @nospecialize(aliases), @nospecialize(algoname), @nospecialize(key))
     sid = static_id(id)
     field = sid === id ? nothing : id
-    return Core.apply_type(IdentifiableAlgo, typeof(func), sid, aliases, algoname, key, typeof(field))(func, field)
+    # Made with `new_instance`: a handle with data in its matcher (`Unique`) is a new type for every uuid.
+    return new_instance(Core.apply_type(IdentifiableAlgo, typeof(func), sid, aliases, algoname, key, typeof(field)), func, field)
 end
 
 """The handle `sa` with matcher `id` (`identifiable_with_id`); everything else is kept."""

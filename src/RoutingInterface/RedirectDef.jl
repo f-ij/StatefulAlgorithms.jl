@@ -26,8 +26,9 @@ struct Redirect{Fmatch, Tmatch, varnames, aliases, F, T} <: RootOption
     to::T
 end
 
-function Redirect(
-    from_to::Pair,
+# Untyped, made with `new_instance`: a redirect from a held `Unique` handle is a new type for every uuid.
+Base.@nospecializeinfer function Redirect(
+    @nospecialize(from_to::Pair),
     originalname_or_aliaspairs::Union{Symbol, Pair{Symbol, Symbol}}...,
 )
     from, to = from_to
@@ -43,14 +44,14 @@ function Redirect(
     aliases = last.(completed_pairs)
     from_ref = scref_object(from)
     to_ref = scref_object(to)
-    return Redirect{
+    return new_instance(Redirect{
         scref_match(from),
         scref_match(to),
         varnames,
         aliases,
         typeof(from_ref),
         typeof(to_ref),
-    }(from_ref, to_ref)
+    }, from_ref, to_ref)
 end
 
 # The endpoint matchers (parameters 1, 2) are those of the endpoint fields `from`, `to` (Identifiable/UniquePlanIds.jl).
