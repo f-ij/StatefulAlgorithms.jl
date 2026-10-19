@@ -225,7 +225,7 @@ and then committing the resulting persistent context back onto the worker. Use
 it from `prepare!` when a job needs freshly initialized context state instead
 of reusing the previous context object.
 """
-function reinitworker!(slot::WorkerSlot{<:Process}, inputs_overrides...; kwargs...)
+function reinitworker!(slot::WorkerSlot{<:AnyProcess}, inputs_overrides...; kwargs...)
     commit_context!(slot.worker, context(init(getalgo(slot.worker), inputs_overrides...; lifetime = lifetime(slot.worker))))
     return slot
 end
@@ -243,7 +243,7 @@ context should keep its current values. Concretely, it builds a lifecycle-wrappe
 algorithm from the current process context, runs `partialinit(algo, inputs_overrides...)`,
 and assigns the returned context back to `slot.worker`.
 """
-function partialinitworker!(slot::WorkerSlot{<:Process}, inputs_overrides...)
+function partialinitworker!(slot::WorkerSlot{<:AnyProcess}, inputs_overrides...)
     algo = _with_lifecycle(
         getalgo(slot.worker),
         context(slot.worker),
@@ -260,7 +260,7 @@ end
 Extract a per-run process lifetime from manager launch keyword arguments.
 `lifetime`, `repeats`, and `repeat` are launch controls, not runtime inputs.
 """
-function _manager_launch_lifetime(worker::P, kwargs::K) where {P<:Process, K<:NamedTuple}
+function _manager_launch_lifetime(worker::P, kwargs::K) where {P<:AnyProcess, K<:NamedTuple}
     lifetime_value = get(kwargs, :lifetime, nothing)
     repeats_value = get(kwargs, :repeats, nothing)
     repeat_value = get(kwargs, :repeat, nothing)
@@ -288,7 +288,7 @@ end
 Split manager launch arguments into `(lifetime, runtime_kwargs)` for a `Process`
 worker. Runtime keyword arguments are passed to the loop as `@input` values.
 """
-function _manager_process_launch_args(worker::P, kwargs::K) where {P<:Process, K<:NamedTuple}
+function _manager_process_launch_args(worker::P, kwargs::K) where {P<:AnyProcess, K<:NamedTuple}
     lifetime = _manager_launch_lifetime(worker, kwargs)
     runtime_kwargs = deletekeys(kwargs, :lifetime, :repeats, :repeat)
     return lifetime, runtime_kwargs
@@ -301,7 +301,7 @@ Run a `Process` worker synchronously in the current task and store the resulting
 runtime context back on the worker. This avoids per-job `Task` allocation for
 threaded manager jobs.
 """
-function runprocessinline!(worker::P; lifetime = nothing, repeats = nothing, repeat = nothing, kwargs...) where {P<:Process}
+function runprocessinline!(worker::P; lifetime = nothing, repeats = nothing, repeat = nothing, kwargs...) where {P<:AnyProcess}
     @assert isidle(worker) "Process is already in use"
     @atomic worker.shouldrun = true
     @atomic worker.paused = false
@@ -769,7 +769,7 @@ end
 Build a worker from a template and a slot-specific context. The default
 implementation supports `Process` templates.
 """
-function _process_with_context(template::Process, idx::Integer, prepared_context)
+function _process_with_context(template::AnyProcess, idx::Integer, prepared_context)
     return Process(getalgo(template); context = prepared_context, lifetime = lifetime(template), timeout = template.timeout)
 end
 
@@ -1068,7 +1068,7 @@ makeworker(recipe, idx, manager, initdata) = _call_recipe_field(recipe, Val(:mak
 Default worker-copy rule. `Process` workers keep the same algorithm/lifetime and
 deep-copy context; other worker objects are deep-copied directly.
 """
-function _default_copyworker(template::Process, idx, manager)
+function _default_copyworker(template::AnyProcess, idx, manager)
     return Process(getalgo(template); context = deepcopy(context(template)), lifetime = lifetime(template), timeout = template.timeout)
 end
 _default_copyworker(template, idx, manager) = deepcopy(template)
@@ -1279,7 +1279,7 @@ Default worker launch step. `Process` workers are launched with
 `run(worker; kwargs...)`; custom worker types can either support the same call
 shape or provide recipe `start!`.
 """
-function _start_worker!(worker::Process, kwargs::NamedTuple)
+function _start_worker!(worker::AnyProcess, kwargs::NamedTuple)
     lifetime, runtime_kwargs = _manager_process_launch_args(worker, kwargs)
     run(worker, lifetime; runtime_kwargs...)
     return worker
@@ -1341,7 +1341,7 @@ Default completion check for a worker. `Process` workers use `isdone(worker)`;
 other worker types should provide recipe `isdone` unless they support the same
 operation.
 """
-_worker_isdone(worker::Process) = isdone(worker)
+_worker_isdone(worker::AnyProcess) = isdone(worker)
 
 """
     _finalize_worker!(worker)
@@ -1349,7 +1349,7 @@ _worker_isdone(worker::Process) = isdone(worker)
 Default finish step for a `Process`: wait for completion, close it, and leave the
 finished context stored on the process.
 """
-function _finalize_worker!(worker::Process)
+function _finalize_worker!(worker::AnyProcess)
     wait(worker)
     close(worker)
     return worker
@@ -1371,7 +1371,7 @@ end
 Default worker cleanup used when a manager closes a slot without a recipe
 `close!` callback.
 """
-function _close_worker!(worker::Process)
+function _close_worker!(worker::AnyProcess)
     close(worker)
     return worker
 end

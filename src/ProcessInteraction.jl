@@ -23,7 +23,7 @@ otherwise different lifetime without rebuilding its initialized context.
     end
 end
 
-function Base.run(p::Process, run_lifetime = nothing, inputs_and_overrides...; repeats = nothing, lifetime = nothing, kwargs...)
+function Base.run(p::AnyProcess, run_lifetime = nothing, inputs_and_overrides...; repeats = nothing, lifetime = nothing, kwargs...)
     @assert isidle(p) "Process is already in use"
 
     if ispaused(p)
@@ -54,14 +54,14 @@ function Base.run(p::AP, lifetime = nothing, inputs_and_overrides...; kwargs...)
     makeloop!(p, (; kwargs...))
 end
 
-run!(p::Process; kwargs...) = run(p; kwargs...)
+run!(p::AnyProcess; kwargs...) = run(p; kwargs...)
 
 """
 Wait for a process to finish
 """
-@inline Base.wait(@nospecialize(p::Process)) = if !isnothing(p.task) wait(p.task) else nothing end
+@inline Base.wait(@nospecialize(p::AnyProcess)) = if !isnothing(p.task) wait(p.task) else nothing end
 
-function _cleanup_paused_process!(p::Process, fetched_result)
+function _cleanup_paused_process!(p::AnyProcess, fetched_result)
     # A paused task already stored its live runtime context when the loop exited.
     # `close` turns that paused lifecycle into a final one, so cleanup must run
     # here because the loop will not re-enter `after_while`.
@@ -80,7 +80,7 @@ end
 """
 Close a process, stopping it from running
 """
-function Base.close(p::Process)
+function Base.close(p::AnyProcess)
     was_paused = ispaused(p)
     @atomic p.paused = false
     @atomic p.shouldrun = false
@@ -109,7 +109,7 @@ function Base.close(p::Process)
     return true
 end
 
-function restart(p::Process)
+function restart(p::AnyProcess)
     close(p)
     wait(p)
     @atomic p.paused = false # Force reinit
@@ -119,7 +119,7 @@ end
 """
 Pause a process, allowing it to be unpaused later
 """
-function pause(p::Process)
+function pause(p::AnyProcess)
     @atomic p.paused = true
     @atomic p.shouldrun = false
     return true
@@ -129,7 +129,7 @@ end
 """
 Start a process that is not running or unpause a paused process
 """
-function start(p::Process; prevent_hanging = false, threaded = true)
+function start(p::AnyProcess; prevent_hanging = false, threaded = true)
     @warn "start is deprecated, use run instead"
     run(p)
 end   
@@ -137,7 +137,7 @@ end
 """
 Close and remove a process from the process list
 """
-function quit(p::Process)
+function quit(p::AnyProcess)
     close(p)
     delete!(processlist, p.id)
     return true
@@ -147,7 +147,7 @@ end
 # """
 # Redefine task without preparing again
 # """
-# function unpause(p::Process; threaded = true)
+# function unpause(p::AnyProcess; threaded = true)
 #     @atomic p.shouldrun = true
 #     if threaded
 #         p.task = spawnloop(p, getalgo(p), getcontext(p), runtimelisteners(p))
@@ -166,7 +166,7 @@ This will cause the computed properties to re-compute.
 This may be used also to levarge the dispatch system, if the types of the data change
 so that the new loop function is newly compiled
 """
-function reinit(p::Process)
+function reinit(p::AnyProcess)
     pause(p)
     commit_context!(p, context(init(getalgo(p); lifetime = lifetime(p))))
     run(p)
@@ -180,7 +180,7 @@ The target can be a registry symbol or registered algorithm reference. `inputs`
 are merged into the target subcontext before `init`, and `overrides` are merged
 afterwards.
 """
-function reinit(p::Process, target; inputs = (;), overrides = (;))
+function reinit(p::AnyProcess, target; inputs = (;), overrides = (;))
     pause(p)
     commit_context!(p, initcontext(_context(p), target; inputs, overrides))
     run(p)
@@ -190,7 +190,7 @@ end
 # """
 # Close and restart a process
 # """
-# function restart(p::Process; context...)
+# function restart(p::AnyProcess; context...)
     
 #     if !isempty(context)
 #         changecontext!(p, context...)
@@ -211,9 +211,9 @@ end
 # end
 
 """The run's result as SA works with it (see `fetch`)."""
-@inline _fetch(@nospecialize(p::Process)) = if !isnothing(p.task) fetch(p.task) else p.lastresult end
+@inline _fetch(@nospecialize(p::AnyProcess)) = if !isnothing(p.task) fetch(p.task) else p.lastresult end
 """Fetch the return value of a process; a context comes with the `Unique` handles the user holds as keys found from types (`with_held_ids`)."""
-Base.@nospecializeinfer Base.fetch(@nospecialize(p::Process)) = with_held_ids(_fetch(p))
+Base.@nospecializeinfer Base.fetch(@nospecialize(p::AnyProcess)) = with_held_ids(_fetch(p))
 
 """
 Quit all processes in the process list
@@ -225,3 +225,28 @@ function quitall()
     end
 end
 export quitall
+
+
+# A `Process` passes the calls that start, stop or reinitialize a run to its core, so they and the loop are compiled for
+# the core's type, the same for every new set of `Unique` handles; a call that returns the core returns the `Process`.
+for f in (:run, :run!, :start, :restart, :reinit, :pause, :quit, :makeloop!, :reset!, :_resume_paused_loop!)
+    target = f === :run ? :(Base.run) : f
+    @eval function $target(@nospecialize(p::Process); kwargs...)
+        result = $target(getcore(p); kwargs...)
+        return result === getcore(p) ? p : result
+    end
+    # One method per number of arguments, so none is ambiguous with a core method of fixed arity (`reinit(p, target)`).
+    @eval function $target(@nospecialize(p::Process), a; kwargs...)
+        result = $target(getcore(p), a; kwargs...)
+        return result === getcore(p) ? p : result
+    end
+    @eval function $target(@nospecialize(p::Process), a, b; kwargs...)
+        result = $target(getcore(p), a, b; kwargs...)
+        return result === getcore(p) ? p : result
+    end
+    @eval function $target(@nospecialize(p::Process), a, b, c, args...; kwargs...)
+        result = $target(getcore(p), a, b, c, args...; kwargs...)
+        return result === getcore(p) ? p : result
+    end
+end
+Base.close(@nospecialize(p::Process)) = close(getcore(p))

@@ -13,7 +13,7 @@ default. A wrapper of a loop algorithm adds a method that asks what it wraps (`F
 """
     reset!(x) -> x
 
-Reset `x` before it runs again and return it: does nothing by default. `reset!(::Process)` calls it on the process's
+Reset `x` before it runs again and return it: does nothing by default. `reset!(::AnyProcess)` calls it on the process's
 algorithm; a type that keeps counters between runs adds a method (`Package` resets its interval counter).
 """
 @inline reset!(x::T) where {T} = x

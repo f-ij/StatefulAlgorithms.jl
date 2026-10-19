@@ -1,7 +1,7 @@
 export savecontext, loadcontext
 
 """
-    savecontext(p::Process, filename)
+    savecontext(p::AnyProcess, filename)
     savecontext(context::ProcessContext, filename)
 
 Save the persistent data of a process context to a JLD2 file: a `NamedTuple`

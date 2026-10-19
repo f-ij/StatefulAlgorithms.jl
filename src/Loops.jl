@@ -69,7 +69,7 @@ end
 
 """Return whether this loop exit is a pause rather than a final completion."""
 @inline _loop_ispaused(process::P) where {P<:AbstractProcess} = false
-@inline _loop_ispaused(process::P) where {P<:Process} = ispaused(process)
+@inline _loop_ispaused(process::P) where {P<:AnyProcess} = ispaused(process)
 
 """Build the root wiring view for one loop execution."""
 @inline _root_wiring_view(algo, step_plan) = PlanWiringView(getwiring(step_plan))
@@ -77,7 +77,7 @@ end
 """Build or recover the per-run loop cursor for one execution."""
 @inline _loop_cursor(process::AbstractProcess, plan, ::Resuming) = loop_cursor(plan, Val(false))
 
-@inline function _loop_cursor(process::Process, plan, ::Resuming{IsResuming}) where {IsResuming}
+@inline function _loop_cursor(process::AnyProcess, plan, ::Resuming{IsResuming}) where {IsResuming}
     IsResuming && return @inline getloopcursor(process)
     return @inline loop_cursor(plan, Val(true))
 end
@@ -86,11 +86,11 @@ end
 Keep the cursor on a pause so the next run resumes from it. It is stored only on
 that exit, so while the loop runs the cursor never escapes and can stay in registers.
 """
-@inline _keep_loop_cursor!(process::Process, cursor) = (process.loop_cursor = cursor; nothing)
+@inline _keep_loop_cursor!(process::AnyProcess, cursor) = (process.loop_cursor = cursor; nothing)
 @inline _keep_loop_cursor!(::AbstractProcess, cursor) = nothing
 
 """Commit or return the persistent context produced by the loop."""
-@inline function after_while(p::P, func::F, persistent_context::C, runtime_context::RC, returnvalue, start_persistent_context::SC = persistent_context) where {P<:Process,F,C<:ProcessContext,RC<:ProcessContext,SC<:ProcessContext}
+@inline function after_while(p::P, func::F, persistent_context::C, runtime_context::RC, returnvalue, start_persistent_context::SC = persistent_context) where {P<:AnyProcess,F,C<:ProcessContext,RC<:ProcessContext,SC<:ProcessContext}
     @inline set_endtime!(p)
     if ispaused(p)
         paused_context = @inline _paused_visible_context(persistent_context, runtime_context)
