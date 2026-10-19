@@ -234,13 +234,7 @@ end
 
 """The keys of all algorithms in `reg`, in order; for a registry or its type."""
 function all_keys(reg::Union{NameSpaceRegistry, Type{<:NameSpaceRegistry}})
-    flat_collect_broadcast(all_keys, getentries(reg))
-end
-
-"""`reg` with every key in `changed_names` (`old => new`) replaced."""
-function replacecontextkeyss(reg::NameSpaceRegistry, changed_names::Dict{Symbol,Symbol})
-    newentries = map(entry -> replacecontextkeyss(entry, changed_names), getentries(reg))
-    return NameSpaceRegistry{typeof(newentries)}(newentries)
+    flat_collect_broadcast(keys, getentries(reg))
 end
 
 ###############################################################################
@@ -282,7 +276,7 @@ end
 
 """All algorithms in `reg` that have a key, in order; for a registry or its type."""
 function all_named_algos(reg::Union{NameSpaceRegistry, Type{<:NameSpaceRegistry}})
-    flat_collect_broadcast(all_named_algos, getentries(reg))
+    flat_collect_broadcast(getentries, getentries(reg))
 end
 
 """Iterates over the registry's entries (`RegistryTypeEntry`s), in order."""

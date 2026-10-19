@@ -12,8 +12,6 @@ entry_types(rte::Type{<:RegistryTypeEntry{T,E}}) where {T,E} = E.parameters
 """The entry type (`Lin`) of an entry or of its type."""
 gettype(rte::Type{<:RegistryTypeEntry{T}}) where T = T
 gettype(rte::RegistryTypeEntry) = gettype(typeof(rte))
-"""The number of algorithms in the entry."""
-@inline Base.length(te::RegistryTypeEntry) = length(getentries(te))
 
 """The runtime lookup table of the entry (lookup key => position)."""
 @inline getdynamiclookup(rte::RegistryTypeEntry) = getfield(rte, :dynamic_lookup)
@@ -45,7 +43,7 @@ function Base.getindex(te::RegistryTypeEntry, obj)
         return static_get(te, obj)
     end
     entry = dynamic_get(te, obj)
-    isnothing(entry) && error("No matching entry found for value: $obj with matcher $(match_by(obj))\nin RegistryTypeEntry of type $(gettype(te))\nwith entries: $(getentries(te))\nand matchers $(match_by.(getentries(te)))")
+    isnothing(entry) && throw_not_in_entry(te, obj)
     return entry
 end
 
@@ -57,10 +55,14 @@ end
 """The algorithm `val` as the entry stores it, found by its matcher; errors when it is not there."""
 @inline function static_get(rte::RegistryTypeEntry, val::V) where V 
     idx = static_findfirst_match(rte, val)
-    if isnothing(idx)
-        error("No matching entry found for value: $val with matcher $(match_by(val))\nin RegistryTypeEntry of type $(gettype(rte))\nwith entries: $(getentries(rte))\nand matchers $(match_by.(getentries(rte)))")
-    end
+    isnothing(idx) && throw_not_in_entry(rte, val)
     return getentries(rte)[idx]
+end
+
+"""Throws the error for `val` not being in the entry: its matcher and the entry's algorithms and their matchers.
+Not inlined, so the message is not built into the callers."""
+@noinline function throw_not_in_entry(rte::RegistryTypeEntry, val)
+    error("No matching entry found for value: $val with matcher $(match_by(val))\nin RegistryTypeEntry of type $(gettype(rte))\nwith entries: $(getentries(rte))\nand matchers $(match_by.(getentries(rte)))")
 end
 
 """The algorithm `val` as the entry stores it, found through the runtime lookup table, or `nothing`."""
@@ -72,39 +74,14 @@ end
     return getentries(rte)[idx]
 end
 
-"""Iterates over `(algorithm, multiplier)` pairs of the entry, in order."""
-function Base.iterate(te::RegistryTypeEntry, state = 1)
-    if state > length(te)
-        return nothing
-    else
-        return ((getentries(te)[state], getmultipliers(te)[state]), state + 1)
-    end
-end
-
 ###############################################################################
 # Keys
 ###############################################################################
 
-"""The entry's algorithms (all have a key); for an entry or its type."""
-all_named_algos(te::Union{RegistryTypeEntry, Type{<:RegistryTypeEntry}}) = getentries(te)
-
-"""The keys of the entry's algorithms (`Lin_1`, ...), in order; for an entry or its type."""
-function all_keys(te::Union{RegistryTypeEntry, Type{<:RegistryTypeEntry}})
-    getkey.(getentries(te))
-end
-
-"""The keys of the entry's algorithms, as a constant tuple; for an entry or its type."""
+"""The keys of the entry's algorithms (`Lin_1`, ...), in order, as a constant tuple; for an entry or its type."""
 @inline @generated function Base.keys(entry::Union{RTE, Type{<:RTE}}) where RTE<:RegistryTypeEntry
     keys = getkey.(getentries(RTE))
     return :($keys)
-end
-
-"""The entry with the keys in `changed_names` (`old => new`) replaced."""
-function replacecontextkeyss(te::RegistryTypeEntry, changed_names::Dict{Symbol,Symbol})
-    ps = pairs(changed_names)
-    unrollreplace_splat(te, ps...) do rte, (oldname, newname)
-        setcontextkey(rte, newname)
-    end
 end
 
 """The position of the algorithm with key `key` in the entry, or `nothing`; for an entry or its type."""
@@ -118,9 +95,6 @@ end
         return :($idx)
     end
 end
-
-"""Whether the entry has an algorithm with key `key`; for an entry or its type."""
-@inline Base.haskey(te::Union{RTE, Type{<:RTE}}, key::Symbol) where RTE <: RegistryTypeEntry = !isnothing(findkey(te, key))
 
 @inline _registry_findall_type(::Type{E}) where {E} = E
 @inline _registry_findall_type(::Type{<:AbstractIdentifiableAlgo{F}}) where {F} = F
