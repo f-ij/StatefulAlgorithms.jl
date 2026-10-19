@@ -1,6 +1,6 @@
 #=
-Ids that are different on every run, how to take them apart and rebuild them, and how they are keyed in a
-registry's runtime lookup table.
+Ids that are different on every run, how to take them apart and rebuild them, and how they are lowered to a
+`Symbol` for a registry's runtime lookup table (keys in Registry/LookupKey.jl).
 
 `Unique(f)` gives a handle a random `SimpleId{uuid}()`, so the handle's type is new on every run. `resolve` replaces
 such ids by `NormalizedId{k, R}()` (NormalizeIds.jl) and keeps what is needed to rebuild the original id in the
@@ -52,39 +52,17 @@ of its own, so it cannot clash with ids users choose.
 struct NormalizedId{N, R} <: AbstractMatcher{N} end
 
 """
-    LookupKey(key)
+    _lowered_matcher(matcher)
 
-A key of a registry's runtime lookup table (`RegistryTypeEntry.dynamic_lookup`): `key` (a type, a `Symbol`, an
-`isbits` value, ...) wrapped in one concrete type, equal and hashed as `key` itself. Lookups behave as with `key`;
-the table's methods (`setindex!`, `get`, `delete!`) are compiled once for `LookupKey`, not once per key type (a
-`Dict{Any}` compiles `setindex!` again for every type used as a key, `Lin{1}`, `Lin{2}`, ...). Prints as `key`.
+The matcher as a lookup-table key: an id that is different on every run (`SimpleId`, `ObjectIDMatcher`) becomes the
+`Symbol` from `_lowered_id_key`, any other matcher is returned as it is. Used by `dynamic_lookup_key`.
 """
-struct LookupKey
-    key::Any
-end
-Base.isequal(a::LookupKey, b::LookupKey) = isequal(a.key, b.key)
-Base.hash(k::LookupKey, h::UInt) = hash(k.key, h)
-Base.print(io::IO, k::LookupKey) = print(io, k.key)
-Base.show(io::IO, k::LookupKey) = show(io, k.key)
-
-"""
-    dynamic_lookup_key(obj) -> LookupKey
-
-The key under which `obj` is stored in a registry's runtime lookup table (`RegistryTypeEntry.dynamic_lookup`), as a
-`LookupKey`: the lowered matcher of `obj` (`match_by`).
-
-Ids that are different on every run are lowered to a `Symbol` naming the id's type and data, for example
-`Symbol("StatefulAlgorithms.SimpleId{Base.UUID}_9e27…")`: a new uuid then gives a new key of the same type `Symbol`,
-so storing it compiles nothing, and different id types cannot collide. A normalized handle gets the key of its
-original id, so the table is right during `resolve` already. Any other matcher is used as it is.
-"""
-dynamic_lookup_key(obj) = LookupKey(_lowered_matcher(match_by(obj)))
-
-function dynamic_lookup_key(sa::IdentifiableAlgo{F, Id, VA, AlgoName, Key, R}) where {F, Id, VA, AlgoName, Key, R<:IdReconstructor}
-    return LookupKey(_lowered_id_key(reconstructor_idtype(R), getfield(getfield(sa, :reconstructor), :data)))
-end
-
 _lowered_matcher(matcher) = matcher
 _lowered_matcher(id::Union{SimpleId, ObjectIDMatcher})::Symbol = _lowered_id_key(deconstruct_id(id)...)
 
+"""
+    _lowered_id_key(IdType, data) -> Symbol
+
+A `Symbol` naming the id type and its data, e.g. `Symbol("StatefulAlgorithms.SimpleId{Base.UUID}_9e27…")`.
+"""
 _lowered_id_key(IdType, data)::Symbol = Symbol(parentmodule(IdType), ".", nameof(IdType), "{", typeof(data), "}_", data)

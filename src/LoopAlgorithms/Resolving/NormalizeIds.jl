@@ -11,7 +11,7 @@ gives a plan of a new type, and the whole typed `resolve` compiles again. For a 
     restore_original_ids(resolved)        # every normalized handle back to the original one
 
 While `resolve` runs, the registry holds the normalized handles, so its type is the same for every uuid, and their
-runtime lookup keys are already those of the original ids (`dynamic_lookup_key`, IdReconstruction.jl). After
+runtime lookup keys are already those of the original ids (`dynamic_lookup_key`, Registry/LookupKey.jl). After
 `resolve` the plan itself holds no ids, only each child's context name; the handles live in the registry, and the
 last step puts the original ones back there, so a handle the user still holds is matched at compile time as before.
 
