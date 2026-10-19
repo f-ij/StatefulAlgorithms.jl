@@ -4,7 +4,8 @@ using StatefulAlgorithms
 const RB = StatefulAlgorithms
 
 # Building a plan's registry (step 1 of `resolve`): `build_registry_and_key_plan` works the layout out from the
-# plan's type while compiling (the generated path), or from the values at run time (`build_registry_from_values`).
+# plan's type while compiling (the typed path, built from a recipe), or from the values at run time
+# (`build_registry_from_values`).
 
 @StepAlgorithm function RBCount(@managed(n = 0))
     @update n = n + 1
@@ -76,7 +77,7 @@ rb_dsl_local = @Routine begin
     RBCount()
 end
 
-# Plans whose layout follows from their type: the generated path is taken.
+# Plans whose layout follows from their type: the typed path is taken.
 const RB_TYPED_PLANS = Pair{String,Any}[
     "flat composite" => CompositeAlgorithm(RBCount, RBScale, RBSrc, (1, 1, 1)),
     "intervals" => CompositeAlgorithm(RBCount, RBScale, (1, 3)),
@@ -110,7 +111,7 @@ merge2 = @Routine begin
 end
 const RB_MERGE_PLAN = CompositeAlgorithm(merge1, merge2, (1, 2))
 
-@testset "Registry build: the generated path is taken for the usual plan shapes" begin
+@testset "Registry build: the typed path is taken for the usual plan shapes" begin
     for (name, plan) in RB_TYPED_PLANS
         @testset "$name" begin
             @test !rb_uses_runtime_path(rb_loopalgorithm(plan))
@@ -119,7 +120,7 @@ const RB_MERGE_PLAN = CompositeAlgorithm(merge1, merge2, (1, 2))
     @test rb_uses_runtime_path(rb_loopalgorithm(RB_MERGE_PLAN))
 end
 
-@testset "Registry build: the generated path gives the run-time path's registry" begin
+@testset "Registry build: the typed path gives the run-time path's registry" begin
     for (name, plan) in [RB_TYPED_PLANS; "merged named states" => RB_MERGE_PLAN]
         @testset "$name" begin
             la = rb_loopalgorithm(plan)
@@ -164,29 +165,15 @@ end
     @test RB.all_keys(RB.registry(builder)) == (:RBCount_1, :RBScale_1)
 end
 
-# Rule methods of algorithms defined here (after the package was loaded).
-struct RBRenamed <: ProcessAlgorithm end
-RB.init(::RBRenamed, c) = (; x = 0.0)
-RB.step!(::RBRenamed, c) = (; x = c.x + 1.0)
-struct RBCustom <: ProcessAlgorithm end
-RB.init(::RBCustom, c) = (; x = 0.0)
-RB.step!(::RBCustom, c) = (; x = c.x + 1.0)
-RB.autokey_basename(::Union{RBCustom, Type{<:RBCustom}}) = :Custom
-
-@testset "Registry build: changing a rule updates prepared plan types" begin
-    keys_of(plan) = RB.all_keys(RB.getregistry(resolve(plan)))
-    renamed() = CompositeAlgorithm(RBRenamed, RBCount, (1, 2))
-    @test keys_of(renamed()) == (:RBRenamed_1, :RBCount_1)
-    # A new rule method for an algorithm whose plan type is prepared already: the next resolve uses it.
-    @eval RB.autokey_basename(::Union{RBRenamed, Type{<:RBRenamed}}) = :Renamed
-    @test keys_of(renamed()) == (:Renamed_1, :RBCount_1)
-    # Redefined (as Revise does).
-    @eval RB.autokey_basename(::Union{RBRenamed, Type{<:RBRenamed}}) = :Again
-    @test keys_of(renamed()) == (:Again_1, :RBCount_1)
-    # A rule method defined before the first resolve: both paths agree.
-    la = rb_loopalgorithm(CompositeAlgorithm(RBCustom, RBCustom, (1, 2)))
-    @test RB.all_keys(RB.build_registry_and_key_plan(la)[1]) == (:Custom_1,)
-    @test rb_same_setup(RB.build_registry_and_key_plan(la), RB.build_registry_from_values(la))
-    # Plans that ask no changed rule keep the generated path.
-    @test !rb_uses_runtime_path(rb_loopalgorithm(CompositeAlgorithm(RBCount, RBScale, (1, 2))))
+@testset "Registry build: plans past the recipe's limits" begin
+    # More children than a recipe call takes: set up at run time, the same registry.
+    wide = rb_loopalgorithm(CompositeAlgorithm(ntuple(_ -> RBCount, 70)..., ntuple(_ -> 1, 70)))
+    @test rb_uses_runtime_path(wide)
+    @test rb_same_setup(RB.build_registry_and_key_plan(wide), RB.build_registry_from_values(wide))
+    # Nested deeper than the recipe's methods per depth: still the typed path, inferred, the same registry.
+    deep = foldl((inner, k) -> Routine(inner, isodd(k) ? RBCount : RBScale, (1, 2)), 1:30; init = Routine(RBSrc, RBScale, (1, 1)))
+    deep_la = rb_loopalgorithm(deep)
+    @test !rb_uses_runtime_path(deep_la)
+    @test isconcretetype(Base.return_types(RB.build_registry_and_key_plan, (typeof(deep_la),))[1])
+    @test rb_same_setup(RB.build_registry_and_key_plan(deep_la), RB.build_registry_from_values(deep_la))
 end

@@ -7,7 +7,8 @@ wrapper (`_attach_registry`, Accessors.jl; step 1 leaves no nested wrappers).
 child of a plan is then stored raw (without its identity wrapper), and its key goes into the plan's `namespaces`.
 
 The walk works on values (`build_registry_from_values`), or on the plan's type, with `KnownByType`s
-(`generate_registry_setup`): the code generated from that only reads the algorithms out of the plan.
+(`generate_registry_setup`): the code built from that (GeneratedCode/RegistrySetup.jl) only reads the algorithms out of
+the plan.
 =#
 
 """

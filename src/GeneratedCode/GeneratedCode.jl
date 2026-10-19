@@ -1,5 +1,4 @@
 include("Registry.jl")
 include("SimpleRegistry.jl")
 include("SubContextView.jl")
-include("RuleDependencies.jl")
 include("RegistrySetup.jl")

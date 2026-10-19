@@ -6,37 +6,10 @@ When a plan is prepared (`resolve`), every algorithm and state in it is added to
 functions below, and only by them.
 
 All rules are defined on TYPES: the layout of a plan's registry is worked out from the plan's type when that plan type
-is first prepared, and the code that builds it is compiled once (`build_registry_and_key_plan`). Changing a method
-of one of these rules (also with Revise) makes that code be generated again for every plan type that asked it (see
-`ask_rule`). A method added after this package was loaded is not seen while generating code (Julia runs generators in
-the world they were defined in): a plan whose layout asks it is set up from its values at run time.
-
-These are internal rules of the package: an algorithm type changes them by adding methods to the functions marked
-"Extended by", as the package does for its own types.
+is first compiled (`make_registry_recipe`), and the code that builds it is compiled once. These are internal rules of
+the package: the package's own types change them by adding methods to the functions marked "Extended by". A method
+added or changed after a plan type was compiled (with Revise) is not seen by that plan type's compiled code.
 =#
-
-###############################################################################
-# Asking a rule
-###############################################################################
-
-"""
-While the registry layout of a plan type is worked out (`build_registry_and_key_plan`), the list the rule calls
-made are recorded in (as signature types, `Tuple{typeof(f), typeof(x)}`); `nothing` otherwise.
-"""
-const RULE_CALLS = Base.ScopedValues.ScopedValue{Union{Nothing, Vector{Any}}}(nothing)
-
-"""
-    ask_rule(f, x) -> f(x)
-
-Calls the rule `f` on `x` and returns its answer. While a registry layout is worked out from types, the call is also
-recorded (`RULE_CALLS`), so that the generated layout code is generated again when a method of `f` that could answer
-it is added or changed.
-"""
-function ask_rule(@nospecialize(f), @nospecialize(x))
-    calls = RULE_CALLS[]
-    calls === nothing || push!(calls, Tuple{Core.Typeof(f), Core.Typeof(x)})
-    return f(x)
-end
 
 """
     ask_type_rule(f, T) -> f(x)
@@ -45,15 +18,7 @@ The answer of the rule `f` for a value `x` of type `T`, asked with `T` alone: `f
 just one (a type without fields), else `f(T)`. So a method of such a rule for a type with fields must take the type
 (`f(::Union{MyAlgo, Type{<:MyAlgo}})`), as every method in the package does.
 """
-ask_type_rule(@nospecialize(f), @nospecialize(T)) = ask_rule(f, Base.issingletontype(T) ? T.instance : T)
-
-"""
-    call_rule(f, x) -> f(x)
-
-Calls the rule `f` on `x`, without recording it (see `ask_rule`); for rules that are also used outside of building a
-registry, in code that should fold to a constant.
-"""
-@inline call_rule(f::F, x) where {F} = f(x)
+ask_type_rule(@nospecialize(f), @nospecialize(T)) = f(Base.issingletontype(T) ? T.instance : T)
 
 ###############################################################################
 # Entry type: which group of the registry an algorithm goes into
@@ -72,12 +37,11 @@ registry_entrytype(@nospecialize(T)) = nothing
 
 The entry type of the registry that `x` (an algorithm, or its type) goes into: `registry_entrytype` of its type, or else
 its type, without type parameters (`Lin`, not `Lin{1}`). Algorithms of one entry type are keyed and found among each
-other. `ask` is the way the rule `registry_entrytype` is asked (`call_rule`, or `ask_rule` while building a registry).
+other.
 """
-@inline assign_entrytype(x) = assign_entrytype(x, call_rule)
-@inline function assign_entrytype(x, ask::A) where {A}
+@inline function assign_entrytype(x)
     T = x isa Type ? x : typeof(x)
-    return Base.typename(something(ask(registry_entrytype, T), T)).wrapper
+    return Base.typename(something(registry_entrytype(T), T)).wrapper
 end
 
 """
@@ -101,8 +65,8 @@ algorithm, or its type for one known only by its type (for a handle both give it
 Extended by: `match_by` (Matching.jl), for algorithm types and values.
 """
 function added_matcher(@nospecialize(x))
-    m = ask_rule(match_by, x)
-    return m isa AbstractMatcher ? m : ask_rule(match_by, m)
+    m = match_by(x)
+    return m isa AbstractMatcher ? m : match_by(m)
 end
 
 """
@@ -110,7 +74,7 @@ end
 
 What an algorithm of type `T` that is already in the registry is compared by: `match_by(T)`.
 """
-entry_matcher(@nospecialize(T)) = ask_rule(match_by, T)
+entry_matcher(@nospecialize(T)) = match_by(T)
 
 """
     same_algorithm(added, entry) -> Bool

@@ -10,7 +10,7 @@ from it once, at the end.
 
 The builder works in two modes, with the same code:
 - on values, at run time: `add!` gets the algorithms, and `registry(builder)` builds the registry from them;
-- on types, while compiling (the generated `setup_registry_and_keyed_algos` sees only the plan's type): `add!` gets
+- on types, while compiling (the generated `build_registry_and_key_plan` sees only the plan's type): `add!` gets
   `KnownByType`s (KnownByType.jl), an algorithm's type plus the code that reads the algorithm out of the plan at run
   time, and `registry_code(builder)` is the code that builds the registry, the body of the generated function. Every
   decision is then made from the types; a step that needs the values (a merge) throws `NeedsValues`, and the plan is
@@ -97,7 +97,7 @@ Base.@nospecializeinfer function add!(b::RegistryBuilder, @nospecialize(algo), @
     T <: NameSpaceRegistry && error("Cannot add a NameSpaceRegistry to another NameSpaceRegistry")
     T === Nothing && error("Trying to add `nothing` to a registry")
     algo isa KnownByType && !(isconcretetype(T) && T <: IdentifiableAlgo) && throw(NeedsValues())
-    entry = entry_for!(b, assign_entrytype(algo isa KnownByType ? T : algo, ask_rule))
+    entry = entry_for!(b, assign_entrytype(algo isa KnownByType ? T : algo))
     idx = find_same(entry, algo)
     if isnothing(idx)
         keyed = with_autokey(algo, length(entry.algos) + 1)

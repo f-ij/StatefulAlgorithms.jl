@@ -15,21 +15,20 @@ Measured on this branch at a4c581f, machine otherwise quiet. Raw files next to t
 
 ## How the registry code is organized (after the simplification, 2026-10-15)
 - Registry/Interfaces.jl: the rules that decide a registry's layout (entry type, states first, what makes two
-  algorithms the same, automatic keys `Lin_1`, merging), defined on types; `ask_rule` records which rule methods a
-  generated layout asked.
+  algorithms the same, automatic keys `Lin_1`, merging), defined on types. Internal: only the package's own types
+  extend them.
 - Registry/Builder.jl: `RegistryBuilder`; `add!(builder, algo, multiplier) -> keyed algo` (the old `add`, which is
   now a thin wrapper), `registry(builder)` (on values), `registry_code(builder)` (the code that builds it, for the
-  generated path).
+  typed path).
 - Registry/KnownByType.jl: a value known only by its type while a layout is worked out from types, with
   `read_field`, `build_tuple`, ... that read it the same way as a value.
-- LoopAlgorithms/Resolving/Registering.jl: the walk over a plan: `register_tree!`, `register_states!`,
-  `register_children!`, `register_child!`; `build_registry_from_values` (run time) and `generate_registry_setup` (from
-  types).
-- GeneratedCode/RegistrySetup.jl: the generated `build_registry_and_key_plan`; GeneratedCode/RuleDependencies.jl:
-  makes the generated code depend on the rule methods it asked (redefining one regenerates it; a rule method defined
-  after loading makes that plan use the run-time path).
+- LoopAlgorithms/Resolving/Registering.jl: the walk over a plan: `register_tree!`, `register_states!`, `register_children!`,
+  `register_child!`; `build_registry_from_values` (run time) and `generate_registry_setup` (from types).
+- GeneratedCode/RegistrySetup.jl: `build_registry_and_key_plan` without a generated function (fix/nongen-registry):
+  `make_registry_recipe(LA)` (`:foldable`, run while inferring) turns the code the type walk writes into a recipe
+  type, and `build_from_recipe` builds the result from it with inlined methods, one per depth.
 - Registry/Registries.jl, TypeEntries/: reading a registry and its entries (finding, keys, multipliers, listing).
-- Tests: test/RegistryBuildTest.jl (generated path taken, both paths agree, redefined rules followed).
+- Tests: test/RegistryBuildTest.jl (typed path taken, both paths agree, plans past the recipe's limits).
 
 ## Done (from the plan)
 1-5 of the plan are done (wip/registry-simplify, fast-forwarded into this branch). Not done: Packages name their
