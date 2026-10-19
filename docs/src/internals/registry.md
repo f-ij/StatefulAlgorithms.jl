@@ -41,9 +41,22 @@ Key consequences:
 
 ## 3. `Unique` and Distinguishability
 
-`Unique(f)` builds an `IdentifiableAlgo` with a fresh UUID identity (`src/Identifiable/StructDef.jl`).
+`Unique(f)` builds an `IdentifiableAlgo` with a fresh UUID identity: its matcher is `UniquePlanId{uuid}(uuid)`
+(`src/Matching.jl`), kept as data in the handle's `matcher` field, with its type in the handle's type.
 
 That gives a guaranteed distinct match identity even when the wrapped value is otherwise indistinguishable.
+
+The uuid is in the handle's type only on the handle the user holds. Inside plans it is replaced
+(`src/Identifiable/UniquePlanIds.jl`):
+
+1. Constructors and DSL blocks strip it from their inputs (`strip_unique`): `UniquePlanId{nothing}(uuid)`.
+2. Building a plan numbers its handles (`number_unique_ids`): `UniquePlanId{k}(uuid)`, in order of first appearance;
+   a nested plan is renumbered into the new plan's numbers, matched by uuid. Plans built from the same code with new
+   `Unique`s have the same type, so constructing and resolving compile once.
+3. The last step of `resolve` (`registry_matchers`) stores each handle in the registry with
+   `DoubleMatcher(UniquePlanId{k}(uuid), UniquePlanId{uuid}(uuid))`: the plan's code finds it by `k`, the held handle by
+   its uuid, both from types. The registry, and so the context and the loop, have the uuids in their types: `init` and
+   the loop compile again for new `Unique`s.
 
 This is the mechanism used when you need multiple logically separate instances of the same algorithm in one composition.
 
