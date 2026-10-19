@@ -109,30 +109,30 @@ end
 
 """The algorithm `v` as `reg` stores it, found by its matcher (`findfirst_match`); for `isstaticallyfindable` values."""
 function static_get(reg::NameSpaceRegistry, v::V) where {V}
-    entries = get_type_entries(reg, v)
-    idx = findfirst_match(entries, v)
+    entry = get_type_entries(reg, v)
+    idx = findfirst_match(entry, v)
     if isnothing(idx)
-        return static_get(entries, v)
+        return static_get(entry, v)
     end
-    return entries[idx]
+    return entry[idx]
 end
 
 """The algorithm `val` as `reg` stores it, or `nothing`, found by its matcher only."""
 @inline function static_get_match(reg::NameSpaceRegistry, val)
-    entries = get_type_entries(reg, val)
-    @DebugMode "Static get match for value: $val in entries: $entries"
-    idx = static_findfirst_match(entries, val)
+    entry = get_type_entries(reg, val)
+    @DebugMode "Static get match for value: $val in entry: $entry"
+    idx = static_findfirst_match(entry, val)
     if isnothing(idx)
         return nothing
     end
-    return getalgos(entries)[idx]
+    return getalgos(entry)[idx]
 end
 
 """Where `val` is in `reg`, found by its matcher, as a `RegistryLocation` (index `nothing` when not found)."""
 @inline function static_findfirst_match(reg::NameSpaceRegistry, val)
-    entries = get_type_entries(reg, val)
-    T = getentrytype(entries)
-    idx = static_findfirst_match(entries, val)
+    entry = get_type_entries(reg, val)
+    T = getentrytype(entry)
+    idx = static_findfirst_match(entry, val)
     if isnothing(idx)
         return RegistryLocation(T, nothing)
     end
@@ -144,20 +144,20 @@ function Base.getindex(reg::NameSpaceRegistry, t::RegistryLocation{T, idx}) wher
     if isnothing(T)
         error("No matching entry found for type: (nothing, nothing) in registry")
     end
-    type_entries = get_type_entries(reg, T)
-    return type_entries[idx]
+    entry = get_type_entries(reg, T)
+    return entry[idx]
 end
 
 """The position of `val` within its entry, found through the entry's runtime lookup table (values that are not `isbits`)."""
 function dynamic_lookup(reg::NameSpaceRegistry, val)
-    entries = get_type_entries(reg, val)
-    return dynamic_lookup(entries, val)
+    entry = get_type_entries(reg, val)
+    return dynamic_lookup(entry, val)
 end
 
 """The algorithm `val` as `reg` stores it, found through the runtime lookup table (values that are not `isbits`)."""
 function dynamic_get(reg::NameSpaceRegistry, val)
-    entries = get_type_entries(reg, val)
-    return dynamic_get(entries, val)
+    entry = get_type_entries(reg, val)
+    return dynamic_get(entry, val)
 end
 
 """
@@ -168,15 +168,15 @@ The first algorithm in `registry` whose `match_by` equals `matcher`; errors when
 @inline function get_by_matcher(reg::NameSpaceRegistry, matcher)
     return _get_by_matcher(matcher, all_algos(reg))
 end
-@inline function _get_by_matcher(matcher, entries)
-    if isempty(entries)
-        error("Matcher $matcher not found in registry entries: $entries")
+@inline function _get_by_matcher(matcher, algos)
+    if isempty(algos)
+        error("Matcher $matcher not found in the algorithms of the registry: $algos")
     end
-    head = gethead(entries)
+    head = gethead(algos)
     if match_by(head) == matcher
         return head
     end
-    return _get_by_matcher(matcher, gettail(entries))
+    return _get_by_matcher(matcher, gettail(algos))
 end
 
 """
@@ -247,22 +247,22 @@ function static_get_multiplier(reg::NameSpaceRegistry, val)
     if isnothing(getidx(loc))
         error("Found other values of type $(getentrytype(loc)), but no match found for value: $val in registry: $reg")
     end
-    type_entries = get_type_entries(reg, getentrytype(loc))
-    return getmultiplier(type_entries, getidx(loc))
+    entry = get_type_entries(reg, getentrytype(loc))
+    return getmultiplier(entry, getidx(loc))
 end
 
 """How often `val` runs per root step (its multiplier); 0 when it is not in `reg`."""
 function getmultiplier(reg::NameSpaceRegistry, val)
-    entries = get_type_entries(reg, val)
+    entry = get_type_entries(reg, val)
     entry_idx = if isstaticallyfindable(val)
-        static_findfirst_match(entries, val)
+        static_findfirst_match(entry, val)
     else
-        dynamic_lookup(entries, val)
+        dynamic_lookup(entry, val)
     end
     if isnothing(entry_idx)
         return 0
     end
-    return getmultiplier(entries, entry_idx)
+    return getmultiplier(entry, entry_idx)
 end
 
 ###############################################################################

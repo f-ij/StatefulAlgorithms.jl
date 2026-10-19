@@ -1,21 +1,21 @@
 """
-    SimpleRegistry(entries, multipliers)
+    SimpleRegistry(algos, multipliers)
 
 A registry without entry types: a flat tuple of keyed algorithms and their multipliers, found by matching each in
 turn. Used for the few algorithms of a `Package`; a `NameSpaceRegistry` groups algorithms by entry type instead.
 """
 struct SimpleRegistry{T} <: AbstractRegistry
-    entries::T
+    algos::T
     multipliers::Vector{Float64}
 end
 SimpleRegistry() = SimpleRegistry((), Float64[])
 
-getentries(r::SimpleRegistry) = getfield(r, :entries)
+getalgos(r::SimpleRegistry) = getfield(r, :algos)
 getmultipliers(r::SimpleRegistry) = getfield(r, :multipliers)
-all_algos(r::SimpleRegistry) = getentries(r)
+all_algos(r::SimpleRegistry) = getalgos(r)
 
-Base.length(r::SimpleRegistry) = length(getentries(r))
-function entrytypes(r::Union{SimpleRegistry{T}, Type{<:SimpleRegistry{T}}}) where T
+Base.length(r::SimpleRegistry) = length(getalgos(r))
+function getalgotypes(r::Union{SimpleRegistry{T}, Type{<:SimpleRegistry{T}}}) where T
     if isempty(T.parameters)
         return tuple()
     end
@@ -30,23 +30,23 @@ function Base.getindex(r::SimpleRegistry{T}, key) where T
     if isnothing(fidx)
         error("No match found for key: $key in registry of type $(typeof(r))")
     end
-    return getentries(r)[fidx]
+    return getalgos(r)[fidx]
 end
 function Base.getindex(r::SimpleRegistry{T}, idx::Int) where T
-    return getentries(r)[idx]
+    return getalgos(r)[idx]
 end
 
 function add(r::SimpleRegistry{T}, obj, multiplier = 1.; withkey = nothing) where T
     fidx = static_findfirst_match(r, Val(obj))
     if isnothing(fidx)
-        identifiable = Autokey(obj, length(getentries(r)) + 1)
-        newentries = (getentries(r)..., identifiable)
+        identifiable = Autokey(obj, length(getalgos(r)) + 1)
+        newalgos = (getalgos(r)..., identifiable)
         push!(r.multipliers, multiplier)
-        return setfield(r, :entries, newentries), identifiable
+        return setfield(r, :algos, newalgos), identifiable
     else
         multipliers = getmultipliers(r)
         multipliers[fidx] = multipliers[fidx] + multiplier
-        return setfield(r, :multipliers, multipliers), getentries(r)[fidx]
+        return setfield(r, :multipliers, multipliers), getalgos(r)[fidx]
     end
 end
 
@@ -55,7 +55,7 @@ end
     if isnothing(fidx)
         error("No match found for key: $key in registry of type $(SR)")
     end
-    return entrytypes(SR)[fidx]
+    return getalgotypes(SR)[fidx]
 end
 
 @inline function static_get_multiplier(r::SimpleRegistry, val)
