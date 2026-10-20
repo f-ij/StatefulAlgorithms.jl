@@ -53,10 +53,12 @@ The uuid is in the handle's type only on the handle the user holds. Inside plans
 2. Building a plan numbers its handles (`number_unique_ids`): `UniquePlanId{k}(uuid)`, in order of first appearance;
    a nested plan is renumbered into the new plan's numbers, matched by uuid. Plans built from the same code with new
    `Unique`s have the same type, so constructing and resolving compile once.
-3. The registry stores each handle numbered, as the plan has it. No registry, context or loop has a uuid in its type,
-   so `init` and the loop compile once for every new set of `Unique`s. The plan's code finds a handle by its number `k`,
-   from types; a handle the user holds (`context[handle]`, `Init(handle; ...)`, `Var(handle, :x)`) is found by its uuid
-   in the registry's runtime lookup table (`static_findfirst_match`, `src/Registry/TypeEntries/Methods.jl`).
+3. The registry stores each handle numbered, as the plan has it. No registry, context or loop that SA works with has a
+   uuid in its type, so `init` and the loop compile once for every new set of `Unique`s.
+4. A context handed to the user (`context(p)`, `fetch(p)`) carries the plan's `UniqueKeyMap` (`k => uuid` pairs) in its
+   type (`with_held_ids`, `src/Identifiable/UniquePlanIds.jl`). `context[handle]` with a handle the user holds numbers it
+   from that map while compiling and looks it up from types, as a registry key. The registry itself is not changed, and
+   a context given back to SA (`Process(...; context)`) has the map stripped (`strip_held_ids`).
 
 This is the mechanism used when you need multiple logically separate instances of the same algorithm in one composition.
 
