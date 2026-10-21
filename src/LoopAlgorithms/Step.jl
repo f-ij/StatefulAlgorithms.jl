@@ -208,7 +208,9 @@ The lines that run all repeats of routine child `i`, a plan, assigning `lc` at t
 
 They do what `_subroutine_step!` does, with the child's own lines in place of its `_step!` call. Between repeats they
 carry only the persistent fields the child writes, as the loops do (see src/Context/Carried/Carry.jl), and the runtime
-context, which has the same type before and after each repeat (the child removes its own returns when it ends).
+context. That has the same type before and after each repeat (the child removes its own returns when it ends), except a
+local declared without a type that gets its first value in a repeat: from then on it has the written type (Locals.jl,
+section 3).
 `routine_cursor` is the routine's cursor (it holds the resume points) and `repeat_value` the child's repeat.
 """
 function _inline_routine_child_exprs(ChildType::Type, child, child_cursor, child_wiring, namespace_expr, lc, routine_cursor, i, repeat_value)
@@ -390,8 +392,9 @@ Return the body of the generated `_find_writable_fields` for a plan that steps i
 threaded composite); see the file header, 4. The body returns the union of the persistent fields its children write,
 each child asked at its own cursor, wiring view and namespace.
 
-The runtime context type is passed from child to child as `_step!` passes the runtime context. A child that repeats
-sees the same type in every repeat, because a step removes what it adds. Nested plans are written inline, for the
+The runtime context type is passed from child to child as `_step!` passes the runtime context. A child that repeats is
+asked once, with the type before its first repeat: a step removes what it adds, so the type is the same in every repeat,
+except a local declared without a type that gets its first value in a repeat (Locals.jl, section 3). Nested plans are written inline, for the
 same reason as in `_plan_step_exprs`: a nested `_find_writable_fields` call would be the same method with a growing runtime
 context type, which inference stops following.
 """

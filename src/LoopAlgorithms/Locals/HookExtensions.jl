@@ -1,6 +1,7 @@
 #=
 How declared locals extend the base of reading and writing stored values (Context/View/Hooks.jl): a `Maybe` reads
-and shows as its value, or as `nothing` / an error while unset.
+and shows as its value, or as `nothing` / an error while unset; a local declared without a value that was never
+written (`undef`) reads as an error.
 =#
 
 _throw_undef() = throw(UndefRefError())

@@ -10,7 +10,8 @@ in the runtime context's `_declared_locals` subcontext, one slot per declaration
 2. Storage       `Maybe`, for locals that may not hold a value yet, and the field types declared values are stored with
 3. Reading and writing during a run; a local declared without a type takes the type of its first value
 
-How a `Maybe` reads and shows (its hook methods) is in HookExtensions.jl.
+How a `Maybe` and a local that was never written (`undef`) read, and how a `Maybe` shows (their hook methods), is in
+HookExtensions.jl.
 =#
 
 ############################################################################################
@@ -114,7 +115,7 @@ make_maybe_type(::Type{T}, ::Type{Empty}) where {T, Empty} = Maybe{T, _choose_fl
 _choose_flag_type(::Type{T}) where {T} = isconcretetype(T) ? (a = Base.datatype_alignment(T); a >= 8 ? UInt64 : a == 4 ? UInt32 : a == 2 ? UInt16 : UInt8) : UInt8
 Base.convert(::Type{Maybe{T, F, Empty}}, ::Empty) where {T, F, Empty} = Maybe{T, F, Empty}()
 Base.convert(::Type{Maybe{T, F, Empty}}, x) where {T, F, Empty} = Maybe{T, F, Empty}(convert(T, x))
-Base.convert(::Type{M}, m::M) where {M<:Maybe} = m
+Base.convert(::Type{Maybe{T, F, Empty}}, m::Maybe{T, F, Empty}) where {T, F, Empty} = m   # resolves the method above against Base's `convert(::Type{T}, ::T)`
 
 # Declared values are stored with the field types the run will carry: a `Union{Nothing,T}`
 # becomes a `Maybe` (a Julia `Union` field in the carried context costs copies every step).
@@ -132,7 +133,7 @@ _to_storage_type(::Type{T}) where {T} = (T isa Union && Nothing <: T && T !== No
 A local declared without a type (`local x`, or a `nothing` starting value) holds that placeholder until its first
 write, which replaces it: the field gets the type of the value written (for a `nothing` local, a `Maybe` of it, which
 reads as `nothing` when `nothing` is written again), so the runtime context changes type, once. The loop continues
-with the new type (`_repeat_steps`, Loops.jl), and a block on a schedule gives the local the written type when it ran
+with the new type (`_repeat_steps`, `_run_steps`, Loops.jl), and a block on a schedule gives the local the written type when it ran
 and the placeholder when it did not (`_compute_conditional_loopcontext_type`, Step.jl). Later writes are converted to
 that type, as for a local declared with one.
 =#
