@@ -11,15 +11,13 @@ mutable struct LoopRunProcess{LT} <: AbstractProcess
     loopidx::UInt
     tickidx::UInt
     lifetime::LT
-    @atomic shouldrun::Bool
     starttime::Union{Nothing, Float64, UInt64}
     endtime::Union{Nothing, Float64, UInt64}
     threadid::Int
 end
 
-LoopRunProcess(lifetime::LT) where {LT} = LoopRunProcess{LT}(UInt(1), UInt(1), lifetime, true, nothing, nothing, 0)
+LoopRunProcess(lifetime::LT) where {LT} = LoopRunProcess{LT}(UInt(1), UInt(1), lifetime, nothing, nothing, 0)
 @inline lifetime(p::LoopRunProcess) = p.lifetime
-@inline shouldrun(p::LoopRunProcess) = p.shouldrun
 @inline tick!(p::LoopRunProcess) = (p.tickidx += UInt(1))
 @inline set_starttime!(p::LoopRunProcess) = (p.starttime = time_ns())
 @inline set_endtime!(p::LoopRunProcess) = (p.endtime = time_ns())

@@ -86,7 +86,7 @@ function scalar_replace_direct_plan_loop(process::IP) where {IP<:StatefulAlgorit
             lifetime,
         )
         StatefulAlgorithms.inc!(process)
-        StatefulAlgorithms.process_breakcondition(lifetime, process, context) && break
+        StatefulAlgorithms.process_breakcondition(process) && break
     end
 
     return context

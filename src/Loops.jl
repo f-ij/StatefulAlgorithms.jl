@@ -136,13 +136,19 @@ Run a single function in a loop indefinitely.
     # step (see src/Context/Carried/Carry.jl).
     carried = @inline create_carried(step_plan, step_cursor, LoopContext(persistent_context, runtime_context), step_wiring, Namespace{nothing}(), process, lifetime)
     while true
+        # Before the step: the lifetime's own stop condition (`Until`, ...), with the steps done; as a `while` loop's
+        # condition, the same as for a routine child's repeats. It may read declared locals, so it sees both contexts.
+        if @inline lifetime_breakcondition(lifetime, (@inline final_context(LoopContext((@inline with_carried(persistent_context, carried)), runtime_context))), (@inline loopint(process)) - 1)
+            break
+        end
         # The step's `LoopContext` is built from the pieces the loop carries, and taken apart again after it.
         stepped_lc = @inline _step!(step_plan, step_cursor, LoopContext((@inline with_carried(persistent_context, carried)), runtime_context), step_wiring, Namespace{nothing}(), process, lifetime)
         stepped_persistent_context, runtime_context = (@inline getpersistent(stepped_lc)), (@inline getruntime(stepped_lc))
         carried = @inline next_carried(carried, stepped_persistent_context)
         @inline tick!(process)
         @inline inc!(process)
-        if @inline process_breakcondition(lifetime, process, stepped_persistent_context)
+        # After the step: a pause or close of the process.
+        if @inline process_breakcondition(process)
             break
         end
     end
@@ -183,13 +189,19 @@ Base.@constprop :aggressive @inline function loop(process::P, algo::F, start_per
     # step (see src/Context/Carried/Carry.jl).
     carried = @inline create_carried(step_plan, step_cursor, LoopContext(persistent_context, runtime_context), step_wiring, Namespace{nothing}(), process, lifetime)
     for _ in (@inline loopidx(process)):(@inline repeats(lifetime))
+        # Before the step: the lifetime's own stop condition (`Until`, ...), with the steps done; as a `while` loop's
+        # condition, the same as for a routine child's repeats. It may read declared locals, so it sees both contexts.
+        if @inline lifetime_breakcondition(lifetime, (@inline final_context(LoopContext((@inline with_carried(persistent_context, carried)), runtime_context))), (@inline loopint(process)) - 1)
+            break
+        end
         # The step's `LoopContext` is built from the pieces the loop carries, and taken apart again after it.
         stepped_lc = @inline _step!(step_plan, step_cursor, LoopContext((@inline with_carried(persistent_context, carried)), runtime_context), step_wiring, Namespace{nothing}(), process, lifetime)
         stepped_persistent_context, runtime_context = (@inline getpersistent(stepped_lc)), (@inline getruntime(stepped_lc))
         carried = @inline next_carried(carried, stepped_persistent_context)
         @inline tick!(process)
         @inline inc!(process)
-        if @inline process_breakcondition(lifetime, process, stepped_persistent_context)
+        # After the step: a pause or close of the process.
+        if @inline process_breakcondition(process)
             break
         end
     end

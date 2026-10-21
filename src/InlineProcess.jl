@@ -57,7 +57,6 @@ end
 @inline isasync(ip::InlineProcess{TD,ContextType,Lt,Mode}) where {TD,ContextType,Lt,Mode} = Mode == :async
 
 # getlidx(ip::InlineProcess) = Int(ip.loopidx)
-@inline shouldrun(ip::IP) where {IP<:InlineProcess} = true
 @inline lifetime(ip::IP) where {IP<:InlineProcess} = ip.lifetime
 @inline getcontext(ip::IP) where {IP<:InlineProcess} = ip.context::contexttype(ip)
 

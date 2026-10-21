@@ -6,14 +6,15 @@ using StatefulAlgorithms
 const SA = StatefulAlgorithms
 
 """
-`NoStopRepeat(n)`: `n` repeats like `Repeat(n)`, but its stop check is always `false`, so a `Process` running it never
-reads `shouldrun` (not after routine repeats, not after steps) and cannot be paused or closed early. Perf only: the
-`process, no stop checks` runner uses it to measure what the stop checks cost, which a hand-written loop does not pay.
+`NoStopRepeat(n)`: `n` repeats like `Repeat(n)`, but a `Process` running it is never interrupted: its
+`process_breakcondition` is always `false`, so it never reads `shouldrun` (not after routine repeats, not after steps)
+and cannot be paused or closed early. Perf only: the `process, no stop checks` runner uses it to measure what the
+pause check costs, which a hand-written loop does not pay. `Process` carries its lifetime as a type parameter.
 """
 struct NoStopRepeat <: SA.RepeatLifetime
     repeats::Int
 end
-SA.process_breakcondition(lifetime::LT, process::P, context::C) where {LT<:NoStopRepeat, P<:SA.AbstractProcess, C} = false
+SA.process_breakcondition(process::P) where {F, LT<:NoStopRepeat, P<:SA.Process{F, LT}} = false
 
 #################
 ### Algorithms ###

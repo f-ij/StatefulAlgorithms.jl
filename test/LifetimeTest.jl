@@ -27,6 +27,14 @@ using StatefulAlgorithms
     run(capped_process)
     capped_context = fetch(capped_process)
     @test capped_context[LifetimeCounter].count == 5
+
+    # The lifetime's condition is checked before every step, like a routine child's before every repeat: if it
+    # already holds at the start, no step runs.
+    already_done_process = InlineProcess(
+        LifetimeCounter;
+        lifetime = StatefulAlgorithms.Until(x -> x >= 0, Var(LifetimeCounter, :count)),
+    )
+    @test run(already_done_process)[LifetimeCounter].count == 0
 end
 
 @testset "Condition lifetimes run cleanup on natural completion" begin

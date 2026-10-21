@@ -1,22 +1,23 @@
 #=
-Extendable API of processes: the check whether the process stops.
+Extendable API of processes: the check whether the process is interrupted (paused or closed).
 
 Each function here has the default every process gets. Extended in:
-- Lifetimes/HookExtensions.jl: `Until`, `AtLeast`, `RepeatOrUntil`, `AtLeastAtMost` (their own stop condition);
-- perf/cases.jl: `NoStopRepeat` (never stops, to time the loop without the check).
+- Process.jl: `Process` (its `shouldrun` flag);
+- perf/cases.jl: a `Process` with a `NoStopRepeat` lifetime (never interrupted, to time the loop without the check).
+
+The logical stop check, a lifetime's own condition, is `lifetime_breakcondition` (Lifetimes/Hooks.jl).
 =#
 
 """
-    process_breakcondition(lifetime, process, context) -> Bool
+    process_breakcondition(process) -> Bool
 
-Whether the process stops. Checked by the process loop after every step (`Loops.jl`) and inside a routine after every
-repeat of a child (`LoopAlgorithms/Step.jl`). By default (`Repeat`, `Indefinite`): when the process is paused or closed
-(`!shouldrun(process)`). A lifetime with its own stop condition adds a method in Lifetimes/HookExtensions.jl that also
-checks that condition, read from `context`.
+Whether `process` is interrupted: paused or closed from outside. Checked after every step by the process loop
+(`Loops.jl`) and after every repeat inside a routine (`LoopAlgorithms/Step.jl`), so the run stops there (a pause
+resumes after it). `false` by default: a process that cannot be paused or closed (`InlineProcess`, the `LoopRunProcess`
+of a hand-driven step). `Process` adds a method that reads its `shouldrun` flag.
 
-Repeats can run for a very long time, so a pause or close of a `Process` must be seen between any two of them, not once
-per child. See `shouldrun(::Process)`. A routine child's own stop condition is `routine_breakcondition`
-(LoopAlgorithms/Routines/Hooks.jl).
+Repeats can run for a very long time, so an interruption must be seen between any two of them, not once per child.
+Checked after the step, not before: a check before made LLVM select between the new and old values on the flag, which
+put that read in every update's dependency chain (`17a1a33`).
 """
-@inline process_breakcondition(lifetime::LT, process::P, context::C) where {LT<:Lifetime,P<:AbstractProcess,C} =
-    @inline !shouldrun(process)
+@inline process_breakcondition(process::P) where {P<:AbstractProcess} = false

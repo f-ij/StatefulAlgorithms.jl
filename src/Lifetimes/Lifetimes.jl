@@ -1,6 +1,7 @@
 #=
-Lifetimes: how long a process runs, and how often a routine repeats a child. The stop checks they extend (the process's
-`process_breakcondition`, a routine child's `routine_breakcondition`) are in HookExtensions.jl.
+Lifetimes: how long a process runs, and how often a routine repeats a child. Their logical stop check
+(`lifetime_breakcondition`) is in Hooks.jl, and the methods of the lifetimes with their own condition in
+HookExtensions.jl.
 =#
 
 export Repeat, Indefinite, Until, AtLeast, RepeatOrUntil, AtLeastAtMost
