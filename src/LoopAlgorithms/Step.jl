@@ -8,7 +8,8 @@ Terms used in this file:
   to its own `_step!`.
 - `lc`: the `LoopContext` variable: the persistent context, the runtime context, and the plan node whose scope the step
   is in (see Context/ContextBundles.jl). Every generated line that steps something reads `lc` and assigns it again.
-- schedule: how often a composite child runs (`Interval{1}` = every step, `@every n` = every n-th step).
+- schedule: when a composite child runs (`Interval{1}` = every step, `@every n` = every n-th step, `RunIf` = on its
+  interval when a condition on the context holds).
 - repeat: how often a routine child runs in one step of the routine (`Repeat(n)`, `Until(...)`, ...).
 
 1. Nested plans are written inline.
@@ -57,7 +58,7 @@ Terms used in this file:
        local resume_point = get_resume_point(cursor, 2)
        local start_persistent = getpersistent(lc)
        local runtime = getruntime(lc)
-       local carried = _written_values(start_persistent, _find_writable_fields(child2, ...))   # the fields child 2 writes
+       local carried = create_carried(child2, cursor2, lc, wiring2, Namespace2(), process, lifetime)   # the fields child 2 writes
        local count = routine_repeat_count(repeat2)
        for lidx in resume_point:count
            if _routine_breakcondition(repeat2, process, <context>, lidx - 1)    # child 2's own stop condition
@@ -241,9 +242,7 @@ function _inline_routine_child_exprs(ChildType::Type, child, child_cursor, child
     body = Any[:(local $resume_point = @inline get_resume_point($routine_cursor, $i)),
                :(local $start_persistent = @inline getpersistent($lc)),
                :(local $runtime = @inline getruntime($lc)),
-               # The fields the nested plan writes (its `_find_writable_fields`, nested plans inline: not `create_carried`, which asks
-               # what the nested plan's `_step!` returns, from inside this `_step!`).
-               :(local $carried = @inline _written_values($start_persistent, (@inline _find_writable_fields($child, $child_cursor, $start_persistent, (@inline runtime_type(typeof($lc))), $child_wiring, $namespace_expr, process, lifetime))))]
+               :(local $carried = @inline create_carried($child, $child_cursor, $lc, $child_wiring, $namespace_expr, process, lifetime))]
     if once
         push!(body, :(if $resume_point <= 1; $(repeat_once()...); $(paused_after(resume_point)); end))   # `Repeat(1)`: no own condition
     else
@@ -440,8 +439,8 @@ is past the last repeat.
     persistent_context = @inline getpersistent(lc)
     runtime_context = @inline getruntime(lc)
     if resume_point <= this_repeat_count
-        # The repeats carry only the fields the child writes, as the loops do (see src/Context/Carried/Carry.jl); `context`
-        # stays the routine's starting context.
+        # The repeats carry only the fields the child writes, as the loops do (see src/Context/Carried/Carry.jl);
+        # `persistent_context` stays the routine's starting context, only `carried` changes.
         carried = @inline create_carried(func, func_cursor, lc, child_step_wiring, namespace, process, lifetime)
         # Every repeat the same:
         # - before it, the child's own stop condition (`Until`, ...), as a `while` loop's condition: if it already holds,
@@ -474,7 +473,7 @@ end
 Run routine child `idx`, a leaf with `Repeat(1)`, once (unless already run before a pause), and return `lc` after it.
 
 It is `_subroutine_step!` without the loop and without the child's own stop condition; only the pause or close check
-after the step stays. Without the loop the child's `_step!` is emitted once instead of twice.
+after the step stays.
 """
 @inline function _subroutine_step_once!(
     lc::L,
