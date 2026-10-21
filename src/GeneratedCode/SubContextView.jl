@@ -21,8 +21,8 @@ function _subcontext_view_merge_exprs(SCV::Type, Args::Type, demanded_runtime_na
     algo_varnames = fieldnames(Args)
     demand_all = demanded_runtime_names === :all
 
-    merge_preambles_by_subcontext = Dict{Symbol, Vector{Expr}}()
-    merge_expressions_by_subcontext = Dict{Symbol, Vector{Expr}}()
+    write_preambles = Expr[]
+    write_requests = Expr[]
     runtime_expressions_by_subcontext = Dict{Symbol, Vector{Expr}}()
 
     for (var_idx, algo_varname) in enumerate(algo_varnames)
@@ -36,14 +36,9 @@ function _subcontext_view_merge_exprs(SCV::Type, Args::Type, demanded_runtime_na
             # Converted to the slot's type by `merge_runtime_return(…, Val(target_subcontext), …)`.
             push!(exprs, Expr(:(=), targetname, :(getproperty(args, $(QuoteNode(algo_varname))))))
         elseif !isnothing(target_location) # If the local variable exists
-            target_subcontext = get_subcontextname(target_location)
-            targetname = location_fieldname(target_location)
-
-            exprs = get!(merge_expressions_by_subcontext, target_subcontext, Expr[])
-            preambles = get!(merge_preambles_by_subcontext, target_subcontext, Expr[])
-            writeback_preambles, writeback_exprs = _subcontext_view_writeback_exprs(target_location, target_subcontext, algo_varname)
-            append!(preambles, writeback_preambles)
-            append!(exprs, writeback_exprs)
+            preambles, requests = _build_write_request_exprs(target_location, algo_varname)
+            append!(write_preambles, preambles)
+            append!(write_requests, requests)
 
         elseif demand_all || algo_varname in demanded_runtime_names # A demanded name the view does not see: one of this namespace's own outputs.
             exprs = get!(runtime_expressions_by_subcontext, SubKey, Expr[])
@@ -54,27 +49,18 @@ function _subcontext_view_merge_exprs(SCV::Type, Args::Type, demanded_runtime_na
         end
     end
 
-    # Build the NamedTuple expressions for real subcontext writes and runtime
-    # field patches. These create:
-    #   (; subcontext1 = (; var1 = ...), ...)
-
-    merge_subcontext_exprs = map(collect(merge_expressions_by_subcontext)) do (subctx, field_exprs)
-        merge_expr = Expr(:tuple, Expr(:parameters, field_exprs...))
-        preambles = get(merge_preambles_by_subcontext, subctx, Expr[])
-        if !isempty(preambles)
-            merge_expr = quote
-                $(preambles...)
-                $merge_expr
-            end
-        end
-        return Expr(:(=), subctx, merge_expr)
+    # The persistent writes: one `StoreInto` request per written field, followed by `_follow_writes` (Writing.jl) and
+    # grouped into `(; subcontext1 = (; var1 = ...), ...)` by `_build_write_payload`.
+    merge_expr = quote
+        $(write_preambles...)
+        @inline _build_write_payload(@inline _follow_writes(scv, ($(write_requests...),)))
     end
     runtime_subcontext_exprs = [
         Expr(:(=), subctx, Expr(:tuple, Expr(:parameters, field_exprs...)))
         for (subctx, field_exprs) in runtime_expressions_by_subcontext
     ]
     return (
-        Expr(:tuple, Expr(:parameters, merge_subcontext_exprs...)),
+        merge_expr,
         Expr(:tuple, Expr(:parameters, runtime_subcontext_exprs...)),
     )
 end
@@ -92,60 +78,37 @@ interpreted in route-source order; named-tuple results are read by backing name.
     getfield(value, index)
 
 """
-    _subcontext_view_writeback_exprs(location, target_subcontext, algo_varname)
+    _build_write_request_exprs(location, algo_varname)
 
-Build preamble and named-tuple field expressions that write one returned view
-field back into its backing subcontext location.
+Return the preamble expressions and the `StoreInto` request expressions that write the returned `algo_varname` to the
+view location `location`: one request for its field, or after a reverse transform one per field it reads.
 """
-function _subcontext_view_writeback_exprs(@nospecialize(target_location::VarLocation), target_subcontext::Symbol, algo_varname::Symbol)
+function _build_write_request_exprs(@nospecialize(target_location::VarLocation), algo_varname::Symbol)
+    target_subcontext = get_subcontextname(target_location)
     targetname = location_fieldname(target_location)
     forward_func = getfunc(target_location)
     reverse_func = getreversefunc(target_location)
     returned_expr = :(getproperty(args, $(QuoteNode(algo_varname))))
+    request_expr(field, value_expr) = :(StoreInto{$(typeof(VarLocation{:state}(target_subcontext, field)))}($value_expr))
 
     if isnothing(reverse_func)
         if !isnothing(forward_func) || targetname isa Tuple
             error("Algorithm returned transformed variable $(algo_varname), but its route to $(target_subcontext).$(targetname) has no reverse_transform.")
         end
-
-        return Expr[], [_subcontext_view_writeback_field_expr(target_subcontext, targetname, returned_expr)]
+        return Expr[], [request_expr(targetname, returned_expr)]
     end
 
     if targetname isa Tuple
         reverse_values = gensym(:reverse_values)
         preambles = [Expr(:(=), reverse_values, Expr(:call, reverse_func, returned_expr))]
-        field_exprs = [
-            _subcontext_view_writeback_field_expr(
-                target_subcontext,
-                targetname[i],
-                :(@inline _reverse_transform_component($reverse_values, Val($(QuoteNode(targetname[i]))), Val($i))),
-            )
+        requests = [
+            request_expr(targetname[i], :(@inline _reverse_transform_component($reverse_values, Val($(QuoteNode(targetname[i]))), Val($i))))
             for i in eachindex(targetname)
         ]
-        return preambles, field_exprs
+        return preambles, requests
     end
 
-    write_value = Expr(:call, reverse_func, returned_expr)
-    return Expr[], [_subcontext_view_writeback_field_expr(target_subcontext, targetname, write_value)]
-end
-
-"""
-    _subcontext_view_writeback_field_expr(target_subcontext, targetname, value_expr)
-
-Build the named-tuple field expression for one backing variable writeback.
-"""
-function _subcontext_view_writeback_field_expr(target_subcontext::Symbol, targetname::Symbol, value_expr::Expr)
-    # Let the current stored value decide how an algorithm return is written
-    # back. Plain fields use the returned value directly; wrapper fields can
-    # absorb the write while preserving context shape.
-    return Expr(
-        :(=),
-        targetname,
-        :(@inline writeback_value(
-            (@inline partition_storedproperty(scv, Val($(QuoteNode(target_subcontext))), Val($(QuoteNode(targetname))))),
-            $value_expr,
-        )),
-    )
+    return Expr[], [request_expr(targetname, Expr(:call, reverse_func, returned_expr))]
 end
 
 """Merge with every non-state return field demanded."""

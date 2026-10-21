@@ -8,7 +8,7 @@ struct RecursiveViewWrapper{T}
 end
 
 """A test wrapper that reads as its inner value, so wrappers inside wrappers test `ReadVar`."""
-StatefulAlgorithms.read_action(reader::R, value::RecursiveViewWrapper{T}) where {R<:StatefulAlgorithms.AbstractContext, T} =
+StatefulAlgorithms.read_value(reader::R, value::RecursiveViewWrapper{T}) where {R<:StatefulAlgorithms.AbstractContext, T} =
     StatefulAlgorithms.ReadVar(getfield(value, :value))
 
 function StatefulAlgorithms.init(::RedirectSourceState, context::C) where {C}
@@ -106,6 +106,32 @@ end
         @test @inferred(read_target(stepped_context)) == 3
         read_target(stepped_context)
         @test (@allocated read_target(stepped_context)) == 0
+    end
+
+    @testset "A write through a redirect to a redirect lands at the source, inferred and without allocations" begin
+        algo = resolve(CompositeAlgorithm(
+            :target => RedirectTargetAlgo(),
+            (1,),
+            :middle => RedirectMiddleState(),
+            :source => RedirectSourceState(),
+            Redirect(:middle => :target, :value),
+            Redirect(:source => :middle, :value),
+        ))
+
+        initialized = init(algo; lifetime = Repeat(1))
+        stepped_context = StatefulAlgorithms._step!(initialized, StatefulAlgorithms.context(initialized))
+        @test stepped_context.source.value == 4
+        @test stepped_context.middle.value isa RedirectedVar
+        @test stepped_context.target.value isa RedirectedVar
+
+        stepped_context = StatefulAlgorithms._step!(initialized, stepped_context)
+        @test stepped_context.source.value == 5
+        @test stepped_context.target.seen == 4
+
+        step_once(i, c) = StatefulAlgorithms._step!(i, c)
+        @inferred step_once(initialized, stepped_context)
+        step_once(initialized, stepped_context)
+        @test (@allocated step_once(initialized, stepped_context)) == 0
     end
 
     @testset "A Redirect cycle is an error when the redirects are applied" begin

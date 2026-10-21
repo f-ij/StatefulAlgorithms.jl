@@ -57,7 +57,7 @@ named `name` (a declared local as its value).
     end
     locals = @inline get_declared_locals(pc)
     if haskey(locals, name)
-        return @inline read_value(pc, getproperty(locals, name))   # its value, not its storage
+        return @inline _follow_reads(pc, getproperty(locals, name))   # its value, not its storage
     end
     error("Context has no persistent subcontext named `$name`.")
 end
