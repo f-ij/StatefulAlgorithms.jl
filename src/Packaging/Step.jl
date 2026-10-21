@@ -43,8 +43,6 @@ Base.@constprop :aggressive @inline function cleanup(pkg::Package, context::C) w
     return ret
 end
 
-@inline reset!(pkg::Package) = (getinc(pkg)[] = 1; reset!.(getalgos(pkg)); pkg)
-
 @inline @generated function inc!(pkg::Package)
     _lcm = lcm(intervals(pkg)...)
     # TODO: Use the compare/select wrap from the core inc! (LoopAlgorithms/CompositeAlgorithms.jl); mod1 costs ~3 ns per tick.

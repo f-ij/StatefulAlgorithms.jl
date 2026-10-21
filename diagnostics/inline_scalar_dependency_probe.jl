@@ -279,7 +279,7 @@ function scalar_dependency_direct_plan_loop(process::IP) where {IP<:StatefulAlgo
             lifetime,
         )
         @inline StatefulAlgorithms.inc!(process)
-        (@inline StatefulAlgorithms._process_breakcondition(lifetime, process, context)) && break
+        (@inline StatefulAlgorithms.process_breakcondition(lifetime, process, context)) && break
     end
 
     return context

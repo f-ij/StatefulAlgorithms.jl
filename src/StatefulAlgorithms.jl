@@ -31,8 +31,9 @@ module StatefulAlgorithms
 
 
     include("AbstractProcesses/AbstractProcesses.jl")
-    include("Lifetime.jl")
-    include("AbstractProcesses/Interface.jl")   # after Lifetime.jl: the stop check takes a `Lifetime`
+    include("Lifetimes/Lifetimes.jl")
+    include("AbstractProcesses/Interface.jl")
+    include("AbstractProcesses/Hooks.jl")       # after Lifetimes.jl: the stop check takes a `Lifetime`
     include("ProcessEntities/ProcessEntities.jl")
 
 
@@ -78,6 +79,7 @@ module StatefulAlgorithms
     include("Manager/Manager.jl")
 
     include("LoopAlgorithms/LoopAlgorithms.jl")
+    include("Lifetimes/HookExtensions.jl")      # after LoopAlgorithms: extends the routine stop check (Routines/Hooks.jl)
     include("CompositeDSL/CompositeDSL.jl")
     include("Legacy/Legacy.jl")   # deprecated macros, removed in a later version
     include("ContextAnalyzer/ContextAnalyzer.jl")

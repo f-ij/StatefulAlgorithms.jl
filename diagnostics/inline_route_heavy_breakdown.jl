@@ -295,7 +295,7 @@ function inline_route_direct_plan_loop(process::IP) where {IP<:StatefulAlgorithm
             lifetime,
         )
         @inline StatefulAlgorithms.inc!(process)
-        if @inline StatefulAlgorithms._process_breakcondition(lifetime, process, context)
+        if @inline StatefulAlgorithms.process_breakcondition(lifetime, process, context)
             break
         end
     end

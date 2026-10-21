@@ -10,6 +10,8 @@ export FinalizedAlgorithm, finalstep
 # Nested finalized wrappers are intentionally rejected by the parser in
 # `Setup.jl`: only the outer process has a single final result, while inner loop
 # algorithms must continue to behave like ordinary algorithms.
+#
+# The hooks it extends (`reset!`, `loop_final_result`) are in HookExtensions.jl.
 
 """
 Root-only loop-algorithm wrapper that post-processes the cleaned final context.
@@ -84,7 +86,6 @@ end
 
 @inline Base.length(fa::FinalizedAlgorithm) = length(inneralgorithm(fa))
 @inline Base.eachindex(fa::FinalizedAlgorithm) = eachindex(inneralgorithm(fa))
-@inline reset!(fa::FinalizedAlgorithm) = reset!(inneralgorithm(fa))
 @inline cleanup(fa::FinalizedAlgorithm, context) = cleanup(inneralgorithm(fa), context)
 @inline cleanup(fa::FinalizedAlgorithm, lc::LoopContext) = cleanup(inneralgorithm(fa), lc)
 
@@ -111,15 +112,6 @@ end
 
 @inline iscomposite(::Type{FA}) where {LA, FA<:FinalizedAlgorithm{LA}} = iscomposite(LA)
 @inline iscomposite(fa::FinalizedAlgorithm) = iscomposite(inneralgorithm(fa))
-
-@inline function _loop_final_result(fa::FinalizedAlgorithm, cleaned_context)
-    return finalfunction(fa)(cleaned_context)
-end
-
-@inline function _loop_final_result(fa::FinalizedAlgorithm, cleaned_context, runtime_context)
-    final = finalfunction(fa)
-    return applicable(final, cleaned_context, runtime_context) ? final(cleaned_context, runtime_context) : final(cleaned_context)
-end
 
 function _strip_nested_finalized_algorithm(algo)
     return algo

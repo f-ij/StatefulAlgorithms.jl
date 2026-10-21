@@ -60,9 +60,6 @@ statetypes(r::Union{Routine, Type{<:Routine}}) = ()
 # getnames(r::Routine{T, R, NT, N}) where {T, R, NT, N} = N
 Base.length(r::Routine) = length(getalgos(r))
 
-function reset!(r::Routine)
-    reset!.(getalgos(r))
-end
 #############################################
 ################ Type Info ###############
 #############################################

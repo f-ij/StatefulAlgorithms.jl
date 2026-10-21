@@ -109,7 +109,7 @@ This targets constructor latency and repeated short-run workloads.
 
 Relevant files:
 
-- `src/LoopAlgorithms/FinalizedAlgorithm.jl`
+- `src/LoopAlgorithms/FinalizedAlgorithm/FinalizedAlgorithm.jl`
 - `src/LoopAlgorithms/Preparation`
 - `src/Packaging`
 

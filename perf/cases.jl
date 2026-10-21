@@ -13,7 +13,7 @@ reads `shouldrun` (not after routine repeats, not after steps) and cannot be pau
 struct NoStopRepeat <: SA.RepeatLifetime
     repeats::Int
 end
-SA._process_breakcondition(lifetime::LT, process::P, context::C) where {LT<:NoStopRepeat, P<:SA.AbstractProcess, C} = false
+SA.process_breakcondition(lifetime::LT, process::P, context::C) where {LT<:NoStopRepeat, P<:SA.AbstractProcess, C} = false
 
 #################
 ### Algorithms ###

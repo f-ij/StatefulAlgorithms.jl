@@ -18,7 +18,7 @@ there. Returns the persistent context and the result; the runtime values end wit
 """
 @inline function finalizer!(func::F, persistent_context::C, runtime_context::RC, process::P, lifetime::LT) where {F,C<:ProcessContext,RC<:ProcessContext,P<:AbstractProcess,LT<:Lifetime}
     cleaned = @inline cleanup(func, LoopContext(persistent_context, runtime_context))
-    return (@inline getpersistent(cleaned)), (@inline _loop_final_result(func, (@inline final_context(cleaned)), getruntime(cleaned)))
+    return (@inline getpersistent(cleaned)), (@inline loop_final_result(func, (@inline final_context(cleaned)), getruntime(cleaned)))
 end
 
 """
@@ -142,7 +142,7 @@ Run a single function in a loop indefinitely.
         carried = @inline next_carried(carried, stepped_persistent_context)
         @inline tick!(process)
         @inline inc!(process)
-        if @inline _process_breakcondition(lifetime, process, stepped_persistent_context)
+        if @inline process_breakcondition(lifetime, process, stepped_persistent_context)
             break
         end
     end
@@ -189,7 +189,7 @@ Base.@constprop :aggressive @inline function loop(process::P, algo::F, start_per
         carried = @inline next_carried(carried, stepped_persistent_context)
         @inline tick!(process)
         @inline inc!(process)
-        if @inline _process_breakcondition(lifetime, process, stepped_persistent_context)
+        if @inline process_breakcondition(lifetime, process, stepped_persistent_context)
             break
         end
     end
