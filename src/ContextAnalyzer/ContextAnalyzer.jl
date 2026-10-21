@@ -391,7 +391,6 @@ function _analysis_mock_loopalgorithm(ca::CompositeAlgorithm)
     funcs = map(_analysis_mock_loopalgorithm, getalgos(ca))
     mocked = newfuncs(ca, funcs)
     mocked = setintervals(mocked, ntuple(_ -> 1, length(funcs)))
-    reset!(mocked)
     return mocked
 end
 
@@ -399,7 +398,6 @@ function _analysis_mock_loopalgorithm(r::Routine)
     funcs = map(_analysis_mock_loopalgorithm, getalgos(r))
     mocked = newfuncs(r, funcs)
     mocked = setrepeats(mocked, ntuple(_ -> 1, length(funcs)))
-    reset!(mocked)
     return mocked
 end
 

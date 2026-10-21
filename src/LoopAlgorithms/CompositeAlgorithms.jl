@@ -114,11 +114,6 @@ of 1 the counter never changes.
     end
 end
 
-function reset!(cursor::CompositeLoopCursor, ca::CA) where CA <: CompositeAlgorithm
-    getinc(cursor)[] = 1
-    reset!.(getalgos(ca))
-end
-
 num_funcs(ca::CompositeAlgorithm{FA}) where FA = fieldcount(FA)
 
 # TODO: WHAT IS THIS

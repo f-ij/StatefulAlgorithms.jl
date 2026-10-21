@@ -412,9 +412,11 @@ This performs these exact mutations:
 - `process.shouldrun = true`
 - `process.starttime = nothing`
 - `process.endtime = nothing`
-- `reset!(getalgo(process))`
+- `process.loop_cursor = nothing`: the next run builds a fresh cursor, so every interval counter and resume point
+  starts over.
 
-It does not change `process.runtime_context`, `process.task`, or
+It does not reset counters an algorithm keeps in its own value: a `Package`'s interval counter goes on from where it
+was (TODO.md, "Packaging and threaded composites"). It does not change `process.runtime_context`, `process.task`, or
 `process.lastresult`. It does not clear or replace values stored in
 `context(process)`.
 """
@@ -425,8 +427,6 @@ function reset!(p::Process)
     @atomic p.paused = false
     @atomic p.shouldrun = true
     reset_times!(p)
-    algo = getalgo(p)
-    reset!(algo)
     return p
 end
 

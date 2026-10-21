@@ -1,10 +1,7 @@
 #=
-How a `FinalizedAlgorithm` extends the hooks of loop algorithms (LoopAlgorithms/Hooks.jl): a reset goes to the
-algorithm it wraps, and the result of a run is its final function applied to the context after cleanup.
+How a `FinalizedAlgorithm` extends the hooks of loop algorithms (LoopAlgorithms/Hooks.jl): the result of a run is its
+final function applied to the context after cleanup.
 =#
-
-"""Reset a finalized algorithm before it runs again: resets the algorithm it wraps."""
-@inline reset!(fa::FinalizedAlgorithm) = reset!(inneralgorithm(fa))
 
 """The result of a run: the final function applied to the context after cleanup."""
 @inline function loop_final_result(fa::FA, cleaned_context::C) where {FA<:FinalizedAlgorithm, C}

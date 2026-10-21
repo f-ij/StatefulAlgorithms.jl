@@ -199,7 +199,7 @@ For a `Process`, this performs these exact mutations:
 - `slot.worker.shouldrun = true`
 - `slot.worker.starttime = nothing`
 - `slot.worker.endtime = nothing`
-- `reset!(getalgo(slot.worker))`
+- `slot.worker.loop_cursor = nothing`
 
 It does not change `slot.worker.runtime_context`, `slot.worker.task`, or
 `slot.worker.lastresult`. It also does not rebuild or clear values stored in the

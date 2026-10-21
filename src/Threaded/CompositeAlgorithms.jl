@@ -76,11 +76,6 @@ Base.eachindex(tca::ThreadedCompositeAlgorithm) = eachindex(getalgos(tca))
     return :(getinc(cursor)[] = mod1(getinc(cursor)[] + 1, $_lcm))
 end
 
-function reset!(cursor::CompositeLoopCursor, tca::ThreadedCompositeAlgorithm)
-    getinc(cursor)[] = 1
-    reset!.(getalgos(tca))
-end
-
 multipliers(tca::ThreadedCompositeAlgorithm) = tuplemap(x -> 1 / getinterval(x), intervals(tca))
 multipliers(tcaT::Type{TCA}) where {TCA<:ThreadedCompositeAlgorithm} = tuplemap(x -> 1 / getinterval(x), intervals(tcaT))
 multiplier(tca::ThreadedCompositeAlgorithm, idx) = 1 / interval(tca, idx)

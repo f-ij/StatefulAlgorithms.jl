@@ -11,7 +11,7 @@ export FinalizedAlgorithm, finalstep
 # `Setup.jl`: only the outer process has a single final result, while inner loop
 # algorithms must continue to behave like ordinary algorithms.
 #
-# The hooks it extends (`reset!`, `loop_final_result`) are in HookExtensions.jl.
+# The hook it extends (`loop_final_result`) is in HookExtensions.jl.
 
 """
 Root-only loop-algorithm wrapper that post-processes the cleaned final context.
