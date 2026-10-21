@@ -72,7 +72,7 @@ end
 
 @testset "Declaring: Local(:x), Local(:x => T), Declaration(x = v); only wired algorithms see a local" begin
     @test StatefulAlgorithms.getvalues(Local(:x)).x === undef
-    @test StatefulAlgorithms.getvalues(Local(:x => Float64)).x isa StatefulAlgorithms.Maybe{Float64}
+    @test StatefulAlgorithms.getvalues(Local(:x => Float64)).x === StatefulAlgorithms.UndefLocal{Float64}()
     @test StatefulAlgorithms.getvalues(Declaration(x = 0.0)).x === 0.0
     err = try; Local(x = 0.0); nothing; catch e; e; end
     @test err isa ErrorException && occursin("A starting value is a `Declaration(x = …)`", sprint(showerror, err))
@@ -157,7 +157,28 @@ end
     StatefulAlgorithms.step!(::FractionWriter, context) = (; reading = 2.5)
     @test_throws InexactError run(InlineProcess(CompositeAlgorithm(IntWriter, FractionWriter, (1, 2), Local(:reading), Route(:_declared_locals => IntWriter, :reading => :reading), Route(:_declared_locals => FractionWriter, :reading => :reading)); repeats = 3))
     final = run(InlineProcess(CompositeAlgorithm(IntWriter, FractionWriter, (1, 2), Local(:reading => Float64), Route(:_declared_locals => IntWriter, :reading => :reading), Route(:_declared_locals => FractionWriter, :reading => :reading)); repeats = 3))
-    @test StatefulAlgorithms.get_declared_locals(final).reading.value === 1.0
+    @test StatefulAlgorithms.get_declared_locals(final).reading === 1.0   # stored as the declared type, not a `Maybe`
+end
+
+@testset "Typed locals without a value: a placeholder until the first write, which converts to the type" begin
+    route(A) = Route(:_declared_locals => A, :reading => :reading)
+    # The first value (an `Int`) is converted to the declared `Float64`.
+    final = run(InlineProcess(CompositeAlgorithm(IntWriter, SlotReader, (1, 1), Local(:reading => Float64), route(IntWriter), route(SlotReader)); repeats = 3))
+    @test fieldtype(typeof(StatefulAlgorithms.get_declared_locals(final)), :reading) === Float64
+    @test final[SlotReader].acc === 3.0
+    # Reading before the first write throws, as for `local x`.
+    @test_throws UndefRefError run(InlineProcess(CompositeAlgorithm(SlotSensor, SlotReader, (10, 1), Local(:reading => Float64), route(SlotSensor), route(SlotReader)); repeats = 3))
+    # Never written: the context after the run shows `undef`.
+    final = run(InlineProcess(CompositeAlgorithm(SlotSensor, (1,), Local(:reading => Float64)); repeats = 2))
+    @test StatefulAlgorithms.get_declared_locals(final).reading isa StatefulAlgorithms.UndefLocal{Float64}
+    # A `Union{Nothing,T}` type is stored as a `Maybe`: `nothing` can be written after a value. The writer does not read
+    # the local (`Blinker` would, before its first write, which throws).
+    struct NothingOnOdd <: ProcessAlgorithm end
+    StatefulAlgorithms.init(::NothingOnOdd, context) = (; n = 0)
+    StatefulAlgorithms.step!(::NothingOnOdd, context) = (; n = context.n + 1, reading = isodd(context.n) ? nothing : Float64(context.n))
+    final = run(InlineProcess(CompositeAlgorithm(NothingOnOdd, UnionReader, (1, 1), Local(:reading => Union{Nothing, Float64}), route(NothingOnOdd), route(UnionReader)); repeats = 6))
+    @test final[UnionReader].acc == 0.0 + 2.0 + 4.0
+    @test fieldtype(typeof(StatefulAlgorithms.get_declared_locals(final)), :reading) <: StatefulAlgorithms.Maybe{Float64}
 end
 
 @testset "Locals are scoped to the plan that declares them" begin
