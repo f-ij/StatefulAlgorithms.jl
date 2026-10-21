@@ -28,8 +28,8 @@ using StatefulAlgorithms
     raw_route = Route(WiringSource => WiringTarget, :value)
     @test !StatefulAlgorithms.isresolved(raw_route)
     @test !StatefulAlgorithms.isresolved(typeof(raw_route))
-    @test StatefulAlgorithms.getfrom(raw_route) === WiringSource
-    @test StatefulAlgorithms.getto(raw_route) === WiringTarget
+    @test StatefulAlgorithms.get_source_ref(raw_route) === WiringSource
+    @test StatefulAlgorithms.get_target_ref(raw_route) === WiringTarget
 
     resolved_share = Share(:source, :target)
     @test StatefulAlgorithms.isresolved(resolved_share)

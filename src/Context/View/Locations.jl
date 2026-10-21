@@ -70,12 +70,12 @@ end
 
 """The locations a route gives the view, read from where its source lives (`location_kind`)."""
 function _routed_locations(partition::ContextPartition, @nospecialize(sv))
-    fromname = source_namespace(sv)
+    source_ns = source_namespace(sv)
     _aliases = getaliases(sv)
     _source_fieldnames = source_fieldnames(sv)
     locations = _Locations()
     for i in 1:length(_aliases)
-        push!(locations, _aliases[i] => VarLocation{location_kind(partition)}(fromname, _source_fieldnames[i], gettransform(sv), getreverse_transform(sv)))
+        push!(locations, _aliases[i] => VarLocation{location_kind(partition)}(source_ns, _source_fieldnames[i], gettransform(sv), getreverse_transform(sv)))
     end
     return locations
 end

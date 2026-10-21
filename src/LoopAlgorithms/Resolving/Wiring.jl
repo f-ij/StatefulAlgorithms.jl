@@ -48,19 +48,19 @@ Base.@nospecializeinfer function _resolve_wiring(@nospecialize(la::AbstractPlan)
             children[i] = getfield(child, :wiring)
             continue
         end
-        target = _read_child_namespace(la, i)
-        # TODO: `Val(target)` on a run-time name compiles `context_partition(::Val)` once per namespace name (2 names: 2
+        target_ns = _read_child_namespace(la, i)
+        # TODO: `Val(target_ns)` on a run-time name compiles `context_partition(::Val)` once per namespace name (2 names: 2
         # new method instances) and dispatches at run time; `_compute_node_scope_typed` (Typed.jl) does the same. Mark the
         # `::Val` fallback in Context/ContextPartitions.jl `@nospecialize`, or check the `Symbol` directly.
-        context_partition(Val(target)) isa NamespacePartition && !(target in owners) && push!(owners, target)
+        context_partition(Val(target_ns)) isa NamespacePartition && !(target_ns in owners) && push!(owners, target_ns)
         # Wires attached to this child (`WithWiring`) point at the child itself until now;
         # give them its namespace so they resolve like any route into it.
-        bucket = _retarget_owner_routes(getfield(old_children, i), target)
+        bucket = _retarget_owner_routes(getfield(old_children, i), target_ns)
 
         # Concrete children receive a single resolved `Wiring`: inherited global
         # wiring for their namespace, occluded by child-scoped routes.
-        target_global = get(combined_global, target, Wiring())
-        target_child = get(_resolve_and_group_wiring(registry, bucket), target, Wiring())
+        target_global = get(combined_global, target_ns, Wiring())
+        target_child = get(_resolve_and_group_wiring(registry, bucket), target_ns, Wiring())
         children[i] = merge_wiring(target_global, target_child)
     end
 
@@ -77,7 +77,7 @@ Base.@nospecializeinfer _read_child_namespace(@nospecialize(plan::AbstractPlan),
     typeof(getfield(getfield(plan, :namespaces), i)).parameters[1]::Symbol
 
 #=
-Wiring grouped by target: a named tuple from target namespace to the `Wiring` (routes and
+Wiring grouped by target namespace: a named tuple from target namespace to the `Wiring` (routes and
 shares) aimed at it, e.g. `(; Reader_1 = Wiring((route,), ()))`. Plan-wide wiring is kept in this
 form so each child can take its group by its namespace.
 =#

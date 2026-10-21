@@ -21,7 +21,7 @@ Instantiate a wiring value from its type.
 
 Resolved wiring is pure type data: routes and shares have no endpoint fields,
 `Wiring` only contains route/share tuples, and `PlanWiring` only contains
-target-grouped/global wiring plus child-indexed wiring. This helper rebuilds
+target-namespace-grouped/global wiring plus child-indexed wiring. This helper rebuilds
 those values from type information so hot stepping code does not have to carry
 or inspect runtime wiring fields.
 """

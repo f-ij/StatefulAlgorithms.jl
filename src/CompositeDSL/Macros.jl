@@ -227,7 +227,7 @@ function _dsl_expand_simplealgorithm_resolved(
             )
             # Return the same resolved wrapper the outer builder expects from any
             # other DSL statement.
-            local _dsl_inputs = Tuple((; kind = :simple, source = input.first, destination = input.second) for input in _dsl_external_inputs)
+            local _dsl_inputs = Tuple((; kind = :simple, source_field = input.first, target_field = input.second) for input in _dsl_external_inputs)
             StatefulAlgorithms._CompositeDSLResolved{:algo, typeof(_dsl_algo), typeof(_dsl_inputs)}(_dsl_algo, _dsl_inputs)
         end
     end

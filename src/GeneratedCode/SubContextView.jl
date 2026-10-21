@@ -69,7 +69,7 @@ end
     _reverse_transform_component(value, Val(name), Val(index))
 
 Return one backing-field value from a reverse transform result. Tuple results are
-interpreted in route-source order; named-tuple results are read by backing name.
+interpreted in source-field order; named-tuple results are read by backing name.
 """
 @inline _reverse_transform_component(value::NT, ::Val{name}, ::Val{index}) where {NT<:NamedTuple,name,index} =
     getproperty(value, name)

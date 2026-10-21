@@ -206,8 +206,8 @@ end
     updated = StatefulAlgorithms.update_keys(plan, StatefulAlgorithms.getregistry(resolve(plan)))
 
     redirect = only(getoptions(updated))
-    @test getkey(StatefulAlgorithms.getfrom(redirect)) == :UKSource_1
-    @test getkey(StatefulAlgorithms.getto(redirect)) == :UKSink_1
+    @test getkey(StatefulAlgorithms.get_source_ref(redirect)) == :UKSource_1
+    @test getkey(StatefulAlgorithms.get_target_ref(redirect)) == :UKSink_1
     @test map(getkey, StatefulAlgorithms.getalgos(updated)) == (:UKSource_1, :UKSink_1)
     # The route still belongs to the sink
     @test map(w -> length(StatefulAlgorithms.routes(w)), StatefulAlgorithms.child_wiring(StatefulAlgorithms.getwiring(updated))) == (0, 1)

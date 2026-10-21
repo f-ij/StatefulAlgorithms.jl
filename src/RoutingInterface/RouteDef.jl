@@ -11,9 +11,9 @@ view, and `reverse_transform` maps returned target-view values back into backing
 source values during writeback. Resolved routes have `Nothing` endpoint fields,
 allowing `typeof(route)()` to reconstruct the same compile-time route value.
 """
-struct Route{Fmatch, Tmatch, FT, RFT, varnames, aliases, F, T} <: AbstractWiring
-    from::F
-    to::T
+struct Route{Smatch, Tmatch, FT, RFT, varnames, aliases, S, T} <: AbstractWiring
+    source_ref::S
+    target_ref::T
 end
 
 """
@@ -25,14 +25,14 @@ state references are kept in the value fields until registry resolution.
 returned target-view value back into source storage during merge/writeback.
 """
 Base.@nospecializeinfer function Route(
-    @nospecialize(from_to::Pair),
+    @nospecialize(namespaces::Pair),
     originalname_or_aliaspairs::Union{Symbol, Pair{Symbol, Symbol}, Pair{NTuple{N, Symbol}, Symbol}}...;
     transform = nothing,
     reverse_transform = nothing,
 ) where {N}
-    from, to = from_to
-    _assert_route_endpoint(from, "Origin")
-    _assert_route_endpoint(to, "Target")
+    source_ns, target_ns = namespaces
+    _assert_route_endpoint(source_ns, "Source namespace")
+    _assert_route_endpoint(target_ns, "Target namespace")
 
     completed_pairs = ntuple(length(originalname_or_aliaspairs)) do i
         item = originalname_or_aliaspairs[i]
@@ -43,25 +43,25 @@ Base.@nospecializeinfer function Route(
 
     ((!isnothing(transform) || !isnothing(reverse_transform)) ? (length(originalname_or_aliaspairs) == 1) : true) || construction_assert_error("Transform-based routes must have exactly one variable mapping, but got ", originalname_or_aliaspairs)
 
-    from_ref = scref_object(from)
-    to_ref = scref_object(to)
+    source_ref = scref_object(source_ns)
+    target_ref = scref_object(target_ns)
     return Route{
-        scref_match(from),
-        scref_match(to),
+        scref_match(source_ns),
+        scref_match(target_ns),
         transform,
         reverse_transform,
         varnames,
         aliases,
-        typeof(from_ref),
-        typeof(to_ref),
-    }(from_ref, to_ref)
+        typeof(source_ref),
+        typeof(target_ref),
+    }(source_ref, target_ref)
 end
 
 """Construct a resolved route from its type parameters."""
-function Route{Fmatch, Tmatch, FT, RFT, varnames, aliases, Nothing, Nothing}() where {Fmatch, Tmatch, FT, RFT, varnames, aliases}
-    _assert_resolved_endpoint(Fmatch, "Route origin")
-    _assert_resolved_endpoint(Tmatch, "Route target")
-    return Route{Fmatch, Tmatch, FT, RFT, varnames, aliases, Nothing, Nothing}(nothing, nothing)
+function Route{Smatch, Tmatch, FT, RFT, varnames, aliases, Nothing, Nothing}() where {Smatch, Tmatch, FT, RFT, varnames, aliases}
+    _assert_resolved_endpoint(Smatch, "Route source namespace")
+    _assert_resolved_endpoint(Tmatch, "Route target namespace")
+    return Route{Smatch, Tmatch, FT, RFT, varnames, aliases, Nothing, Nothing}(nothing, nothing)
 end
 
 """Validate route endpoints accepted by user-facing constructors."""
@@ -81,30 +81,30 @@ function _assert_resolved_endpoint(endpoint, role::String)
 end
 
 """
-Resolve route endpoints against a registry and return target-keyed route wiring.
+Resolve route endpoints against a registry and return target-namespace-keyed route wiring.
 
 The returned route carries only context-name symbols in its type parameters and
 stores no endpoint references.
 """
 function resolve_wiring(reg::NameSpaceRegistry, r::R) where {R<:Route}
-    fromname = resolve_scref(reg, from_match_by(r), getfrom(r), "origin")
-    toname = resolve_scref(reg, to_match_by(r), getto(r), "target")
+    source_ns = resolve_scref(reg, source_match_by(r), get_source_ref(r), "source namespace")
+    target_ns = resolve_scref(reg, target_match_by(r), get_target_ref(r), "target namespace")
 
     # Resolved routes are pure type data: endpoint refs are dropped so
     # `typeof(route)()` reconstructs the same route without runtime lookup.
-    resolved = Route{fromname, toname, gettransform(r), getreverse_transform(r), source_fieldnames(r), getaliases(r), Nothing, Nothing}()
-    return toname => resolved
+    resolved = Route{source_ns, target_ns, gettransform(r), getreverse_transform(r), source_fieldnames(r), getaliases(r), Nothing, Nothing}()
+    return target_ns => resolved
 end
 
 """Update unresolved endpoint references against a parent registry."""
 function update_keys(r::R, reg::NameSpaceRegistry) where {R<:Route}
     isresolved(r) && return r
-    newfrom = update_scref(reg, from_match_by(r), getfrom(r))
-    newto = update_scref(reg, to_match_by(r), getto(r))
+    new_source_ns = update_scref(reg, source_match_by(r), get_source_ref(r))
+    new_target_ns = update_scref(reg, target_match_by(r), get_target_ref(r))
     varnames = source_fieldnames(r)
     aliases = getaliases(r)
     mappings = ntuple(i -> varnames[i] == aliases[i] ? varnames[i] : (varnames[i] => aliases[i]), length(varnames))
-    return Route(newfrom => newto, mappings...; transform = gettransform(r), reverse_transform = getreverse_transform(r))
+    return Route(new_source_ns => new_target_ns, mappings...; transform = gettransform(r), reverse_transform = getreverse_transform(r))
 end
 
 @inline function _route_endpoint_label(x)

@@ -57,7 +57,7 @@ function _route_types_from_wiring_type(@nospecialize(W::Type{<:PlanWiring}))
     return (global_routes..., child_routes...)
 end
 
-"""Flatten route types from target-grouped global wiring."""
+"""Flatten route types from target-namespace-grouped global wiring."""
 function _route_types_from_grouped_wiring_type(@nospecialize(Grouped::Type{<:NamedTuple}))
     names = fieldnames(Grouped)
     routes = ()
@@ -76,7 +76,7 @@ function _route_types_from_child_wiring_type(@nospecialize(Children::Type{<:Tupl
     return routes
 end
 
-"""Flatten a route source selector into demanded variable names."""
+"""Append a route's source field name to the demanded names, if it is not there yet."""
 _append_route_demand_names(names::Tuple, name::Symbol) = name in names ? names : (names..., name)
 function _append_route_demand_names(names::Tuple, route_varnames::Tuple)
     merged = names

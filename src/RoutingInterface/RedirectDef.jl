@@ -13,26 +13,26 @@ marker into the target context field.
 """
 
 """
-    Redirect(source => target, :name)
-    Redirect(source => target, :source_name => :target_name)
+    Redirect(source_namespace => target_namespace, :name)
+    Redirect(source_namespace => target_namespace, :source_field => :target_field)
 
 Option (a `RootOption`) that marks a target context field as backed by a source
 context field. `Redirect` is not plan wiring; `resolve` collects it from every
 plan, and it is materialized into the initialized persistent context as a
 `RedirectedVar`.
 """
-struct Redirect{Fmatch, Tmatch, varnames, aliases, F, T} <: RootOption
-    from::F
-    to::T
+struct Redirect{Smatch, Tmatch, varnames, aliases, S, T} <: RootOption
+    source_ref::S
+    target_ref::T
 end
 
 function Redirect(
-    from_to::Pair,
+    namespaces::Pair,
     originalname_or_aliaspairs::Union{Symbol, Pair{Symbol, Symbol}}...,
 )
-    from, to = from_to
-    _assert_route_endpoint(from, "Origin")
-    _assert_route_endpoint(to, "Target")
+    source_ns, target_ns = namespaces
+    _assert_route_endpoint(source_ns, "Source namespace")
+    _assert_route_endpoint(target_ns, "Target namespace")
     isempty(originalname_or_aliaspairs) && error("Redirect requires at least one variable mapping.")
 
     completed_pairs = ntuple(length(originalname_or_aliaspairs)) do i
@@ -41,61 +41,61 @@ function Redirect(
     end
     varnames = first.(completed_pairs)
     aliases = last.(completed_pairs)
-    from_ref = scref_object(from)
-    to_ref = scref_object(to)
+    source_ref = scref_object(source_ns)
+    target_ref = scref_object(target_ns)
     return Redirect{
-        scref_match(from),
-        scref_match(to),
+        scref_match(source_ns),
+        scref_match(target_ns),
         varnames,
         aliases,
-        typeof(from_ref),
-        typeof(to_ref),
-    }(from_ref, to_ref)
+        typeof(source_ref),
+        typeof(target_ref),
+    }(source_ref, target_ref)
 end
 
 """Construct a resolved redirect from its type parameters."""
-function Redirect{Fmatch, Tmatch, varnames, aliases, Nothing, Nothing}() where {Fmatch, Tmatch, varnames, aliases}
-    _assert_resolved_endpoint(Fmatch, "Redirect origin")
-    _assert_resolved_endpoint(Tmatch, "Redirect target")
-    return Redirect{Fmatch, Tmatch, varnames, aliases, Nothing, Nothing}(nothing, nothing)
+function Redirect{Smatch, Tmatch, varnames, aliases, Nothing, Nothing}() where {Smatch, Tmatch, varnames, aliases}
+    _assert_resolved_endpoint(Smatch, "Redirect source namespace")
+    _assert_resolved_endpoint(Tmatch, "Redirect target namespace")
+    return Redirect{Smatch, Tmatch, varnames, aliases, Nothing, Nothing}(nothing, nothing)
 end
 
-"""Return the unresolved source endpoint reference stored on a redirect."""
-getfrom(r::Redirect) = getfield(r, :from)
+"""Return the unresolved source-namespace reference stored on a redirect."""
+get_source_ref(r::Redirect) = getfield(r, :source_ref)
 
-"""Return the unresolved target endpoint reference stored on a redirect."""
-getto(r::Redirect) = getfield(r, :to)
+"""Return the unresolved target-namespace reference stored on a redirect."""
+get_target_ref(r::Redirect) = getfield(r, :target_ref)
 
-"""Return source variable names carried by a redirect."""
-source_fieldnames(::Union{Redirect{Fmatch, Tmatch, varnames}, Type{<:Redirect{Fmatch, Tmatch, varnames}}}) where {Fmatch, Tmatch, varnames} = varnames
+"""Return the source field names carried by a redirect."""
+source_fieldnames(::Union{Redirect{Smatch, Tmatch, varnames}, Type{<:Redirect{Smatch, Tmatch, varnames}}}) where {Smatch, Tmatch, varnames} = varnames
 
-"""Return target variable aliases carried by a redirect."""
-getaliases(::Union{Redirect{Fmatch, Tmatch, varnames, aliases}, Type{<:Redirect{Fmatch, Tmatch, varnames, aliases}}}) where {Fmatch, Tmatch, varnames, aliases} = aliases
+"""Return the target field names (aliases) carried by a redirect."""
+getaliases(::Union{Redirect{Smatch, Tmatch, varnames, aliases}, Type{<:Redirect{Smatch, Tmatch, varnames, aliases}}}) where {Smatch, Tmatch, varnames, aliases} = aliases
 
-"""Return the redirect origin matcher identity or resolved origin name."""
-from_match_by(::Union{Redirect{Fmatch}, Type{<:Redirect{Fmatch}}}) where {Fmatch} = Fmatch
+"""Return the redirect source-namespace matcher identity, or the resolved source namespace."""
+source_match_by(::Union{Redirect{Smatch}, Type{<:Redirect{Smatch}}}) where {Smatch} = Smatch
 
-"""Return the redirect target matcher identity or resolved target name."""
-to_match_by(::Union{Redirect{Fmatch, Tmatch}, Type{<:Redirect{Fmatch, Tmatch}}}) where {Fmatch, Tmatch} = Tmatch
+"""Return the redirect target-namespace matcher identity, or the resolved target namespace."""
+target_match_by(::Union{Redirect{Smatch, Tmatch}, Type{<:Redirect{Smatch, Tmatch}}}) where {Smatch, Tmatch} = Tmatch
 
 """Return whether a redirect has already been resolved to context-name symbols."""
-isresolved(r::Union{Redirect{Fmatch, Tmatch}, Type{<:Redirect{Fmatch, Tmatch}}}) where {Fmatch, Tmatch} =
-    Fmatch isa Symbol && Tmatch isa Symbol
+isresolved(r::Union{Redirect{Smatch, Tmatch}, Type{<:Redirect{Smatch, Tmatch}}}) where {Smatch, Tmatch} =
+    Smatch isa Symbol && Tmatch isa Symbol
 
 """Resolve redirect endpoints against a registry."""
 function resolve_redirect(reg::NameSpaceRegistry, r::R) where {R<:Redirect}
-    fromname = resolve_scref(reg, from_match_by(r), getfrom(r), "origin")
-    toname = resolve_scref(reg, to_match_by(r), getto(r), "target")
-    return Redirect{fromname, toname, source_fieldnames(r), getaliases(r), Nothing, Nothing}()
+    source_ns = resolve_scref(reg, source_match_by(r), get_source_ref(r), "source namespace")
+    target_ns = resolve_scref(reg, target_match_by(r), get_target_ref(r), "target namespace")
+    return Redirect{source_ns, target_ns, source_fieldnames(r), getaliases(r), Nothing, Nothing}()
 end
 
 """Update unresolved endpoint references against a parent registry."""
 function update_keys(r::R, reg::NameSpaceRegistry) where {R<:Redirect}
     isresolved(r) && return r
-    newfrom = update_scref(reg, from_match_by(r), getfrom(r))
-    newto = update_scref(reg, to_match_by(r), getto(r))
+    new_source_ns = update_scref(reg, source_match_by(r), get_source_ref(r))
+    new_target_ns = update_scref(reg, target_match_by(r), get_target_ref(r))
     varnames = source_fieldnames(r)
     aliases = getaliases(r)
     mappings = ntuple(i -> varnames[i] == aliases[i] ? varnames[i] : (varnames[i] => aliases[i]), length(varnames))
-    return Redirect(newfrom => newto, mappings...)
+    return Redirect(new_source_ns => new_target_ns, mappings...)
 end

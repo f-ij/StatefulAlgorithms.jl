@@ -2,36 +2,36 @@
 ##################  ROUTES  ####################
 ################################################
 
-"""Return the unresolved endpoint reference stored on a route."""
-getfrom(r::Route) = getfield(r, :from)
+"""Return the unresolved source-namespace reference stored on a route."""
+get_source_ref(r::Route) = getfield(r, :source_ref)
 
-"""Return the unresolved target reference stored on a route."""
-getto(r::Route) = getfield(r, :to)
+"""Return the unresolved target-namespace reference stored on a route."""
+get_target_ref(r::Route) = getfield(r, :target_ref)
 
-"""Return source variable names carried by a route."""
-source_fieldnames(::Union{Route{Fmatch, Tmatch, FT, RFT, varnames}, Type{<:Route{Fmatch, Tmatch, FT, RFT, varnames}}}) where {Fmatch, Tmatch, FT, RFT, varnames} = varnames
+"""Return the source field names carried by a route."""
+source_fieldnames(::Union{Route{Smatch, Tmatch, FT, RFT, varnames}, Type{<:Route{Smatch, Tmatch, FT, RFT, varnames}}}) where {Smatch, Tmatch, FT, RFT, varnames} = varnames
 
-"""Return local variable aliases carried by a route."""
-getaliases(::Union{Route{Fmatch, Tmatch, FT, RFT, varnames, aliases}, Type{<:Route{Fmatch, Tmatch, FT, RFT, varnames, aliases}}}) where {Fmatch, Tmatch, FT, RFT, varnames, aliases} = aliases
+"""Return the target field names (aliases) carried by a route."""
+getaliases(::Union{Route{Smatch, Tmatch, FT, RFT, varnames, aliases}, Type{<:Route{Smatch, Tmatch, FT, RFT, varnames, aliases}}}) where {Smatch, Tmatch, FT, RFT, varnames, aliases} = aliases
 
 """Return the transform function carried by a route."""
-gettransform(::Union{Route{Fmatch, Tmatch, FT}, Type{<:Route{Fmatch, Tmatch, FT}}}) where {Fmatch, Tmatch, FT} = FT
+gettransform(::Union{Route{Smatch, Tmatch, FT}, Type{<:Route{Smatch, Tmatch, FT}}}) where {Smatch, Tmatch, FT} = FT
 
 """Return the reverse transform function carried by a route."""
-getreverse_transform(::Union{Route{Fmatch, Tmatch, FT, RFT}, Type{<:Route{Fmatch, Tmatch, FT, RFT}}}) where {Fmatch, Tmatch, FT, RFT} = RFT
+getreverse_transform(::Union{Route{Smatch, Tmatch, FT, RFT}, Type{<:Route{Smatch, Tmatch, FT, RFT}}}) where {Smatch, Tmatch, FT, RFT} = RFT
 
-"""Return the route origin matcher identity or resolved origin name."""
-from_match_by(::Union{Route{Fmatch}, Type{<:Route{Fmatch}}}) where {Fmatch} = Fmatch
+"""Return the route source-namespace matcher identity, or the resolved source namespace."""
+source_match_by(::Union{Route{Smatch}, Type{<:Route{Smatch}}}) where {Smatch} = Smatch
 
-"""Return the route target matcher identity or resolved target name."""
-to_match_by(::Union{Route{Fmatch, Tmatch}, Type{<:Route{Fmatch, Tmatch}}}) where {Fmatch, Tmatch} = Tmatch
+"""Return the route target-namespace matcher identity, or the resolved target namespace."""
+target_match_by(::Union{Route{Smatch, Tmatch}, Type{<:Route{Smatch, Tmatch}}}) where {Smatch, Tmatch} = Tmatch
 
 """Return whether a route has already been resolved to context-name symbols."""
-isresolved(r::Union{Route{Fmatch, Tmatch}, Type{<:Route{Fmatch, Tmatch}}}) where {Fmatch, Tmatch} =
-    Fmatch isa Symbol && Tmatch isa Symbol
+isresolved(r::Union{Route{Smatch, Tmatch}, Type{<:Route{Smatch, Tmatch}}}) where {Smatch, Tmatch} =
+    Smatch isa Symbol && Tmatch isa Symbol
 
-"""Return the source context name for a resolved route."""
-source_namespace(r::Union{Route{Fmatch}, Type{<:Route{Fmatch}}}) where {Fmatch} = Fmatch
+"""Return the source namespace of a resolved route."""
+source_namespace(r::Union{Route{Smatch}, Type{<:Route{Smatch}}}) where {Smatch} = Smatch
 
 Base.keys(r::Union{Route, Type{<:Route}}) = source_fieldnames(r)
 Base.values(r::Union{Route, Type{<:Route}}) = getaliases(r)

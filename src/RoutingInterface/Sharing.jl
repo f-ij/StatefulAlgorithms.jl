@@ -9,25 +9,25 @@ get_firstalgo(s::Share) = getfield(s, :a1)
 get_secondalgo(s::Share) = getfield(s, :a2)
 
 """Return the first share endpoint matcher identity or resolved name."""
-first_match_by(::Union{Share{from}, Type{<:Share{from}}}) where {from} = from
+first_match_by(::Union{Share{Smatch}, Type{<:Share{Smatch}}}) where {Smatch} = Smatch
 
 """Return the second share endpoint matcher identity or resolved name."""
-second_match_by(::Union{Share{from, to}, Type{<:Share{from, to}}}) where {from, to} = to
+second_match_by(::Union{Share{Smatch, Tmatch}, Type{<:Share{Smatch, Tmatch}}}) where {Smatch, Tmatch} = Tmatch
 
 """Return whether the share is directional."""
-is_directional(::Union{Share{from, to, directional}, Type{<:Share{from, to, directional}}}) where {from, to, directional} = directional
+is_directional(::Union{Share{Smatch, Tmatch, directional}, Type{<:Share{Smatch, Tmatch, directional}}}) where {Smatch, Tmatch, directional} = directional
 
 """Return whether a share has already been resolved to context-name symbols."""
-isresolved(s::Union{Share{from, to}, Type{<:Share{from, to}}}) where {from, to} =
-    from isa Symbol && to isa Symbol
+isresolved(s::Union{Share{Smatch, Tmatch}, Type{<:Share{Smatch, Tmatch}}}) where {Smatch, Tmatch} =
+    Smatch isa Symbol && Tmatch isa Symbol
 
-"""Return the source context name for a resolved share."""
-contextname(::Union{Share{from}, Type{<:Share{from}}}) where {from} = from
+"""Return the source namespace of a resolved share."""
+contextname(::Union{Share{Smatch}, Type{<:Share{Smatch}}}) where {Smatch} = Smatch
 
 contextname(::Any) = nothing
 
 """
-Resolve share wiring into target-keyed resolved share values.
+Resolve share wiring into target-namespace-keyed resolved share values.
 
 Bidirectional shares produce one resolved share for each direction.
 """
@@ -36,14 +36,14 @@ function resolve_wiring(reg::NameSpaceRegistry, s::S) where {S<:Share}
     return (; pairs...)
 end
 
-"""Resolve share wiring into target-keyed pairs for tuple-recursive grouping."""
+"""Resolve share wiring into target-namespace-keyed pairs for tuple-recursive grouping."""
 function resolve_wiring_pairs(reg::NameSpaceRegistry, s::S) where {S<:Share}
-    fromname = resolve_scref(reg, first_match_by(s), get_firstalgo(s), "share origin")
-    toname = resolve_scref(reg, second_match_by(s), get_secondalgo(s), "share target")
-    forward = Share{fromname, toname, is_directional(s), Nothing, Nothing}()
-    is_directional(s) && return (toname => forward,)
-    backward = Share{toname, fromname, is_directional(s), Nothing, Nothing}()
-    return (toname => forward, fromname => backward)
+    source_ns = resolve_scref(reg, first_match_by(s), get_firstalgo(s), "first share endpoint")
+    target_ns = resolve_scref(reg, second_match_by(s), get_secondalgo(s), "second share endpoint")
+    forward = Share{source_ns, target_ns, is_directional(s), Nothing, Nothing}()
+    is_directional(s) && return (target_ns => forward,)
+    backward = Share{target_ns, source_ns, is_directional(s), Nothing, Nothing}()
+    return (target_ns => forward, source_ns => backward)
 end
 
 """Update unresolved share endpoints against a parent registry."""

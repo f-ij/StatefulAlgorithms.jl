@@ -16,23 +16,23 @@ function _check_redirect_endpoint(context::C, ::Val{subcontext}, ::Val{name}, ro
 end
 
 """Write one redirect marker into its target persistent context field."""
-function _apply_redirect_mapping(context::C, ::Val{fromname}, ::Val{toname}, ::Val{sourcevar}, ::Val{targetvar}) where {C<:ProcessContext, fromname, toname, sourcevar, targetvar}
-    _check_redirect_endpoint(context, Val(fromname), Val(sourcevar), "source")
-    _check_redirect_endpoint(context, Val(toname), Val(targetvar), "target")
+function _apply_redirect_mapping(context::C, ::Val{source_ns}, ::Val{target_ns}, ::Val{source_field}, ::Val{target_field}) where {C<:ProcessContext, source_ns, target_ns, source_field, target_field}
+    _check_redirect_endpoint(context, Val(source_ns), Val(source_field), "source")
+    _check_redirect_endpoint(context, Val(target_ns), Val(target_field), "target")
 
-    marker = RedirectedVar(VarLocation{:state}(fromname, sourcevar))
-    patch = NamedTuple{(toname,)}((NamedTuple{(targetvar,)}((marker,)),))
+    marker = RedirectedVar(VarLocation{:state}(source_ns, source_field))
+    patch = NamedTuple{(target_ns,)}((NamedTuple{(target_field,)}((marker,)),))
     return @inline merge_into_subcontexts(context, patch)
 end
 
 """Materialize one resolved redirect option into the persistent context."""
 function _apply_resolved_redirect(context::C, redirect::R) where {C<:ProcessContext, R<:Redirect}
-    fromname = from_match_by(redirect)
-    toname = to_match_by(redirect)
-    sourcevars = source_fieldnames(redirect)
-    targetvars = getaliases(redirect)
-    for i in eachindex(sourcevars)
-        context = @inline _apply_redirect_mapping(context, Val(fromname), Val(toname), Val(sourcevars[i]), Val(targetvars[i]))
+    source_ns = source_match_by(redirect)
+    target_ns = target_match_by(redirect)
+    source_fields = source_fieldnames(redirect)
+    target_fields = getaliases(redirect)
+    for i in eachindex(source_fields)
+        context = @inline _apply_redirect_mapping(context, Val(source_ns), Val(target_ns), Val(source_fields[i]), Val(target_fields[i]))
     end
     return context
 end

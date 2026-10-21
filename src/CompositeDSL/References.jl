@@ -48,17 +48,17 @@ function _dsl_rewrite_context_root(context_map, ex)
     return ex, false
 end
 
-"""Extract a lowered route owner/source pair from a `@context` reference."""
+"""Extract a lowered location `(; owner, field)` from a `@context` reference."""
 function _dsl_parse_context_route_expr(context_map, ex)
     if ex isa Expr && ex.head == :. && length(ex.args) == 2 && ex.args[2] isa QuoteNode
-        source = ex.args[2].value
-        source isa Symbol || return nothing
+        field = ex.args[2].value
+        field isa Symbol || return nothing
         if ex.args[1] isa Symbol && haskey(context_map, ex.args[1])
             owner = :(StatefulAlgorithms._composite_dsl_block_state($(context_map[ex.args[1]])))
-            return (; owner, source)
+            return (; owner, field)
         end
         owner, changed = _dsl_rewrite_context_root(context_map, ex.args[1])
-        return changed ? (; owner, source) : nothing
+        return changed ? (; owner, field) : nothing
     end
     return nothing
 end
@@ -96,20 +96,20 @@ function _dsl_state_owner(alias_map, x)
     return changed ? owner : x
 end
 
-"""Extract a lowered route owner/source pair from a known alias field reference, or `@state(X).field`."""
+"""Extract a lowered location `(; owner, field)` from a known alias field reference, or `@state(X).field`."""
 function _dsl_parse_alias_route_expr(alias_map, ex)
     if ex isa Expr && ex.head == :. && length(ex.args) == 2 && ex.args[2] isa QuoteNode
-        source = ex.args[2].value
-        source isa Symbol || return nothing
+        field = ex.args[2].value
+        field isa Symbol || return nothing
         x = _dsl_state_of(ex.args[1])
-        isnothing(x) || return (; owner = _dsl_state_owner(alias_map, x), source)
+        isnothing(x) || return (; owner = _dsl_state_owner(alias_map, x), field)
         owner, changed = _dsl_rewrite_alias_owner_root(alias_map, ex.args[1])
-        return changed ? (; owner, source) : nothing
+        return changed ? (; owner, field) : nothing
     end
     return nothing
 end
 
-"""Extract a lowered route owner/source pair from a known alias or `@context` field reference."""
+"""Extract a lowered location `(; owner, field)` from a known alias or `@context` field reference."""
 function _dsl_parse_owned_route_expr(alias_map, context_map, ex)
     parsed = _dsl_parse_context_route_expr(context_map, ex)
     isnothing(parsed) || return parsed
@@ -159,7 +159,7 @@ function _dsl_parse_transform_expr(ex)
 end
 
 """Parse one explicit transformed route source."""
-function _dsl_parse_explicit_transform_input(alias_map, context_map, ex, destination::Symbol)
+function _dsl_parse_explicit_transform_input(alias_map, context_map, ex, target_field::Symbol)
     parsed = _dsl_parse_transform_expr(ex)
     isnothing(parsed) && return nothing
 
@@ -167,12 +167,12 @@ function _dsl_parse_explicit_transform_input(alias_map, context_map, ex, destina
     if source_expr isa Symbol
         owned_route = _dsl_parse_symbol_alias_route_expr(alias_map, context_map, source_expr)
         if !isnothing(owned_route)
-            return (; kind = :context_transform, owner = owned_route.owner, source = owned_route.source, destination, transform_expr = parsed.transform_expr, display = parsed.display)
+            return (; kind = :context_transform, owner = owned_route.owner, source_field = owned_route.field, target_field, transform_expr = parsed.transform_expr, display = parsed.display)
         end
-        return (; kind = :simple_transform, source = source_expr, destination, transform_expr = parsed.transform_expr, display = parsed.display)
+        return (; kind = :simple_transform, source_field = source_expr, target_field, transform_expr = parsed.transform_expr, display = parsed.display)
     end
 
     owned_route = _dsl_parse_owned_route_expr(alias_map, context_map, source_expr)
     !isnothing(owned_route) || error("@transform source must be a routable symbol or owned field reference like `produced`, `dynamics.state`, or `c1.plus_capture.captured`. Got `$source_expr`.")
-    return (; kind = :context_transform, owner = owned_route.owner, source = owned_route.source, destination, transform_expr = parsed.transform_expr, display = parsed.display)
+    return (; kind = :context_transform, owner = owned_route.owner, source_field = owned_route.field, target_field, transform_expr = parsed.transform_expr, display = parsed.display)
 end

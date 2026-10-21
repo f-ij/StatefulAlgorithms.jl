@@ -68,13 +68,13 @@ struct InspectionEntry
 end
 
 struct InspectionShare
-    target::Symbol
-    source::Symbol
+    target_namespace::Symbol
+    source_namespace::Symbol
 end
 
 struct InspectionRoute{Mappings,Transform,ReverseTransform}
-    target::Symbol
-    source::Symbol
+    target_namespace::Symbol
+    source_namespace::Symbol
     mappings::Mappings
     transform::Transform
     reverse_transform::ReverseTransform
@@ -185,29 +185,29 @@ end
 function _resolved_wiring_by_target(wiring::PlanWiring)
     share_map = (;)
     route_map = (;)
-    for target in propertynames(global_wiring(wiring))
-        bucket = getproperty(global_wiring(wiring), target)
-        share_map = (; share_map..., target => _append_unique_wiring_values(get(share_map, target, ()), shares(bucket)))
-        route_map = (; route_map..., target => _append_unique_wiring_values(get(route_map, target, ()), routes(bucket)))
+    for target_ns in propertynames(global_wiring(wiring))
+        bucket = getproperty(global_wiring(wiring), target_ns)
+        share_map = (; share_map..., target_ns => _append_unique_wiring_values(get(share_map, target_ns, ()), shares(bucket)))
+        route_map = (; route_map..., target_ns => _append_unique_wiring_values(get(route_map, target_ns, ()), routes(bucket)))
     end
     for bucket in child_wiring(wiring)
         if bucket isa PlanWiring
             child_share_map, child_route_map = _resolved_wiring_by_target(bucket)
-            for target in propertynames(child_share_map)
-                share_map = (; share_map..., target => _append_unique_wiring_values(get(share_map, target, ()), getproperty(child_share_map, target)))
+            for target_ns in propertynames(child_share_map)
+                share_map = (; share_map..., target_ns => _append_unique_wiring_values(get(share_map, target_ns, ()), getproperty(child_share_map, target_ns)))
             end
-            for target in propertynames(child_route_map)
-                route_map = (; route_map..., target => _append_unique_wiring_values(get(route_map, target, ()), getproperty(child_route_map, target)))
+            for target_ns in propertynames(child_route_map)
+                route_map = (; route_map..., target_ns => _append_unique_wiring_values(get(route_map, target_ns, ()), getproperty(child_route_map, target_ns)))
             end
             continue
         end
         for route in routes(bucket)
-            target = to_match_by(route)
-            route_map = (; route_map..., target => _append_unique_wiring_values(get(route_map, target, ()), (route,)))
+            target_ns = target_match_by(route)
+            route_map = (; route_map..., target_ns => _append_unique_wiring_values(get(route_map, target_ns, ()), (route,)))
         end
         for share in shares(bucket)
-            target = second_match_by(share)
-            share_map = (; share_map..., target => _append_unique_wiring_values(get(share_map, target, ()), (share,)))
+            target_ns = second_match_by(share)
+            share_map = (; share_map..., target_ns => _append_unique_wiring_values(get(share_map, target_ns, ()), (share,)))
         end
     end
     return share_map, route_map
@@ -218,21 +218,21 @@ function _inspection_resolved_sharing(la::LA) where {LA<:AbstractLoopAlgorithm}
     shares = InspectionShare[]
     routes = InspectionRoute[]
 
-    for target in propertynames(sharedcontexts)
-        for shared in _inspection_tuple(getproperty(sharedcontexts, target))
-            source = contextname(shared)
-            source isa Symbol && push!(shares, InspectionShare(target, source))
+    for target_ns in propertynames(sharedcontexts)
+        for shared in _inspection_tuple(getproperty(sharedcontexts, target_ns))
+            source_ns = contextname(shared)
+            source_ns isa Symbol && push!(shares, InspectionShare(target_ns, source_ns))
         end
     end
 
-    for target in propertynames(sharedvars)
-        for shared in _inspection_tuple(getproperty(sharedvars, target))
-            source = source_namespace(shared)
-            source isa Symbol || continue
+    for target_ns in propertynames(sharedvars)
+        for shared in _inspection_tuple(getproperty(sharedvars, target_ns))
+            source_ns = source_namespace(shared)
+            source_ns isa Symbol || continue
             varnames = collect(source_fieldnames(shared))
             aliases = collect(getaliases(shared))
             mappings = Pair{Symbol,Symbol}[varnames[i] => aliases[i] for i in eachindex(varnames)]
-            push!(routes, InspectionRoute(target, source, mappings, gettransform(shared), getreverse_transform(shared)))
+            push!(routes, InspectionRoute(target_ns, source_ns, mappings, gettransform(shared), getreverse_transform(shared)))
         end
     end
 

@@ -17,8 +17,8 @@ struct ThisChild end
 """
     WithWiring(child, wires...)
 
-Wiring that belongs to one plan child, attached by position: the target of each wire is
-`child` itself, so it needs no identity. Works for any child (an algorithm or an
+Wiring that belongs to one plan child, attached by position: the target namespace of each wire is
+`child`'s, so it needs no identity. Works for any child (an algorithm or an
 [`Callable`](@ref)). Wires are made with [`From`](@ref).
 
     CompositeAlgorithm(Sensor, WithWiring(Callable(total_energy, (:spins,), :energy), From(Sensor, :state => :spins)), ...)
@@ -26,7 +26,7 @@ Wiring that belongs to one plan child, attached by position: the target of each 
 struct WithWiring{C}
     child::C
     # Untyped on purpose: the wires only travel to the plan constructor, which builds the typed
-    # wiring. Keeping their types (which include their source objects) out of `WithWiring`
+    # wiring. Keeping their types (which include their source-namespace refs) out of `WithWiring`
     # keeps the type of a plan's child list the same when an identical plan is built again.
     wires::Tuple
 end

@@ -5,7 +5,7 @@ that a wire provides is shown as the wire's source, `owner.field` or `@transform
 function _callable_string(ex::Callable{F, Args, Kwargs, Returns}, wiring = Wiring()) where {F, Args, Kwargs, Returns}
     sources = Dict{Symbol, String}()
     for r in routes(wiring)
-        owner = isnothing(getfrom(r)) ? from_match_by(r) : getfrom(r)
+        owner = isnothing(get_source_ref(r)) ? source_match_by(r) : get_source_ref(r)
         owner_label = owner isa Symbol ? string(owner) : owner isa AbstractIdentifiableAlgo && haskey(owner) ? string(getkey(owner)) : string(owner)
         for (name, alias) in zip(source_fieldnames(r), getaliases(r))
             source = string(owner_label, ".", name isa Tuple ? join(name, ".") : name)

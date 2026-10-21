@@ -18,13 +18,13 @@ Relevant files:
 
 `Route` stores:
 
-- source endpoint (`from`)
-- target endpoint (`to`)
-- routed source variable names
-- local aliases in target view
+- source-namespace ref (`source_ref`)
+- target-namespace ref (`target_ref`)
+- source field names
+- target field names (aliases) in the target view
 - optional transform function
 - optional reverse transform function
-- precomputed `match_by` identities for from/to
+- precomputed `match_by` identities for the source and target namespaces (`source_match_by`, `target_match_by`)
 
 `resolve_options(reg, routes...)` converts each route into:
 
@@ -57,11 +57,11 @@ read through a `PlanWiringView` while that child executes.
 
 `Redirect` stores:
 
-- source endpoint (`from`)
-- target endpoint (`to`)
-- source variable names
-- target aliases
-- precomputed matcher identities for from/to
+- source-namespace ref (`source_ref`)
+- target-namespace ref (`target_ref`)
+- source field names
+- target field names (aliases)
+- precomputed matcher identities for the source and target namespaces (`source_match_by`, `target_match_by`)
 
 `resolve_redirect(reg, redirect)` resolves endpoints against the
 namespace registry and returns a resolved `Redirect` whose endpoint identities

@@ -24,14 +24,14 @@ function _resolve_composite_dsl_algorithm_call(
 
     resolved = _dsl_with_customname(spec, Val(Name))
     inputs = Any[
-        (; kind = :simple, source = input_symbols[idx], destination = positional_names[idx])
+        (; kind = :simple, source_field = input_symbols[idx], target_field = positional_names[idx])
         for idx in eachindex(input_symbols)
     ]
 
-    for destination in keys(keyword_args)
-        source = getproperty(keyword_args, destination)
-        source isa Symbol || error("Keyword arguments in direct ProcessAlgorithm call syntax must be routed symbols. Use `Algo(name = source)` for route syntax or plain function call syntax for literal keyword captures.")
-        push!(inputs, (; kind = :simple, source, destination))
+    for target_field in keys(keyword_args)
+        source_field = getproperty(keyword_args, target_field)
+        source_field isa Symbol || error("Keyword arguments in direct ProcessAlgorithm call syntax must be routed symbols. Use `Algo(name = source)` for route syntax or plain function call syntax for literal keyword captures.")
+        push!(inputs, (; kind = :simple, source_field, target_field))
     end
 
     routed_inputs = tuple(inputs...)
@@ -39,15 +39,15 @@ function _resolve_composite_dsl_algorithm_call(
 end
 
 """Retarget one direct-call ProcessAlgorithm route onto the declared argument name."""
-function _dsl_retarget_processalgorithm_direct_input(input, destination::Symbol)
+function _dsl_retarget_processalgorithm_direct_input(input, target_field::Symbol)
     if input.kind == :simple
-        return (; kind = :simple, source = input.source, destination)
+        return (; kind = :simple, source_field = input.source_field, target_field)
     elseif input.kind == :context_simple
-        return (; kind = :context_simple, owner = input.owner, source = input.source, destination)
+        return (; kind = :context_simple, owner = input.owner, source_field = input.source_field, target_field)
     elseif input.kind == :simple_transform
-        return (; kind = :simple_transform, source = input.source, destination, transform_expr = input.transform_expr)
+        return (; kind = :simple_transform, source_field = input.source_field, target_field, transform_expr = input.transform_expr)
     elseif input.kind == :context_transform
-        return (; kind = :context_transform, owner = input.owner, source = input.source, destination, transform_expr = input.transform_expr)
+        return (; kind = :context_transform, owner = input.owner, source_field = input.source_field, target_field, transform_expr = input.transform_expr)
     end
 
     error("Unsupported direct-call DSL input kind `$(input.kind)`.")
@@ -102,24 +102,24 @@ function _resolve_composite_dsl_call(
             for idx in eachindex(routed_positional_inputs)
         ]
 
-        for destination in keys(keyword_args)
-            source = getproperty(keyword_args, destination)
-            routed = findfirst(input -> input.destination == destination, routed_keyword_inputs)
+        for target_field in keys(keyword_args)
+            source_field = getproperty(keyword_args, target_field)
+            routed = findfirst(input -> input.target_field == target_field, routed_keyword_inputs)
             if isnothing(routed)
-                source isa Symbol || error("Direct-call DSL syntax for ProcessAlgorithms only supports routed symbol keyword arguments.")
-                push!(inputs, (; kind = :simple, source, destination))
+                source_field isa Symbol || error("Direct-call DSL syntax for ProcessAlgorithms only supports routed symbol keyword arguments.")
+                push!(inputs, (; kind = :simple, source_field, target_field))
                 continue
             end
 
             input = routed_keyword_inputs[routed]
             if input.kind == :simple
-                push!(inputs, (; kind = :simple, source = input.source, destination))
+                push!(inputs, (; kind = :simple, source_field = input.source_field, target_field))
             elseif input.kind == :context_simple
-                push!(inputs, (; kind = :context_simple, owner = input.owner, source = input.source, destination))
+                push!(inputs, (; kind = :context_simple, owner = input.owner, source_field = input.source_field, target_field))
             elseif input.kind == :simple_transform
-                push!(inputs, (; kind = :simple_transform, source = input.source, destination, transform_expr = input.transform_expr))
+                push!(inputs, (; kind = :simple_transform, source_field = input.source_field, target_field, transform_expr = input.transform_expr))
             elseif input.kind == :context_transform
-                push!(inputs, (; kind = :context_transform, owner = input.owner, source = input.source, destination, transform_expr = input.transform_expr))
+                push!(inputs, (; kind = :context_transform, owner = input.owner, source_field = input.source_field, target_field, transform_expr = input.transform_expr))
             else
                 error("Unsupported direct-call DSL keyword input kind `$(input.kind)`.")
             end

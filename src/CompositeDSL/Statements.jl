@@ -132,13 +132,13 @@ function _dsl_build_global_route_statement(stmt, alias_map, context_map; include
     end
 
     route = if isnothing(transform) && isnothing(reverse_transform)
-        :(StatefulAlgorithms.Route($(esc(source.owner)) => $(esc(target.owner)), $(QuoteNode(source.source)) => $(QuoteNode(target.source))))
+        :(StatefulAlgorithms.Route($(esc(source.owner)) => $(esc(target.owner)), $(QuoteNode(source.field)) => $(QuoteNode(target.field))))
     elseif isnothing(reverse_transform)
-        :(StatefulAlgorithms.Route($(esc(source.owner)) => $(esc(target.owner)), $(QuoteNode(source.source)) => $(QuoteNode(target.source)); transform = $(esc(transform))))
+        :(StatefulAlgorithms.Route($(esc(source.owner)) => $(esc(target.owner)), $(QuoteNode(source.field)) => $(QuoteNode(target.field)); transform = $(esc(transform))))
     elseif isnothing(transform)
-        :(StatefulAlgorithms.Route($(esc(source.owner)) => $(esc(target.owner)), $(QuoteNode(source.source)) => $(QuoteNode(target.source)); reverse_transform = $(esc(reverse_transform))))
+        :(StatefulAlgorithms.Route($(esc(source.owner)) => $(esc(target.owner)), $(QuoteNode(source.field)) => $(QuoteNode(target.field)); reverse_transform = $(esc(reverse_transform))))
     else
-        :(StatefulAlgorithms.Route($(esc(source.owner)) => $(esc(target.owner)), $(QuoteNode(source.source)) => $(QuoteNode(target.source)); transform = $(esc(transform)), reverse_transform = $(esc(reverse_transform))))
+        :(StatefulAlgorithms.Route($(esc(source.owner)) => $(esc(target.owner)), $(QuoteNode(source.field)) => $(QuoteNode(target.field)); transform = $(esc(transform)), reverse_transform = $(esc(reverse_transform))))
     end
     return _dsl_maybe_guard_metadata_expr(:(push!(_dsl_options, $route)), include_condition)
 end
@@ -156,7 +156,7 @@ function _dsl_build_redirect_statement(stmt, alias_map, context_map; include_con
     isnothing(source) && error("@redirect source must be an owned field reference like `source.value` or `c1.inner.value`.")
     isnothing(target) && error("@redirect target must be an owned field reference like `sink.value`.")
 
-    redirect = :(StatefulAlgorithms.Redirect($(esc(source.owner)) => $(esc(target.owner)), $(QuoteNode(source.source)) => $(QuoteNode(target.source))))
+    redirect = :(StatefulAlgorithms.Redirect($(esc(source.owner)) => $(esc(target.owner)), $(QuoteNode(source.field)) => $(QuoteNode(target.field))))
     return _dsl_maybe_guard_metadata_expr(:(push!(_dsl_options, $redirect)), include_condition)
 end
 
@@ -208,7 +208,7 @@ function _dsl_bind_endpoint(alias_map, context_map, ex)
     end
     parsed = _dsl_parse_owned_route_expr(alias_map, context_map, ex)
     isnothing(parsed) && error("@bind endpoints are a state field like `x` or an owned field like `a.x`. Got `$ex`.")
-    return (; owner = esc(parsed.owner), field = parsed.source)
+    return (; owner = esc(parsed.owner), field = parsed.field)
 end
 
 """Split `@bind a.x => b.y c.z => d.z [begin ... end]` into its mappings and the statements of its scope (or `nothing`)."""
@@ -311,24 +311,24 @@ end
 
 function _dsl_context_write_value_input(input)
     if input.kind == :simple
-        return (; kind = :simple, source = input.source, destination = :value)
+        return (; kind = :simple, source_field = input.source_field, target_field = :value)
     elseif input.kind == :context_simple
-        return (; kind = :context_simple, owner = input.owner, source = input.source, destination = :value)
+        return (; kind = :context_simple, owner = input.owner, source_field = input.source_field, target_field = :value)
     elseif input.kind == :simple_transform
-        return (; kind = :simple_transform, source = input.source, destination = :value, transform_expr = input.transform_expr)
+        return (; kind = :simple_transform, source_field = input.source_field, target_field = :value, transform_expr = input.transform_expr)
     elseif input.kind == :context_transform
-        return (; kind = :context_transform, owner = input.owner, source = input.source, destination = :value, transform_expr = input.transform_expr)
+        return (; kind = :context_transform, owner = input.owner, source_field = input.source_field, target_field = :value, transform_expr = input.transform_expr)
     end
     error("Unsupported ContextWrite value input kind `$(input.kind)`.")
 end
 
 function _dsl_parse_owned_write_target(alias_map, context_map, lhs)
     if lhs isa Expr && lhs.head == :. && length(lhs.args) == 2 && lhs.args[2] isa QuoteNode
-        source = lhs.args[2].value
-        source isa Symbol || return nothing
+        field = lhs.args[2].value
+        field isa Symbol || return nothing
         base = lhs.args[1]
         if base isa Symbol && haskey(alias_map, base)
-            return (; owner = :(StatefulAlgorithms._composite_dsl_write_owner($(alias_map[base]), $(QuoteNode(base)))), source)
+            return (; owner = :(StatefulAlgorithms._composite_dsl_write_owner($(alias_map[base]), $(QuoteNode(base)))), field)
         end
     end
     return _dsl_parse_owned_route_expr(alias_map, context_map, lhs)
@@ -346,7 +346,7 @@ function _dsl_build_owned_write_statement(lhs, rhs, alias_map, context_map, know
     schedule_expr = _dsl_schedule_expr(schedule_kind, schedule_value, expected_schedule, owner_name)
 
     value_spec, value_input = _dsl_parse_function_positional_arg(alias_map, context_map, inner, known_outputs, 1)
-    current_input = (; kind = :context_simple, owner = owned_route.owner, source = owned_route.source, destination = owned_route.source)
+    current_input = (; kind = :context_simple, owner = owned_route.owner, source_field = owned_route.field, target_field = owned_route.field)
     inputs = if isnothing(value_input)
         (current_input,)
     else
@@ -354,9 +354,9 @@ function _dsl_build_owned_write_statement(lhs, rhs, alias_map, context_map, know
     end
     inputs_expr = _dsl_inputs_expr(inputs)
     spec_expr = if isnothing(value_input)
-        :(StatefulAlgorithms.ContextWrite($(QuoteNode(owned_route.source)), $(_dsl_context_write_value_expr(value_spec))))
+        :(StatefulAlgorithms.ContextWrite($(QuoteNode(owned_route.field)), $(_dsl_context_write_value_expr(value_spec))))
     else
-        :(StatefulAlgorithms.ContextWrite($(QuoteNode(owned_route.source))))
+        :(StatefulAlgorithms.ContextWrite($(QuoteNode(owned_route.field))))
     end
 
     return quote
@@ -390,9 +390,9 @@ Build `owner.field = f(args...)`: the call runs every step (like `x = f(args...)
 call: a return under a name its view can see is written back through the route.
 """
 function _dsl_build_owned_call_write_statement(owned_route, rhs, alias_map, context_map, known_outputs::Set{Symbol}, expected_schedule::Symbol, owner_name::Symbol; include_condition = nothing)
-    output = gensym(Symbol(:dsl_write_, owned_route.source))
+    output = gensym(Symbol(:dsl_write_, owned_route.field))
     call_statement = _dsl_build_statement(:($output = $rhs), alias_map, context_map, known_outputs, Set{Symbol}(), expected_schedule, owner_name; include_condition)
-    write_route = _dsl_inputs_expr(((; kind = :context_simple, owner = owned_route.owner, source = owned_route.source, destination = output),))
+    write_route = _dsl_inputs_expr(((; kind = :context_simple, owner = owned_route.owner, source_field = owned_route.field, target_field = output),))
     return quote
         $call_statement
         $(_dsl_maybe_guard_metadata_expr(quote
@@ -475,7 +475,7 @@ function _dsl_build_statement(stmt, alias_map, context_map, known_outputs::Set{S
     if !isnothing(owned_route)
         length(outputs) == 1 || error("Owned field references like `alias.field` can only bind to one output symbol, e.g. `state = dynamics.state`.")
         output = only(outputs)
-        output == owned_route.source || error("Owned field aliasing currently requires the output name to match the field name. Use `$(owned_route.source) = ...` for `$(repr(rhs))`.")
+        output == owned_route.field || error("Owned field aliasing currently requires the output name to match the field name. Use `$(owned_route.field) = ...` for `$(repr(rhs))`.")
         metadata_expr = quote
             local _dsl_output = $(QuoteNode(output))
             local _dsl_owner = $(esc(owned_route.owner))

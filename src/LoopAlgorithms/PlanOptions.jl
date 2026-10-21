@@ -12,10 +12,10 @@ end
 @inline _append_withwiring_wires(w::WithWiring, bucket::Wiring) = Wiring((routes(bucket)..., getfield(w, :wires)...), shares(bucket))
 _append_withwiring_wires(w::WithWiring, bucket) = error("`WithWiring` can only wire a concrete child, not the nested plan $(getfield(w, :child)).")
 
-"""Point the routes that belong to this child (`OwnerMatcher` target) at its namespace."""
-function _retarget_owner_routes(bucket::Wiring, target::Symbol)
-    retarget(r) = to_match_by(r) === OwnerMatcher ?
-        Route{from_match_by(r), target, gettransform(r), getreverse_transform(r), source_fieldnames(r), getaliases(r), typeof(getfrom(r)), Nothing}(getfrom(r), nothing) : r
+"""Point the routes that belong to this child (target namespace `OwnerMatcher`) at its namespace."""
+function _retarget_owner_routes(bucket::Wiring, target_ns::Symbol)
+    retarget(r) = target_match_by(r) === OwnerMatcher ?
+        Route{source_match_by(r), target_ns, gettransform(r), getreverse_transform(r), source_fieldnames(r), getaliases(r), typeof(get_source_ref(r)), Nothing}(get_source_ref(r), nothing) : r
     return Wiring(map(retarget, routes(bucket)), shares(bucket))
 end
 
@@ -70,7 +70,7 @@ and those of one child as `LocalPlanOption(child, route)`. `setwiring` (or a con
 it, which `collect_wiring` alone cannot: it loses which child a route belonged to.
 
 Only for an unresolved plan. After `resolve` the plan-wide wiring is keyed by registry names, holds a share once per
-target and, in a nested plan, also the parent plans' wiring; rebuilt from that, shares would double and parent wiring
+target namespace and, in a nested plan, also the parent plans' wiring; rebuilt from that, shares would double and parent wiring
 would be copied into the children.
 """
 function collect_scoped_wiring(plan::AbstractPlan)
@@ -145,8 +145,8 @@ Base.@nospecializeinfer function _local_wiring_matches_child(@nospecialize(child
     scoped_wiring = _unwrap_local_option(option)
     if scoped_wiring isa Route
         # A route into a function call names the call object itself.
-        to_match_by(scoped_wiring) === OwnerMatcher && return match(child, getfield(option, :owner))
-        return child_matches_scref(child, to_match_by(scoped_wiring))
+        target_match_by(scoped_wiring) === OwnerMatcher && return match(child, getfield(option, :owner))
+        return child_matches_scref(child, target_match_by(scoped_wiring))
     end
 
     if match(child, getfield(option, :owner))

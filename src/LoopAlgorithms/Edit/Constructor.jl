@@ -99,7 +99,7 @@ end
     aliases = getaliases(r)
     mappings = ntuple(i -> varnames[i] == aliases[i] ? varnames[i] : (varnames[i] => aliases[i]), length(varnames))
     return Route(
-        _rename_item(getfrom(r), replacements) => _rename_item(getto(r), replacements),
+        _rename_item(get_source_ref(r), replacements) => _rename_item(get_target_ref(r), replacements),
         mappings...;
         transform = gettransform(r),
         reverse_transform = getreverse_transform(r),

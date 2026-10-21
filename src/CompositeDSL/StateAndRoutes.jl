@@ -31,13 +31,13 @@ function _dsl_inputs_expr(input_specs)
         if spec.kind == :simple
             # Keep the emitted structure plain NamedTuples so the builder-side
             # route code stays easy to inspect at runtime.
-            :( (; kind = :simple, source = $(QuoteNode(spec.source)), destination = $(QuoteNode(spec.destination)) ) )
+            :( (; kind = :simple, source_field = $(QuoteNode(spec.source_field)), target_field = $(QuoteNode(spec.target_field)) ) )
         elseif spec.kind == :context_simple
-            :( (; kind = :context_simple, owner = $(esc(spec.owner)), source = $(QuoteNode(spec.source)), destination = $(QuoteNode(spec.destination)) ) )
+            :( (; kind = :context_simple, owner = $(esc(spec.owner)), source_field = $(QuoteNode(spec.source_field)), target_field = $(QuoteNode(spec.target_field)) ) )
         elseif spec.kind == :simple_transform
-            :( (; kind = :simple_transform, source = $(QuoteNode(spec.source)), destination = $(QuoteNode(spec.destination)), transform = $(esc(spec.transform_expr)) ) )
+            :( (; kind = :simple_transform, source_field = $(QuoteNode(spec.source_field)), target_field = $(QuoteNode(spec.target_field)), transform = $(esc(spec.transform_expr)) ) )
         elseif spec.kind == :context_transform
-            :( (; kind = :context_transform, owner = $(esc(spec.owner)), source = $(QuoteNode(spec.source)), destination = $(QuoteNode(spec.destination)), transform = $(esc(spec.transform_expr)) ) )
+            :( (; kind = :context_transform, owner = $(esc(spec.owner)), source_field = $(QuoteNode(spec.source_field)), target_field = $(QuoteNode(spec.target_field)), transform = $(esc(spec.transform_expr)) ) )
         else
             error("Unsupported DSL input spec kind `$(spec.kind)`.")
         end
@@ -56,26 +56,26 @@ function _composite_dsl_push_local_option!(options::Vector{Any}, owner, option)
 end
 
 """Turn parsed DSL input specs into statement-local `Route` options."""
-function _composite_dsl_add_routes!(options::Vector{Any}, producers::Dict{Symbol, Any}, external_inputs::Vector{Pair{Symbol, Symbol}}, target, inputs::Tuple)
-    @nospecialize target inputs
+function _composite_dsl_add_routes!(options::Vector{Any}, producers::Dict{Symbol, Any}, external_inputs::Vector{Pair{Symbol, Symbol}}, target_owner, inputs::Tuple)
+    @nospecialize target_owner inputs
     for input in inputs
         if input.kind == :simple
-            source = input.source
-            destination = input.destination
-            if haskey(producers, source)
-                _composite_dsl_push_local_option!(options, target, Route(producers[source] => target, source => destination))
+            source_field = input.source_field
+            target_field = input.target_field
+            if haskey(producers, source_field)
+                _composite_dsl_push_local_option!(options, target_owner, Route(producers[source_field] => target_owner, source_field => target_field))
             else
-                ext_mapping = source => source
+                ext_mapping = source_field => source_field
                 ext_mapping in external_inputs || push!(external_inputs, ext_mapping)
             end
         elseif input.kind == :context_simple
-            _composite_dsl_push_local_option!(options, target, Route(input.owner => target, input.source => input.destination))
+            _composite_dsl_push_local_option!(options, target_owner, Route(input.owner => target_owner, input.source_field => input.target_field))
         elseif input.kind == :simple_transform
-            source = input.source
-            haskey(producers, source) || error("Transform routes currently require a previously produced symbol or an owned field reference. Missing producer for `$source`.")
-            _composite_dsl_push_local_option!(options, target, Route(producers[source] => target, source => input.destination; transform = input.transform))
+            source_field = input.source_field
+            haskey(producers, source_field) || error("Transform routes currently require a previously produced symbol or an owned field reference. Missing producer for `$source_field`.")
+            _composite_dsl_push_local_option!(options, target_owner, Route(producers[source_field] => target_owner, source_field => input.target_field; transform = input.transform))
         elseif input.kind == :context_transform
-            _composite_dsl_push_local_option!(options, target, Route(input.owner => target, input.source => input.destination; transform = input.transform))
+            _composite_dsl_push_local_option!(options, target_owner, Route(input.owner => target_owner, input.source_field => input.target_field; transform = input.transform))
         else
             error("Unsupported DSL input kind `$(input.kind)`.")
         end
@@ -100,12 +100,12 @@ function _composite_dsl_call_wires(entity::Union{StepAlgorithm, Type{<:StepAlgor
     for input in inputs
         transform = hasproperty(input, :transform) ? input.transform : nothing
         source_owner = if input.kind in (:simple, :simple_transform)
-            haskey(producers, input.source) || continue   # an outside input, recorded by `_composite_dsl_add_inputs!`
-            producers[input.source]
+            haskey(producers, input.source_field) || continue   # an outside input, recorded by `_composite_dsl_add_inputs!`
+            producers[input.source_field]
         else
             input.owner
         end
-        push!(wires, Route(source_owner => ThisChild(), input.source => input.destination; transform))
+        push!(wires, Route(source_owner => ThisChild(), input.source_field => input.target_field; transform))
     end
     return Tuple(wires)
 end
@@ -115,14 +115,14 @@ function _composite_dsl_call_wires(entity::Callable, producers::Dict{Symbol, Any
     for input in inputs
         transform = hasproperty(input, :transform) ? input.transform : nothing
         source_owner = if input.kind in (:simple, :simple_transform)
-            haskey(producers, input.source) || continue   # an outside input, read by name
-            producers[input.source]
+            haskey(producers, input.source_field) || continue   # an outside input, read by name
+            producers[input.source_field]
         else
             input.owner
         end
         # Same name from the scope, untransformed: read by name, no wire.
-        _dsl_read_by_name(source_owner) && input.source === input.destination && isnothing(transform) && continue
-        push!(wires, Route(source_owner => ThisChild(), input.source => input.destination; transform))
+        _dsl_read_by_name(source_owner) && input.source_field === input.target_field && isnothing(transform) && continue
+        push!(wires, Route(source_owner => ThisChild(), input.source_field => input.target_field; transform))
     end
     return Tuple(wires)
 end
@@ -131,8 +131,8 @@ end
 function _composite_dsl_register_call_inputs!(external_inputs::Vector{Pair{Symbol, Symbol}}, producers::Dict{Symbol, Any}, inputs::Tuple)
     @nospecialize inputs
     for input in inputs
-        input.kind == :simple && !haskey(producers, input.source) || continue
-        mapping = input.source => input.source
+        input.kind == :simple && !haskey(producers, input.source_field) || continue
+        mapping = input.source_field => input.source_field
         mapping in external_inputs || push!(external_inputs, mapping)
     end
     return external_inputs
@@ -574,20 +574,20 @@ function _composite_dsl_rebind!(algos::Vector{Any}, options::Vector{Any}, algo_s
     end
     resize!(options, option_start)
     append!(options, rewired)
-    for (source, source_field, target, target_field) in binds
-        _composite_dsl_is_state_owner(target) && continue
-        push!(options, Route(source => target, source_field => target_field))
+    for (source_owner, source_field, target_owner, target_field) in binds
+        _composite_dsl_is_state_owner(target_owner) && continue
+        push!(options, Route(source_owner => target_owner, source_field => target_field))
     end
     return algos, options
 end
 
 _composite_dsl_is_state_owner(owner) = owner isa AbstractIdentifiableAlgo && getalgo(owner) isa AlgoState
 
-"""The bind (source, field) that replaces reading `field` from an endpoint with matcher `endpoint_match`, or `nothing`."""
+"""The bind (source owner, source field) that replaces reading `field` from an endpoint with matcher `endpoint_match`, or `nothing`."""
 function _composite_dsl_bound_source(binds::Tuple, endpoint_match, field::Symbol)
     endpoint_match isa Symbol && return nothing
-    for (source, source_field, target, target_field) in binds
-        target_field == field && scref_match(target) == endpoint_match && return (source, source_field)
+    for (source_owner, source_field, target_owner, target_field) in binds
+        target_field == field && scref_match(target_owner) == endpoint_match && return (source_owner, source_field)
     end
     return nothing
 end
@@ -598,22 +598,22 @@ _composite_dsl_rebind_option(option::LocalPlanOption, binds::Tuple) =
     map(o -> LocalPlanOption(getfield(option, :owner), o), _composite_dsl_rebind_option(getfield(option, :option), binds))
 function _composite_dsl_rebind_option(route::Route, binds::Tuple)
     isresolved(route) && return (route,)
-    from = isnothing(getfrom(route)) ? from_match_by(route) : getfrom(route)
-    to = isnothing(getto(route)) ? to_match_by(route) : getto(route)
+    source_owner = isnothing(get_source_ref(route)) ? source_match_by(route) : get_source_ref(route)
+    target_owner = isnothing(get_target_ref(route)) ? target_match_by(route) : get_target_ref(route)
     varnames, aliases = source_fieldnames(route), getaliases(route)
     kept = Pair{Symbol, Symbol}[]
     moved = Any[]
     for i in eachindex(varnames)
-        bound = _composite_dsl_bound_source(binds, from_match_by(route), varnames[i])
+        bound = _composite_dsl_bound_source(binds, source_match_by(route), varnames[i])
         if isnothing(bound)
             push!(kept, varnames[i] => aliases[i])
         else
-            push!(moved, Route(bound[1] => to, bound[2] => aliases[i]; transform = gettransform(route), reverse_transform = getreverse_transform(route)))
+            push!(moved, Route(bound[1] => target_owner, bound[2] => aliases[i]; transform = gettransform(route), reverse_transform = getreverse_transform(route)))
         end
     end
     isempty(moved) && return (route,)
     isempty(kept) && return Tuple(moved)
-    return (Route(from => to, kept...; transform = gettransform(route), reverse_transform = getreverse_transform(route)), moved...)
+    return (Route(source_owner => target_owner, kept...; transform = gettransform(route), reverse_transform = getreverse_transform(route)), moved...)
 end
 
 """A nested block with `binds` applied to its wiring, its nested blocks and its `@state`; any other entry as it is."""

@@ -43,10 +43,10 @@ function _resolve_wiring_typed(la::LA, registry::NameSpaceRegistry, inherited_gl
         if child isa LoopSpec
             return getwiring(child)
         end
-        target = plan_child_namespace(la, i)
-        bucket = _retarget_owner_routes(getfield(child_wiring(raw_wiring), i), target)
-        target_global = get(combined_global, target, Wiring())
-        target_child = get(_resolve_and_group_wiring(registry, bucket), target, Wiring())
+        target_ns = plan_child_namespace(la, i)
+        bucket = _retarget_owner_routes(getfield(child_wiring(raw_wiring), i), target_ns)
+        target_global = get(combined_global, target_ns, Wiring())
+        target_child = get(_resolve_and_group_wiring(registry, bucket), target_ns, Wiring())
         resolved = merge_wiring(target_global, target_child)
         return resolved
     end

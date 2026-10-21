@@ -228,18 +228,18 @@ function _composite_dsl_check_updates(entity, inputs::Tuple, producers::Dict{Sym
     isempty(updated) && return nothing
     algo_name = nameof(algo isa Type ? algo : typeof(algo))
     for input in inputs
-        input.destination in updated || continue
-        what = "`$(algo_name)` updates its argument `$(input.destination)`"
-        input.kind in (:simple, :context_simple) || error("$what, which reads `$(input.source)` through a transform: that cannot be written back. Pass `$(input.source)` itself.")
+        input.target_field in updated || continue
+        what = "`$(algo_name)` updates its argument `$(input.target_field)`"
+        input.kind in (:simple, :context_simple) || error("$what, which reads `$(input.source_field)` through a transform: that cannot be written back. Pass `$(input.source_field)` itself.")
         input.kind == :context_simple && continue                     # a field of an algorithm's or a block's state
-        source = input.source
-        haskey(producers, source) || error("$what, which is `$source` here: an `@input` or an outside value, which cannot be changed.")
-        producer = producers[source]
-        _dsl_is_input_owner(producer) && error("$what, which is `$source` here: an `@input`, which cannot be changed.")
-        haskey(state_owners, source) && state_owners[source] === producer && continue   # a state field of the block
-        source in mutable && continue
+        source_field = input.source_field
+        haskey(producers, source_field) || error("$what, which is `$source_field` here: an `@input` or an outside value, which cannot be changed.")
+        producer = producers[source_field]
+        _dsl_is_input_owner(producer) && error("$what, which is `$source_field` here: an `@input`, which cannot be changed.")
+        haskey(state_owners, source_field) && state_owners[source_field] === producer && continue   # a state field of the block
+        source_field in mutable && continue
         _dsl_read_by_name(producer) || continue          # not a value of the block (a captured return or a local)
-        @warn "$what, so it changes `$source` here. If that is intended, declare it with `@mutable` (`@mutable $source = ...` or `@mutable local $source`)." _id = (algo_name, source) maxlog = 1
+        @warn "$what, so it changes `$source_field` here. If that is intended, declare it with `@mutable` (`@mutable $source_field = ...` or `@mutable local $source_field`)." _id = (algo_name, source_field) maxlog = 1
     end
     return nothing
 end

@@ -67,7 +67,7 @@ function _dsl_rewrite_entry_root(alias_map, ex)
 end
 
 """Parse `source[idx...]` as a transformed route from `source` through `getindex`."""
-function _dsl_parse_ref_transform_input(alias_map, context_map, ex, destination::Symbol, known_outputs::Set{Symbol})
+function _dsl_parse_ref_transform_input(alias_map, context_map, ex, target_field::Symbol, known_outputs::Set{Symbol})
     ex isa Expr && ex.head == :ref && !isempty(ex.args) || return nothing
 
     source_expr = ex.args[1]
@@ -77,14 +77,14 @@ function _dsl_parse_ref_transform_input(alias_map, context_map, ex, destination:
     display = _dsl_display_expr(ex)
 
     if source_expr isa Symbol && source_expr in known_outputs
-        return (; kind = :simple_transform, source = source_expr, destination, transform_expr, display)
+        return (; kind = :simple_transform, source_field = source_expr, target_field, transform_expr, display)
     end
 
     owned_route = source_expr isa Symbol ?
         _dsl_parse_symbol_alias_route_expr(alias_map, context_map, source_expr) :
         _dsl_parse_owned_route_expr(alias_map, context_map, source_expr)
     isnothing(owned_route) && return nothing
-    return (; kind = :context_transform, owner = owned_route.owner, source = owned_route.source, destination, transform_expr, display)
+    return (; kind = :context_transform, owner = owned_route.owner, source_field = owned_route.field, target_field, transform_expr, display)
 end
 
 """
@@ -106,7 +106,7 @@ expressions, or written as same-name semicolon keywords like `; x`.
 """
 function _dsl_parse_function_positional_arg(alias_map, context_map, arg, known_outputs::Set{Symbol}, index::Int)
     if arg isa Symbol && (arg in known_outputs)
-        return (; kind = :routed, value = arg, display = arg), (; kind = :simple, source = arg, destination = arg)
+        return (; kind = :routed, value = arg, display = arg), (; kind = :simple, source_field = arg, target_field = arg)
     elseif arg isa QuoteNode && arg.value isa Symbol
         return (; kind = :literal_symbol, value = arg.value, display = _dsl_display_expr(arg)), nothing
     end
@@ -114,24 +114,24 @@ function _dsl_parse_function_positional_arg(alias_map, context_map, arg, known_o
     symbol_alias_route = arg isa Symbol ? _dsl_parse_symbol_alias_route_expr(alias_map, context_map, arg) : nothing
     if !isnothing(symbol_alias_route)
         routed_name = gensym(Symbol(:dsl_pos_, index))
-        routed_input = (; kind = :context_simple, owner = symbol_alias_route.owner, source = symbol_alias_route.source, destination = routed_name)
+        routed_input = (; kind = :context_simple, owner = symbol_alias_route.owner, source_field = symbol_alias_route.field, target_field = routed_name)
         return (; kind = :routed, value = routed_name, display = _dsl_display_expr(arg)), routed_input
     end
 
     transform_input = _dsl_parse_explicit_transform_input(alias_map, context_map, arg, gensym(Symbol(:dsl_pos_, index)))
     if !isnothing(transform_input)
-        return (; kind = :routed, value = transform_input.destination, display = transform_input.display), transform_input
+        return (; kind = :routed, value = transform_input.target_field, display = transform_input.display), transform_input
     end
 
     ref_input = _dsl_parse_ref_transform_input(alias_map, context_map, arg, gensym(Symbol(:dsl_pos_, index)), known_outputs)
     if !isnothing(ref_input)
-        return (; kind = :routed, value = ref_input.destination, display = ref_input.display), ref_input
+        return (; kind = :routed, value = ref_input.target_field, display = ref_input.display), ref_input
     end
 
     owned_route = _dsl_parse_owned_route_expr(alias_map, context_map, arg)
     if !isnothing(owned_route)
         routed_name = gensym(Symbol(:dsl_pos_, index))
-        routed_input = (; kind = :context_simple, owner = owned_route.owner, source = owned_route.source, destination = routed_name)
+        routed_input = (; kind = :context_simple, owner = owned_route.owner, source_field = owned_route.field, target_field = routed_name)
         return (; kind = :routed, value = routed_name, display = _dsl_display_expr(arg)), routed_input
     end
 
@@ -150,14 +150,14 @@ function _dsl_parse_function_call(alias_map, context_map, ex, known_outputs::Set
 
     function _record_function_kwarg!(name::Symbol, value)
         if value isa Symbol && (value in known_outputs)
-            push!(routed_keyword_inputs, (; kind = :simple, source = value, destination = name))
+            push!(routed_keyword_inputs, (; kind = :simple, source_field = value, target_field = name))
             push!(keyword_specs, (; name, routed = true, value = name, display = value))
             return
         end
 
         symbol_alias_route = value isa Symbol ? _dsl_parse_symbol_alias_route_expr(alias_map, context_map, value) : nothing
         if !isnothing(symbol_alias_route)
-            push!(routed_keyword_inputs, (; kind = :context_simple, owner = symbol_alias_route.owner, source = symbol_alias_route.source, destination = name))
+            push!(routed_keyword_inputs, (; kind = :context_simple, owner = symbol_alias_route.owner, source_field = symbol_alias_route.field, target_field = name))
             push!(keyword_specs, (; name, routed = true, value = name, display = _dsl_display_expr(value)))
             return
         end
@@ -178,7 +178,7 @@ function _dsl_parse_function_call(alias_map, context_map, ex, known_outputs::Set
 
         owned_route = value isa Symbol ? nothing : _dsl_parse_owned_route_expr(alias_map, context_map, value)
         if !isnothing(owned_route)
-            push!(routed_keyword_inputs, (; kind = :context_simple, owner = owned_route.owner, source = owned_route.source, destination = name))
+            push!(routed_keyword_inputs, (; kind = :context_simple, owner = owned_route.owner, source_field = owned_route.field, target_field = name))
             push!(keyword_specs, (; name, routed = true, value = name, display = _dsl_display_expr(value)))
             return
         end
@@ -326,30 +326,30 @@ function _dsl_split_route_kwargs(alias_map, context_map, kwargs, known_outputs::
     inputs = Any[]
     for kw in kwargs
         kw isa Expr && kw.head == :kw || error("Only keyword-based routes are supported for ProcessAlgorithms in the DSL.")
-        destination = kw.args[1]
-        destination isa Symbol || error("Route targets must be symbols. Got `$destination`.")
+        target_field = kw.args[1]
+        target_field isa Symbol || error("Route targets must be symbols. Got `$target_field`.")
         source = kw.args[2]
 
         if source isa Symbol
             owned_route = _dsl_parse_symbol_alias_route_expr(alias_map, context_map, source)
             if !isnothing(owned_route)
-                push!(inputs, (; kind = :context_simple, owner = owned_route.owner, source = owned_route.source, destination))
+                push!(inputs, (; kind = :context_simple, owner = owned_route.owner, source_field = owned_route.field, target_field))
                 continue
             end
 
             # Plain `x = produced` stays a simple route and can still become an
             # external input later if `produced` is not known yet.
-            push!(inputs, (; kind = :simple, source, destination))
+            push!(inputs, (; kind = :simple, source_field = source, target_field))
             continue
         end
 
-        transform_input = _dsl_parse_explicit_transform_input(alias_map, context_map, source, destination)
+        transform_input = _dsl_parse_explicit_transform_input(alias_map, context_map, source, target_field)
         if !isnothing(transform_input)
             push!(inputs, transform_input)
             continue
         end
 
-        ref_input = _dsl_parse_ref_transform_input(alias_map, context_map, source, destination, known_outputs)
+        ref_input = _dsl_parse_ref_transform_input(alias_map, context_map, source, target_field, known_outputs)
         if !isnothing(ref_input)
             push!(inputs, ref_input)
             continue
@@ -357,11 +357,11 @@ function _dsl_split_route_kwargs(alias_map, context_map, kwargs, known_outputs::
 
         owned_route = _dsl_parse_owned_route_expr(alias_map, context_map, source)
         if !isnothing(owned_route)
-            push!(inputs, (; kind = :context_simple, owner = owned_route.owner, source = owned_route.source, destination))
+            push!(inputs, (; kind = :context_simple, owner = owned_route.owner, source_field = owned_route.field, target_field))
             continue
         end
 
-        error("ProcessAlgorithm routes only support plain routed symbols/owned fields or explicit `@transform(f, source)` syntax. Got `$source` for `$destination`.")
+        error("ProcessAlgorithm routes only support plain routed symbols/owned fields or explicit `@transform(f, source)` syntax. Got `$source` for `$target_field`.")
     end
     return tuple(inputs...)
 end

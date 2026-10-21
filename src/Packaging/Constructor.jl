@@ -42,7 +42,7 @@ function Package(comp::CompositeAlgorithm, states::States, name = Symbol()) wher
     # Package aliases are derived from the concrete endpoint objects retained
     # by unresolved routes. Resolution deliberately replaces those objects
     # with type-level namespace information, which this conversion cannot use.
-    if any(route -> isnothing(getfrom(route)) || isnothing(getto(route)), routes)
+    if any(route -> isnothing(get_source_ref(route)) || isnothing(get_target_ref(route)), routes)
         throw(ArgumentError(
             "Package requires unresolved routes with concrete algorithm or type endpoints. " *
             "Package the CompositeAlgorithm before resolve."
@@ -94,8 +94,8 @@ function package_alias(func, registry::NameSpaceRegistry, routes::Routes, pairs)
     end
 
     route = getfield(routes, 1)
-    target = getto(route)
-    next_pairs = match(func, target) ? (pairs..., route_to_alias_zip(route, registry)...) : pairs
+    target_ref = get_target_ref(route)
+    next_pairs = match(func, target_ref) ? (pairs..., route_to_alias_zip(route, registry)...) : pairs
     return package_alias(func, registry, Base.tail(routes), next_pairs)
 end
 

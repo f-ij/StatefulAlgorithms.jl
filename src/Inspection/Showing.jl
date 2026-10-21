@@ -60,13 +60,13 @@ function _inspection_print_sharing(io::IO, shares::S, routes::R) where {S<:Abstr
 
     lines = String[]
     for share in shares
-        push!(lines, string("share ", share.source, " -> ", share.target))
+        push!(lines, string("share ", share.source_namespace, " -> ", share.target_namespace))
     end
     for route in routes
         mappings = isempty(route.mappings) ? "<all>" : join((string(p.first, "=>", p.second) for p in route.mappings), ", ")
         transform = isnothing(route.transform) ? "" : string(" transform=", route.transform)
         reverse_transform = isnothing(route.reverse_transform) ? "" : string(" reverse_transform=", route.reverse_transform)
-        push!(lines, string("route ", route.source, " -> ", route.target, " (", mappings, ")", transform, reverse_transform))
+        push!(lines, string("route ", route.source_namespace, " -> ", route.target_namespace, " (", mappings, ")", transform, reverse_transform))
     end
     _inspection_print_tree_lines(io, lines)
     return nothing

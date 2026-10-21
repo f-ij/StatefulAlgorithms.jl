@@ -10,7 +10,7 @@ Terms:
   shared subcontexts `:_captured_returns` (captured returns) and `:_declared_locals` (declared locals).
 - SCRef: whatever a user writes to say which subcontext they mean: an SCKey, an algorithm or
   state instance, its type, a matcher, or a call. Resolving an SCRef gives its SCKey.
-- endpoint: the role of a subcontext in a route or share (its from side or its to side). Each
+- endpoint: the role of a subcontext in a route or share (its source side or its target side). The endpoint is the namespace; a source or target is a location in it (namespace plus field). Each
   endpoint is written as an SCRef and, once the plan is resolved, is an SCKey.
 
 An SCRef is used in three steps:

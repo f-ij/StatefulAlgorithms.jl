@@ -9,14 +9,14 @@ function resolve_options(reg::R) where {R<:NameSpaceRegistry}
     return (;)
 end
 
-"""Append one resolved wiring item to a target-keyed named tuple."""
+"""Append one resolved wiring item to a target-namespace-keyed named tuple."""
 @inline function _append_resolved_wiring(grouped::NamedTuple, resolved::Pair)
     name = first(resolved)
     item = last(resolved)
     return (; grouped..., name => (get(grouped, name, ())..., item))
 end
 
-"""Append resolved wiring pairs while preserving target-key groups."""
+"""Append resolved wiring pairs while preserving target-namespace groups."""
 @inline _append_resolved_wiring(grouped::NamedTuple, resolved::Tuple{}) = grouped
 @inline function _append_resolved_wiring(grouped::NamedTuple, resolved::Resolved) where {Resolved<:Tuple}
     grouped = _append_resolved_wiring(grouped, first(resolved))
@@ -24,7 +24,7 @@ end
 end
 
 """
-Resolve share wiring and group resolved shares by target context name.
+Resolve share wiring and group resolved shares by target namespace.
 """
 function resolve_options(reg::R, shares::Share...) where {R<:NameSpaceRegistry}
     return _resolve_share_options(reg, shares, (;))
@@ -38,7 +38,7 @@ end
 end
 
 """
-Resolve route wiring and group resolved routes by target context name.
+Resolve route wiring and group resolved routes by target namespace.
 """
 @inline function resolve_options(reg::R, routes::Route...) where {R<:NameSpaceRegistry}
     return _resolve_route_options(reg, routes, (;))
