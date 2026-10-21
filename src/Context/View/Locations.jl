@@ -45,14 +45,11 @@ end
 """
 Shared subcontexts => VarLocations
 """
-@inline _as_tuple(shared) = shared isa Tuple ? shared : (shared,)
-
 function get_shared_locations(@nospecialize(SCT::Type{<:SubContextView}))
     persistent = persistent_type(SCT.parameters[1])
-    shared = _as_tuple(view_shares(SCT))
     locations = _Locations()
-    for k in 1:length(shared)
-        name = contextname(shared[k])
+    for share in view_shares(SCT)
+        name = contextname(share)
         shared_data_type = getdatatype(get_subcontext_type(persistent, name))
         for i in 1:fieldcount(shared_data_type)
             varname = fieldname(shared_data_type, i)
@@ -64,10 +61,8 @@ end
 
 """Routes supplied to the view => VarLocations."""
 function get_routed_locations(@nospecialize(SCT::Type{<:SubContextView}))
-    routes = _as_tuple(view_routes(SCT))
     locations = _Locations()
-    for k in 1:length(routes)
-        route = routes[k]
+    for route in view_routes(SCT)
         append!(locations, _routed_locations(context_partition(Val(source_namespace(route))), route))
     end
     return locations
