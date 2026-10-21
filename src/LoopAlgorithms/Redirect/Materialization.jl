@@ -52,5 +52,13 @@ function apply_redirect_specs(context::C, registry::R, redirects::Redirects) whe
     return context
 end
 
-@inline apply_redirect_specs(context::C, la::LA) where {C<:ProcessContext, LA<:LoopSpec} =
-    @inline apply_redirect_specs(context, getregistry(la), getstoredredirects(la))
+"""
+    apply_redirect_specs(context, la)
+
+Apply the redirects of the resolved `la` to `context` (see the method above) and return the new context. Throws if
+`la` is not resolved, since the redirect endpoints are looked up in its registry.
+"""
+@inline function apply_redirect_specs(context::C, la::LA) where {C<:ProcessContext, LA<:LoopSpec}
+    isresolved(la) || error("apply_redirect_specs requires a resolved LoopAlgorithm; call `resolve` first. Got $(typeof(la)).")
+    return @inline apply_redirect_specs(context, getregistry(la), getstoredredirects(la))
+end

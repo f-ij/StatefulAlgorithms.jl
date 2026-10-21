@@ -152,6 +152,24 @@ end
         @test_throws "Redirect makes a cycle" init(to_itself; lifetime = Repeat(1))
     end
 
+    @testset "Applying redirects needs a resolved algorithm" begin
+        plan = CompositeAlgorithm(
+            :target => RedirectReadTargetAlgo(),
+            (1,),
+            :source => RedirectSourceState(),
+            Redirect(:source => :target, :value),
+        )
+        resolved = resolve(plan)
+        @test !StatefulAlgorithms.isresolved(plan)
+        @test !StatefulAlgorithms.isresolved(typeof(plan))
+        @test StatefulAlgorithms.isresolved(resolved)
+        @test StatefulAlgorithms.isresolved(typeof(resolved))
+        @test @inferred(StatefulAlgorithms.isresolved(resolved))
+
+        context = StatefulAlgorithms.context(init(resolved; lifetime = Repeat(1)))
+        @test_throws "requires a resolved LoopAlgorithm" StatefulAlgorithms.apply_redirect_specs(context, plan)
+    end
+
     @testset "DSL @redirect lowers to root redirect option" begin
         algo = @CompositeAlgorithm begin
             @alias source = RedirectSourceAlgo

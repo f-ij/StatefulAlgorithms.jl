@@ -64,7 +64,7 @@ end
 @inline getoptions(fa::FinalizedAlgorithm) = getoptions(inneralgorithm(fa))
 @inline getwiring(fa::FinalizedAlgorithm) = getwiring(inneralgorithm(fa))
 @inline getregistry(fa::FinalizedAlgorithm) = getregistry(inneralgorithm(fa))
-@inline isresolved(fa::FinalizedAlgorithm) = isresolved(inneralgorithm(fa))
+@inline isresolved(::Union{FinalizedAlgorithm{LA}, Type{<:FinalizedAlgorithm{LA}}}) where {LA<:LoopSpec} = isresolved(LA)
 @inline getid(fa::FinalizedAlgorithm) = getid(inneralgorithm(fa))
 
 @inline setoptions(fa::FinalizedAlgorithm, options) = finalstep(setoptions(inneralgorithm(fa), options), finalfunction(fa))

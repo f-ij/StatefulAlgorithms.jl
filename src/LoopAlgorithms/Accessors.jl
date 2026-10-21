@@ -95,9 +95,14 @@ end
 @inline _attach_registry(la::LoopAlgorithm{Plan, O, OldR, C, Inits, Overrides, id}, registry::R) where {Plan, O, OldR, C, Inits, Overrides, id, R<:NameSpaceRegistry} =
     LoopAlgorithm{Plan, O, R, C, Inits, Overrides, id}(getplan(la), getoptions(la), registry, getpersistentcontext(la), getstoredinits(la), getstoredoverrides(la))
 
-@inline isresolved(la::LoopAlgorithm) = !isnothing(getregistry(la))
-@inline isresolved(::AbstractPlan) = false
-@inline isresolved(::LA) where {LA<:LoopSpec} = false
+"""
+    isresolved(la)
+
+Return whether `la` (an algorithm or its type) is resolved: a `LoopAlgorithm` whose registry type `R` is not `Nothing`.
+Decided by the type alone, so it folds to a constant.
+"""
+@inline isresolved(::Union{LoopAlgorithm{Plan, O, R}, Type{<:LoopAlgorithm{Plan, O, R}}}) where {Plan, O, R} = !(R <: Nothing)
+@inline isresolved(::Union{LA, Type{LA}}) where {LA<:LoopSpec} = false
 @inline getid(la::Union{LoopAlgorithm{Plan,O,R,C,I,Ov,id}, Type{<:LoopAlgorithm{Plan,O,R,C,I,Ov,id}}}) where {Plan,O,R,C,I,Ov,id} = id
 @inline hasid(la::Union{LoopAlgorithm{Plan,O,R,C,I,Ov,id}, Type{<:LoopAlgorithm{Plan,O,R,C,I,Ov,id}}}) where {Plan,O,R,C,I,Ov,id} = !isnothing(id)
 @inline id(la::Union{LoopAlgorithm{Plan,O,R,C,I,Ov,id}, Type{<:LoopAlgorithm{Plan,O,R,C,I,Ov,id}}}) where {Plan,O,R,C,I,Ov,id} = id
