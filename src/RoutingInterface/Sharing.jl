@@ -9,20 +9,20 @@ get_firstalgo(s::Share) = getfield(s, :a1)
 get_secondalgo(s::Share) = getfield(s, :a2)
 
 """Return the first share endpoint matcher identity or resolved name."""
-first_match_by(::Union{Share{Smatch}, Type{<:Share{Smatch}}}) where {Smatch} = Smatch
+first_match_by(::Union{Share{FirstMatch}, Type{<:Share{FirstMatch}}}) where {FirstMatch} = FirstMatch
 
 """Return the second share endpoint matcher identity or resolved name."""
-second_match_by(::Union{Share{Smatch, Tmatch}, Type{<:Share{Smatch, Tmatch}}}) where {Smatch, Tmatch} = Tmatch
+second_match_by(::Union{Share{FirstMatch, SecondMatch}, Type{<:Share{FirstMatch, SecondMatch}}}) where {FirstMatch, SecondMatch} = SecondMatch
 
 """Return whether the share is directional."""
-is_directional(::Union{Share{Smatch, Tmatch, directional}, Type{<:Share{Smatch, Tmatch, directional}}}) where {Smatch, Tmatch, directional} = directional
+is_directional(::Union{Share{FirstMatch, SecondMatch, directional}, Type{<:Share{FirstMatch, SecondMatch, directional}}}) where {FirstMatch, SecondMatch, directional} = directional
 
 """Return whether a share has already been resolved to context-name symbols."""
-isresolved(s::Union{Share{Smatch, Tmatch}, Type{<:Share{Smatch, Tmatch}}}) where {Smatch, Tmatch} =
-    Smatch isa Symbol && Tmatch isa Symbol
+isresolved(s::Union{Share{FirstMatch, SecondMatch}, Type{<:Share{FirstMatch, SecondMatch}}}) where {FirstMatch, SecondMatch} =
+    FirstMatch isa Symbol && SecondMatch isa Symbol
 
 """Return the source namespace of a resolved share."""
-contextname(::Union{Share{Smatch}, Type{<:Share{Smatch}}}) where {Smatch} = Smatch
+contextname(::Union{Share{FirstMatch}, Type{<:Share{FirstMatch}}}) where {FirstMatch} = FirstMatch
 
 contextname(::Any) = nothing
 

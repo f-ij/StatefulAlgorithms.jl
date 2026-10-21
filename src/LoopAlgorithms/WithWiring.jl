@@ -21,7 +21,7 @@ Wiring that belongs to one plan child, attached by position: the target namespac
 `child`'s, so it needs no identity. Works for any child (an algorithm or an
 [`Callable`](@ref)). Wires are made with [`From`](@ref).
 
-    CompositeAlgorithm(Sensor, WithWiring(Callable(total_energy, (:spins,), :energy), From(Sensor, :state => :spins)), ...)
+    CompositeAlgorithm(Sensor, WithWiring(Callable(total_energy, (:spins,), :energy), From(Var(Sensor, :state) => :spins)), ...)
 """
 struct WithWiring{C}
     child::C

@@ -8,7 +8,7 @@ Share a whole context namespace from one endpoint to another.
 The first two type parameters are unresolved endpoint identities or resolved
 context-name symbols. Resolved shares store `nothing` in both endpoint fields.
 """
-struct Share{Smatch, Tmatch, directional, A1, A2} <: AbstractWiring
+struct Share{FirstMatch, SecondMatch, directional, A1, A2} <: AbstractWiring
     a1::A1
     a2::A2
 end
@@ -35,8 +35,8 @@ Base.@nospecializeinfer function Share(@nospecialize(algo1), @nospecialize(algo2
 end
 
 """Construct a resolved share from its type parameters."""
-function Share{Smatch, Tmatch, directional, Nothing, Nothing}() where {Smatch, Tmatch, directional}
-    _assert_resolved_endpoint(Smatch, "Share source namespace")
-    _assert_resolved_endpoint(Tmatch, "Share target namespace")
-    return Share{Smatch, Tmatch, directional, Nothing, Nothing}(nothing, nothing)
+function Share{FirstMatch, SecondMatch, directional, Nothing, Nothing}() where {FirstMatch, SecondMatch, directional}
+    _assert_resolved_endpoint(FirstMatch, "Share source namespace")
+    _assert_resolved_endpoint(SecondMatch, "Share target namespace")
+    return Share{FirstMatch, SecondMatch, directional, Nothing, Nothing}(nothing, nothing)
 end
