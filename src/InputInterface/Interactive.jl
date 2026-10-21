@@ -45,18 +45,9 @@ end
 
 @inline interactive_names(::Union{Interactive{Target, Names}, Type{<:Interactive{Target, Names}}}) where {Target, Names} = Names
 
-"""An `InteractiveVar` reads as the value it currently holds."""
-@inline read_action(reader::R, ref::InteractiveVar) where {R<:AbstractContext} = DirectRead(ref[])
-
 """Wrap a context value for interactive mutation, unless it is already wrapped."""
 @inline interactive_wrapper(value) = InteractiveVar(value)
 @inline interactive_wrapper(ref::InteractiveVar) = ref
-
-"""Write an algorithm return value through an existing `InteractiveVar`."""
-@inline function writeback_value(ref::InteractiveVar, value)
-    ref[] = value
-    return ref
-end
 
 """
     apply_interactive_specs(context, specs)

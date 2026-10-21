@@ -3,8 +3,9 @@ The extendable base of how stored values are read and written: what a read of a 
 followed by `read_value`), which location a state field reads and writes back to (`_redirected_varlocation`), what a
 write stores (`writeback_value`), and what the context after a run (`final_context`) shows (`shown_value`).
 
-Each function here has the default every stored value gets. A storage wrapper extends it with methods in a file of
-its own, next to the wrapper: `RedirectedVar` in LoopAlgorithms/Redirect/Hooks.jl.
+Each function here has the default every stored value gets. A storage wrapper extends the hooks in a
+`HookExtensions.jl` next to it: LoopAlgorithms/Redirect (`RedirectedVar`), LoopAlgorithms/Locals (`Maybe`,
+`LocalProbe`), InputInterface (`InteractiveVar`).
 =#
 
 ##########################################
