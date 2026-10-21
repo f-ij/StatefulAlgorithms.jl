@@ -1,7 +1,15 @@
 #=
-Extendable API of views: functions packages overload to change what a read or a write of a stored value does, and
-what the context after a run (`final_context`) shows for it.
+The extendable base of how stored values are read and written: what a read of a stored value shows (`read_action`,
+followed by `read_value`), which location a state field reads and writes back to (`_redirected_varlocation`), what a
+write stores (`writeback_value`), and what the context after a run (`final_context`) shows (`shown_value`).
+
+Each function here has the default every stored value gets. A storage wrapper extends it with methods in a file of
+its own, next to the wrapper: `RedirectedVar` in LoopAlgorithms/Redirect/Hooks.jl.
 =#
+
+##########################################
+########## Reading a stored value ########
+##########################################
 
 """
 What `read_action` answers for a stored value: the value the read ends with (`DirectRead`), or where it goes on
@@ -47,6 +55,50 @@ sees `stored`. A storage wrapper adds a method: a `RedirectedVar` answers `ReadF
 first, as the container does in `getindex`.
 """
 @inline read_action(reader::R, stored::S) where {R<:AbstractContext, S} = DirectRead(stored)
+
+"""
+    read_value(reader, stored)
+
+Return the value `reader` sees for the value `stored` in one of its fields: `read_action(reader, stored)` followed
+until it answers `DirectRead`.
+"""
+@inline read_value(reader::R, stored::S) where {R<:AbstractContext, S} =
+    @inline _follow_read(reader, read_action(reader, stored))
+
+@inline _follow_read(reader::R, action::DirectRead{T}) where {R<:AbstractContext, T} = getfield(action, :value)
+
+# `read_location` reads the field and ends in `read_value` itself, so a redirect to a redirect is followed as well.
+@inline _follow_read(reader::R, ::ReadFrom{L}) where {R<:AbstractContext, L} = @inline read_location(reader, L())
+
+# Unused API for now (see `ReadVar`): no wrapper in the package answers it.
+@inline _follow_read(reader::R, action::ReadVar{T}) where {R<:AbstractContext, T} =
+    @inline read_value(reader, getfield(action, :value))
+
+"""
+    read_location(reader, location)
+
+Return the value `reader` sees at `location` (a `VarLocation`): what a `ReadFrom` goes on with. A view reads it as an
+algorithm would (`getproperty(view, location)`), a `ProcessContext` as `context[Var(...)]`.
+"""
+function read_location end
+
+##########################################
+########## Where a state field is stored #
+##########################################
+
+"""
+    _redirected_varlocation(::Type{T}, Val(subcontext), Val(name))
+
+Return the location a view reads and writes back to for the state field `subcontext.name`, whose stored value has
+type `T`: that field itself by default. A storage marker type adds a method to send reads and writeback to another
+`VarLocation`; `RedirectedVar` makes the field behave as the source field it points to.
+"""
+@inline _redirected_varlocation(::Type{T}, ::Val{SubKey}, ::Val{name}) where {T, SubKey, name} =
+    VarLocation{:state}(SubKey, name)
+
+##########################################
+########## Writing and showing ###########
+##########################################
 
 """
     writeback_value(stored, returned) -> value

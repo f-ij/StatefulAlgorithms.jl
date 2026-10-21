@@ -43,22 +43,6 @@ function _state_locations(::NamespacePartition, @nospecialize(SCT::Type))
 end
 
 """
-    _redirected_varlocation(::Type{T}, Val(subcontext), Val(name))
-
-Overloadable storage-type hook for state fields in `SubContextView`.
-
-The default maps a state field to its location in the persistent context. Storage
-marker types can overload this to redirect reads and writeback to another
-`VarLocation`; `RedirectedVar` uses this to make a state marker behave as a source
-field elsewhere in the persistent context.
-"""
-@inline _redirected_varlocation(::Type{T}, ::Val{SubKey}, ::Val{name}) where {T, SubKey, name} =
-    VarLocation{:state}(SubKey, name)
-
-@inline _redirected_varlocation(::Type{T}, ::Val{SubKey}, ::Val{name}) where {VL<:VarLocation, T<:RedirectedVar{VL}, SubKey, name} =
-    VL()
-
-"""
 Shared subcontexts => VarLocations
 """
 @inline _as_tuple(shared) = shared isa Tuple ? shared : (shared,)
@@ -409,9 +393,6 @@ steps). Whether it is there is known from the type, so the check costs nothing.
 @inline _assigned_value(values::NamedTuple, name::Symbol) = haskey(values, name) ? getfield(values, name) : _throw_unassigned(name)
 
 @noinline _throw_unassigned(name::Symbol) = error("`$name` has no value in this step: it is assigned by a step that does not run in every step (on a schedule). Declare it first (`local $name` in a DSL block, `Local` in a plan) to keep its last value between steps.")
-
-"""A redirected field is read at the location its marker points to."""
-@inline read_action(reader::R, ::RedirectedVar{VL}) where {R<:AbstractContext, VL<:VarLocation} = ReadFrom{VL}()
 
 """Return the value `view` shows at `location`, as an algorithm reading through it would see it."""
 @inline read_location(view::V, location::VL) where {V<:SubContextView, VL<:VarLocation} = @inline getproperty(view, location)
