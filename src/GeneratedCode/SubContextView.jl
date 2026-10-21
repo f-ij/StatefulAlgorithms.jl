@@ -49,7 +49,7 @@ function _subcontext_view_merge_exprs(SCV::Type, Args::Type, demanded_runtime_na
         end
     end
 
-    # The persistent writes: one `StoreInto` request per written field, followed by `_follow_writes` (Writing.jl) and
+    # The persistent writes: one `StoreInto` request per written field, followed by `_follow_writes` (ReadingWriting.jl) and
     # grouped into `(; subcontext1 = (; var1 = ...), ...)` by `_build_write_payload`.
     merge_expr = quote
         $(write_preambles...)

@@ -1,8 +1,8 @@
 #=
 The extendable base of how stored values are read and written: what a read of a stored value does (`read_value`),
 what a write to a stored value does (`write_value`), and what the context after a run (`final_context`) shows
-(`shown_value`). The hooks only answer with an action; the machinery that follows the answers is in Reading.jl
-(`_follow_reads`) and Writing.jl (`_follow_writes`).
+(`shown_value`). The hooks only answer with an action; the machinery that follows the answers is in ReadingWriting.jl
+(`_follow_reads`, `_follow_writes`).
 
 Each function here has the default every stored value gets. A storage wrapper extends the hooks in a
 `HookExtensions.jl` next to it: LoopAlgorithms/Redirect (`RedirectedVar`), LoopAlgorithms/Locals (`Maybe`,
@@ -64,7 +64,7 @@ first, as the container does in `getindex`.
 
 """
 What `write_value` answers for a write: where the write goes on (`StoreInto`), or how it ends (`DirectWrite`,
-`NoWrite`). `_follow_writes` (Writing.jl) follows the answers until every one ends.
+`NoWrite`). `_follow_writes` (ReadingWriting.jl) follows the answers until every one ends.
 """
 abstract type WriteAction end
 
