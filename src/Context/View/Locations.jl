@@ -343,7 +343,7 @@ function _read_partition end
     partition_storedproperty(scv, Val(subcontext), Val(varname))
 
 Return the backing value stored for one `SubContextView` location without
-applying `_follow_reads`: what the hooks `read_value` and `writeback_value` are asked
+applying `_follow_reads`: what the hooks `read_value` and `write_value` are asked
 about (through `stored_value_at`).
 """
 @inline function partition_storedproperty(

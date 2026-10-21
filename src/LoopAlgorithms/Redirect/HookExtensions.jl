@@ -7,5 +7,5 @@ holding it is read and written at the location it points to.
 @inline read_value(reader::R, ::RedirectedVar{VL}) where {R<:AbstractContext, VL<:VarLocation} = ReadFrom{VL}()
 
 """A write to a redirected field goes on at the location its marker points to."""
-@inline writeback_value(view::V, ::RedirectedVar{VL}, request::StoreInto) where {V<:SubContextView, VL<:VarLocation} =
+@inline write_value(view::V, ::RedirectedVar{VL}, request::StoreInto) where {V<:SubContextView, VL<:VarLocation} =
     StoreInto{VL}(getfield(request, :value))

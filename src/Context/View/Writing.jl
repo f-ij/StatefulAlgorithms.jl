@@ -1,5 +1,5 @@
 #=
-Writing a stored value: every write starts as a `StoreInto` request. Ask the hook `writeback_value` (Hooks.jl) what
+Writing a stored value: every write starts as a `StoreInto` request. Ask the hook `write_value` (Hooks.jl) what
 writing to the value stored there does, and follow its answers until every one ends the write (`DirectWrite`,
 `NoWrite`). The answers form a tuple that can grow (an answer may be a tuple of actions); the `DirectWrite`s left at
 the end are the merge payload.
@@ -9,7 +9,7 @@ the end are the merge payload.
     _follow_writes(view, requests::Tuple) -> Tuple
 
 Return the `DirectWrite`s that the write actions `requests` end in: each `StoreInto` is answered by
-`writeback_value` and its answers followed in turn; a `NoWrite` ends with nothing.
+`write_value` and its answers followed in turn; a `NoWrite` ends with nothing.
 """
 @inline _follow_writes(view::V, ::Tuple{}) where {V<:SubContextView} = ()
 @inline _follow_writes(view::V, actions::A) where {V<:SubContextView, A<:Tuple} =
@@ -24,7 +24,7 @@ Return the `DirectWrite`s that the write actions `requests` end in: each `StoreI
 # chain (a marker, then the value), so Julia's inference follows it; recursing on the request alone (`StoreInto{L1}`,
 # then `StoreInto{L2}`, the same shape) is widened and loses the payload's type.
 @inline _follow_store(view::V, stored::S, request::R) where {V<:SubContextView, S, R<:StoreInto} =
-    @inline _follow_answer(view, writeback_value(view, stored, request))
+    @inline _follow_answer(view, write_value(view, stored, request))
 
 @inline _follow_answer(view::V, action::DirectWrite) where {V<:SubContextView} = (action,)
 @inline _follow_answer(view::V, ::NoWrite) where {V<:SubContextView} = ()

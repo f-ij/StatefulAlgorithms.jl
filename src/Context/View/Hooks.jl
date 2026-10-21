@@ -1,6 +1,6 @@
 #=
 The extendable base of how stored values are read and written: what a read of a stored value does (`read_value`),
-what a write to a stored value does (`writeback_value`), and what the context after a run (`final_context`) shows
+what a write to a stored value does (`write_value`), and what the context after a run (`final_context`) shows
 (`shown_value`). The hooks only answer with an action; the machinery that follows the answers is in Reading.jl
 (`_follow_reads`) and Writing.jl (`_follow_writes`).
 
@@ -63,7 +63,7 @@ first, as the container does in `getindex`.
 ##########################################
 
 """
-What `writeback_value` answers for a write: where the write goes on (`StoreInto`), or how it ends (`DirectWrite`,
+What `write_value` answers for a write: where the write goes on (`StoreInto`), or how it ends (`DirectWrite`,
 `NoWrite`). `_follow_writes` (Writing.jl) follows the answers until every one ends.
 """
 abstract type WriteAction end
@@ -72,7 +72,7 @@ abstract type WriteAction end
     StoreInto{L}(value)
 
 Write action: write `value` at location `L` (a `VarLocation` type). The value stored there is asked about in turn
-(`writeback_value`). Every write starts as one; a redirect answers it with the location it points to.
+(`write_value`). Every write starts as one; a redirect answers it with the location it points to.
 """
 struct StoreInto{L, T} <: WriteAction
     value::T
@@ -99,13 +99,13 @@ value into its reference).
 struct NoWrite <: WriteAction end
 
 """
-    writeback_value(view, stored, request::StoreInto) -> WriteAction or a tuple of them
+    write_value(view, stored, request::StoreInto) -> WriteAction or a tuple of them
 
 What writing `request`'s value through `view` to a field that holds `stored` does: `DirectWrite` at the request's
 location by default, so the value is merged there. A storage wrapper adds a method: a `RedirectedVar` answers
 `StoreInto` (the field it points to), an `InteractiveVar` puts the value into its reference and answers `NoWrite`.
 """
-@inline writeback_value(view::V, stored::S, request::StoreInto{L}) where {V<:SubContextView, S, L} =
+@inline write_value(view::V, stored::S, request::StoreInto{L}) where {V<:SubContextView, S, L} =
     DirectWrite{L}(getfield(request, :value))
 
 ##########################################
