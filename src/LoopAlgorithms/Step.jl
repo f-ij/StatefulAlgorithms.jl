@@ -356,7 +356,7 @@ in `new` when the steps `ran`, else keeps the placeholder, so its first value ov
 function _join_fields(@nospecialize(old), @nospecialize(new), ran::Bool, locals::Bool)
     types = map(fieldnames(old), fieldtypes(old)) do name, T
         N = fieldtype(new, name)
-        locals && _is_untyped_local(T) && return ran ? N : T
+        locals && _is_placeholder_local(T) && return ran ? N : T
         T <: NamedTuple && N <: NamedTuple ? _join_fields(T, N, ran, false) : Union{T, N}
     end
     return NamedTuple{fieldnames(old), Tuple{types...}}

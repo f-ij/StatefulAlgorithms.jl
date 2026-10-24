@@ -5,7 +5,7 @@ what a write to a stored value does (`write_value`), and what the context after 
 (`_follow_reads`, `_follow_writes`).
 
 Each function here has the default every stored value gets. A storage wrapper extends the hooks in a
-`HookExtensions.jl` next to it: LoopAlgorithms/Redirect (`RedirectedVar`), LoopAlgorithms/Locals (`Maybe`),
+`HookExtensions.jl` next to it: LoopAlgorithms/Redirect (`RedirectedVar`), LoopAlgorithms/Locals (the placeholder `UndefLocal`),
 InputInterface (`InteractiveVar`), OnChange (`OnChange`).
 =#
 
@@ -52,7 +52,7 @@ end
 
 What reading the value `stored` in one field through `reader` does: `DirectRead(stored)` by default, so the reader
 sees `stored`. A storage wrapper adds a method: a `RedirectedVar` answers `ReadFrom` (the field it points to), an
-`InteractiveVar` `DirectRead(ref[])`, a declared local's `Maybe` `DirectRead` of its value. `reader` is the
+`InteractiveVar` `DirectRead(ref[])`, a declared local's placeholder (no value yet) throws. `reader` is the
 `SubContextView` an algorithm reads through, or the `ProcessContext` of `context[Var(...)]` and `context.x`; it comes
 first, as the container does in `getindex`.
 """
@@ -128,7 +128,7 @@ location by default, so the value is merged there. A storage wrapper adds a meth
     shown_value(stored) -> value
 
 The value the context after a run (`final_context`) shows for the value `stored`: `stored` itself by default. Unlike
-`read_value` there is no reader and it never throws: a storage wrapper that may hold no value (a declared local's
-`Maybe`) shows `nothing` then, and otherwise unwraps one layer and calls `shown_value(inner)` again.
+`read_value` there is no reader and it never throws: a stored value that holds no value yet (a declared local's
+placeholder `UndefLocal`) shows `undef`.
 """
 @inline shown_value(stored::S) where {S} = stored
