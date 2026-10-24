@@ -23,7 +23,7 @@ function _subcontext_view_merge_exprs(SCV::Type, Args::Type, demanded_runtime_na
 
     write_preambles = Expr[]
     write_requests = Expr[]
-    runtime_expressions_by_subcontext = Dict{Symbol, Vector{Pair{Symbol, Symbol}}}()   # partition => [stored name => returned name]
+    runtime_expressions_by_subcontext = Dict{Symbol, Vector{Expr}}()
 
     for (var_idx, algo_varname) in enumerate(algo_varnames)
         target_location, subcontext_varname = _compute_location(SCV, algo_varname)
@@ -32,17 +32,20 @@ function _subcontext_view_merge_exprs(SCV::Type, Args::Type, demanded_runtime_na
             target_subcontext = get_subcontextname(target_location)
             targetname = location_fieldname(target_location)
             _writable_runtime(context_partition(Val(target_subcontext)), target_subcontext, SubKey) || error("An algorithm writes back `$(algo_varname)`, which it reads from `$(target_subcontext)`: that is read-only.")
-            fields = get!(runtime_expressions_by_subcontext, target_subcontext, Pair{Symbol, Symbol}[])
+            exprs = get!(runtime_expressions_by_subcontext, target_subcontext, Expr[])
             # Converted to the slot's type by `merge_runtime_return(…, Val(target_subcontext), …)`.
-            push!(fields, targetname => algo_varname)
+            push!(exprs, Expr(:(=), targetname, :(getproperty(args, $(QuoteNode(algo_varname))))))
         elseif !isnothing(target_location) # If the local variable exists
             preambles, requests = _build_write_request_exprs(target_location, algo_varname)
             append!(write_preambles, preambles)
             append!(write_requests, requests)
 
         elseif demand_all || algo_varname in demanded_runtime_names # A demanded name the view does not see: one of this namespace's own outputs.
-            fields = get!(runtime_expressions_by_subcontext, SubKey, Pair{Symbol, Symbol}[])
-            push!(fields, subcontext_varname => algo_varname)
+            exprs = get!(runtime_expressions_by_subcontext, SubKey, Expr[])
+            push!(
+                exprs,
+                Expr(:(=), subcontext_varname, :(getproperty(args, $(QuoteNode(algo_varname))))),
+            )
         end
     end
 
@@ -52,12 +55,9 @@ function _subcontext_view_merge_exprs(SCV::Type, Args::Type, demanded_runtime_na
         $(write_preambles...)
         @inline _build_write_payload(@inline _follow_writes(scv, ($(write_requests...),)))
     end
-    # Each partition's values as a named tuple typed by `Args`' fields (inferred types, see `_type_as_inferred`), not by the
-    # values returned this time.
     runtime_subcontext_exprs = [
-        Expr(:(=), subctx, :(NamedTuple{$(Tuple(first.(fields))), Tuple{$(map(f -> fieldtype(Args, last(f)), fields)...)}}(
-            ($((:(getproperty(args, $(QuoteNode(last(f))))) for f in fields)...),))))
-        for (subctx, fields) in runtime_expressions_by_subcontext
+        Expr(:(=), subctx, Expr(:tuple, Expr(:parameters, field_exprs...)))
+        for (subctx, field_exprs) in runtime_expressions_by_subcontext
     ]
     return (
         merge_expr,

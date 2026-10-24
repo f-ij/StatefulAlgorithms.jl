@@ -95,11 +95,11 @@ end
     @test fieldtype(typeof(StatefulAlgorithms.get_declared_locals(final)), :reading) === Union{Nothing, Float64}
 
 
-    # `reading = nothing`: `nothing` until the first write, then the written type (`Float64`), as Julia
-    # infers a variable that starts as `nothing` and is overwritten before it is read.
+    # `reading = nothing`: the field is `Union{Nothing,Float64}`, the type Julia gives a variable that starts as `nothing`
+    # and is assigned `Float64`s in the loop.
     final = run(InlineProcess(CompositeAlgorithm(UnionSensor, UnionReader, (10, 1), Declaration(reading = nothing), Route(:_declared_locals => UnionSensor, :reading => :reading), Route(:_declared_locals => UnionReader, :reading => :reading)); repeats = 25))
     @test final[UnionReader].acc == 10 * 1.0 + 6 * 2.0
-    @test fieldtype(typeof(StatefulAlgorithms.get_declared_locals(final)), :reading) === Float64
+    @test fieldtype(typeof(StatefulAlgorithms.get_declared_locals(final)), :reading) === Union{Nothing, Float64}
 
     # Writing `nothing` again after a value needs a local declared to hold it (`Union{Nothing,Float64}`).
     final = run(InlineProcess(CompositeAlgorithm(Blinker, UnionReader, (1, 1), Declaration(declared), Route(:_declared_locals => Blinker, :reading => :reading), Route(:_declared_locals => UnionReader, :reading => :reading)); repeats = 6))
@@ -110,7 +110,7 @@ end
     @test final[UnionReader].acc == 0.0 + 2.0 + 4.0
 end
 
-@testset "undef locals take the type of their first value" begin
+@testset "undef locals hold what is written to them" begin
     # Hand-written (deprecated interface): a `@StepAlgorithm` reads every argument each step, so it cannot write
     # an undef local without reading it, nor read one only under a condition.
     struct SlotSensor <: ProcessAlgorithm end
@@ -119,7 +119,7 @@ end
     # Written in the first step.
     final = run(InlineProcess(CompositeAlgorithm(SlotSensor, SlotReader, (1, 1), Local(:reading), Route(:_declared_locals => SlotSensor, :reading => :reading), Route(:_declared_locals => SlotReader, :reading => :reading)); repeats = 10))
     @test final[SlotReader].acc == 55.0
-    @test fieldtype(typeof(StatefulAlgorithms.get_declared_locals(final)), :reading) === Float64   # the first value replaced `undef`
+    @test fieldtype(typeof(StatefulAlgorithms.get_declared_locals(final)), :reading) === Union{UndefInitializer, Float64}   # `undef` until the first write, as Julia flags an unassigned variable
     # First written at step 10 (scheduled later): the loop continues with the new type.
     final = run(InlineProcess(CompositeAlgorithm(SlotSensor, SlotReader, (10, 10), Local(:reading), Route(:_declared_locals => SlotSensor, :reading => :reading), Route(:_declared_locals => SlotReader, :reading => :reading)); repeats = 30))
     @test final[SlotReader].acc == 1.0 + 2.0 + 3.0
@@ -142,7 +142,7 @@ end
     plan = CompositeAlgorithm(LateSensor, GuardedReader, (1, 1), Local(:reading), Route(:_declared_locals => LateSensor, :reading => :reading), Route(:_declared_locals => GuardedReader, :reading => :reading))
     final = run(InlineProcess(plan; repeats = 8))
     @test final[GuardedReader].acc == 5.0 + 6.0 + 7.0 + 8.0
-    @test fieldtype(typeof(StatefulAlgorithms.get_declared_locals(final)), :reading) === Float64
+    @test fieldtype(typeof(StatefulAlgorithms.get_declared_locals(final)), :reading) === Union{UndefInitializer, Float64}
 
     # Once written, the loop allocates nothing per step.
     small = InlineProcess(plan; repeats = 1_000); large = InlineProcess(plan; repeats = 101_000)
@@ -154,24 +154,25 @@ end
     final = run(InlineProcess(CompositeAlgorithm(LateSensor, GuardedReader, (1, 1), Local(:reading), Route(:_declared_locals => LateSensor, :reading => :reading), Route(:_declared_locals => GuardedReader, :reading => :reading)); repeats = 4))
     @test final[GuardedReader].acc == 0.0
 
-    # The first value gives the type: here an `Int`, so the `Float64` the second writer emits is converted to it,
-    # which fails for 2.5 (declare `Local(:reading => Float64)` to take both).
+    # Two writers, an `Int` and a `Float64`: the local holds either, as a Julia variable assigned both would.
+    # Declared `Float64`, both are converted to it.
     struct IntWriter <: ProcessAlgorithm end
     struct FractionWriter <: ProcessAlgorithm end
     StatefulAlgorithms.init(::IntWriter, context) = (;)
     StatefulAlgorithms.step!(::IntWriter, context) = (; reading = 1)
     StatefulAlgorithms.init(::FractionWriter, context) = (;)
     StatefulAlgorithms.step!(::FractionWriter, context) = (; reading = 2.5)
-    @test_throws InexactError run(InlineProcess(CompositeAlgorithm(IntWriter, FractionWriter, (1, 2), Local(:reading), Route(:_declared_locals => IntWriter, :reading => :reading), Route(:_declared_locals => FractionWriter, :reading => :reading)); repeats = 3))
+    final = run(InlineProcess(CompositeAlgorithm(IntWriter, FractionWriter, (1, 2), Local(:reading), Route(:_declared_locals => IntWriter, :reading => :reading), Route(:_declared_locals => FractionWriter, :reading => :reading)); repeats = 3))
+    @test fieldtype(typeof(StatefulAlgorithms.get_declared_locals(final)), :reading) === Union{UndefInitializer, Int64, Float64}
     final = run(InlineProcess(CompositeAlgorithm(IntWriter, FractionWriter, (1, 2), Local(:reading => Float64), Route(:_declared_locals => IntWriter, :reading => :reading), Route(:_declared_locals => FractionWriter, :reading => :reading)); repeats = 3))
     @test StatefulAlgorithms.get_declared_locals(final).reading === 1.0   # stored as the declared type
 end
 
-@testset "Typed locals without a value: a placeholder until the first write, which converts to the type" begin
+@testset "Typed locals without a value: a placeholder until the first write; writes convert to the type" begin
     route(A) = Route(:_declared_locals => A, :reading => :reading)
-    # The first value (an `Int`) is converted to the declared `Float64`.
+    # An `Int` written is converted to the declared `Float64`.
     final = run(InlineProcess(CompositeAlgorithm(IntWriter, SlotReader, (1, 1), Local(:reading => Float64), route(IntWriter), route(SlotReader)); repeats = 3))
-    @test fieldtype(typeof(StatefulAlgorithms.get_declared_locals(final)), :reading) === Float64
+    @test fieldtype(typeof(StatefulAlgorithms.get_declared_locals(final)), :reading) === Union{StatefulAlgorithms.UndefLocal{Float64}, Float64}
     @test final[SlotReader].acc === 3.0
     # Reading before the first write throws, as for `local x`.
     @test_throws UndefRefError run(InlineProcess(CompositeAlgorithm(SlotSensor, SlotReader, (10, 1), Local(:reading => Float64), route(SlotSensor), route(SlotReader)); repeats = 3))
@@ -185,7 +186,7 @@ end
     StatefulAlgorithms.step!(::NothingOnOdd, context) = (; n = context.n + 1, reading = isodd(context.n) ? nothing : Float64(context.n))
     final = run(InlineProcess(CompositeAlgorithm(NothingOnOdd, UnionReader, (1, 1), Local(:reading => Union{Nothing, Float64}), route(NothingOnOdd), route(UnionReader)); repeats = 6))
     @test final[UnionReader].acc == 0.0 + 2.0 + 4.0
-    @test fieldtype(typeof(StatefulAlgorithms.get_declared_locals(final)), :reading) === Union{Nothing, Float64}
+    @test fieldtype(typeof(StatefulAlgorithms.get_declared_locals(final)), :reading) === Union{StatefulAlgorithms.UndefLocal{Union{Nothing, Float64}}, Nothing, Float64}
 end
 
 @testset "Locals are scoped to the plan that declares them" begin
@@ -209,7 +210,7 @@ end
 end
 
 @testset "An untyped local gets the type its writer is inferred to return" begin
-    # A call that returns `nothing` or a value: the local is a `Union{Nothing,Float64}` from its first write, without a
+    # A call that returns `nothing` or a value: the local holds both (`Union{UndefInitializer,Nothing,Float64}`), without a
     # declared type.
     final = run(InlineProcess(resolve(@CompositeAlgorithm begin
         @state s = 0.0
@@ -224,13 +225,15 @@ end
     @test final[:_state_1].acc == 0.0 + 2.0 + 4.0
 end
 
-@testset "A local keeps its type after its first value" begin
+@testset "A local holds every type assigned to it" begin
     # Reads its own local: starts as `nothing`, then is written back with the same type. Fine.
     final = run(InlineProcess(CompositeAlgorithm(KeepLowest, (1,), Declaration(best = nothing), Route(:_declared_locals => KeepLowest, :best => :best)); repeats = 5))
     @test StatefulAlgorithms.get_declared_locals(final).best isa Float64
 
-    # Starts as a Float64, then written as a String: the String cannot be converted to the local's type.
-    @test_throws MethodError run(InlineProcess(CompositeAlgorithm(ChangesType, (1,), Declaration(x = nothing), Route(:_declared_locals => ChangesType, :x => :x)); repeats = 3))
+    # `nothing`, then a Float64, then a String: the local holds all three, as a Julia variable assigned them would.
+    final = run(InlineProcess(CompositeAlgorithm(ChangesType, (1,), Declaration(x = nothing), Route(:_declared_locals => ChangesType, :x => :x)); repeats = 3))
+    @test StatefulAlgorithms.get_declared_locals(final).x == "changed"
+    @test fieldtype(typeof(StatefulAlgorithms.get_declared_locals(final)), :x) === Union{Nothing, Float64, String}
 end
 
 @testset "Outputs have one type in every step" begin

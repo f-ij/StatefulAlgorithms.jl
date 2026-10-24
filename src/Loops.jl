@@ -128,6 +128,7 @@ Run a single function in a loop indefinitely.
     step_cursor = @inline _loop_cursor(process, step_plan, resume)
     persistent_context = @inline _loop_persistent_context(start_persistent_context, resume)
     runtime_context = @inline _loop_runtime_context(func, inputs, process, lifetime, start_persistent_context, resume)
+    runtime_context = @inline settle_locals(runtime_context, step_plan, step_cursor, persistent_context, step_wiring, process, lifetime)
 
     isresuming && @atomic process.paused = false
 
@@ -164,6 +165,7 @@ Base.@constprop :aggressive @inline function loop(process::P, algo::F, start_per
     step_cursor = @inline _loop_cursor(process, step_plan, resume)
     persistent_context = @inline _loop_persistent_context(start_persistent_context, resume)
     runtime_context = @inline _loop_runtime_context(algo, inputs, process, lifetime, start_persistent_context, resume)
+    runtime_context = @inline settle_locals(runtime_context, step_plan, step_cursor, persistent_context, step_wiring, process, lifetime)
 
     isresuming && @atomic process.paused = false
 
@@ -188,7 +190,7 @@ end
 
 Run steps `i` to `repeats(lifetime)` (until the process's stop check holds) and return the carried fields and the
 runtime context after the last one. The steps run in a loop compiled for the runtime context's type; when a step
-returns another type (a local declared without a type gets its first value, Locals.jl), the remaining steps continue in
+returns another type (a declared local written a type its settled type does not hold, Locals.jl), the remaining steps continue in
 a call compiled for that type, so the loop stays type-stable. Inlined into `loop` (as separate code, Routine plans ran
 up to 1.9x slower); the call for a new type stays a call.
 """
