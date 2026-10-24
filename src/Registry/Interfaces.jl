@@ -6,7 +6,7 @@ When a plan is prepared (`resolve`), every algorithm and state in it is added to
 functions below, and only by them.
 
 All rules are defined on TYPES: the layout of a plan's registry is worked out from the plan's type when that plan type
-is first compiled (`make_registry_recipe`), and the code that builds it is compiled once. These are internal rules of
+is first compiled (the generated `build_registry_and_key_plan`), and the code that builds it is compiled once. These are internal rules of
 the package: the package's own types change them by adding methods to the functions marked "Extended by". A method
 added or changed after a plan type was compiled (with Revise) is not seen by that plan type's compiled code.
 =#

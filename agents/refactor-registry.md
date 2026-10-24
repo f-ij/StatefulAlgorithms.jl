@@ -24,11 +24,10 @@ Measured on this branch at a4c581f, machine otherwise quiet. Raw files next to t
   `read_field`, `build_tuple`, ... that read it the same way as a value.
 - LoopAlgorithms/Resolving/Registering.jl: the walk over a plan: `register_tree!`, `register_states!`, `register_children!`,
   `register_child!`; `build_registry_from_values` (run time) and `generate_registry_setup` (from types).
-- GeneratedCode/RegistrySetup.jl: `build_registry_and_key_plan` without a generated function (fix/nongen-registry):
-  `make_registry_recipe(LA)` (`:foldable`, run while inferring) turns the code the type walk writes into a recipe
-  type, and `build_from_recipe` builds the result from it with inlined methods, one per depth.
+- GeneratedCode/RegistrySetup.jl: the generated `build_registry_and_key_plan`: its generator returns the code the type
+  walk writes (`generate_registry_setup`).
 - Registry/Registries.jl, TypeEntries/: reading a registry and its entries (finding, keys, multipliers, listing).
-- Tests: test/RegistryBuildTest.jl (typed path taken, both paths agree, plans past the recipe's limits).
+- Tests: test/RegistryBuildTest.jl (typed path taken, both paths agree, wide and deep plans).
 
 ## Done (from the plan)
 1-5 of the plan are done (wip/registry-simplify, fast-forwarded into this branch). Not done: Packages name their

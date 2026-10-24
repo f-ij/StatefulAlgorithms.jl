@@ -4,7 +4,7 @@ using StatefulAlgorithms
 const RB = StatefulAlgorithms
 
 # Building a plan's registry (step 1 of `resolve`): `build_registry_and_key_plan` works the layout out from the
-# plan's type while compiling (the typed path, built from a recipe), or from the values at run time
+# plan's type while compiling (the typed path, a generated function), or from the values at run time
 # (`build_registry_from_values`).
 
 @StepAlgorithm function RBCount(@managed(n = 0))
@@ -165,12 +165,12 @@ end
     @test RB.all_keys(RB.registry(builder)) == (:RBCount_1, :RBScale_1)
 end
 
-@testset "Registry build: plans past the recipe's limits" begin
-    # More children than a recipe call takes: set up at run time, the same registry.
+@testset "Registry build: wide and deep plans" begin
+    # Many children: still the typed path, the same registry.
     wide = rb_loopalgorithm(CompositeAlgorithm(ntuple(_ -> RBCount, 70)..., ntuple(_ -> 1, 70)))
-    @test rb_uses_runtime_path(wide)
+    @test !rb_uses_runtime_path(wide)
     @test rb_same_setup(RB.build_registry_and_key_plan(wide), RB.build_registry_from_values(wide))
-    # Nested deeper than the recipe's methods per depth: still the typed path, inferred, the same registry.
+    # Nested 30 levels deep: still the typed path, inferred, the same registry.
     deep = foldl((inner, k) -> Routine(inner, isodd(k) ? RBCount : RBScale, (1, 2)), 1:30; init = Routine(RBSrc, RBScale, (1, 1)))
     deep_la = rb_loopalgorithm(deep)
     @test !rb_uses_runtime_path(deep_la)
