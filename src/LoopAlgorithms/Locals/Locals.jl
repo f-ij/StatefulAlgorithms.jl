@@ -8,8 +8,8 @@ in the runtime context's `_declared_locals` subcontext, one slot per declaration
 
 1. Declaring     `Local`, how declarations are collected and named
 2. Storage       the placeholders of locals without a value (`undef`, `UndefLocal{T}`)
-3. Reading and writing during a run: the first write replaces a placeholder, and a local declared with a type converts
-                 to it there
+3. Reading and writing during a run: the first write replaces a placeholder with the type the writing step is
+                 inferred to return, and a local declared with a type converts to it there
 
 How the placeholders read and show (their hook methods) is in HookExtensions.jl.
 =#
@@ -23,7 +23,7 @@ How the placeholders read and show (their hook methods) is in HookExtensions.jl.
 
 Declare loop-local variables on a plan without a value, like `local x` (and `local y::Float64`) before a Julia `for`
 loop; what a DSL block's `local x` becomes. Pass it to `CompositeAlgorithm(...)` or `Routine(...)` like a route. A
-name alone gets the type of its first value (section 3); `name => T` has type `T`.
+name alone gets the type its first writer is inferred to return (section 3); `name => T` has type `T`.
 Reading a local before anything is written to it is an error. A local with a starting value is a
 [`Declaration`](@ref).
 
@@ -54,7 +54,7 @@ Local(; values...) = error("`Local(", join(("$k = …" for k in keys(values)), "
 
 Declare loop-local variables on a plan with a starting value: a [`Local`](@ref) whose slots hold `value` when the run
 starts, and the type of `value` (returned values are converted to it; `nothing` holds until the first write, and the
-local then has the type of what is written). For plans built with constructors; a DSL block declares locals without a value
+local then has the type the writing step is inferred to return). For plans built with constructors; a DSL block declares locals without a value
 (`local x`) and keeps a starting value in `@state`.
 """
 Declaration(; values...) = Declaration(NamedTuple(values))
@@ -117,10 +117,10 @@ struct UndefLocal{T} end
 #=
 A local without a value holds a placeholder until its first write, which replaces it, so the runtime context changes
 type, once:
-- declared without a type (`local x`, placeholder `undef`; or a `nothing` starting value): the field gets the type of
-  the value written, as Julia infers a variable that starts as `nothing` and is overwritten before it is read. Writing
-  `nothing` again after a value is a conversion error, as any other change of type; a local that holds `nothing` or a
-  value is declared so (`local x::Union{Nothing,T}`);
+- declared without a type (`local x`, placeholder `undef`; or a `nothing` starting value): the field gets the type the
+  writing step is inferred to return for it (`_type_as_inferred`, ProcessAlgorithmStep.jl), not the type of the one
+  value written: a step that returns `nothing` or a `Float64` gives `Union{Nothing,Float64}`, as Julia types a
+  variable;
 - declared with type `T` (`local x::T`, placeholder `UndefLocal{T}`): the field gets type `T` and the value is converted
   to it; a `Union{Nothing,T}` field holds `nothing` or a value. The conversion is compiled away when the value already
   has the type.
@@ -133,8 +133,9 @@ Step.jl). Later writes are converted to that type, as for a local declared with 
 _is_placeholder_local(::Type{T}) where {T} = T === UndefInitializer || T === Nothing || T <: UndefLocal
 
 """
-The field type a local of field type `T` has after a write of a value of type `V`: a placeholder takes the written
-type (`undef`, `nothing`) or its declared one (`UndefLocal{T}`); any other local keeps `T`.
+The field type a local of field type `T` has after a write typed `V` (the inferred type of what the step returns for
+it, see `_type_as_inferred`): a placeholder takes `V` (`undef`, `nothing`) or its declared type (`UndefLocal{T}`); any
+other local keeps `T`.
 """
 _type_after_write(::Type{T}, ::Type{V}) where {T, V} = T
 _type_after_write(::Type{UndefInitializer}, ::Type{V}) where {V} = V

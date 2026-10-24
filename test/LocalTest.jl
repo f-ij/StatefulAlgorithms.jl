@@ -48,6 +48,11 @@ end
     @update x = x === nothing ? 1.0 : "changed"
 end
 
+nothing_on_odd_local_test(n, s) = isodd(n) ? nothing : s
+add_unless_nothing_local_test(acc, x) = x === nothing ? acc : acc + x
+n_plus_one_local_test(n) = n + 1
+s_plus_one_local_test(s) = s + 1.0
+
 @StepAlgorithm function OutputCollector(v, @managed(seen = Any[]))
     push!(seen, v)
     return
@@ -99,8 +104,10 @@ end
     # Writing `nothing` again after a value needs a local declared to hold it (`Union{Nothing,Float64}`).
     final = run(InlineProcess(CompositeAlgorithm(Blinker, UnionReader, (1, 1), Declaration(declared), Route(:_declared_locals => Blinker, :reading => :reading), Route(:_declared_locals => UnionReader, :reading => :reading)); repeats = 6))
     @test final[UnionReader].acc == 0.0 + 2.0 + 4.0
-    # With `reading = nothing` the first value gives the type, so writing `nothing` again cannot be converted to it.
-    @test_throws MethodError run(InlineProcess(CompositeAlgorithm(Blinker, UnionReader, (1, 1), Declaration(reading = nothing), Route(:_declared_locals => Blinker, :reading => :reading), Route(:_declared_locals => UnionReader, :reading => :reading)); repeats = 6))
+    # The same with `reading = nothing`: the local gets the type `Blinker` is inferred to return for it,
+    # `Union{Nothing,Float64}`, so `nothing` can be written again, as in a Julia loop.
+    final = run(InlineProcess(CompositeAlgorithm(Blinker, UnionReader, (1, 1), Declaration(reading = nothing), Route(:_declared_locals => Blinker, :reading => :reading), Route(:_declared_locals => UnionReader, :reading => :reading)); repeats = 6))
+    @test final[UnionReader].acc == 0.0 + 2.0 + 4.0
 end
 
 @testset "undef locals take the type of their first value" begin
@@ -199,6 +206,22 @@ end
     final = run(InlineProcess(shadowing; repeats = 2))
     @test final[ScopeOutside].seen == 100
     @test final[ScopePeek].seen == 6
+end
+
+@testset "An untyped local gets the type its writer is inferred to return" begin
+    # A call that returns `nothing` or a value: the local is a `Union{Nothing,Float64}` from its first write, without a
+    # declared type.
+    final = run(InlineProcess(resolve(@CompositeAlgorithm begin
+        @state s = 0.0
+        @state n = 0
+        @state acc = 0.0
+        local x
+        x = nothing_on_odd_local_test(n, s)
+        acc = add_unless_nothing_local_test(acc, x)
+        n = n_plus_one_local_test(n)
+        s = s_plus_one_local_test(s)
+    end); repeats = 6))
+    @test final[:_state_1].acc == 0.0 + 2.0 + 4.0
 end
 
 @testset "A local keeps its type after its first value" begin
