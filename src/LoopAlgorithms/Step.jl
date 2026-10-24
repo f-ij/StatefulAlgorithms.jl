@@ -219,9 +219,8 @@ The lines that run all repeats of routine child `i`, a plan, assigning `lc` at t
 
 They do what `_subroutine_step!` does, with the child's own lines in place of its `_step!` call. Between repeats they
 carry only the persistent fields the child writes, as the loops do (see src/Context/Carried/Carry.jl), and the runtime
-context. That has the same type before and after each repeat (the child removes its own returns when it ends), except a
-local declared without a type that gets its first value in a repeat: from then on it has the written type (Locals.jl,
-section 3).
+context, which has the same type before and after each repeat (the child removes its own returns when it ends, and the
+declared locals are typed before the loop, Locals.jl section 3).
 `routine_cursor` is the routine's cursor (it holds the resume points), `repeat_value` the expression that gives the
 child's repeat (`_schedule_entry_expr`), and `is_repeat_once` whether it is `RepeatOnce`: then the child runs without
 the loop.
@@ -308,17 +307,16 @@ Return `lc` after `_step!` of each child in order when `run` is `true`, else `lc
 `wirings` and `namespaces` are tuples, one entry per child.
 
 Both results are converted to one type (`_compute_conditional_loopcontext_type`), so the code after the branch has
-one type, except a local declared without a type that the steps give their first value: it has the written type when
-they ran and its placeholder when not. When inference cannot tell which `LoopContext` type the steps return, no type is
+one type. When inference cannot tell which `LoopContext` type the steps return, no type is
 chosen: each result is returned as it is, and the call's return type is their union. The steps run on their own
 branch (`_keep_branch`).
 """
 @inline function _conditional_step(run::Bool, children::ChildrenType, cursors::CursorsType, lc::LoopContextType, wirings::WiringViewsType, namespaces::NamespacesType, process::ProcessType, lifetime::LifetimeType) where {ChildrenType<:Tuple, CursorsType<:Tuple, LoopContextType<:LoopContext, WiringViewsType<:Tuple, NamespacesType<:Tuple, ProcessType, LifetimeType}
     Stepped = Core.Compiler.return_type(_step_children!, Tuple{LoopContextType, ChildrenType, CursorsType, WiringViewsType, NamespacesType, ProcessType, LifetimeType})
-    RanType = _compute_conditional_loopcontext_type(LoopContextType, Stepped, true)
-    RanType === Nothing && return run ? (_keep_branch(); @inline _step_children!(lc, children, cursors, wirings, namespaces, process, lifetime)) : lc
-    run && (_keep_branch(); return @inline _as_conditional((@inline _step_children!(lc, children, cursors, wirings, namespaces, process, lifetime)), RanType))
-    return @inline _as_conditional(lc, _compute_conditional_loopcontext_type(LoopContextType, Stepped, false))
+    Joined = _compute_conditional_loopcontext_type(LoopContextType, Stepped)
+    Joined === Nothing && return run ? (_keep_branch(); @inline _step_children!(lc, children, cursors, wirings, namespaces, process, lifetime)) : lc
+    run && (_keep_branch(); return @inline _as_conditional((@inline _step_children!(lc, children, cursors, wirings, namespaces, process, lifetime)), Joined))
+    return @inline _as_conditional(lc, Joined)
 end
 
 """Return `lc` after `_step!` of each child in turn; the arguments are tuples as in `_conditional_step`."""
@@ -328,19 +326,19 @@ end
 end
 
 """
-Return the `LoopContext` type that `_conditional_step` converts its result to when the steps ran (`ran`) or not, or
+Return the `LoopContext` type that `_conditional_step` converts its result to, whether the steps ran or not, or
 `Nothing` when `Stepped` is not one concrete `LoopContext` type.
 
 `Before` is the type before the branch, `Stepped` the type after the steps. The result has the persistent context of
-`Stepped` and the runtime fields of `Before`, each with the union of its type in `Before` and in `Stepped`, except a
-local declared without a type (`_join_fields`). Fields the steps added are left out.
+`Stepped` and the runtime fields of `Before`, each with the union of its type in `Before` and in `Stepped`
+(`_join_fields`). Fields the steps added are left out.
 """
-Base.@assume_effects :foldable function _compute_conditional_loopcontext_type(@nospecialize(Before), @nospecialize(Stepped), ran::Bool)
+Base.@assume_effects :foldable function _compute_conditional_loopcontext_type(@nospecialize(Before), @nospecialize(Stepped))
     (Stepped isa DataType && Stepped <: LoopContext && isconcretetype(Stepped)) || return Nothing
     before = fieldtype(runtime_type(Before), :subcontexts)
     after = fieldtype(runtime_type(Stepped), :subcontexts)
     parts = map(fieldnames(before), fieldtypes(before)) do name, S
-        SubContext{name, _join_fields(getdatatype(S), getdatatype(fieldtype(after, name)), ran, name === :_declared_locals)}
+        SubContext{name, _join_fields(getdatatype(S), getdatatype(fieldtype(after, name)))}
     end
     runtime = ProcessContext{NamedTuple{fieldnames(before), Tuple{parts...}}, fieldtype(runtime_type(Stepped), :reg)}
     return LoopContext{persistent_type(Stepped), runtime, Stepped.parameters[3]}
@@ -349,15 +347,11 @@ end
 """
 Return a named tuple type with the field names of `old`, each field typed as the union of its type in `old` and in
 `new`. A field that is a named tuple in both is joined field by field instead. Fields only `new` has are left out.
-Among `locals` (the declared locals), one declared without a type (its placeholder `undef` or `nothing`) gets its type
-in `new` when the steps `ran`, else keeps the placeholder, so its first value overwrites it instead of making a union
-(Locals.jl, section 3); `locals` applies to the top level only, the declared locals themselves.
 """
-function _join_fields(@nospecialize(old), @nospecialize(new), ran::Bool, locals::Bool)
+function _join_fields(@nospecialize(old), @nospecialize(new))
     types = map(fieldnames(old), fieldtypes(old)) do name, T
         N = fieldtype(new, name)
-        locals && _is_placeholder_local(T) && return ran ? N : T
-        T <: NamedTuple && N <: NamedTuple ? _join_fields(T, N, ran, false) : Union{T, N}
+        T <: NamedTuple && N <: NamedTuple ? _join_fields(T, N) : Union{T, N}
     end
     return NamedTuple{fieldnames(old), Tuple{types...}}
 end
@@ -405,8 +399,8 @@ threaded composite); see the file header, 4. The body returns the union of the p
 each child asked at its own cursor, wiring view and namespace.
 
 The runtime context type is passed from child to child as `_step!` passes the runtime context. A child that repeats is
-asked once, with the type before its first repeat: a step removes what it adds, so the type is the same in every repeat,
-except a local declared without a type that gets its first value in a repeat (Locals.jl, section 3). Nested plans are written inline, for the
+asked once, with the type before its first repeat: a step removes what it adds and the declared locals are typed before
+the loop (Locals.jl section 3), so the type is the same in every repeat. Nested plans are written inline, for the
 same reason as in `_plan_step_exprs`: a nested `_find_writable_fields` call would be the same method with a growing runtime
 context type, which inference stops following.
 """
