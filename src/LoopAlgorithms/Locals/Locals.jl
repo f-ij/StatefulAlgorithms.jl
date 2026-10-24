@@ -7,11 +7,11 @@ Julia loop. A declaration lives on the plan that makes it (in its `PlanWiring`);
 in the runtime context's `_declared_locals` subcontext, one slot per declaration.
 
 1. Declaring     `Local`, how declarations are collected and named
-2. Storage       `Maybe`, for locals that may not hold a value yet, and the field types declared values are stored with
-3. Reading and writing during a run; a local declared without a type takes the type of its first value
+2. Storage       the placeholders of locals without a value (`undef`, `UndefLocal{T}`)
+3. Reading and writing during a run: the first write replaces a placeholder, and a local declared with a type converts
+                 to it there
 
-How a `Maybe` and a local that was never written (`undef`) read, and how a `Maybe` shows (their hook methods), is in
-HookExtensions.jl.
+How the placeholders read and show (their hook methods) is in HookExtensions.jl.
 =#
 
 ############################################################################################
@@ -45,7 +45,7 @@ end
 
 Local(names::Union{Symbol, Pair{Symbol, <:Type}}...) = _build_local(NamedTuple(_declare_unset(name) for name in names))
 _declare_unset(name::Symbol) = name => undef
-_declare_unset((name, T)::Pair{Symbol, <:Type}) = name => make_maybe_type(T, UndefInitializer)()
+_declare_unset((name, T)::Pair{Symbol, <:Type}) = name => UndefLocal{T}()
 Local(; values...) = error("`Local(", join(("$k = …" for k in keys(values)), ", "), ")`: a local is declared without a value, `Local(",
                            join((repr(k) for k in keys(values)), ", "), ")`. A starting value is a `Declaration(", join(("$k = …" for k in keys(values)), ", "), ")`.")
 
@@ -53,15 +53,15 @@ Local(; values...) = error("`Local(", join(("$k = …" for k in keys(values)), "
     Declaration(x = value, ...)
 
 Declare loop-local variables on a plan with a starting value: a [`Local`](@ref) whose slots hold `value` when the run
-starts, and the type of `value` (returned values are converted to it; `nothing` is a value until the first write, and
-then the type of what is written). For plans built with constructors; a DSL block declares locals without a value
+starts, and the type of `value` (returned values are converted to it; `nothing` holds until the first write, and the
+local then has the type of what is written). For plans built with constructors; a DSL block declares locals without a value
 (`local x`) and keeps a starting value in `@state`.
 """
 Declaration(; values...) = Declaration(NamedTuple(values))
 Declaration(values::NamedTuple) = _build_local(values)
 
-"""Build a `Local` from declared values, stored with the field types the run will carry (section 2)."""
-_build_local(values::NT) where {NT<:NamedTuple} = Local{_to_storage_types(NT)}(_convert_to_storage(values))
+"""Build a `Local` from declared values, each stored with the type it has (a `Union{Nothing,T}` field as a `Union`)."""
+_build_local(values::NT) where {NT<:NamedTuple} = Local{NT}(values)
 
 """Return the declared initial values carried by a `Local`."""
 @inline getvalues(l::Local) = getfield(l, :values)
@@ -78,10 +78,13 @@ memory for all of them is allocated in `_declared_locals` when a run starts.
 """
 @generated function collect_tree_locals(plan::P) where {P<:AbstractPlan}
     names = Symbol[]
+    types = Any[]
     values = Any[]
     function collect!(@nospecialize(T::Type), @nospecialize(expr), @nospecialize(path))   # compiled once, not per plan node type or depth
-        for name in fieldnames(fieldtype(fieldtype(T, :wiring), :locals))
+        Declared = fieldtype(fieldtype(T, :wiring), :locals)
+        for name in fieldnames(Declared)
             push!(names, make_storage_name(name, join(path, ".")))
+            push!(types, fieldtype(Declared, name))   # the declared type: a `Union{Nothing,T}` stays one
             push!(values, :(getfield(getfield(getfield($expr, :wiring), :locals), $(QuoteNode(name)))))
         end
         F = fieldtype(T, :funcs)
@@ -90,7 +93,7 @@ memory for all of them is allocated in `_declared_locals` when a run starts.
         end
     end
     collect!(P, :plan, ())
-    return :(NamedTuple{$(Tuple(names))}(($(values...),)))
+    return :(NamedTuple{$(Tuple(names)), Tuple{$(types...)}}(($(values...),)))
 end
 @inline collect_tree_locals(la::LoopAlgorithm) = collect_tree_locals(getplan(la))
 @inline collect_tree_locals(fa::FinalizedAlgorithm) = collect_tree_locals(inneralgorithm(fa))
@@ -101,58 +104,56 @@ end
 ############################################################################################
 
 """
-Flag-plus-value storage for a local that may not hold a value yet; `value` is undefined while
-unset. `Empty` is what an unset local reads as: `Nothing` (reads give `nothing`) or
-`UndefInitializer` (reads throw `UndefRefError`).
+Placeholder of a local declared with type `T` and without a value (`local x::T`, `Local(:x => T)`): reading it throws
+`UndefRefError`, and the first write replaces it with the value converted to `T` (section 3). A local declared without a
+type has the placeholder `undef` instead.
 """
-struct Maybe{T, F<:Unsigned, Empty}
-    isset::F      # as wide as T's alignment: a 1-byte Bool would leave padding that gets copied every step
-    value::T
-    Maybe{T, F, Empty}() where {T, F, Empty} = new{T, F, Empty}(zero(F))
-    Maybe{T, F, Empty}(x) where {T, F, Empty} = new{T, F, Empty}(one(F), x)
-end
-make_maybe_type(::Type{T}, ::Type{Empty}) where {T, Empty} = Maybe{T, _choose_flag_type(T), Empty}
-_choose_flag_type(::Type{T}) where {T} = isconcretetype(T) ? (a = Base.datatype_alignment(T); a >= 8 ? UInt64 : a == 4 ? UInt32 : a == 2 ? UInt16 : UInt8) : UInt8
-Base.convert(::Type{Maybe{T, F, Empty}}, ::Empty) where {T, F, Empty} = Maybe{T, F, Empty}()
-Base.convert(::Type{Maybe{T, F, Empty}}, x) where {T, F, Empty} = Maybe{T, F, Empty}(convert(T, x))
-Base.convert(::Type{Maybe{T, F, Empty}}, m::Maybe{T, F, Empty}) where {T, F, Empty} = m   # resolves the method above against Base's `convert(::Type{T}, ::T)`
-
-# Declared values are stored with the field types the run will carry: a `Union{Nothing,T}`
-# becomes a `Maybe` (a Julia `Union` field in the carried context costs copies every step).
-_to_storage_type(::Type{T}) where {T} = (T isa Union && Nothing <: T && T !== Nothing) ? make_maybe_type(Base.typesplit(T, Nothing), Nothing) : T
-@generated _to_storage_types(::Type{NT}) where {NT<:NamedTuple} =
-    :(NamedTuple{$(fieldnames(NT)), Tuple{$(map(_to_storage_type, fieldtypes(NT))...)}})
-@inline _convert_to_storage(values::NT) where {NT<:NamedTuple} =
-    _to_storage_types(NT)(map((T, v) -> convert(T, v), fieldtypes(_to_storage_types(NT)), Tuple(values)))
+struct UndefLocal{T} end
 
 ############################################################################################
 # 3. Reading and writing during a run
 ############################################################################################
 
 #=
-A local declared without a type (`local x`, or a `nothing` starting value) holds that placeholder until its first
-write, which replaces it: the field gets the type of the value written (for a `nothing` local, a `Maybe` of it, which
-reads as `nothing` when `nothing` is written again), so the runtime context changes type, once. The loop continues
-with the new type (`_repeat_steps`, `_run_steps`, Loops.jl), and a block on a schedule gives the local the written type when it ran
-and the placeholder when it did not (`_compute_conditional_loopcontext_type`, Step.jl). Later writes are converted to
-that type, as for a local declared with one.
+A local without a value holds a placeholder until its first write, which replaces it, so the runtime context changes
+type, once:
+- declared without a type (`local x`, placeholder `undef`; or a `nothing` starting value): the field gets the type of
+  the value written, as Julia infers a variable that starts as `nothing` and is overwritten before it is read. Writing
+  `nothing` again after a value is a conversion error, as any other change of type; a local that holds `nothing` or a
+  value is declared so (`local x::Union{Nothing,T}`);
+- declared with type `T` (`local x::T`, placeholder `UndefLocal{T}`): the field gets type `T` and the value is converted
+  to it; a `Union{Nothing,T}` field holds `nothing` or a value. The conversion is compiled away when the value already
+  has the type.
+The loop continues with the new type (`_repeat_steps`, `_run_steps`, Loops.jl), and a block on a schedule gives the
+local the written type when it ran and the placeholder when it did not (`_compute_conditional_loopcontext_type`,
+Step.jl). Later writes are converted to that type, as for a local declared with one.
 =#
 
-"""Whether a local's field type `T` is the placeholder of a local declared without a type."""
-_is_untyped_local(::Type{T}) where {T} = T === UndefInitializer || T === Nothing
+"""Whether a local's field type `T` is a placeholder, which its first write replaces."""
+_is_placeholder_local(::Type{T}) where {T} = T === UndefInitializer || T === Nothing || T <: UndefLocal
 
-"""Build the expression for what a placeholder local (field type `Empty`) holds after its first write of `value` (an expression) of type `V`."""
-_build_first_write_expr(::Type{UndefInitializer}, ::Type{V}, value) where {V} = value
-_build_first_write_expr(::Type{Nothing}, ::Type{V}, value) where {V} = V === Nothing ? value : :($(make_maybe_type(V, Nothing))($value))
+"""
+The field type a local of field type `T` has after a write of a value of type `V`: a placeholder takes the written
+type (`undef`, `nothing`) or its declared one (`UndefLocal{T}`); any other local keeps `T`.
+"""
+_type_after_write(::Type{T}, ::Type{V}) where {T, V} = T
+_type_after_write(::Type{UndefInitializer}, ::Type{V}) where {V} = V
+_type_after_write(::Type{Nothing}, ::Type{V}) where {V} = V
+_type_after_write(::Type{UndefLocal{T}}, ::Type{V}) where {T, V} = T
 
-"""Write a step's returns `args` into the locals `old`: a placeholder is replaced by the value, anything else is converted to the local's type."""
+"""
+Write a step's returns `args` into the locals `old` and return the new locals, typed by `_type_after_write`: a
+placeholder is replaced by the value, and every written value is converted to its field's type (compiled away when it
+already has it).
+"""
 @inline @generated function _write_locals(old::NT, args::A) where {NT<:NamedTuple, A<:NamedTuple}
-    values = map(fieldnames(NT)) do name
-        !(name in fieldnames(A)) && return :(getfield(old, $(QuoteNode(name))))
-        _is_untyped_local(fieldtype(NT, name)) && return _build_first_write_expr(fieldtype(NT, name), fieldtype(A, name), :(getfield(args, $(QuoteNode(name)))))
-        return :(convert($(fieldtype(NT, name)), getfield(args, $(QuoteNode(name)))))
-    end
-    return :(NamedTuple{$(fieldnames(NT))}(($(values...),)))
+    names = fieldnames(NT)
+    written(name) = name in fieldnames(A)
+    types = map(name -> written(name) ? _type_after_write(fieldtype(NT, name), fieldtype(A, name)) : fieldtype(NT, name), names)
+    values = map(name -> written(name) ? :(convert($(_type_after_write(fieldtype(NT, name), fieldtype(A, name))), getfield(args, $(QuoteNode(name))))) :
+                                         :(getfield(old, $(QuoteNode(name)))), names)
+    New = NamedTuple{names, Tuple{types...}}
+    return :($New(($(values...),))::$New)
 end
 
 include("HookExtensions.jl")
