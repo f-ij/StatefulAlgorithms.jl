@@ -25,14 +25,18 @@ Base.@nospecializeinfer function Share(@nospecialize(algo1), @nospecialize(algo2
 
     # Like routes, raw shares keep endpoint refs only until resolution. Symbol
     # endpoints are already names and therefore have `Nothing` value fields.
-    return Share{
+    # `new_instance`: a share of a held `Unique` handle is a new type for every uuid.
+    return new_instance(Share{
         scref_match(algo1),
         scref_match(algo2),
         directional,
         typeof(a1),
         typeof(a2),
-    }(a1, a2)
+    }, a1, a2)
 end
+
+# The endpoint matchers (parameters 1, 2) are those of the endpoint fields `a1`, `a2` (Identifiable/UniquePlanIds.jl).
+scref_derived_params(::Type{<:Share}) = (1 => 1, 2 => 2)
 
 """Construct a resolved share from its type parameters."""
 function Share{FirstMatch, SecondMatch, directional, Nothing, Nothing}() where {FirstMatch, SecondMatch, directional}

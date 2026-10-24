@@ -69,7 +69,7 @@ end
     write_lookup_table_expr(lookup) -> expression
 
 The expression that gives an entry's lookup table `lookup` (of a builder filled by the walk on types): the table of
-its fixed keys as a constant, or, when some keys are only known at run time (normalized handles), a copy of it with
+its fixed keys as a constant, or, when some keys are only known at run time (`Unique` handles), a copy of it with
 those keys added.
 """
 Base.@nospecializeinfer function write_lookup_table_expr(lookup::Dict{TypeWalkLookupKey,Int})

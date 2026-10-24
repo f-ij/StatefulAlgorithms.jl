@@ -23,13 +23,16 @@ Base.show(io::IO, k::LookupKey) = show(io, k.name)
 The name of `matcher` in a runtime lookup table. A matcher whose data is all in its type (a type, or a singleton such as
 `SimpleId{uuid}()`, `ObjectIDMatcher{id}()`, `ValMatcher{v}()`) is named after that type (`lower_type`), so a type and
 its instance get the same name. A value with fields of its own (an `isbits` algorithm that matches by value, such as a
-`ContextWrite`) is named after the value as printed (`lower_value`). Add a method for a matcher that needs another name.
+`ContextWrite`) is named after the value as printed (`lower_value`). A `UniquePlanId` is named after its uuid only, so
+every form of it (held by the user, stripped, numbered) gets the same name. Add a method for a matcher that needs
+another name.
 """
 Base.@nospecializeinfer lower_matcher(@nospecialize(T::Type)) = lower_type(T)
 Base.@nospecializeinfer function lower_matcher(@nospecialize(matcher))
     Base.issingletontype(typeof(matcher)) && return lower_type(typeof(matcher))
     return lower_value(matcher)
 end
+Base.@nospecializeinfer lower_matcher(id::UniquePlanId) = Symbol(lower_type(UniquePlanId), "_", origin(id))
 
 """
     lower_type(T) -> Symbol
@@ -62,11 +65,6 @@ Base.@nospecializeinfer lower_value(@nospecialize(x)) = Symbol(sprint(show, x; c
     dynamic_lookup_key(obj) -> LookupKey
 
 The key under which `obj` is stored in a registry's runtime lookup table (`RegistryTypeEntry.dynamic_lookup`): its
-matcher (`match_by`) lowered to a name (`lower_matcher`). A normalized handle gets the key of its original id (rebuilt
-from its `reconstructor`), so the table is right during `resolve` already.
+matcher (`match_by`) lowered to a name (`lower_matcher`).
 """
 dynamic_lookup_key(obj) = LookupKey(lower_matcher(match_by(obj)))
-
-function dynamic_lookup_key(sa::IdentifiableAlgo{F, Id, VA, AlgoName, Key, R}) where {F, Id, VA, AlgoName, Key, R<:IdReconstructor}
-    return LookupKey(lower_matcher(reconstruct_id(getfield(sa, :reconstructor))))
-end

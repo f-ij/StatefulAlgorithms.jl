@@ -22,6 +22,10 @@ mutable struct Process{F,LT,C} <: AbstractProcess
     # allocator::Allocator
     rls::RuntimeListeners
     threadid::Int
+    # The context last handed to the user (`context(p)`) with its `UniqueKeyMap` (`_HeldContextCache`), or `nothing`.
+    # Untyped, so the map's type (new for every set of `Unique` handles) is not in the `Process` type the loop is
+    # compiled for.
+    held_keymap::Any
 end
 
 @setterGetter Process lock shouldrun runtime_context
@@ -175,7 +179,8 @@ end
 end
 
 @inline function _finish_process_constructor(algo::A, context::C, lifetime::LT, timeout) where {A<:AbstractLoopAlgorithm, C, LT}
-    return _finish_process_constructor_with_context(algo, context, lifetime, timeout)
+    # A context the user got from SA carries a `UniqueKeyMap`; the process works with it without (`strip_held_ids`).
+    return _finish_process_constructor_with_context(algo, strip_held_ids(context), lifetime, timeout)
 end
 
 function _finish_process_constructor_with_context(algo::A, prepared_context::PC, lifetime::LT, timeout) where {A<:AbstractLoopAlgorithm, PC, LT}
@@ -183,7 +188,7 @@ function _finish_process_constructor_with_context(algo::A, prepared_context::PC,
 
     # p = Process(uuid1(), context, td, timeout, nothing, UInt(1), UInt(1), Threads.ReentrantLock(), false, true, nothing, nothing, Arena(), RuntimeListeners(), 0)
     C = typeof(loop_cursor(getplan(algo), Val(true)))
-    p = Process{typeof(algo),typeof(lifetime),C}(uuid1(), algo, lifetime, nothing, nothing, timeout, nothing, UInt(1), UInt(1), Threads.ReentrantLock(), false, true, nothing, nothing, nothing, RuntimeListeners(), 0)
+    p = Process{typeof(algo),typeof(lifetime),C}(uuid1(), algo, lifetime, nothing, nothing, timeout, nothing, UInt(1), UInt(1), Threads.ReentrantLock(), false, true, nothing, nothing, nothing, RuntimeListeners(), 0, nothing)
 
     register_process!(p)
     schedule_loop_precompile!(p, lifetime)
@@ -216,9 +221,38 @@ end
 Base.:(==)(p1::Process, p2::Process) = p1.id == p2.id
 
 getalgo(p::P) where {P<:Process} = p.algo
-function context(p::P) where {P<:Process}
+"""The process's context as SA works with it: its registry stores `Unique` handles numbered (see `context`)."""
+function _context(p::P) where {P<:Process}
     runtime_context = p.runtime_context
     return isnothing(runtime_context) ? getpersistentcontext(getalgo(p)) : runtime_context
+end
+
+"""
+    context(p)
+
+The process's context, with the `Unique` handles the user holds as keys found from types (`with_held_ids`):
+`context(p)[handle]`.
+"""
+Base.@nospecializeinfer function context(@nospecialize(p::Process))
+    c = _context(p)
+    cached = p.held_keymap
+    # The context handed out last, while the process's context is still that one.
+    cached isa _HeldContextCache && cached.context === c && return cached.held
+    c isa ProcessContext || return c
+    ref = registryref(c)
+    ref isa Base.RefValue || return c
+    keymap = cached isa _HeldContextCache && cached.ref === ref ? cached.keymap : cached_key_map(ref)
+    held = with_held_ids(c, keymap)
+    p.held_keymap = _HeldContextCache(ref, keymap, c, held)
+    return held
+end
+
+"""What `context(p)` handed out last: for the context `context` (registry `ref`, map `keymap`), the user's `held`."""
+struct _HeldContextCache
+    ref::Any
+    keymap::Any
+    context::Any
+    held::Any
 end
 
 """
@@ -358,10 +392,10 @@ function makeloop!(p::Process, inputs::NamedTuple, lt; threaded = true, loopfunc
 end
 
 @noinline _makeloop_dynamic!(p::Process, inputs::NamedTuple; threaded = true, loopfunc::LF = loop) where {LF} =
-    _makeloop!(p, inputs, lifetime(p), StatefulAlgorithms.context(p); threaded, loopfunc)
+    _makeloop!(p, inputs, lifetime(p), _context(p); threaded, loopfunc)
 
 @noinline _makeloop_dynamic!(p::Process, inputs::NamedTuple, lt; threaded = true, loopfunc::LF = loop) where {LF} =
-    _makeloop!(p, inputs, lt, StatefulAlgorithms.context(p); threaded, loopfunc)
+    _makeloop!(p, inputs, lt, _context(p); threaded, loopfunc)
 
 function _makeloop!(p::Process, inputs::NamedTuple, lt, base_context; threaded = true, loopfunc::LF = loop) where {LF}
     @atomic p.paused = false
@@ -391,7 +425,7 @@ function _resume_paused_loop!(p::Process; threaded = true)
     p.lastresult = nothing
 
     func = getalgo(p)
-    runtime_context = StatefulAlgorithms.context(p)
+    runtime_context = _context(p)
     lt = lifetime(p)
     return _makeloop_prepared!(p, func, runtime_context, lt, (;); threaded, resume = Resuming{true}())
 end
@@ -464,7 +498,7 @@ function Base.show(io::IO, ::MIME"text/plain", p::Process)
     algo_lines = _process_nested_show_lines(io, getalgo(p))
     _print_process_nested_field(io, "├── ", "│   ", :algo, algo_lines)
 
-    context_lines = _process_context_show_lines(io, context(p))
+    context_lines = _process_context_show_lines(io, _context(p))
     _print_process_nested_field(io, "└── ", "    ", :context, context_lines)
 
     return nothing

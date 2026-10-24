@@ -18,9 +18,8 @@ end
 
 const RoutinePlan = Routine
 
-function Routine(args...)
-    parse_la_input(Routine, args...)
-end
+# The inputs are stripped of `Unique` uuids first (`strip_unique`), so the typed parsing compiles once for new handles.
+Base.@nospecializeinfer Routine(@nospecialize(args...)) = parse_la_input(Routine, strip_uniques(args)...)
 
 
 function newfuncs(r::Routine, funcs)

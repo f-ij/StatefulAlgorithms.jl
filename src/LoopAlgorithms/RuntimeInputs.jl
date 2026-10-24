@@ -148,7 +148,7 @@ end
 @inline getstoredinits(la::LA) where {LA<:LoopSpec} = hasfield(LA, :inits) ? getfield(la, :inits) : ()
 @inline getstoredoverrides(la::LA) where {LA<:LoopSpec} = hasfield(LA, :overrides) ? getfield(la, :overrides) : ()
 @inline getpersistentcontext(la::LA) where {LA<:LoopSpec} = hasfield(LA, :context) ? getfield(la, :context) : nothing
-@inline context(la::LA) where {LA<:LoopSpec} = getpersistentcontext(la)
+Base.@nospecializeinfer context(@nospecialize(la::LoopSpec)) = with_held_ids(getpersistentcontext(la))
 @inline _without_lifecycle(la::LA) where {LA<:LoopSpec} = _with_lifecycle(la, nothing, (), ())
 
 # Merge newly passed `Init`/`Override` specs over previously stored specs by

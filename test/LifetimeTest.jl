@@ -84,3 +84,16 @@ end
     close(paused)
     @test context(paused)[LifetimeIndefiniteCleanupCounter].cleaned
 end
+
+@testset "A lifetime reading a Unique handle's variable (Var), and the handles read back by the user" begin
+    @StepAlgorithm @config step = 1.0 function LifetimeStepper(@managed(x = 0.0))
+        @update x += step
+    end
+    a, b = Unique(LifetimeStepper(step = 1.0)), Unique(LifetimeStepper(step = 10.0))
+    # `a` repeats until its own `x` reaches 3 (at most 100), then `b` runs once
+    inner = Routine(a, b, (RepeatOrUntil(x -> x >= 3.0, 100, Var(a, :x)), 1))
+    c = StatefulAlgorithms.context(run(init(resolve(CompositeAlgorithm(inner, (1,)))); repeats = 1))
+    @test c[a].x == 3.0
+    @test c[b].x == 10.0
+    @test c[Var(b, :x)] == 10.0
+end
