@@ -26,8 +26,9 @@ struct Redirect{Smatch, Tmatch, varnames, aliases, S, T} <: RootOption
     target_ref::T
 end
 
-function Redirect(
-    namespaces::Pair,
+# Untyped, made with `new_instance`: a redirect from a held `Unique` handle is a new type for every uuid.
+Base.@nospecializeinfer function Redirect(
+    @nospecialize(namespaces::Pair),
     originalname_or_aliaspairs::Union{Symbol, Pair{Symbol, Symbol}}...,
 )
     source_ns, target_ns = namespaces
@@ -43,15 +44,18 @@ function Redirect(
     aliases = last.(completed_pairs)
     source_ref = scref_object(source_ns)
     target_ref = scref_object(target_ns)
-    return Redirect{
+    return new_instance(Redirect{
         scref_match(source_ns),
         scref_match(target_ns),
         varnames,
         aliases,
         typeof(source_ref),
         typeof(target_ref),
-    }(source_ref, target_ref)
+    }, source_ref, target_ref)
 end
+
+# The endpoint matchers (parameters 1, 2) are those of the endpoint fields `source_ref`, `target_ref` (Identifiable/UniquePlanIds.jl).
+scref_derived_params(::Type{<:Redirect}) = (1 => 1, 2 => 2)
 
 """Construct a resolved redirect from its type parameters."""
 function Redirect{Smatch, Tmatch, varnames, aliases, Nothing, Nothing}() where {Smatch, Tmatch, varnames, aliases}

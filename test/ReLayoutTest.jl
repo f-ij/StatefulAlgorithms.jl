@@ -28,12 +28,10 @@ rl_uniques(k) = (b = Unique(RLCounter()); CompositeAlgorithm(Unique(RLCounter())
 rl_nested(k) = CompositeAlgorithm(CompositeAlgorithm(Unique(RLCounter()), Callable(RLScale(1.0 + k), (:n,), :m), (1, 1), Declaration(m = 0.0)),
                                   StatefulAlgorithms.Routine(Unique(RLCounter()), Callable(rl_bump, (:n,), :n), (3, 2)), (1, 1), Declaration(n = 1.0 * k))
 
-# The types each phase gives for one build: the plan, the plan as `resolve` works on it (ids normalized), the resolved
-# plan and the initialized one.
+# The types each phase gives for one build: the plan, the resolved plan and the initialized one.
 function rl_phase_types(plan)
     resolved = resolve(plan)
     return (; plan = typeof(plan),
-              resolving = typeof(first(StatefulAlgorithms.normalize_ids(plan))),
               resolved = typeof(resolved),
               initialized = typeof(StatefulAlgorithms.init(resolved)))
 end
@@ -45,14 +43,13 @@ end
     @test first.initialized === again.initialized
 end
 
-@testset "Re-layout with new Unique ids reuses the resolve" begin
+@testset "Re-layout with new Unique ids reuses every phase" begin
     for layout in (rl_uniques, rl_nested)
         first, again = rl_phase_types(layout(0)), rl_phase_types(layout(1))
-        @test first.resolving === again.resolving    # what `resolve` compiles for is the same
-        # Known gaps: the ids are in the types of the plan and of the resolved registry, so constructing and
-        # initializing compile again for new ids.
-        @test_broken first.plan === again.plan
-        @test_broken first.initialized === again.initialized
+        # The plan, its registry and its context hold numbered ids, no uuids: nothing compiles again for new handles.
+        @test first.plan === again.plan
+        @test first.resolved === again.resolved
+        @test first.initialized === again.initialized
     end
 end
 
@@ -60,4 +57,27 @@ end
     for plan in (rl_values(0), rl_nested(0))
         @test typeof(resolve(plan)) === typeof(StatefulAlgorithms._resolve_plan_typed(plan))
     end
+end
+
+@testset "A Unique handle the user holds is a key found from types" begin
+    held = Unique(RLCounter())
+    p = Process(CompositeAlgorithm(held, Unique(RLCounter()), (1, 1)); repeats = 3)
+    run(p); wait(p)
+    c = StatefulAlgorithms.context(p)
+    read_x(c, h) = c[h].x
+    @test (@inferred read_x(c, held)) == 3.0
+    T = only(Base.return_types(getindex, (typeof(c), typeof(held))))
+    @test isconcretetype(T)
+end
+
+@testset "A context with the user's Unique keys can be given back to a Process" begin
+    held = Unique(RLCounter())
+    plan = CompositeAlgorithm(held, Unique(RLCounter()), (1, 1))
+    p = Process(plan; repeats = 2); run(p); wait(p)
+    c = StatefulAlgorithms.context(p)
+    @test c[held].x == 2.0
+    q = Process(plan; context = c, repeats = 3); run(q); wait(q)
+    @test StatefulAlgorithms.context(q)[held].x == 5.0
+    # The process works with the context without the key map: same type as a fresh process's
+    @test typeof(StatefulAlgorithms.getalgo(q)) === typeof(StatefulAlgorithms.getalgo(p))
 end

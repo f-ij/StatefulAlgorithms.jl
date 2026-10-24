@@ -58,19 +58,21 @@ end
 
 # getlidx(ip::InlineProcess) = Int(ip.loopidx)
 @inline lifetime(ip::IP) where {IP<:InlineProcess} = ip.lifetime
-@inline getcontext(ip::IP) where {IP<:InlineProcess} = ip.context::contexttype(ip)
+getcontext(ip::IP) where {IP<:InlineProcess} = context(ip)
 
 @inline set_starttime!(ip::InlineProcess) = (ip.starttime = time_ns())
 @inline set_endtime!(ip::InlineProcess) = (ip.endtime = time_ns())
 getalgo(ip::InlineProcess) = ip.algo
 
 @inline context(ip::InlineProcess, c) = (ip.context = c)
-@inline context(ip::InlineProcess) = ip.context::contexttype(ip)
+@inline _context(ip::InlineProcess) = ip.context::contexttype(ip)
+"""The process's context, with the `Unique` handles the user holds as keys found from types (`with_held_ids`)."""
+Base.@nospecializeinfer context(@nospecialize(ip::InlineProcess)) = with_held_ids(_context(ip))
 
 @inline function reset!(p::InlineProcess, inputs_overrides...)
     p.loopidx = 1
     initialized = init(getalgo(p), inputs_overrides...; lifetime = lifetime(p))
-    p.context = StatefulAlgorithms.context(initialized)
+    p.context = getpersistentcontext(initialized)
     # TODO: Probably remove consumed flag
     p.consumed = false
     return true
@@ -92,8 +94,9 @@ end
     algo = getalgo(p)
     
     run_context = if isnothing(context)
-        StatefulAlgorithms.context(p)
+        _context(p)
     else
+        context = strip_held_ids(context)
         @assert context isa contexttype(p) "Wrong context shape for this process\n Context is of type $(typeof(context)), but expected $(contexttype(p))."
         context
     end
@@ -116,8 +119,9 @@ end
     algo = getalgo(p)
     
     run_context = if isnothing(context)
-        StatefulAlgorithms.context(p)
+        _context(p)
     else
+        context = strip_held_ids(context)
         @assert context isa contexttype(p) "Wrong context shape for this process\n Context is of type $(typeof(context)), but expected $(contexttype(p))."
         context
     end

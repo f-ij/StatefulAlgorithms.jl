@@ -193,6 +193,7 @@ Base.@nospecializeinfer LoopAlgorithm(PlanType::Type{<:AbstractPlan}, @nospecial
 # are only known at run time. A typed body compiled again for every plan type, which includes every new `Unique`
 # handle. Only the final struct creation is compiled per type.
 Base.@nospecializeinfer function _build_plan(PlanType::Type, @nospecialize(funcs::Tuple), @nospecialize(states::Tuple), @nospecialize(options::Tuple), @nospecialize(schedule), id)
+    funcs, states, options, schedule = _number_plan_unique_ids(funcs, states, options, schedule)
     namespaces = Tuple(Any[Namespace{nothing}() for _ in 1:length(funcs)])
     funcs, child_wiring = _split_children_and_wiring(funcs, options)
     wiring = PlanWiring(_build_plan_wiring_untyped(options), child_wiring, collect_plan_locals(options))
@@ -200,6 +201,33 @@ Base.@nospecializeinfer function _build_plan(PlanType::Type, @nospecialize(funcs
     schedule = store_single_repeats_as_repeat_once(PlanType, schedule)
     return PlanType{typeof(funcs), typeof(schedule), typeof(namespaces), typeof(wiring), id, typeof(states), typeof(plan_options)}(funcs, schedule, namespaces, wiring, states, plan_options)
 end
+
+"""
+    _number_plan_unique_ids(funcs, states, options, schedule) -> (funcs, states, options, schedule)
+
+The inputs of a plan with its `Unique` handles numbered (`number_unique_ids`): each nested plan among `funcs` comes
+with its own numbers and is one scope; the plan's other children, its states, options and schedule are another.
+"""
+Base.@nospecializeinfer function _number_plan_unique_ids(@nospecialize(funcs::Tuple), @nospecialize(states::Tuple), @nospecialize(options::Tuple), @nospecialize(schedule))
+    nested = Int[i for i in eachindex(funcs) if _is_nested_plan_input(funcs[i])]
+    own = Any[funcs[i] for i in eachindex(funcs) if !(i in nested)]
+    scopes = Any[(Tuple(own), states, options, schedule)]
+    for i in nested
+        push!(scopes, funcs[i])
+    end
+    numbered = number_unique_ids(Tuple(scopes))
+    numbered === Tuple(scopes) && return funcs, states, options, schedule
+    own_funcs, states, options, schedule = numbered[1]
+    out = Vector{Any}(undef, length(funcs))
+    o = 0
+    for i in eachindex(funcs)
+        k = findfirst(==(i), nested)
+        out[i] = isnothing(k) ? own_funcs[o += 1] : numbered[k + 1]
+    end
+    return Tuple(out), states, options, schedule
+end
+
+_is_nested_plan_input(@nospecialize(f)) = f isa LoopSpec || (f isa AbstractIdentifiableAlgo && getalgo(f) isa LoopSpec)
 
 """
     _build_plan_typed(PlanType, funcs, states, options, schedule, id)

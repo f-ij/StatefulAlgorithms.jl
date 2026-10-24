@@ -72,8 +72,14 @@ end
 @inline _getindex_partition(::ContextPartition, pc::ProcessContext, name::Symbol) = @inline getproperty(pc, name)
 @inline _getindex_partition(partition::Union{CapturedReturns, Inputs}, pc::ProcessContext, name::Symbol) = @inline get_runtime_partition(pc, partition)
 
-"""Return the subcontext of the algorithm `obj`, looked up in the registry."""
-@inline function Base.getindex(pc::ProcessContext, obj)
+"""
+Return the subcontext of the algorithm `obj`, looked up in the registry. In a context handed to the user, a `Unique`
+handle the user holds is first numbered by the context's `UniqueKeyMap` (`numbered_handle`), while compiling.
+"""
+@inline Base.getindex(pc::ProcessContext{D, HeldRegistry{RR, M}}, obj::IdentifiableAlgo) where {D, RR, M} =
+    @inline _getindex_by_registry(pc, numbered_handle(obj, M))
+@inline Base.getindex(pc::ProcessContext, obj) = @inline _getindex_by_registry(pc, obj)
+@inline function _getindex_by_registry(pc::ProcessContext, obj)
     reg = getregistry(pc)
     isnothing(reg) && error("Cannot index a runtime ProcessContext by object because it has no registry.")
     name = getkey(reg[obj])

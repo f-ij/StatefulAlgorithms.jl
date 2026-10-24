@@ -26,7 +26,8 @@ const CompositePlan = CompositeAlgorithm
 """Return the per-child execution multiplier implied by interval counts."""
 getmultipliers_from_specification_num(::Type{CA}, specification_num) where {CA<:CompositeAlgorithm} = 1 ./(Float64.(specification_num))
 
-CompositeAlgorithm(args...) = parse_la_input(CompositeAlgorithm, args...)
+# The inputs are stripped of `Unique` uuids first (`strip_unique`), so the typed parsing compiles once for new handles.
+Base.@nospecializeinfer CompositeAlgorithm(@nospecialize(args...)) = parse_la_input(CompositeAlgorithm, strip_uniques(args)...)
 
 
 function newfuncs(ca::CompositeAlgorithm, funcs)
