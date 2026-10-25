@@ -24,8 +24,11 @@ Var(subcontext_ref, name::Symbol; transform = nothing) = Var{_var_match(subconte
 # is stored with its uuid again (`UniquePlanId{uuid}`): the plan numbers it by that (`number_unique_ids`).
 function _var_match(ref)
     m = scref_match(ref)
-    m === UniquePlanId{nothing} || return m
-    return typeof(UniquePlanId(origin(match_by(ref))))
+    if m === UniquePlanId{nothing}
+        # A stripped `Unique` handle: put its uuid (still in the value) back into the type
+        return UniquePlanId{origin(match_by(ref))}
+    end
+    return m
 end
 Var(name::Symbol) = Var{:_captured_returns, name, nothing}()
 
