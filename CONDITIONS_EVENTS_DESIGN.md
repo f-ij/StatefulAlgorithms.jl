@@ -74,11 +74,27 @@ Two ways for a loop algorithm to run something only some of the time:
 
 2.5.4 When several watched fields change in one merge, their callbacks run in field order.
 
-### 2.6 Scope
+### 2.6 Handlers as mini plans (the DSL form)
 
-2.6.1 Events within the loop algorithm only. This system is not meant for async compute.
+2.6.1 Syntax: a `do` block. At the definition, `@state x = OnChange(0.0) do new … end`; for an existing state variable, a top-level `@OnChange x do new … end`. The first lowers to `@state x = 0.0` plus the second, so there is one mechanism.
 
-2.6.2 An `OnChange` wrapping an `InteractiveVar` is not supported.
+2.6.2 The `do` body is a small DSL block (a mini plan): statements, calls, algorithms with state, and a `return`. Its names resolve the way a block's names do, so no new scan for free names is needed. Its writes are ordinary merges.
+
+2.6.3 The mini plan is a child of the plan, in the same children tuple, marked by its schedule entry `OnChange(x)` (in `intervals` for a composite, in the lifetimes for a routine). Every walk over the children (registry, keys, `init`/`cleanup`, typing the locals, UniquePlanId, Inspection, `Edit`, `Copy`) sees it as an ordinary child. Not a separate field: that would have to be added to every one of those walks.
+
+2.6.4 Only the code that builds the shape of the step treats it differently: no step at its position. After each sibling that may write `x` (known from the types, as `_find_writable_fields` computes it), the step code steps it when the wrapper's flag is set, and clears the flag. `lcm` over the intervals skips `OnChange` entries.
+
+2.6.5 The wrapper's write only sets the flag: it compares old and new, checks the condition, and merges `OnChange(new, …; fired = true)`. The flag is a `Bool` field of the immutable wrapper, so the context's type stays the same. `new` in the handler is `x` itself (after the merge it holds the new value); `old` needs a `previous` field in the wrapper.
+
+2.6.6 No pausing during a handler, for now. The handler is stepped with a `LoopRunProcess` made on demand and a fresh non-pausable cursor (`loop_cursor(plan, Val(false))`), as the hand-driven `_step!(la, context)` does. `process_breakcondition` is `false` for a `LoopRunProcess`, so a handler always runs to its end; the outer process's pause check comes after.
+
+2.6.7 `AfterMerge` stays for the plain-function form (`OnChange(value, callback, condition)` without the DSL).
+
+### 2.7 Scope
+
+2.7.1 Events within the loop algorithm only. This system is not meant for async compute.
+
+2.7.2 An `OnChange` wrapping an `InteractiveVar` is not supported.
 
 ## 3. Considered, not planned: events from interactive writes
 
@@ -102,4 +118,8 @@ Two ways for a loop algorithm to run something only some of the time:
 - 4.2.1 The action types are fixed when compiling, so an extra write happens every step. When nothing changed, it writes back the value already there; the callback's result converts to that location's type.
 - 4.2.2 How a wrapper's target `Var` becomes a location type when compiling is not worked out.
 
-4.3 Every merge of a step's, `init`'s or cleanup's returns goes through `merge(scv, args, demand)`, once per merge. The wrapper is applied after `init`; decide whether cleanup returns fire.
+4.3 Handlers (2.6):
+- 4.3.1 What the handler's `return` means: written back into `x` (for example a clamp), or the handler's own value for later statements. If written into `x`, a write from its own handler must not fire it again (or is a build error).
+- 4.3.2 `LoopRunProcess` is mutable; check that making one per fired handler is optimized away when everything is inlined, or make one per plan step.
+
+4.4 Every merge of a step's, `init`'s or cleanup's returns goes through `merge(scv, args, demand)`, once per merge. The wrapper is applied after `init`; decide whether cleanup returns fire.
