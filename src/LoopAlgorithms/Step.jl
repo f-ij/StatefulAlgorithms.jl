@@ -357,6 +357,16 @@ function _join_fields(@nospecialize(old), @nospecialize(new))
 end
 
 """
+Return an expression that builds a value of type `Target` from the expression `source`: for a named tuple type, a
+`Target(...)` call built field by field; for anything else, `source` itself (converted by the field it is stored in).
+"""
+function _conditional_value_expr(Target::Type, source)
+    Target <: NamedTuple || return source
+    values = (_conditional_value_expr(T, :(getfield($source, $(QuoteNode(name))))) for (name, T) in zip(fieldnames(Target), fieldtypes(Target)))
+    return :($Target(($(values...),)))
+end
+
+"""
 Return `lc` converted to `Target` (from `_compute_conditional_loopcontext_type`): only the runtime fields `Target` has, each
 converted to its field type there. Returns `lc` itself when it already has type `Target`.
 """
@@ -369,16 +379,6 @@ converted to its field type there. Returns `lc` itself when it already has type 
     end
     runtime = :($target_runtime(NamedTuple{$(fieldnames(target_parts))}(($(part_exprs...),)), getfield(getruntime(lc), :reg)))
     return :(LoopContext{$(persistent_type(Target)), $target_runtime, $(Target.parameters[3])}(getpersistent(lc), $runtime))
-end
-
-"""
-Return an expression that builds a value of type `Target` from the expression `source`: for a named tuple type, a
-`Target(...)` call built field by field; for anything else, `source` itself (converted by the field it is stored in).
-"""
-function _conditional_value_expr(Target::Type, source)
-    Target <: NamedTuple || return source
-    values = (_conditional_value_expr(T, :(getfield($source, $(QuoteNode(name))))) for (name, T) in zip(fieldnames(Target), fieldtypes(Target)))
-    return :($Target(($(values...),)))
 end
 
 """
