@@ -30,8 +30,6 @@ Measured on this branch at a4c581f, machine otherwise quiet. Raw files next to t
 - GeneratedCode/Registry/Setup.jl: the generated `build_registry_and_key_plan`: its generator returns the code the type
   walk writes (`generate_registry_setup`). Each registry entry's multipliers and lookup table are constants shared by
   all plans of the type (`write_registry_expr`, `write_lookup_table_expr`); a registry's are only read.
-  Same design with constructor calls instead of `new` (shared objects behind `Core.compilerbarrier(:const, x)`):
-  branch `exp/registry-constructor-calls` (d1b4cfc), same warm time, 0-5 ms slower first call.
   Archived alternative without a generated function, with measurements: branch `archive/runtime-registry-setup`
   (agents/archive-runtime-registry-setup.md there).
 - Registry/Registries.jl, TypeEntries/: reading a registry and its entries (finding, keys, multipliers, listing).
