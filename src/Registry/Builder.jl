@@ -254,7 +254,7 @@ end
 The code that builds the registry `builder` (filled with `KnownByType`s) holds, the same one `registry` builds from
 values: the registry's type is written out and its algorithms are read from the plan. Each entry's multipliers and
 lookup table are constants, shared by all plans of the type (a registry's are only read; adding to one copies them,
-`RegistryBuilder(registry)`); an entry or registry built only from known values is one constant (`known_from_parts`).
+`RegistryBuilder(registry)`); entries and the registry are made by the generated code (`known_from_parts`).
 """
 Base.@nospecializeinfer function registry_code(b::RegistryBuilder)
     entries = Any[entry_known(entry) for entry in b.entries]

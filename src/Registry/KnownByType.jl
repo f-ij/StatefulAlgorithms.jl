@@ -8,8 +8,9 @@ read a field, count fields, or build a tuple the same way for a value and for a 
 written once.
 
 A value that the type alone decides is known while generating, and is a constant in the generated code
-(`is_known_value`): a field whose type is a singleton (most algorithms and handles), and anything built only from
-known values (`known_from_parts`). The generated code then neither reads nor builds it.
+(`is_known_value`): a field whose type is a singleton (most algorithms and handles), and a tuple of known values
+(`known_from_parts`). The generated code then neither reads nor builds it. A struct is not built while generating:
+the generated code makes it (`struct_code`), so its constructor is compiled into that code, not on its own.
 
 The functions take their arguments as values (`@nospecialize`), so they are compiled once, not once per plan type.
 =#
@@ -65,16 +66,29 @@ is_known_value(x::KnownByType) = x.expr isa QuoteNode
 known_value(x::KnownByType) = (x.expr::QuoteNode).value
 
 """
-    known_from_parts(T, parts, make = T) -> KnownByType
+    known_from_parts(T, parts) -> KnownByType
 
-A `KnownByType` of the value of type `T` that `make` builds from `parts` (`KnownByType`s, in order): built now when all
-their values are known, so it is a constant in the generated code; otherwise the code that builds it. `parts` are kept
-as its fields (`read_field`).
+A `KnownByType` of the value of type `T` (a tuple or a struct) made from `parts` (`KnownByType`s of its elements or
+fields, in order), kept as its fields (`read_field`). A tuple of known values is built now, a constant in the generated
+code; anything else is made by the generated code (`struct_code`).
 """
-Base.@nospecializeinfer function known_from_parts(@nospecialize(T), parts::Vector{Any}, @nospecialize(make = T))
-    all(is_known_value, parts) && return KnownByType(T, QuoteNode(make(Any[known_value(p) for p in parts]...)), parts)
-    return KnownByType(T, Expr(:call, make, Any[p.expr for p in parts]...), parts)
+Base.@nospecializeinfer function known_from_parts(@nospecialize(T), parts::Vector{Any})
+    exprs = Any[p.expr for p in parts]
+    T <: Tuple || return KnownByType(T, struct_code(T, exprs), parts)
+    all(is_known_value, parts) && return KnownByType(T, QuoteNode(Tuple(Any[known_value(p) for p in parts])), parts)
+    return KnownByType(T, Expr(:tuple, exprs...), parts)
 end
+
+"""
+    struct_code(T, exprs) -> Expr
+
+The code that makes a `T` from the code of its fields `exprs`: `new` for a type of this package, whose constructor
+`T(fields...)` is the default one (the tests check that the typed and the run-time setup agree); a call of its
+constructor for a type of another package (a plan type). With `new` nothing is compiled per type when the fields are
+constants; a constructor called on constants is run, and compiled on its own, while compiling the generated code.
+"""
+Base.@nospecializeinfer struct_code(@nospecialize(T::DataType), exprs::Vector{Any}) =
+    parentmodule(T) === (@__MODULE__) ? Expr(:new, T, exprs...) : Expr(:call, T, exprs...)
 
 """The number of fields of `x` (of the type a `KnownByType` stands for)."""
 count_fields(@nospecialize(x)) = x isa KnownByType ? fieldcount(x.type) : nfields(x)
@@ -94,7 +108,7 @@ the `KnownByType`s `xs`.
 """
 Base.@nospecializeinfer function build_tuple(xs::Vector{Any}, @nospecialize(like))
     like isa KnownByType || return Tuple(xs)
-    return known_from_parts(Tuple{Any[read_type(x) for x in xs]...}, xs, tuple)
+    return known_from_parts(Tuple{Any[read_type(x) for x in xs]...}, xs)
 end
 
 """The constant `v`; a `KnownByType` of it when `like` is one."""
