@@ -8,7 +8,7 @@ export FinalizedAlgorithm, finalstep
 # cleaned context into the value returned by `fetch(process)`.
 #
 # Nested finalized wrappers are intentionally rejected by the parser in
-# `Setup.jl`: only the outer process has a single final result, while inner loop
+# `ConstructorCommon.jl`: only the outer process has a single final result, while inner loop
 # algorithms must continue to behave like ordinary algorithms.
 #
 # The hook it extends (`loop_final_result`) is in HookExtensions.jl.
