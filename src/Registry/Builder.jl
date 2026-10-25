@@ -8,7 +8,7 @@ A `RegistryBuilder` is plain vectors, the same type for every plan, so adding do
 
 The same code runs while the generated `build_registry_and_key_plan` is generated, on the plan's type: `add!` then gets
 `GeneratedValue`s (GeneratedValues.jl) instead of algorithms, decides everything from their types (a step that needs
-the values, such as a merge, throws `NeedsValues`), and GeneratedCode/RegistryExpressions.jl writes the code that
+the values, such as a merge, throws `NeedsValues`), and GeneratedCode/Registry/Expressions.jl writes the code that
 builds the registry. The lookup key of a normalized handle needs its value, so there it is a `RuntimeLookupKey`, filled
 in by the generated code.
 =#

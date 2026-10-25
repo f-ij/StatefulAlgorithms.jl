@@ -29,7 +29,7 @@ getentrytype(rte::RegistryTypeEntry) = getentrytype(typeof(rte))
     id = @inline match_by(val)
     @inline static_findfirst_match(rte, Val(id))
 end
-# `static_findfirst_match(rte, Val(matcher))` is generated: GeneratedCode/Registry.jl.
+# `static_findfirst_match(rte, Val(matcher))` is generated: GeneratedCode/Registry/Lookups.jl.
 
 """The position of `val` in the entry, found through the runtime lookup table (`dynamic_lookup_key`), or `nothing`."""
 dynamic_lookup(rte::RegistryTypeEntry{T}, val) where {T} = get(getdynamiclookup(rte), dynamic_lookup_key(val), nothing)

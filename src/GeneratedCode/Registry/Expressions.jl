@@ -1,5 +1,5 @@
 #=
-Writes the body of the generated `build_registry_and_key_plan` (RegistrySetup.jl): the expressions that build a
+Writes the body of the generated `build_registry_and_key_plan` (Setup.jl): the expressions that build a
 plan's registry and keyed plan, from what the walk on the plan's type decided (`GeneratedValue`s,
 Registry/GeneratedValues.jl).
 

@@ -27,7 +27,7 @@ Measured on this branch at a4c581f, machine otherwise quiet. Raw files next to t
   inline; no separate compile when fields are constants) and a constructor call for another package's plan type.
 - LoopAlgorithms/Resolving/Registering.jl: the walk over a plan: `register_tree!`, `register_states!`, `register_children!`,
   `register_child!`; `build_registry_from_values` (run time) and `generate_registry_setup` (from types).
-- GeneratedCode/RegistrySetup.jl: the generated `build_registry_and_key_plan`: its generator returns the code the type
+- GeneratedCode/Registry/Setup.jl: the generated `build_registry_and_key_plan`: its generator returns the code the type
   walk writes (`generate_registry_setup`). Each registry entry's multipliers and lookup table are constants shared by
   all plans of the type (`write_registry_expr`, `write_lookup_table_expr`); a registry's are only read.
   Same design with constructor calls instead of `new` (shared objects behind `Core.compilerbarrier(:const, x)`):

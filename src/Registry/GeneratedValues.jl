@@ -6,7 +6,7 @@ exists. The walk that decides it (`register_tree!`, `add!`) then gets `Generated
 generated function computes at run time, of which the generator knows the type and the expression that gives them.
 The helpers below (`read_field`, `read_type`, `count_fields`, `build_tuple`, ...) do the same on a value and on a
 `GeneratedValue`, so the walk is written once. The expressions themselves are written in
-GeneratedCode/RegistryExpressions.jl.
+GeneratedCode/Registry/Expressions.jl.
 =#
 
 """

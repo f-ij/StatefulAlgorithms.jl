@@ -2,13 +2,13 @@
 Steps 1 and 2 of `resolve`: the registry of a plan, and the plan keyed; the registry is then attached to the root
 wrapper (`_attach_registry`, Accessors.jl; step 1 leaves no nested wrappers).
 
-`build_registry_and_key_plan(la) -> (registry, keyed la)` (GeneratedCode/RegistrySetup.jl) walks the whole tree of
+`build_registry_and_key_plan(la) -> (registry, keyed la)` (GeneratedCode/Registry/Setup.jl) walks the whole tree of
 `la` once: the states first, then every algorithm, each added to one `RegistryBuilder` with its multiplier. Each
 child of a plan is then stored raw (without its identity wrapper), and its key goes into the plan's `namespaces`.
 
 The walk works on values (`build_registry_from_values`), or on the plan's type, with `GeneratedValue`s
 (`generate_registry_setup`), for the generated `build_registry_and_key_plan`: its code (written in
-GeneratedCode/RegistryExpressions.jl) only reads out of the plan what the type does not decide.
+GeneratedCode/Registry/Expressions.jl) only reads out of the plan what the type does not decide.
 =#
 
 """

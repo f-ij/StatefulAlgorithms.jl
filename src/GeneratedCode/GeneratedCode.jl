@@ -1,5 +1,2 @@
-include("Registry.jl")
-include("SimpleRegistry.jl")
-include("SubContextView.jl")
-include("RegistryExpressions.jl")
-include("RegistrySetup.jl")
+include("Registry/Registry.jl")
+include("Context/SubContextView.jl")

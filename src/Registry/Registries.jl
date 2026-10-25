@@ -43,7 +43,7 @@ The index of the entry that `x` (an algorithm, or a type) belongs to, by its typ
 @inline find_typeidx(regt::Type{<:NameSpaceRegistry}, obj) = _find_typeidx(regt, typeof(obj))
 @inline find_typeidx(regt::Type{<:NameSpaceRegistry}, typ::Type) = _find_typeidx(regt, typ)
 @inline find_typeidx(reg::NameSpaceRegistry, obj) = find_typeidx(typeof(reg), obj)
-# `_find_typeidx` is generated: GeneratedCode/Registry.jl.
+# `_find_typeidx` is generated: GeneratedCode/Registry/Lookups.jl.
 
 """
     get_type_entries(registry, x) -> RegistryTypeEntry
