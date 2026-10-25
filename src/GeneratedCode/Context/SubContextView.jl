@@ -11,8 +11,8 @@ _writable_runtime(::ContextPartition, target::Symbol, own::Symbol) = target === 
 
 function _subcontext_view_mergetuple_expr(SCV::Type, Args::Type)
     @nospecialize SCV Args
-    merge_expr, runtime_expr = _subcontext_view_merge_exprs(SCV, Args)
-    return merge_expr
+    actions_expr, runtime_expr = _subcontext_view_merge_exprs(SCV, Args)
+    return :(@inline _build_write_payload($actions_expr))
 end
 
 function _subcontext_view_merge_exprs(SCV::Type, Args::Type, demanded_runtime_names = fieldnames(Args))
@@ -49,18 +49,18 @@ function _subcontext_view_merge_exprs(SCV::Type, Args::Type, demanded_runtime_na
         end
     end
 
-    # The persistent writes: one `StoreInto` request per written field, followed by `_follow_writes` (ReadingWriting.jl) and
-    # grouped into `(; subcontext1 = (; var1 = ...), ...)` by `_build_write_payload`.
-    merge_expr = quote
+    # The persistent writes: one `StoreInto` request per written field, followed by `_follow_writes` (ReadingWriting.jl) to
+    # the actions they end in. `_build_write_payload` groups their `DirectWrite`s into `(; subcontext1 = (; var1 = ...), ...)`.
+    actions_expr = quote
         $(write_preambles...)
-        @inline _build_write_payload(@inline _follow_writes(scv, ($(write_requests...),)))
+        @inline _follow_writes(scv, ($(write_requests...),))
     end
     runtime_subcontext_exprs = [
         Expr(:(=), subctx, Expr(:tuple, Expr(:parameters, field_exprs...)))
         for (subctx, field_exprs) in runtime_expressions_by_subcontext
     ]
     return (
-        merge_expr,
+        actions_expr,
         Expr(:tuple, Expr(:parameters, runtime_subcontext_exprs...)),
     )
 end
@@ -117,18 +117,27 @@ end
 end
 
 """
+    _build_merge_actions(scv, args, demand)
+
+The write actions that `merge(scv, args, demand)` ends in (see `_follow_writes`): the `DirectWrite`s it merges into the
+persistent context and the `AfterMerge`s it runs after.
+"""
+@inline @generated function _build_merge_actions(scv::SubContextView{B, SubKey}, args::NamedTuple, demand::ReturnDemand{Names}) where {B<:ContextBundle, SubKey, Names}
+    actions_expr, _ = _subcontext_view_merge_exprs(scv, args, Names)
+    return actions_expr
+end
+
+"""
     _build_merge_payload(scv, args, demand)
 
 What `merge(scv, args, demand)` writes into the persistent context, as `(; subcontext = (; field = value, ...), ...)`.
 """
-@inline @generated function _build_merge_payload(scv::SubContextView{B, SubKey}, args::NamedTuple, demand::ReturnDemand{Names}) where {B<:ContextBundle, SubKey, Names}
-    mergetuple_expr, _ = _subcontext_view_merge_exprs(scv, args, Names)
-    return mergetuple_expr
-end
+@inline _build_merge_payload(scv::SubContextView{B, SubKey}, args::NamedTuple, demand::ReturnDemand{Names}) where {B<:ContextBundle, SubKey, Names} =
+    @inline _build_write_payload(@inline _build_merge_actions(scv, args, demand))
 
 """
 Merge a step/init/cleanup return into the view's bundle: state into the persistent context, runtime values (declared locals,
-outputs) into the runtime context. Returns the new bundle.
+outputs) into the runtime context; then run the write actions' `AfterMerge`s. Returns the new bundle.
 """
 @inline @generated function Base.merge(scv::SubContextView{B, SubKey}, args::NamedTuple, demand::ReturnDemand{Names}) where {B<:ContextBundle, SubKey, Names}
     _, runtimetuple_expr = _subcontext_view_merge_exprs(scv, args, Names)
@@ -136,9 +145,10 @@ outputs) into the runtime context. Returns the new bundle.
     # Return the expression that does the merge
     return quote
         $(LineNumberNode(@__LINE__, @__FILE__))
-        mergetuple = @inline _build_merge_payload(scv, args, demand)
-        newcontext = merge_into_subcontexts(getpersistent(scv), mergetuple)
+        actions = @inline _build_merge_actions(scv, args, demand)
+        newcontext = merge_into_subcontexts(getpersistent(scv), (@inline _build_write_payload(actions)))
         @assert typeof(newcontext) == typeof(getpersistent(scv)) "A variable type in a subcontext was changed. This is prohibited for performance reasons.\nIf type mutation is needed, set the variable up as a Ref\n$(sprint(show, ContextTypeDiff(getpersistent(scv), newcontext)))"
+        @inline _run_after_merge(actions)
         runtimetuple = $runtimetuple_expr
         return @inline _rebundle(getbundle(scv), newcontext, runtimetuple)
     end

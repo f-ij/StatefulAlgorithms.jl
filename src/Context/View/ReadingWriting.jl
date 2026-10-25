@@ -49,7 +49,7 @@ function stored_value_at end
 """
     _follow_writes(view, requests::Tuple) -> Tuple
 
-Return the `DirectWrite`s that the write actions `requests` end in: each `StoreInto` is answered by
+Return the `DirectWrite`s and `AfterMerge`s that the write actions `requests` end in: each `StoreInto` is answered by
 `write_value` and its answers followed in turn; a `NoWrite` ends with nothing.
 """
 @inline _follow_writes(view::V, ::Tuple{}) where {V<:SubContextView} = ()
@@ -57,6 +57,7 @@ Return the `DirectWrite`s that the write actions `requests` end in: each `StoreI
     ((@inline _follow_write(view, first(actions)))..., (@inline _follow_writes(view, Base.tail(actions)))...)
 
 @inline _follow_write(view::V, action::DirectWrite) where {V<:SubContextView} = (action,)
+@inline _follow_write(view::V, action::AfterMerge) where {V<:SubContextView} = (action,)
 @inline _follow_write(view::V, ::NoWrite) where {V<:SubContextView} = ()
 @inline _follow_write(view::V, request::StoreInto{L}) where {V<:SubContextView, L} =
     @inline _follow_store(view, (@inline stored_value_at(view, L())), request)
@@ -68,6 +69,7 @@ Return the `DirectWrite`s that the write actions `requests` end in: each `StoreI
     @inline _follow_answer(view, write_value(view, stored, request))
 
 @inline _follow_answer(view::V, action::DirectWrite) where {V<:SubContextView} = (action,)
+@inline _follow_answer(view::V, action::AfterMerge) where {V<:SubContextView} = (action,)
 @inline _follow_answer(view::V, ::NoWrite) where {V<:SubContextView} = ()
 @inline _follow_answer(view::V, request::StoreInto{L}) where {V<:SubContextView, L} =
     @inline _follow_store(view, (@inline stored_value_at(view, L())), request)
@@ -76,14 +78,16 @@ Return the `DirectWrite`s that the write actions `requests` end in: each `StoreI
 """
     _build_write_payload(writes::Tuple)
 
-Return what the `DirectWrite`s `writes` merge into the persistent context, as `(; subcontext = (; field = value, ...),
-...)`, grouped by their locations. Two writes to the same field are an error when the code is generated.
+Return what the `DirectWrite`s in `writes` merge into the persistent context, as `(; subcontext = (; field = value, ...),
+...)`, grouped by their locations; its `AfterMerge`s are left out (see `_run_after_merge`). Two writes to the same field
+are an error when the code is generated.
 """
 @inline @generated function _build_write_payload(writes::W) where {W<:Tuple}
     names = Symbol[]
     fields = Vector{Expr}[]
     for (i, Write) in enumerate(W.parameters)
-        Write <: DirectWrite || error("A write ended in $(Write), which is not a `DirectWrite`.")
+        Write <: AfterMerge && continue
+        Write <: DirectWrite || error("A write ended in $(Write), which is not a `DirectWrite` or an `AfterMerge`.")
         location = Write.parameters[1]
         subcontext, field = get_subcontextname(location), location_fieldname(location)
         k = findfirst(==(subcontext), names)
@@ -93,3 +97,16 @@ Return what the `DirectWrite`s `writes` merge into the persistent context, as `(
     end
     return Expr(:tuple, Expr(:parameters, (Expr(:(=), names[k], Expr(:tuple, Expr(:parameters, fields[k]...))) for k in eachindex(names))...))
 end
+
+"""
+    _run_after_merge(actions::Tuple)
+
+Run the `AfterMerge`s in the write actions `actions`, in order, once their merge is done: `f(args...)` for each.
+"""
+@inline _run_after_merge(::Tuple{}) = nothing
+@inline function _run_after_merge(actions::A) where {A<:Tuple}
+    @inline _run_after_merge(first(actions))
+    return @inline _run_after_merge(Base.tail(actions))
+end
+@inline _run_after_merge(action::AfterMerge) = (getfield(action, :f)(getfield(action, :args)...); nothing)
+@inline _run_after_merge(::DirectWrite) = nothing

@@ -5,7 +5,7 @@ Two ways for a loop algorithm to run something only some of the time:
 - a **condition**, checked when a child is scheduled or a repeat starts: "does this hold now?"
 - an **event**, checked at each merge into a value: "did this merge change it?"
 
-Nothing here is built yet. These are the decisions agreed so far, and what is still open. Locals are designed against
+`OnChange` for state values, with its condition and `AfterMerge`, is built on `feat/on-change`; the rest is not built yet. These are the decisions agreed so far, and what is still open. Locals are designed against
 `exp/no-maybe` (a local's type is the join of what its writers return; no `Maybe`).
 
 ## 1. Conditions
@@ -52,7 +52,7 @@ Nothing here is built yet. These are the decisions agreed so far, and what is st
 - 2.3.2.1 In a routine, `x = @repeat 10 child()` is the repeated block `local x; @repeat 10 begin x = child() end` (`_dsl_repeated_assignment`): 10 merges into `x`, so up to 10 callbacks.
 - 2.3.2.2 To merge once, write `@repeat 9 child(); x = child()` (the same 10 runs, the last one assigns).
 
-2.3.3 `OnChange` compares the held value with the merged one (`old !== new`). It means the same for every type: a different value (for an array: replaced by another object). With `!==`, `NaN` to `NaN` doesn't fire and `0.0` to `-0.0` does; this goes in the docstring. The callback gets `(old, new)`.
+2.3.3 `OnChange(value, callback, condition = !==)` fires when `condition(old, new)` holds for the held and the merged value; any function of the two works (for example `(old, new) -> new % 3 == 0`). By default it compares them (`old !== new`), which means the same for every type: a different value (for an array: replaced by another object). With `!==`, `NaN` to `NaN` doesn't fire and `0.0` to `-0.0` does; this goes in the docstring. The callback gets `(old, new)`.
 
 ### 2.4 `OnMutate`: in-place writes
 
@@ -66,7 +66,7 @@ Nothing here is built yet. These are the decisions agreed so far, and what is st
 
 ### 2.5 Callback after the merge
 
-2.5.1 A new terminating write action, `AfterMerge(callback, old, new)`, carries a callback that runs *after* the merge, so it sees the context with the write in it.
+2.5.1 A new terminating write action, `AfterMerge(f, args)`, runs `f(args...)` *after* the merge it is part of. `OnChange` answers its `DirectWrite` and an `AfterMerge` that checks the condition and runs the callback. Open: `f` gets nothing of the merged context yet.
 
 2.5.2 `_build_write_payload` splits actions by type when compiling: `DirectWrite`s go into the payload, `AfterMerge`s into a second tuple, which `merge(scv, args, demand)` runs after `merge_into_subcontexts`.
 

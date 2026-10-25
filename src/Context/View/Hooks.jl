@@ -64,7 +64,7 @@ first, as the container does in `getindex`.
 
 """
 What `write_value` answers for a write: where the write goes on (`StoreInto`), or how it ends (`DirectWrite`,
-`NoWrite`). `_follow_writes` (ReadingWriting.jl) follows the answers until every one ends.
+`NoWrite`, `AfterMerge`). `_follow_writes` (ReadingWriting.jl) follows the answers until every one ends.
 """
 abstract type WriteAction end
 
@@ -97,6 +97,18 @@ Write action that ends the write with nothing merged: the hook has done the writ
 value into its reference).
 """
 struct NoWrite <: WriteAction end
+
+"""
+    AfterMerge(f, args::Tuple)
+
+Write action that ends the write with nothing merged, and runs `f(args...)` after the merge it is part of: once the
+`DirectWrite`s are merged into the persistent context. A hook answers it next to the write it does (an `OnChange` answers
+its `DirectWrite` and an `AfterMerge` that runs its callback).
+"""
+struct AfterMerge{F, A<:Tuple} <: WriteAction
+    f::F
+    args::A
+end
 
 """
     write_value(view, stored, request::StoreInto) -> WriteAction or a tuple of them

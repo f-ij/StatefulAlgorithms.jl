@@ -89,9 +89,11 @@ Each was reproduced in the September 2026 code review unless marked *(unverified
 - [ ] **`_CALLS_NAMESPACE` is a second copy of `fixed_namespace(::Callable)`.** On `refactor/registry` (c511661) `src/LoopAlgorithms/Callable/Matching.jl` has `const _CALLS_NAMESPACE = :_captured_returns` and `fixed_namespace(::Callable) = _CALLS_NAMESPACE`, and the generated registry setup reads the constant directly when it only has the call's type (`add_child!`, `src/LoopAlgorithms/Resolving/Registering.jl:118`: `child isa GeneratedValue ? _CALLS_NAMESPACE : fixed_namespace(child)`). The constant adds nothing: the generator can call a function just as well as it can read a global constant, so the types path should ask `fixed_namespace` too (a method on the type, or `GeneratedValue` forwarding to it) and the constant goes. If the reason was include order (the generator's code loaded before `Callable/`), move the method into `src/GeneratedCode/` instead of adding a constant. Noted 2026-10-19.
 
 ## OnChange: what `feat/on-change` leaves (noted 2026-10-25; design in CONDITIONS_EVENTS_DESIGN.md)
-Built: `OnChange(value, callback)` (src/OnChange/) for persistent state, through the existing hooks (`read_value`,
-`write_value`, `shown_value`); put into the context by an `init` return or an `Override`; tests in test/OnChangeTest.jl.
-- [ ] **Callback after the merge (design 2.5).** The callback runs inside `write_value`, before the merge, so a callback that reads the context sees it from before the write. Add the terminating `AfterMerge` action, split out by `_build_write_payload`.
+Built: `OnChange(value, callback, condition = !==)` (src/OnChange/) for persistent state, through the existing hooks
+(`read_value`, `write_value`, `shown_value`); put into the context by an `init` return or an `Override`; the callback runs
+after the merge through the write action `AfterMerge(f, args)` (Context/View/Hooks.jl), which `_build_write_payload`
+leaves out and `merge(scv, args, demand)` runs (`_run_after_merge`); tests in test/OnChangeTest.jl.
+- [ ] **What an `AfterMerge` gets.** It runs `f(args...)` and gets nothing of the merged context, so an `OnChange` callback sees only `(old, new)`. Decide whether it gets the merged persistent context (and then whether `OnChange`'s callback does).
 - [ ] **Runtime values (design 2.2.3, 2.2.4).** Captured returns and declared locals are merged without `write_value`, so an `OnChange` there never fires. Give the runtime merges the same hook, and keep `OnChange{T}` in `settle_locals`'s join (on `exp/no-maybe`).
 - [ ] **Definition in the DSL (design 2.2.1).** `@state x = OnChange(0.0, cb)` / a `Callable` returning one is untested; only `Override` and `init` returns are covered.
 - [ ] **`OnMutate` for in-place writes (design 2.4).** Not built.

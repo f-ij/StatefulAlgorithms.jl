@@ -1,18 +1,21 @@
 #=
 How an `OnChange` extends the base of reading and writing stored values (Context/View/Hooks.jl): it reads and shows as
-the value it holds, and a write compares the merged value with the held one, runs the callback when they differ, and
-merges a new `OnChange` with the same callback.
+the value it holds, and a write merges a new `OnChange` with the same callback and condition, and runs the callback after
+the merge when the condition holds for the held and the merged value.
 =#
 
 """An `OnChange` reads as the value it holds."""
 @inline read_value(reader::R, w::OnChange) where {R<:AbstractContext} = DirectRead(getfield(w, :value))
 
-"""A write to an `OnChange` runs its callback when the value changes (`old !== new`), and merges the new value wrapped again."""
+"""
+A write to an `OnChange` merges the new value wrapped again, and after the merge runs the callback when the condition
+holds for the held and the new value (`run_on_change`).
+"""
 @inline function write_value(view::V, w::OnChange{T}, request::StoreInto{L}) where {V<:SubContextView, T, L}
     old = getfield(w, :value)
     new = convert(T, getfield(request, :value))
-    old !== new && getfield(w, :callback)(old, new)
-    return DirectWrite{L}(OnChange(new, getfield(w, :callback)))
+    callback, condition = getfield(w, :callback), getfield(w, :condition)
+    return (DirectWrite{L}(OnChange(new, callback, condition)), AfterMerge(run_on_change, (condition, callback, old, new)))
 end
 
 """An `OnChange` shows as the value it holds."""

@@ -32,6 +32,20 @@ using StatefulAlgorithms
     @test isempty(unchanged)
 end
 
+@testset "OnChange with a condition on the old and the new value" begin
+    @StepAlgorithm function OnChangeCounter(@managed(count = 0))
+        @update count = count + 1
+    end
+
+    # Fires only when the count crosses a multiple of 3.
+    crossed = Tuple{Int, Int}[]
+    p = InlineProcess(resolve(CompositeAlgorithm(:counter => OnChangeCounter(), (1,))),
+                      Override(:counter; count = OnChange(0, (old, new) -> push!(crossed, (old, new)), (old, new) -> new % 3 == 0));
+                      repeats = 7)
+    run(p)
+    @test crossed == [(2, 3), (5, 6)]
+end
+
 @testset "OnChange is read and shown as its value" begin
     seen = Float64[]
     @StepAlgorithm function OnChangeReader(@managed(value = 1.0))
@@ -46,4 +60,29 @@ end
     @test seen == [1.0, 2.0, 4.0]
     @test fired[] == 3
     @test StatefulAlgorithms.getcontext(p).reader.value isa OnChange{Float64}
+end
+
+@testset "An AfterMerge in a write's answer runs after the write, and keeps the write" begin
+    # A wrapper whose write answers an `AfterMerge` before its `DirectWrite`: the write is still merged, and the
+    # `AfterMerge` runs after `write_value` answered.
+    order = Symbol[]
+    struct AfterMergeProbe{T}
+        value::T
+    end
+    StatefulAlgorithms.read_value(reader::R, p::AfterMergeProbe) where {R<:StatefulAlgorithms.AbstractContext} =
+        StatefulAlgorithms.DirectRead(p.value)
+    function StatefulAlgorithms.write_value(view::V, p::AfterMergeProbe{T}, request::StatefulAlgorithms.StoreInto{L}) where {V<:StatefulAlgorithms.SubContextView, T, L}
+        push!(order, :write)
+        return (StatefulAlgorithms.AfterMerge(() -> push!(order, :after), ()),
+                StatefulAlgorithms.DirectWrite{L}(AfterMergeProbe(convert(T, request.value))))
+    end
+
+    @StepAlgorithm function AfterMergeTarget(@managed(value = 1.0))
+        @update value = value + 1
+    end
+    algo = resolve(CompositeAlgorithm(:target => AfterMergeTarget(), (1,)))
+    initialized = init(algo, Override(:target; value = AfterMergeProbe(1.0)); lifetime = Repeat(1))
+    stepped = StatefulAlgorithms._step!(initialized, StatefulAlgorithms.context(initialized))
+    @test stepped.target.value == AfterMergeProbe(2.0)   # the `AfterMerge` before the `DirectWrite` does not drop it
+    @test order == [:write, :after]
 end
