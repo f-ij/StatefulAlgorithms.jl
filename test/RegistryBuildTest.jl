@@ -34,9 +34,10 @@ end
 rb_uses_runtime_path(la) =
     occursin("build_registry_from_values", string(Base.code_typed(RB.build_registry_and_key_plan, (typeof(la),))[1][1].code))
 
-"""Whether two `(registry, keyed la)` results are the same: types, keys, multipliers and lookup tables."""
+"""Whether two `(registry, keyed la)` results are the same: types, keyed plans, keys, multipliers and lookup tables."""
 function rb_same_setup(a, b)
     typeof(a) === typeof(b) || return false
+    a[2] === b[2] || return false
     repr(a[1]) == repr(b[1]) || return false
     return all(zip(RB.getentries(a[1]), RB.getentries(b[1]))) do (x, y)
         RB.getmultipliers(x) == RB.getmultipliers(y) && RB.getdynamiclookup(x) == RB.getdynamiclookup(y)

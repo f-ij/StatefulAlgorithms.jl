@@ -26,6 +26,8 @@ Measured on this branch at a4c581f, machine otherwise quiet. Raw files next to t
   `register_child!`; `build_registry_from_values` (run time) and `generate_registry_setup` (from types).
 - GeneratedCode/RegistrySetup.jl: the generated `build_registry_and_key_plan`: its generator returns the code the type
   walk writes (`generate_registry_setup`).
+  Archived alternative without a generated function, with measurements: branch `archive/runtime-registry-setup`
+  (agents/archive-runtime-registry-setup.md there).
 - Registry/Registries.jl, TypeEntries/: reading a registry and its entries (finding, keys, multipliers, listing).
 - Tests: test/RegistryBuildTest.jl (typed path taken, both paths agree, wide and deep plans).
 
