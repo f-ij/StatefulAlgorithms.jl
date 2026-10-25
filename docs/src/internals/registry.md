@@ -113,6 +113,6 @@ For loop algorithms this is derived from composition structure (intervals/repeat
 1. `AlgoState`s first.
 2. Then flattened algorithms.
 
-(see `src/LoopAlgorithms/Setup.jl`)
+(see `src/LoopAlgorithms/ConstructorCommon.jl`)
 
 That ordering controls init/cleanup traversal order through `all_algos(registry)`.

@@ -94,3 +94,7 @@ end
         CompositeLoopCursor(Ref(1), $children)
     end
 end
+
+# Rebuilding for the edit tools (`_rebuild_loopalgorithm`, LoopAlgorithms/ConstructorCommon.jl)
+@inline _stored_schedule_spec(la::ThreadedCompositeAlgorithm) = getschedule(la)
+@inline _constructor_type(::ThreadedCompositeAlgorithm) = ThreadedCompositeAlgorithm
