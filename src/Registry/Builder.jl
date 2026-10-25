@@ -1,37 +1,28 @@
 #=
-Building a registry.
+Collects a plan's algorithms into a registry: `add!` puts one algorithm in (its entry type, its key, its multiplier,
+or the one already there when it is the same algorithm), and `registry(builder)` builds the registry from them at the
+end, following the rules in Interfaces.jl.
 
-Why a builder: a `NameSpaceRegistry`'s type names every algorithm's type, so adding one algorithm to it gives a registry
-of a new type, and Julia compiles everything that touches it again; adding a plan's algorithms one by one would compile
-once per add. A `RegistryBuilder` is instead a scratch pad of plain vectors, the same type for every plan: per entry type
-(`TypeEntryBuilder`) its keyed algorithms (`Lin_1`, `Lin_2`, ...), their multipliers and its runtime lookup table
-(lookup key => position). `add!` puts one algorithm on it, following the rules in Interfaces.jl; the registry is built
-from it once, at the end.
+A `RegistryBuilder` is plain vectors, the same type for every plan, so adding does not compile anything per plan: a
+`NameSpaceRegistry`'s type names every algorithm's type, and adding to it one by one would compile once per add.
 
-The builder works in two modes, with the same code:
-- on values, at run time: `add!` gets the algorithms, and `registry(builder)` builds the registry from them;
-- on types, while compiling (the generated `build_registry_and_key_plan` sees only the plan's type): `add!` gets
-  `KnownByType`s (KnownByType.jl), an algorithm's type plus the expression that reads the algorithm out of the plan at
-  run time, and `write_registry_expr(builder)` writes the expression that builds the registry, part of the generated
-  function's body. Every decision is then made from the types; a step that needs the values (a merge) throws
-  `NeedsValues`, and the plan is set up on values instead.
-
-Lookup keys (`lookup_key`): for a value, its runtime key (`dynamic_lookup_key`); for a `KnownByType`, the same key
-worked out from the type. A normalized handle's key needs its uuid, a value, so on types it is a `RuntimeLookupKey`
-placeholder, and `write_lookup_table_expr` writes a `dynamic_lookup_key` call that fills it in at run time.
-
-The functions take algorithms and types as values (`@nospecialize`), so they are compiled once, not once per plan.
+The same code runs while the generated `build_registry_and_key_plan` is generated, on the plan's type: `add!` then gets
+`GeneratedValue`s (GeneratedValues.jl) instead of algorithms, decides everything from their types (a step that needs
+the values, such as a merge, throws `NeedsValues`), and GeneratedCode/RegistryExpressions.jl writes the code that
+builds the registry. The lookup key of a normalized handle needs its value, so there it is a `RuntimeLookupKey`, filled
+in by the generated code.
 =#
 
 """
-    RuntimeLookupKey(id, expr)
+    RuntimeLookupKey(id, handle_expr)
 
-Stands in for the lookup key of a normalized handle while a layout is worked out from types: that key comes from the
-handle's `reconstructor` value (`dynamic_lookup_key`), which `expr` reads at run time. Equal for the same normalized id `id`.
+Stands in for the lookup key of a normalized handle while the walk works on the plan's type: that key comes from the
+handle's `reconstructor` value (`dynamic_lookup_key`), which only exists at run time; `handle_expr` is the expression
+in the generated function that gives the handle. Equal for the same normalized id `id`.
 """
 struct RuntimeLookupKey
     id::Any
-    expr::Any
+    handle_expr::Any
 end
 Base.isequal(a::RuntimeLookupKey, b::RuntimeLookupKey) = isequal(a.id, b.id)
 Base.hash(a::RuntimeLookupKey, h::UInt) = hash(a.id, hash(RuntimeLookupKey, h))
@@ -90,14 +81,14 @@ keyed (`Lin_1`), or, when it is the same algorithm as one already there (`added_
 whose multiplier then grows by `multiplier`. Where it goes and under which key is decided by the rules in
 Interfaces.jl.
 
-`algo` can be a `KnownByType`: it must then be a handle (`IdentifiableAlgo`), whose type decides everything.
+`algo` can be a `GeneratedValue`: it must then be a handle (`IdentifiableAlgo`), whose type decides everything.
 """
 Base.@nospecializeinfer function add!(b::RegistryBuilder, @nospecialize(algo), @nospecialize(multiplier))
     T = read_type(algo)
     T <: NameSpaceRegistry && error("Cannot add a NameSpaceRegistry to another NameSpaceRegistry")
     T === Nothing && error("Trying to add `nothing` to a registry")
-    algo isa KnownByType && !(isconcretetype(T) && T <: IdentifiableAlgo) && throw(NeedsValues())
-    entry = find_or_add_entry!(b, assign_entrytype(algo isa KnownByType ? T : algo))
+    algo isa GeneratedValue && !(isconcretetype(T) && T <: IdentifiableAlgo) && throw(NeedsValues())
+    entry = find_or_add_entry!(b, assign_entrytype(algo isa GeneratedValue ? T : algo))
     idx = find_same(entry, algo)
     if isnothing(idx)
         keyed = with_autokey(algo, length(entry.algos) + 1)
@@ -135,10 +126,10 @@ The index of the algorithm in `entry` that `algo` is the same algorithm as, or `
 its runtime lookup key.
 """
 Base.@nospecializeinfer function find_same(entry::TypeEntryBuilder, @nospecialize(algo))
-    if !(algo isa KnownByType)
+    if !(algo isa GeneratedValue)
         isstaticallyfindable(algo) || return get(entry.lookup, dynamic_lookup_key(algo), nothing)
     end
-    added = added_matcher(algo isa KnownByType ? algo.type : algo)
+    added = added_matcher(algo isa GeneratedValue ? algo.valuetype : algo)
     for i in eachindex(entry.algos)
         entry.matchers[i] isa MatcherNotComputed && (entry.matchers[i] = entry_matcher(read_type(entry.algos[i])))
         same_algorithm(added, entry.matchers[i]) && return i
@@ -161,7 +152,7 @@ Base.@nospecializeinfer function add_again!(entry::TypeEntryBuilder, idx::Int, @
     end
     if merges_into(read_type(entry.algos[idx]), read_type(algo))
         # A merge combines the values; from the types it is only known that one happens.
-        algo isa KnownByType && throw(NeedsValues())
+        algo isa GeneratedValue && throw(NeedsValues())
         replace_algo!(entry, idx, merge(entry.algos[idx], algo))
     end
     return nothing
@@ -181,39 +172,39 @@ end
 
 `algo` with the automatic key of the `i`-th algorithm of its entry type (`autokey`), or unchanged if it has a key.
 For a handle the key is set on its type, as a value (nothing is compiled per handle type and index); another value is
-keyed by `Autokey`. For a `KnownByType` handle, returns a `KnownByType` of the keyed handle, built from its fields
+keyed by `Autokey`. For a `GeneratedValue` handle, returns a `GeneratedValue` of the keyed handle, built from its fields
 (`build_from_parts`).
 """
 Base.@nospecializeinfer function with_autokey(@nospecialize(algo), i::Int)
-    algo isa KnownByType || algo isa IdentifiableAlgo || return Autokey(algo, i)
+    algo isa GeneratedValue || algo isa IdentifiableAlgo || return Autokey(algo, i)
     p = read_type(algo).parameters    # {F, Id, VarAliases, AlgoName, ContextKey, R}
     p[5] == Symbol() || return algo
     KT = Core.apply_type(IdentifiableAlgo, p[1], p[2], p[3], p[4], autokey(p[1], i), p[6])
     func, reconstructor = read_field(algo, :func), read_field(algo, :reconstructor)
-    algo isa KnownByType || return KT(func, reconstructor)
+    algo isa GeneratedValue || return KT(func, reconstructor)
     return build_from_parts(KT, Any[func, reconstructor])
 end
 
-# Keys of an algorithm: of the value, or, for a `KnownByType` (always a handle), from its type.
+# Keys of an algorithm: of the value, or, for a `GeneratedValue` (always a handle), from its type.
 """The key of the algorithm `x` (`getkey`)."""
-key_of(@nospecialize(x)) = x isa KnownByType ? getkey(x.type) : getkey(x)
+key_of(@nospecialize(x)) = x isa GeneratedValue ? getkey(x.valuetype) : getkey(x)
 """Whether the algorithm `x` has a key (`haskey`)."""
-has_key(@nospecialize(x)) = x isa KnownByType ? getkey(x.type) != Symbol() : haskey(x)
+has_key(@nospecialize(x)) = x isa GeneratedValue ? getkey(x.valuetype) != Symbol() : haskey(x)
 """Whether the algorithm `x` has an automatic key (`hasautokey`, `is_autokey`)."""
-has_autokey(@nospecialize(x)) = x isa KnownByType ? is_autokey(algotype(x.type), getkey(x.type)) : hasautokey(x)
+has_autokey(@nospecialize(x)) = x isa GeneratedValue ? is_autokey(algotype(x.valuetype), getkey(x.valuetype)) : hasautokey(x)
 """Whether the algorithm `x` has a key given to it, not an automatic one."""
 has_given_key(@nospecialize(x)) = has_key(x) && !has_autokey(x)
 
 """
     lookup_key(algo) -> LookupKey or RuntimeLookupKey
 
-The key of `algo` in its entry's runtime lookup table (`dynamic_lookup_key`). For a `KnownByType`, worked out from its
+The key of `algo` in its entry's runtime lookup table (`dynamic_lookup_key`). For a `GeneratedValue`, worked out from its
 type, as `dynamic_lookup_key` does for a value; for a normalized handle (`IdReconstructor`), a `RuntimeLookupKey`.
 """
 Base.@nospecializeinfer function lookup_key(@nospecialize(algo))
-    algo isa KnownByType || return dynamic_lookup_key(algo)
-    T = algo.type
-    T.parameters[6] <: IdReconstructor && return RuntimeLookupKey(id(T), algo.expr)
+    algo isa GeneratedValue || return dynamic_lookup_key(algo)
+    T = algo.valuetype
+    T.parameters[6] <: IdReconstructor && return RuntimeLookupKey(id(T), algo.value_expr)
     return LookupKey(lower_matcher(entry_matcher(T)))
 end
 
@@ -246,59 +237,4 @@ Base.@nospecializeinfer function registry(b::RegistryBuilder)
     end
     all_entries = Tuple(typeentries)
     return NameSpaceRegistry{typeof(all_entries)}(all_entries)
-end
-
-"""
-    write_registry_expr(builder) -> expression
-
-The expression, part of the generated `build_registry_and_key_plan`'s body, that builds the registry `builder` (filled
-with `KnownByType`s) holds, the same one `registry` builds from values: the registry's type is written out and its
-algorithms are read from the plan. Each entry's multipliers and
-lookup table are constants, shared by all plans of the type (a registry's are only read; adding to one copies them,
-`RegistryBuilder(registry)`); entries and the registry are made by the generated code (`build_from_parts`).
-"""
-Base.@nospecializeinfer function write_registry_expr(b::RegistryBuilder)
-    entries = Any[build_known_entry(entry) for entry in b.entries]
-    all_entries = build_tuple(entries, KnownByType(Nothing, nothing))
-    return build_from_parts(NameSpaceRegistry{all_entries.type}, Any[all_entries]).expr
-end
-
-"""The `KnownByType` of the registry entry that `entry` (of a builder filled with `KnownByType`s) holds."""
-Base.@nospecializeinfer function build_known_entry(entry::TypeEntryBuilder)
-    algos = build_tuple(entry.algos, KnownByType(Nothing, nothing))
-    multipliers = KnownByType(Vector{Float64}, QuoteNode(copy(entry.multipliers)))
-    lookup = KnownByType(Dict{LookupKey,Int}, write_lookup_table_expr(entry.lookup))
-    return build_from_parts(RegistryTypeEntry{entry.type, algos.type}, Any[algos, multipliers, lookup])
-end
-
-"""
-    write_lookup_table_expr(lookup) -> expression
-
-The expression, part of the generated `build_registry_and_key_plan`'s body, that gives an entry's lookup table
-`lookup` (of a builder on types): the table of its fixed keys as a constant, or, when some keys are only known at run
-time (normalized handles), a copy of it with those keys added.
-"""
-Base.@nospecializeinfer function write_lookup_table_expr(lookup::BuilderLookup)
-    fixed_keys, fixed_idxs = LookupKey[], Int[]
-    runtime = Any[]
-    for (k, i) in lookup
-        if k isa RuntimeLookupKey
-            push!(runtime, Expr(:call, setindex!, :d, i, Expr(:call, dynamic_lookup_key, k.expr)))
-        else
-            push!(fixed_keys, k::LookupKey); push!(fixed_idxs, i)
-        end
-    end
-    fixed = QuoteNode(lookup_table(Tuple(fixed_keys), Tuple(fixed_idxs)))
-    isempty(runtime) && return fixed
-    return Expr(:let, Expr(:(=), :d, Expr(:call, copy, fixed)), Expr(:block, runtime..., :d))
-end
-
-"""A new lookup table with `keys[i] => idxs[i]`."""
-Base.@nospecializeinfer function lookup_table(@nospecialize(keys::Tuple), @nospecialize(idxs::Tuple))
-    d = Dict{LookupKey,Int}()
-    sizehint!(d, length(keys))
-    for i in 1:length(keys)
-        d[getfield(keys, i)::LookupKey] = getfield(idxs, i)::Int
-    end
-    return d
 end

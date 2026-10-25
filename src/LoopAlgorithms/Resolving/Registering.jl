@@ -6,9 +6,9 @@ wrapper (`_attach_registry`, Accessors.jl; step 1 leaves no nested wrappers).
 `la` once: the states first, then every algorithm, each added to one `RegistryBuilder` with its multiplier. Each
 child of a plan is then stored raw (without its identity wrapper), and its key goes into the plan's `namespaces`.
 
-The walk works on values (`build_registry_from_values`), or on the plan's type, with `KnownByType`s
-(`generate_registry_setup`): the code built from that (GeneratedCode/RegistrySetup.jl) only reads the algorithms out of
-the plan.
+The walk works on values (`build_registry_from_values`), or on the plan's type, with `GeneratedValue`s
+(`generate_registry_setup`), for the generated `build_registry_and_key_plan`: its code (written in
+GeneratedCode/RegistryExpressions.jl) only reads out of the plan what the type does not decide.
 =#
 
 """
@@ -37,12 +37,12 @@ move a plan to the run-time path.
 Base.@nospecializeinfer function generate_registry_setup(@nospecialize(LA))
     builder = RegistryBuilder()
     keyed = try
-        register_tree!(builder, KnownByType(LA, :la))
+        register_tree!(builder, GeneratedValue(LA, :la))
     catch err
         err isa NeedsValues || rethrow()
         return :(build_registry_from_values(la))
     end
-    return Expr(:tuple, write_registry_expr(builder), keyed.expr)
+    return Expr(:tuple, write_registry_expr(builder), keyed.value_expr)
 end
 
 ###############################################################################
@@ -53,7 +53,7 @@ end
     register_tree!(builder, la) -> keyed la
 
 Adds the whole tree of the `LoopAlgorithm` `la` to `builder`: its states first (`register_states!`), then its algorithms
-(`register_children!`). Returns `la` with its plan keyed. `la` can be a `KnownByType`.
+(`register_children!`). Returns `la` with its plan keyed. `la` can be a `GeneratedValue`.
 """
 Base.@nospecializeinfer function register_tree!(b::RegistryBuilder, @nospecialize(la))
     register_states!(b, la)
@@ -118,12 +118,12 @@ Base.@nospecializeinfer function register_child!(b::RegistryBuilder, @nospeciali
     T = read_type(require_concrete(child))
     if T <: Callable
         # On types: every call's `fixed_namespace`.
-        name = child isa KnownByType ? _CALLS_NAMESPACE : fixed_namespace(child)
+        name = child isa GeneratedValue ? _CALLS_NAMESPACE : fixed_namespace(child)
         return child, quote_constant(Core.apply_type(Namespace, name)(), child)
     end
     if T <: LoopSpec
         # A nested `FinalizedAlgorithm` has its final step dropped with a warning: only on the values.
-        T <: FinalizedAlgorithm && child isa KnownByType && throw(NeedsValues())
+        T <: FinalizedAlgorithm && child isa GeneratedValue && throw(NeedsValues())
         inner = T <: LoopAlgorithm ? read_plan(child) : T <: FinalizedAlgorithm ? _unwrap_nested_plan(child) : child
         return register_children!(b, inner, multiplier), quote_constant(Namespace{nothing}(), child)
     end
@@ -134,7 +134,7 @@ Base.@nospecializeinfer function register_child!(b::RegistryBuilder, @nospeciali
         return register_child!(b, unwrap_named_plan(child), multiplier)
     end
     keyed = add!(b, child, multiplier)
-    raw = child isa KnownByType ? read_field(keyed, :func) : getalgo(keyed)
+    raw = child isa GeneratedValue ? read_field(keyed, :func) : getalgo(keyed)
     return raw, quote_constant(Core.apply_type(Namespace, key_of(keyed))(), child)
 end
 
@@ -147,7 +147,7 @@ types only an `IdentifiableAlgo` is read (its `func` field); another handle type
 Base.@nospecializeinfer function unwrap_named_plan(@nospecialize(child))
     T = read_type(child)
     T <: AbstractIdentifiableAlgo{<:LoopSpec} || return child
-    child isa KnownByType || return getalgo(child)
+    child isa GeneratedValue || return getalgo(child)
     T <: IdentifiableAlgo || throw(NeedsValues())
     return read_field(child, :func)
 end
@@ -165,34 +165,34 @@ _unwrap_nested_plan(fa::FinalizedAlgorithm) = _unwrap_nested_plan(_strip_nested_
 # The parts of a plan the walk reads
 ###############################################################################
 #=
-From a value or from a `KnownByType`. On types, a `LoopAlgorithm` wrapper or a plan is read as the plan interface
+From a value or from a `GeneratedValue`. On types, a `LoopAlgorithm` wrapper or a plan is read as the plan interface
 (LoopAlgorithms/Interface.jl) describes it: children in `funcs`, states in `states`, and `multipliers` of the plan's
 type; anything else throws `NeedsValues`.
 =#
 
 """The plan inside the `LoopAlgorithm` `la` (`getplan`)."""
-read_plan(@nospecialize(la)) = la isa KnownByType ? require_concrete(read_field(la, :plan)) : getplan(la)
+read_plan(@nospecialize(la)) = la isa GeneratedValue ? require_concrete(read_field(la, :plan)) : getplan(la)
 
 """The children of `la` (`getalgos`)."""
 Base.@nospecializeinfer function read_children(@nospecialize(la))
-    la isa KnownByType || return getalgos(la)
-    la.type <: LoopAlgorithm && return read_children(read_plan(la))
-    la.type <: AbstractPlan || throw(NeedsValues())
+    la isa GeneratedValue || return getalgos(la)
+    la.valuetype <: LoopAlgorithm && return read_children(read_plan(la))
+    la.valuetype <: AbstractPlan || throw(NeedsValues())
     return require_concrete(read_field(la, :funcs))
 end
 
 """The states of `la` (`getstates`)."""
 Base.@nospecializeinfer function read_states(@nospecialize(la))
-    la isa KnownByType || return getstates(la)
-    la.type <: LoopAlgorithm && return read_states(read_plan(la))
-    la.type <: AbstractPlan || throw(NeedsValues())
+    la isa GeneratedValue || return getstates(la)
+    la.valuetype <: LoopAlgorithm && return read_states(read_plan(la))
+    la.valuetype <: AbstractPlan || throw(NeedsValues())
     return require_concrete(read_field(la, :states))
 end
 
 """How often each child of `la` runs per run of `la` (`multipliers`), a tuple of numbers."""
 Base.@nospecializeinfer function read_multipliers(@nospecialize(la))
-    la isa KnownByType || return multipliers(la)
-    T = la.type
+    la isa GeneratedValue || return multipliers(la)
+    T = la.valuetype
     T <: AbstractPlan || throw(NeedsValues())
     # A `Routine`'s lifetimes or a composite's intervals are read from the type parameter, not with `multipliers(T)`,
     # which compiles once per plan type. Any other plan type answers `multipliers(T)` (LoopAlgorithms/Interface.jl).

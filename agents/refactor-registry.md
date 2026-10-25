@@ -20,7 +20,7 @@ Measured on this branch at a4c581f, machine otherwise quiet. Raw files next to t
 - Registry/Builder.jl: `RegistryBuilder`; `add!(builder, algo, multiplier) -> keyed algo` (the old `add`, which is
   now a thin wrapper), `registry(builder)` (on values), `write_registry_expr(builder)` (the code that builds it, for the
   typed path).
-- Registry/KnownByType.jl: a value known only by its type while a layout is worked out from types, with
+- Registry/GeneratedValues.jl: a value known only by its type while a layout is worked out from types, with
   `read_field`, `build_tuple`, ... that read it the same way as a value. A value the type alone decides is a constant
   in the generated code (`is_known_value`: singleton types, tuples of known values); `build_from_parts` writes the
   code that makes a struct, with `Expr(:new, T, fields...)` for the package's own types (no constructor to infer and
