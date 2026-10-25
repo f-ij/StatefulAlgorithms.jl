@@ -300,8 +300,8 @@ end
     end
     @test SAru.context(run(ru_legacy_routine; repeats = 1))[RULegacyCounter].count == 3
 
-    # `x = @repeat spec Algo()` keeps its legacy meaning (an error with `@Routine`): `x` binds the returned field `x`
-    # of the last repeat.
+    # `x = @repeat spec Algo()` keeps its legacy meaning (with `@Routine` it is the repeated block
+    # `local x; @repeat spec begin x = Algo() end`): `x` binds the returned field `x` of the last repeat.
     global ru_legacy_repeat_seen = Any[]
     @eval ru_legacy_repeat = @Routine_legacy begin
         doubled = @repeat 2 RULegacyCounter()
