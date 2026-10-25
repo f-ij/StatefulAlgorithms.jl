@@ -29,8 +29,8 @@ end
 
 The body of `build_registry_and_key_plan` for a `LoopAlgorithm` of type `LA` (the argument is named `la`): code that
 returns `(registry, keyed la)` as `build_registry_from_values(la)` does. The same walk, run on `LA`'s types, decides the
-whole registry and the keyed plan; the code returned only reads the algorithms out of `la` and puts them in place,
-creating the multipliers and lookup tables anew. When a step needs the values (`NeedsValues`), the code returned calls
+whole registry and the keyed plan; the code returned only reads the values the types do not decide out of `la` and
+puts them in place (the rest are constants, `is_known_value`). When a step needs the values (`NeedsValues`), the code returned calls
 `build_registry_from_values(la)`; any other error of the walk is thrown, so a bug on the types path does not silently
 move a plan to the run-time path.
 """

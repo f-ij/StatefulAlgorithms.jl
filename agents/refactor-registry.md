@@ -21,11 +21,17 @@ Measured on this branch at a4c581f, machine otherwise quiet. Raw files next to t
   now a thin wrapper), `registry(builder)` (on values), `registry_code(builder)` (the code that builds it, for the
   typed path).
 - Registry/KnownByType.jl: a value known only by its type while a layout is worked out from types, with
-  `read_field`, `build_tuple`, ... that read it the same way as a value.
+  `read_field`, `build_tuple`, ... that read it the same way as a value. A value the type alone decides is a constant
+  in the generated code (`is_known_value`: singleton types, tuples of known values); `known_from_parts` writes the
+  code that makes a struct, with `Expr(:new, T, fields...)` for the package's own types (no constructor to infer and
+  inline; no separate compile when fields are constants) and a constructor call for another package's plan type.
 - LoopAlgorithms/Resolving/Registering.jl: the walk over a plan: `register_tree!`, `register_states!`, `register_children!`,
   `register_child!`; `build_registry_from_values` (run time) and `generate_registry_setup` (from types).
 - GeneratedCode/RegistrySetup.jl: the generated `build_registry_and_key_plan`: its generator returns the code the type
-  walk writes (`generate_registry_setup`).
+  walk writes (`generate_registry_setup`). Each registry entry's multipliers and lookup table are constants shared by
+  all plans of the type (`registry_code`, `lookup_table_code`); a registry's are only read.
+  Same design with constructor calls instead of `new` (shared objects behind `Core.compilerbarrier(:const, x)`):
+  branch `exp/registry-constructor-calls` (d1b4cfc), same warm time, 0-5 ms slower first call.
   Archived alternative without a generated function, with measurements: branch `archive/runtime-registry-setup`
   (agents/archive-runtime-registry-setup.md there).
 - Registry/Registries.jl, TypeEntries/: reading a registry and its entries (finding, keys, multipliers, listing).
