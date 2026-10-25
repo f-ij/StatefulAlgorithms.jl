@@ -88,7 +88,9 @@ Two ways for a loop algorithm to run something only some of the time:
 
 2.6.6 No pausing during a handler, for now. The handler is stepped with a `LoopRunProcess` made on demand and a fresh non-pausable cursor (`loop_cursor(plan, Val(false))`), as the hand-driven `_step!(la, context)` does. `process_breakcondition` is `false` for a `LoopRunProcess`, so a handler always runs to its end; the outer process's pause check comes after.
 
-2.6.7 `AfterMerge` stays for the plain-function form (`OnChange(value, callback, condition)` without the DSL).
+2.6.7 The handler's `return` is its own value, and routable like any statement's return: `y = @OnChange x do new … return v end` captures it, and routes and `@bind` take it like a captured return. It is written only when the handler fires, so it follows the `@every` rule: the name exists first (`local y`). A plan has no return value otherwise (`_dsl_check_plan_capture`); the handler's `return` is the one exception.
+
+2.6.8 `AfterMerge` stays for the plain-function form (`OnChange(value, callback, condition)` without the DSL).
 
 ### 2.7 Scope
 
@@ -119,7 +121,7 @@ Two ways for a loop algorithm to run something only some of the time:
 - 4.2.2 How a wrapper's target `Var` becomes a location type when compiling is not worked out.
 
 4.3 Handlers (2.6):
-- 4.3.1 What the handler's `return` means: written back into `x` (for example a clamp), or the handler's own value for later statements. If written into `x`, a write from its own handler must not fire it again (or is a build error).
+- 4.3.1 A handler whose return is routed into `x` itself (or into another watched value whose handler writes `x`) makes a cycle: a build error.
 - 4.3.2 `LoopRunProcess` is mutable; check that making one per fired handler is optimized away when everything is inlined, or make one per plan step.
 
 4.4 Every merge of a step's, `init`'s or cleanup's returns goes through `merge(scv, args, demand)`, once per merge. The wrapper is applied after `init`; decide whether cleanup returns fire.
