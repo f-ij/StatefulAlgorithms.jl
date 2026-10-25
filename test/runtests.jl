@@ -21,6 +21,7 @@ const TEST_FILES = [
     "SymbolIndexingTest.jl",
     "InnerTypeFilterTest.jl",
     "InteractiveTest.jl",
+    "OnChangeTest.jl",
     "ContextExchangeTest.jl",
     "RedirectTest.jl",
     "ProcessAlgorithmMacroTest.jl",

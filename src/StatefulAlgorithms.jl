@@ -56,6 +56,7 @@ module StatefulAlgorithms
     include("Reports/Reports.jl")
 
     include("InputInterface/InputInterface.jl")
+    include("OnChange/OnChange.jl")
     include("Init.jl")
     include("ConstructorCommon.jl")
     # include("Running.jl")
