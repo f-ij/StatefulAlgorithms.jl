@@ -181,7 +181,8 @@ end
 
 `algo` with the automatic key of the `i`-th algorithm of its entry type (`autokey`), or unchanged if it has a key.
 For a handle the key is set on its type, as a value (nothing is compiled per handle type and index); another value is
-keyed by `Autokey`. For a `KnownByType` handle, returns a `KnownByType` of the keyed handle, built from its fields.
+keyed by `Autokey`. For a `KnownByType` handle, returns a `KnownByType` of the keyed handle, built from its fields
+(`known_from_parts`).
 """
 Base.@nospecializeinfer function with_autokey(@nospecialize(algo), i::Int)
     algo isa KnownByType || algo isa IdentifiableAlgo || return Autokey(algo, i)
@@ -190,7 +191,7 @@ Base.@nospecializeinfer function with_autokey(@nospecialize(algo), i::Int)
     KT = Core.apply_type(IdentifiableAlgo, p[1], p[2], p[3], p[4], autokey(p[1], i), p[6])
     func, reconstructor = read_field(algo, :func), read_field(algo, :reconstructor)
     algo isa KnownByType || return KT(func, reconstructor)
-    return KnownByType(KT, Expr(:call, KT, func.expr, reconstructor.expr), Any[func, reconstructor])
+    return known_from_parts(KT, Any[func, reconstructor])
 end
 
 # Keys of an algorithm: of the value, or, for a `KnownByType` (always a handle), from its type.
@@ -251,23 +252,28 @@ end
     registry_code(builder) -> Expr
 
 The code that builds the registry `builder` (filled with `KnownByType`s) holds, the same one `registry` builds from
-values: the registry's type is written out, its algorithms are read from the plan, and each entry type's multipliers
-and lookup table are created anew on every run (they are changed in place later).
+values: the registry's type is written out and its algorithms are read from the plan. Each entry's multipliers and
+lookup table are constants, shared by all plans of the type (a registry's are only read; adding to one copies them,
+`RegistryBuilder(registry)`); an entry or registry built only from known values is one constant (`known_from_parts`).
 """
 Base.@nospecializeinfer function registry_code(b::RegistryBuilder)
-    n = length(b.entries)
-    entry_types = Vector{Any}(undef, n)
-    entry_exprs = Vector{Any}(undef, n)
-    for (i, entry) in enumerate(b.entries)
-        E = Tuple{Any[read_type(x) for x in entry.algos]...}
-        entry_types[i] = RegistryTypeEntry{entry.type, E}
-        entry_exprs[i] = Expr(:call, entry_types[i], Expr(:tuple, Any[x.expr for x in entry.algos]...),
-            Expr(:ref, Float64, entry.multipliers...), lookup_table_code(entry.lookup))
-    end
-    return Expr(:call, NameSpaceRegistry{Tuple{entry_types...}}, Expr(:tuple, entry_exprs...))
+    entries = Any[entry_known(entry) for entry in b.entries]
+    all_entries = build_tuple(entries, KnownByType(Nothing, nothing))
+    return known_from_parts(NameSpaceRegistry{all_entries.type}, Any[all_entries]).expr
 end
 
-"""The code that creates the lookup table `lookup` of a builder on types: its fixed keys as constants, plus the keys read at run time."""
+"""A `KnownByType` of the registry entry an entry of a builder filled with `KnownByType`s holds."""
+Base.@nospecializeinfer function entry_known(entry::TypeEntryBuilder)
+    algos = build_tuple(entry.algos, KnownByType(Nothing, nothing))
+    multipliers = KnownByType(Vector{Float64}, QuoteNode(copy(entry.multipliers)))
+    lookup = KnownByType(Dict{LookupKey,Int}, lookup_table_code(entry.lookup))
+    return known_from_parts(RegistryTypeEntry{entry.type, algos.type}, Any[algos, multipliers, lookup])
+end
+
+"""
+The code that gives the lookup table `lookup` of a builder on types: the table of its fixed keys as a constant, or,
+when some keys are only known at run time (normalized handles), a copy of it with those keys added.
+"""
 Base.@nospecializeinfer function lookup_table_code(lookup::BuilderLookup)
     fixed_keys, fixed_idxs = LookupKey[], Int[]
     runtime = Any[]
@@ -278,9 +284,9 @@ Base.@nospecializeinfer function lookup_table_code(lookup::BuilderLookup)
             push!(fixed_keys, k::LookupKey); push!(fixed_idxs, i)
         end
     end
-    filled = Expr(:call, lookup_table, Tuple(fixed_keys), Tuple(fixed_idxs))
-    isempty(runtime) && return filled
-    return Expr(:let, Expr(:(=), :d, filled), Expr(:block, runtime..., :d))
+    fixed = QuoteNode(lookup_table(Tuple(fixed_keys), Tuple(fixed_idxs)))
+    isempty(runtime) && return fixed
+    return Expr(:let, Expr(:(=), :d, Expr(:call, copy, fixed)), Expr(:block, runtime..., :d))
 end
 
 """A new lookup table with `keys[i] => idxs[i]`."""

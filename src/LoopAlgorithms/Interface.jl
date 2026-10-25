@@ -81,8 +81,8 @@ only the children change (step 1 of `resolve`, the DSL).
 type parameter that a replaced field is declared as (`_field_parameter_index`) becomes the type of the new value. Used
 by the defaults above and the registry walk; works on types as values, so it is compiled once, not once per plan type.
 
-`s` can be a `KnownByType` (with `values` `KnownByType`s): the result is then a `KnownByType` of the new type, whose
-code calls its constructor on `s`'s other fields and the new values.
+`s` can be a `KnownByType` (with `values` `KnownByType`s): the result is then a `KnownByType` of the new type, built
+from `s`'s other fields and the new values (`known_from_parts`).
 """
 Base.@nospecializeinfer function replace_fields(@nospecialize(s), names::Tuple{Vararg{Symbol}}, @nospecialize(values::Tuple))
     T = read_type(s)
@@ -97,5 +97,5 @@ Base.@nospecializeinfer function replace_fields(@nospecialize(s), names::Tuple{V
     end
     NT = Core.apply_type(T.name.wrapper, params...)
     s isa KnownByType || return NT(fields...)
-    return KnownByType(NT, Expr(:call, NT, Any[f.expr for f in fields]...), fields)
+    return known_from_parts(NT, fields)
 end
