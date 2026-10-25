@@ -9,7 +9,7 @@ lookup keys are all decided by `la`'s type, so they are worked out once while co
 same walk as on values, run on the types). What the type alone decides is a constant in the generated code: the
 algorithms and handles whose type is a singleton, tuples of those, and each entry's multipliers and lookup table
 (shared by all plans of the type). The compiled code only reads the other values out of `la` and makes the structs
-around them (`known_from_parts`). A plan whose layout needs its values (a state merge, an object that is not an
+around them (`build_from_parts`). A plan whose layout needs its values (a state merge, an object that is not an
 `IdentifiableAlgo` handle, a plan type not read from its fields) is set up at run time instead
 (`build_registry_from_values`).
 

@@ -42,7 +42,7 @@ Base.@nospecializeinfer function generate_registry_setup(@nospecialize(LA))
         err isa NeedsValues || rethrow()
         return :(build_registry_from_values(la))
     end
-    return Expr(:tuple, registry_code(builder), keyed.expr)
+    return Expr(:tuple, write_registry_expr(builder), keyed.expr)
 end
 
 ###############################################################################

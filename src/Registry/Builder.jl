@@ -11,14 +11,14 @@ from it once, at the end.
 The builder works in two modes, with the same code:
 - on values, at run time: `add!` gets the algorithms, and `registry(builder)` builds the registry from them;
 - on types, while compiling (the generated `build_registry_and_key_plan` sees only the plan's type): `add!` gets
-  `KnownByType`s (KnownByType.jl), an algorithm's type plus the code that reads the algorithm out of the plan at run
-  time, and `registry_code(builder)` is the code that builds the registry, the body of the generated function. Every
-  decision is then made from the types; a step that needs the values (a merge) throws `NeedsValues`, and the plan is
-  set up on values instead.
+  `KnownByType`s (KnownByType.jl), an algorithm's type plus the expression that reads the algorithm out of the plan at
+  run time, and `write_registry_expr(builder)` writes the expression that builds the registry, part of the generated
+  function's body. Every decision is then made from the types; a step that needs the values (a merge) throws
+  `NeedsValues`, and the plan is set up on values instead.
 
 Lookup keys (`lookup_key`): for a value, its runtime key (`dynamic_lookup_key`); for a `KnownByType`, the same key
 worked out from the type. A normalized handle's key needs its uuid, a value, so on types it is a `RuntimeLookupKey`
-placeholder, and `registry_code` writes a `dynamic_lookup_key` call that fills it in at run time.
+placeholder, and `write_lookup_table_expr` writes a `dynamic_lookup_key` call that fills it in at run time.
 
 The functions take algorithms and types as values (`@nospecialize`), so they are compiled once, not once per plan.
 =#
@@ -97,7 +97,7 @@ Base.@nospecializeinfer function add!(b::RegistryBuilder, @nospecialize(algo), @
     T <: NameSpaceRegistry && error("Cannot add a NameSpaceRegistry to another NameSpaceRegistry")
     T === Nothing && error("Trying to add `nothing` to a registry")
     algo isa KnownByType && !(isconcretetype(T) && T <: IdentifiableAlgo) && throw(NeedsValues())
-    entry = entry_for!(b, assign_entrytype(algo isa KnownByType ? T : algo))
+    entry = find_or_add_entry!(b, assign_entrytype(algo isa KnownByType ? T : algo))
     idx = find_same(entry, algo)
     if isnothing(idx)
         keyed = with_autokey(algo, length(entry.algos) + 1)
@@ -113,12 +113,12 @@ Base.@nospecializeinfer function add!(b::RegistryBuilder, @nospecialize(algo), @
 end
 
 """
-    entry_for!(builder, E) -> TypeEntryBuilder
+    find_or_add_entry!(builder, E) -> TypeEntryBuilder
 
 The entry of `builder` that algorithms of entry type `E` go into: the first whose type `E` is a subtype of, else a new
 one, put first or last (`entrytype_goes_first`).
 """
-Base.@nospecializeinfer function entry_for!(b::RegistryBuilder, @nospecialize(E))
+Base.@nospecializeinfer function find_or_add_entry!(b::RegistryBuilder, @nospecialize(E))
     for entry in b.entries
         E <: entry.type && return entry
     end
@@ -182,7 +182,7 @@ end
 `algo` with the automatic key of the `i`-th algorithm of its entry type (`autokey`), or unchanged if it has a key.
 For a handle the key is set on its type, as a value (nothing is compiled per handle type and index); another value is
 keyed by `Autokey`. For a `KnownByType` handle, returns a `KnownByType` of the keyed handle, built from its fields
-(`known_from_parts`).
+(`build_from_parts`).
 """
 Base.@nospecializeinfer function with_autokey(@nospecialize(algo), i::Int)
     algo isa KnownByType || algo isa IdentifiableAlgo || return Autokey(algo, i)
@@ -191,7 +191,7 @@ Base.@nospecializeinfer function with_autokey(@nospecialize(algo), i::Int)
     KT = Core.apply_type(IdentifiableAlgo, p[1], p[2], p[3], p[4], autokey(p[1], i), p[6])
     func, reconstructor = read_field(algo, :func), read_field(algo, :reconstructor)
     algo isa KnownByType || return KT(func, reconstructor)
-    return known_from_parts(KT, Any[func, reconstructor])
+    return build_from_parts(KT, Any[func, reconstructor])
 end
 
 # Keys of an algorithm: of the value, or, for a `KnownByType` (always a handle), from its type.
@@ -249,32 +249,36 @@ Base.@nospecializeinfer function registry(b::RegistryBuilder)
 end
 
 """
-    registry_code(builder) -> Expr
+    write_registry_expr(builder) -> expression
 
-The code that builds the registry `builder` (filled with `KnownByType`s) holds, the same one `registry` builds from
-values: the registry's type is written out and its algorithms are read from the plan. Each entry's multipliers and
+The expression, part of the generated `build_registry_and_key_plan`'s body, that builds the registry `builder` (filled
+with `KnownByType`s) holds, the same one `registry` builds from values: the registry's type is written out and its
+algorithms are read from the plan. Each entry's multipliers and
 lookup table are constants, shared by all plans of the type (a registry's are only read; adding to one copies them,
-`RegistryBuilder(registry)`); entries and the registry are made by the generated code (`known_from_parts`).
+`RegistryBuilder(registry)`); entries and the registry are made by the generated code (`build_from_parts`).
 """
-Base.@nospecializeinfer function registry_code(b::RegistryBuilder)
-    entries = Any[entry_known(entry) for entry in b.entries]
+Base.@nospecializeinfer function write_registry_expr(b::RegistryBuilder)
+    entries = Any[build_known_entry(entry) for entry in b.entries]
     all_entries = build_tuple(entries, KnownByType(Nothing, nothing))
-    return known_from_parts(NameSpaceRegistry{all_entries.type}, Any[all_entries]).expr
+    return build_from_parts(NameSpaceRegistry{all_entries.type}, Any[all_entries]).expr
 end
 
-"""A `KnownByType` of the registry entry an entry of a builder filled with `KnownByType`s holds."""
-Base.@nospecializeinfer function entry_known(entry::TypeEntryBuilder)
+"""The `KnownByType` of the registry entry that `entry` (of a builder filled with `KnownByType`s) holds."""
+Base.@nospecializeinfer function build_known_entry(entry::TypeEntryBuilder)
     algos = build_tuple(entry.algos, KnownByType(Nothing, nothing))
     multipliers = KnownByType(Vector{Float64}, QuoteNode(copy(entry.multipliers)))
-    lookup = KnownByType(Dict{LookupKey,Int}, lookup_table_code(entry.lookup))
-    return known_from_parts(RegistryTypeEntry{entry.type, algos.type}, Any[algos, multipliers, lookup])
+    lookup = KnownByType(Dict{LookupKey,Int}, write_lookup_table_expr(entry.lookup))
+    return build_from_parts(RegistryTypeEntry{entry.type, algos.type}, Any[algos, multipliers, lookup])
 end
 
 """
-The code that gives the lookup table `lookup` of a builder on types: the table of its fixed keys as a constant, or,
-when some keys are only known at run time (normalized handles), a copy of it with those keys added.
+    write_lookup_table_expr(lookup) -> expression
+
+The expression, part of the generated `build_registry_and_key_plan`'s body, that gives an entry's lookup table
+`lookup` (of a builder on types): the table of its fixed keys as a constant, or, when some keys are only known at run
+time (normalized handles), a copy of it with those keys added.
 """
-Base.@nospecializeinfer function lookup_table_code(lookup::BuilderLookup)
+Base.@nospecializeinfer function write_lookup_table_expr(lookup::BuilderLookup)
     fixed_keys, fixed_idxs = LookupKey[], Int[]
     runtime = Any[]
     for (k, i) in lookup

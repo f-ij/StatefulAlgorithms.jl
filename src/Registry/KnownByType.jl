@@ -3,14 +3,15 @@ Values known only by their type.
 
 The registry layout of a plan is worked out from the plan's type, before any plan value exists
 (`build_registry_and_key_plan`). The same code that builds a registry from values (`add!`, the plan walk) then
-gets `KnownByType`s instead of values: a type, and the code that gives the value at run time. The functions below
+gets `KnownByType`s instead of values: a type, and the expression that gives the value at run time (part of the
+generated `build_registry_and_key_plan`'s body). The functions below
 read a field, count fields, or build a tuple the same way for a value and for a `KnownByType`, so that code is
 written once.
 
 A value that the type alone decides is known while generating, and is a constant in the generated code
 (`is_known_value`): a field whose type is a singleton (most algorithms and handles), and a tuple of known values
-(`known_from_parts`). The generated code then neither reads nor builds it. A struct is not built while generating:
-the generated code makes it (`struct_code`), so its constructor is compiled into that code, not on its own.
+(`build_from_parts`). The generated code then neither reads nor builds it. A struct is not built while generating:
+the generated code makes it (`write_struct_expr`).
 
 The functions take their arguments as values (`@nospecialize`), so they are compiled once, not once per plan type.
 =#
@@ -18,8 +19,9 @@ The functions take their arguments as values (`@nospecialize`), so they are comp
 """
     KnownByType(type, expr, fields = nothing)
 
-A value known only by its type while a registry layout is worked out: its type `type`, and `expr`, the code that gives
-the value at run time (reading it from the plan with `getfield`, or building it). `fields`, when `expr` builds the
+A value known only by its type while a registry layout is worked out: its type `type`, and `expr`, the expression in
+the generated code that gives the value at run time (reading it from the plan with `getfield`, building it, or a
+constant, a `QuoteNode`). `fields`, when `expr` builds the
 value, holds the `KnownByType`s of its fields.
 """
 struct KnownByType
@@ -66,28 +68,29 @@ is_known_value(x::KnownByType) = x.expr isa QuoteNode
 known_value(x::KnownByType) = (x.expr::QuoteNode).value
 
 """
-    known_from_parts(T, parts) -> KnownByType
+    build_from_parts(T, parts) -> KnownByType
 
 A `KnownByType` of the value of type `T` (a tuple or a struct) made from `parts` (`KnownByType`s of its elements or
 fields, in order), kept as its fields (`read_field`). A tuple of known values is built now, a constant in the generated
-code; anything else is made by the generated code (`struct_code`).
+code; anything else is made by the generated code (`write_struct_expr`).
 """
-Base.@nospecializeinfer function known_from_parts(@nospecialize(T), parts::Vector{Any})
+Base.@nospecializeinfer function build_from_parts(@nospecialize(T), parts::Vector{Any})
     exprs = Any[p.expr for p in parts]
-    T <: Tuple || return KnownByType(T, struct_code(T, exprs), parts)
+    T <: Tuple || return KnownByType(T, write_struct_expr(T, exprs), parts)
     all(is_known_value, parts) && return KnownByType(T, QuoteNode(Tuple(Any[known_value(p) for p in parts])), parts)
     return KnownByType(T, Expr(:tuple, exprs...), parts)
 end
 
 """
-    struct_code(T, exprs) -> Expr
+    write_struct_expr(T, exprs) -> expression
 
-The code that makes a `T` from the code of its fields `exprs`: `new` for a type of this package, whose constructor
-`T(fields...)` is the default one (the tests check that the typed and the run-time setup agree); a call of its
-constructor for a type of another package (a plan type). With `new` nothing is compiled per type when the fields are
-constants; a constructor called on constants is run, and compiled on its own, while compiling the generated code.
+The expression, in the generated code, that makes a `T` from the expressions of its fields `exprs`: `Expr(:new, T,
+fields...)` for a type of this package, whose constructor `T(fields...)` is the default one (the tests check that the
+typed and the run-time setup agree); a call of its constructor for a type of another package (a plan type). With
+`new` there is no constructor call to infer and inline, and none that Julia runs (compiling it on its own) when the
+fields are constants.
 """
-Base.@nospecializeinfer struct_code(@nospecialize(T::DataType), exprs::Vector{Any}) =
+Base.@nospecializeinfer write_struct_expr(@nospecialize(T::DataType), exprs::Vector{Any}) =
     parentmodule(T) === (@__MODULE__) ? Expr(:new, T, exprs...) : Expr(:call, T, exprs...)
 
 """The number of fields of `x` (of the type a `KnownByType` stands for)."""
@@ -108,7 +111,7 @@ the `KnownByType`s `xs`.
 """
 Base.@nospecializeinfer function build_tuple(xs::Vector{Any}, @nospecialize(like))
     like isa KnownByType || return Tuple(xs)
-    return known_from_parts(Tuple{Any[read_type(x) for x in xs]...}, xs)
+    return build_from_parts(Tuple{Any[read_type(x) for x in xs]...}, xs)
 end
 
 """The constant `v`; a `KnownByType` of it when `like` is one."""
