@@ -26,8 +26,10 @@ Which subcontext that is, is decided as for a route endpoint:
 | 3 | type (`Counter`) | the subcontext of the first registered algorithm of that type; use a key or an instance when there are several |
 
 The reference is stored in the `Var`'s type (a key as itself, anything else as
-the matcher the registry identifies it by), so a `Var` holds no values and the
-lookup is resolved when the code is compiled.
+the matcher the registry identifies it by), so the lookup is resolved when the
+code is compiled. A `Var` of a `Unique(...)` value also holds the handle's id as
+a value, as a route does, so plans built again with new `Unique`s keep the same
+types.
 
 Example:
 

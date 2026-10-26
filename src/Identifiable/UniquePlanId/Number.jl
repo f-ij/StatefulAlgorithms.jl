@@ -17,6 +17,9 @@ function rewrite_id(r::_NumberIds, @nospecialize(id::UniquePlanId))
     u = origin(id)
     return UniquePlanId{get!(r.numbers, u, length(r.numbers) + 1)}(u)
 end
-# Every holder keeps its id as a value (`list_field_derived_params`): a type alone has nothing to number it by.
-rewrite_type_id(::_NumberIds, @nospecialize(T::Type{<:UniquePlanId})) =
-    error("Cannot number `$T`: only a type holds it, without the value that says which handle it is.")
+# An id only a type holds is numbered by the uuid in it; a number or `ValueId` alone does not say which handle it is.
+function rewrite_type_id(r::_NumberIds, @nospecialize(T::Type{<:UniquePlanId}))
+    u = plan_number(T)
+    u isa UUID || error("Cannot number `$T`: only a type holds it, without the value that says which handle it is.")
+    return UniquePlanId{get!(r.numbers, u, length(r.numbers) + 1)}
+end
