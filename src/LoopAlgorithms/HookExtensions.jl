@@ -10,14 +10,14 @@ this file):
 
 @inline should_run_schedule(interval::I, loopidx::Int, context::C) where {I<:Interval, C} = @inline divides(loopidx, interval)
 
-@inline function should_run_schedule(runif::R, loopidx::Int, context::C) where {Vars, R<:RunIf{Vars}, C}
+@inline function should_run_schedule(runif::R, loopidx::Int, context::C) where {V, R<:RunIf{V}, C}
     if !(@inline divides(loopidx, runif))
         return false
     end
-    if isempty(Vars)
+    if V === Tuple{}
         return @inline getcondition(runif)()
     end
-    return @inline getcondition(runif)(getindex(context, Vars...))
+    return @inline getcondition(runif)(getindex(context, getvars(runif)...))
 end
 
 @inline always_runs(::Type{I}) where {F, I<:Interval{1, F, 0}} = true

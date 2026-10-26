@@ -1,0 +1,26 @@
+#=
+How a `UniquePlanId` answers the hooks of the matching system (Matching.jl) and the registry (Registry/Interfaces.jl,
+Registry/LookupKey.jl). Included after both.
+=#
+
+# A value against a type: the type's `N` names the handle by uuid (a held handle) or by its number in the plan;
+# `ValueId` names none, so no handle matches it by type.
+matches_type(id::UniquePlanId, ::Type{UniquePlanId{N}}) where {N} = _matches_plan_number(id, N)
+_matches_plan_number(id::UniquePlanId, N::UUID) = origin(id) == N
+_matches_plan_number(id::UniquePlanId, N::Int) = plan_number(id) === N
+_matches_plan_number(id::UniquePlanId, ::Type{ValueId}) = false
+
+Base.:(==)(a::UniquePlanId, T::Type{<:UniquePlanId}) = matches_type(a, T)
+Base.:(==)(T::Type{<:UniquePlanId}, b::UniquePlanId) = matches_type(b, T)
+# A merged state (`MatchAnyOf`) holds the ids of the states it merged.
+Base.:(==)(m::Type{<:MatchAnyOf}, x::Union{UniquePlanId, Type{<:UniquePlanId}}) = _any_matches(m, x)
+Base.:(==)(x::Union{UniquePlanId, Type{<:UniquePlanId}}, m::Type{<:MatchAnyOf}) = _any_matches(m, x)
+
+# Given to the handle by `Unique(f)` or a block's `@state`.
+is_given_id(::Union{UniquePlanId, Type{<:UniquePlanId}}) = true
+
+# The registry stores only numbered ids: a held one (`UniquePlanId{uuid}`) is found by its uuid in the runtime table.
+is_found_by_data(id::UniquePlanId) = is_held_unique_id(id)
+
+# Named after its uuid only, so every form of it (held, stripped, numbered) gets the same name.
+Base.@nospecializeinfer lower_matcher(id::UniquePlanId) = Symbol(lower_type(UniquePlanId), "_", origin(id))

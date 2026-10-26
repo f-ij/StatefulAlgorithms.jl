@@ -10,27 +10,26 @@ state as it was put into the plan (its type, or the instance), or a context key 
 `transform`, reading it gives `transform(value)`. Read with `context[var]`, used by lifetimes
 (`Until(cond, Var(counter, :count))`), and as the source of a wire in `WithWiring` (`From`).
 
-Everything is type data. `subcontext_ref` is stored as an SCRef is stored in a route
-(`scref_match`): a context key as itself, anything else (a type, an instance) as its matcher type.
-Reading the `Var` resolves the matcher to a key in the context's registry (`resolve_scref`); a type
-reads the first registered algorithm of that type. The transform must be a plain function or a
-closure without captured values, as for routes.
+`subcontext_ref` is stored as a route stores an endpoint, without the object: in the type, a context key as itself and
+anything else (a type, an instance) as its matcher type (`scref_match`); in the `data` field, the matcher when it
+carries data its type does not hold (`scref_data`, a `Unique` handle's `UniquePlanId`), else `nothing`. Reading the
+`Var` resolves the matcher type to a key in the context's registry (`resolve_scref`), while compiling; a type reads
+the first registered algorithm of that type. The transform must be a plain function or a closure without captured
+values, as for routes.
 """
-struct Var{SubcontextRef, name, transform} end
-
-Var(subcontext_ref, name::Symbol; transform = nothing) = Var{_var_match(subcontext_ref), name, transform}()
-
-# A `Var` holds its SCRef only in its type, so a `Unique` handle that a constructor stripped (`UniquePlanId{nothing}`)
-# is stored with its uuid again (`UniquePlanId{uuid}`): the plan numbers it by that (`number_unique_ids`).
-function _var_match(ref)
-    m = scref_match(ref)
-    if m === UniquePlanId{nothing}
-        # A stripped `Unique` handle: put its uuid (still in the value) back into the type
-        return UniquePlanId{origin(match_by(ref))}
-    end
-    return m
+struct Var{SubcontextRef, name, transform, D}
+    data::D
 end
-Var(name::Symbol) = Var{:_captured_returns, name, nothing}()
+
+# Typed: `c[Var(:key, :x)]` in a function is inferred and does not allocate.
+function Var(subcontext_ref, name::Symbol; transform = nothing)
+    data = scref_data(subcontext_ref)
+    return Var{scref_match(subcontext_ref), name, transform, typeof(data)}(data)
+end
+Var(name::Symbol) = Var{:_captured_returns, name, nothing, Nothing}(nothing)
+
+# The matcher type (parameter 1) is that of the `data` field, as a route's endpoints are those of its endpoint fields.
+list_field_derived_params(::Type{<:Var}) = ((1, 1, scref_match),)
 
 """
 Return the subcontext a `Var` refers to: the one named by its SCKey, or the registry entry its

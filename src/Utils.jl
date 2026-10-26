@@ -153,3 +153,19 @@ end
 @inline Base.setindex!(b::TupleBox, v, i::Int) = (setfield!(b, :data, Base.setindex(getfield(b, :data), v, i)); v)
 @inline Base.length(::TupleBox{N}) where {N} = N
 @inline Base.iterate(b::TupleBox, state...) = iterate(getfield(b, :data), state...)
+
+"""
+    new_instance(T, fields...) -> T
+
+A value of the concrete type `T` with `fields` (of exactly its field types), made without calling a constructor. A new
+type's default constructor is compiled on first call, about 1.5 ms each; `Unique` handles, the routes and `Var`s that
+hold them and their registry matchers are new types for every uuid, so they are made with this.
+"""
+Base.@nospecializeinfer function new_instance(@nospecialize(T::DataType), @nospecialize(fields...))
+    n = length(fields)
+    v = Vector{Any}(undef, n)
+    for i in 1:n
+        v[i] = fields[i]
+    end
+    return ccall(:jl_new_structv, Any, (Any, Ptr{Any}, UInt32), T, v, n)
+end

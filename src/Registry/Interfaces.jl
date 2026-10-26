@@ -153,10 +153,19 @@ with one id are the same entry already, also when their values differ (one may c
 function merges_into(@nospecialize(E), @nospecialize(N))
     E <: IdentifiableAlgo && N <: IdentifiableAlgo || return false
     handles_merge(E, N) || return false
-    return !(_is_given_id(id(E)) && id(E) == id(N))
+    return !(is_given_id(id(E)) && id(E) == id(N))
 end
 
-# An id given to a handle (`Unique`, a block's `@state`), as opposed to one it matches by (its type, its key). `id(E)`
-# of a handle type is the type of a `UniquePlanId`.
-_is_given_id(@nospecialize(id)) = id isa SimpleId || id isa UniquePlanId ||
-    (id isa Type && id <: UniquePlanId)
+###############################################################################
+# Finding: a matcher its type does not find
+###############################################################################
+
+"""
+    is_found_by_data(id) -> Bool
+
+Whether the matcher `id`, when the lookup by its type (`static_findfirst_match`) finds nothing, may still be found by its
+data, through an entry's runtime lookup table (`dynamic_lookup`). Default `false`, so a lookup by type stays decided
+while compiling.
+Extended by: `UniquePlanId` (a handle the user holds), Identifiable/UniquePlanId/HookExtensions.jl.
+"""
+is_found_by_data(@nospecialize(id)) = false
