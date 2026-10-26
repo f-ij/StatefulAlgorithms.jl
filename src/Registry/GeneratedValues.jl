@@ -37,8 +37,8 @@ struct NeedsValues <: Exception end
     multiply_multipliers(a, b), add_multipliers(a, b)
 
 A multiplier (how often an algorithm runs per root step) is a number, or, in the walk on the plan's type, the expression
-that gives it when only a value decides it (a routine child's repeat count). Numbers are multiplied and added as
-numbers, otherwise these write the expression.
+that computes it from the plan's schedule (`compute_multiplier`). Numbers are multiplied and added as numbers,
+otherwise these write the expression.
 """
 multiply_multipliers(a::Number, b::Number) = a * b
 multiply_multipliers(@nospecialize(a), @nospecialize(b)) = Expr(:call, *, a, b)

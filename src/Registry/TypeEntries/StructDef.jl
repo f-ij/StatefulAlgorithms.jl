@@ -4,8 +4,9 @@
 One entry of a registry: the algorithms of entry type `T` (`Lin`), as a tuple `algos` of keyed handles (`Lin_1`,
 `Lin_2`, ...) whose types are `E`, how often each runs per root step (`multipliers`), and the runtime lookup table
 (`lookup`: each algorithm's lookup key, `dynamic_lookup_key`, => its position), used to find values that are not
-`isbits`. The multipliers and the lookup table are only read: the registries of all plans of one type share them
-(the generated setup, `write_registry_expr`); adding to a registry copies them (`RegistryBuilder(registry)`).
+`isbits`. The multipliers and the lookup table are only read: the registries of all plans of one type share the
+lookup table, and an entry of states its multipliers (the generated setup, `write_registry_expr`); adding to a
+registry copies them (`RegistryBuilder(registry)`).
 """
 struct RegistryTypeEntry{T,E}
     algos::E

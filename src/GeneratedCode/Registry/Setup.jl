@@ -7,9 +7,9 @@ in its plan's `namespaces` (step 1 of `resolve`).
 Generated: which entry types the registry has, which algorithm goes where under which key, the multipliers and the
 lookup keys are all decided by `la`'s type, so they are worked out once while compiling (`generate_registry_setup`, the
 same walk as on values, run on the types). What the type alone decides is a constant in the generated code: the
-algorithms and handles whose type is a singleton, tuples of those, and each entry's multipliers and lookup table
-(shared by all plans of the type). The compiled code only reads the other values out of `la` and makes the structs
-around them (`build_from_parts`). A plan whose layout needs its values (a state merge, an object that is not an
+algorithms and handles whose type is a singleton, tuples of those, and each entry's lookup table (shared by all plans
+of the type). The compiled code only reads the other values out of `la`, computes the multipliers from its schedule
+(`compute_multiplier`) and makes the structs around them (`build_from_parts`). A plan whose layout needs its values (a state merge, an object that is not an
 `IdentifiableAlgo` handle, a plan type not read from its fields) is set up at run time instead
 (`build_registry_from_values`).
 

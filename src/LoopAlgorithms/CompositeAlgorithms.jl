@@ -23,8 +23,6 @@ end
 
 const CompositePlan = CompositeAlgorithm
 
-"""Return the per-child execution multiplier implied by interval counts."""
-getmultipliers_from_specification_num(::Type{CA}, specification_num) where {CA<:CompositeAlgorithm} = 1 ./(Float64.(specification_num))
 
 CompositeAlgorithm(args...) = parse_la_input(CompositeAlgorithm, args...)
 
@@ -118,10 +116,8 @@ get_funcs(ca::CompositeAlgorithm{FT}) where FT = FT.parameters
 
 # repeats(ca::CompositeAlgorithm) = 1 ./ intervals(ca)
 # repeats(ca::CompositeAlgorithm, idx) = 1 / interval(ca, idx)
-multipliers(ca::CompositeAlgorithm) = tuplemap(x -> 1/getinterval(x), intervals(ca))
+# On the type, for the tree trackers (Trackers/TreeStructure.jl); a plan value uses `multipliers` (Interface.jl).
 multipliers(::Type{CA}) where {CA<:CompositeAlgorithm} = map(n -> 1/n, interval_numbers(CA))
-
-multiplier(ca::CompositeAlgorithm, idx) = 1 / getinterval(getalgo(ca, idx))
 
 tupletype_to_tuple(t) = (t.parameters...,)
 

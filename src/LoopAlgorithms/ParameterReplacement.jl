@@ -2,12 +2,8 @@ export setrepeats, setintervals, setinterval
 
 #=
 Changing a plan's schedule: the repeats of a `Routine`, the intervals of a composite. A plan keeps its schedule in
-field 2, whose type is type parameter 2. Every change goes through `setschedule`.
+field 2, whose type is type parameter 2 (`getschedule`, Interface.jl). Every change goes through `setschedule`.
 =#
-
-"""The schedule of a plan (field 2): a composite's intervals, a routine's repeats."""
-@inline getschedule(plan::AbstractPlan) = getfield(plan, 2)
-@inline getschedule(la::LoopAlgorithm) = getschedule(getplan(la))
 
 """
     setschedule(plan, schedule) -> plan

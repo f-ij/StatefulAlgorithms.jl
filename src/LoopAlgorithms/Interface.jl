@@ -6,9 +6,9 @@ A plan stores its children in `funcs`, its states in `states`, its route/share w
 options in `options`, and, once resolved, its children's context names in `namespaces` (one `Namespace` type per
 child). The getters below read those fields; a plan type that stores them differently defines its own methods.
 
-Each plan type defines `multipliers(plan)` and `multipliers(typeof(plan))`: how often each child runs per run of the
-plan, a tuple of numbers (from its intervals or repeats). The type method is used when the registry is set up from the
-plan's type (Resolving/Registering.jl).
+Its schedule (a composite's intervals, a routine's repeats) is field 2, whose type is type parameter 2: one entry per
+child. How often each child runs per run of the plan (`multipliers`) is `compute_multiplier` (Hooks.jl) of its entry,
+for every plan type.
 =#
 
 ###############################################################################
@@ -27,6 +27,13 @@ plan's type (Resolving/Registering.jl).
 @inline getalgo(plan::P, idx::I) where {P<:AbstractPlan, I} = getalgos(plan)[idx]
 """Return the children of `plan`, as `getalgos`."""
 @inline subalgorithms(plan::P) where {P<:AbstractPlan} = getalgos(plan)
+"""The schedule of a plan (field 2): a composite's intervals, a routine's repeats."""
+@inline getschedule(plan::P) where {P<:AbstractPlan} = getfield(plan, 2)
+@inline getschedule(la::LA) where {LA<:LoopAlgorithm} = getschedule(getplan(la))
+"""How often each child of `plan` runs per run of `plan`: `compute_multiplier` of each schedule entry."""
+@inline multipliers(plan::P) where {P<:AbstractPlan} = map(compute_multiplier, getschedule(plan))
+"""How often child `idx` of `plan` runs per run of `plan`."""
+@inline multiplier(plan::P, idx::I) where {P<:AbstractPlan, I} = compute_multiplier(getschedule(plan)[idx])
 
 ###############################################################################
 # A copy with new children and wiring, while a plan is resolved

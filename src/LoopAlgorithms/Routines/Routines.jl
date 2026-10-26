@@ -38,17 +38,10 @@ statetypes(::Union{Routine{T,R,NS,W,id,S}, Type{<:Routine{T,R,NS,W,id,S}}}) wher
 
 
 
-"""Convert a routine lifetime schedule into registry multiplier weight."""
-@inline _routine_schedule_multiplier(spec::RL) where {RL<:RepeatLifetime} = Float64(repeats(spec))
-@inline _routine_schedule_multiplier(spec::IL) where {IL<:IndefiniteLifetime} = Inf
-
 """Return the numeric loop bound used by a routine child lifetime."""
 @inline routine_repeat_count(spec::RL) where {RL<:RepeatLifetime} = repeats(spec)
 @inline routine_repeat_count(spec::IL) where {IL<:IndefiniteLifetime} = typemax(Int)
 
-"""Convert routine specification entries into registry multiplier weights."""
-getmultipliers_from_specification_num(::Type{R}, specification_num::S) where {R<:Routine,S} =
-    map(_routine_schedule_multiplier, specification_num)
 resumable(r::Routine) = true
 
 # TODO: This is only used in treesctructure, try to deprecate
@@ -68,8 +61,6 @@ Base.length(r::Routine) = length(getalgos(r))
 @inline getalgotype(::Union{Routine{T,R,NS}, Type{<:Routine{T,R,NS}}}, idx) where {T,R,NS} = T.parameters[idx]
 @inline numalgos(r::Union{Routine{T,R,NS}, Type{<:Routine{T,R,NS}}}) where {T,R,NS} = length(T.parameters)
 
-"""Return registry multiplier weights for each routine child."""
-multipliers(r::R) where {R<:Routine} = tuplemap(_routine_schedule_multiplier, lifetimes(r))
 getid(r::Union{Routine{T,R,NS,W,id},Type{<:Routine{T,R,NS,W,id}}}) where {T,R,NS,W,id} = id
 
 """Return the child lifetime schedule tuple for a routine."""

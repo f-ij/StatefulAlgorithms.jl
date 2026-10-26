@@ -166,8 +166,8 @@ _unwrap_nested_plan(fa::FinalizedAlgorithm) = _unwrap_nested_plan(_strip_nested_
 ###############################################################################
 #=
 From a value or from a `GeneratedValue`. On types, a `LoopAlgorithm` wrapper or a plan is read as the plan interface
-(LoopAlgorithms/Interface.jl) describes it: children in `funcs`, states in `states`, and `multipliers` of the plan's
-type; anything else throws `NeedsValues`.
+(LoopAlgorithms/Interface.jl) describes it: children in `funcs`, states in `states`, and its schedule (field 2), of
+which `compute_multiplier` is called when the setup runs; anything else throws `NeedsValues`.
 =#
 
 """The plan inside the `LoopAlgorithm` `la` (`getplan`)."""
@@ -190,28 +190,12 @@ Base.@nospecializeinfer function read_states(@nospecialize(la))
 end
 
 """
-How often each child of `la` runs per run of `la` (`multipliers`), a tuple of multipliers: numbers, or for a
-`GeneratedValue` the expression of one that only the plan's value decides (a routine child's repeat count).
+How often each child of `la` runs per run of `la` (`multipliers`): numbers, or for a `GeneratedValue` the expressions
+that compute them from its schedule entries when the setup runs (`compute_multiplier` of each, LoopAlgorithms/Hooks.jl).
 """
 Base.@nospecializeinfer function read_multipliers(@nospecialize(la))
     la isa GeneratedValue || return multipliers(la)
-    T = la.valuetype
-    T <: AbstractPlan || throw(NeedsValues())
-    # A `Routine`'s lifetimes or a composite's intervals are read from the schedule field's type, not with
-    # `multipliers(T)`, which compiles once per plan type. Any other plan type answers `multipliers(T)`
-    # (LoopAlgorithms/Interface.jl).
-    T <: Union{Routine, CompositeAlgorithm} || return multipliers(T)
+    la.valuetype <: AbstractPlan || throw(NeedsValues())
     schedule = read_field(la, 2)
-    ms = Vector{Any}(undef, count_fields(schedule))
-    for i in eachindex(ms)
-        ms[i] = T <: Routine ? read_routine_multiplier(read_field(schedule, i)) : 1 / getinterval(read_type(read_field(schedule, i)))
-    end
-    return Tuple(ms)
-end
-
-# A routine child's multiplier: `Inf` for a lifetime without a count, else its count, known or read at run time.
-Base.@nospecializeinfer function read_routine_multiplier(@nospecialize(lifetime::GeneratedValue))
-    lifetime.valuetype <: IndefiniteLifetime && return Inf
-    is_known_value(lifetime) && return _routine_schedule_multiplier(known_value(lifetime))
-    return Expr(:call, _routine_schedule_multiplier, lifetime.value_expr)
+    return Tuple(Any[Expr(:call, compute_multiplier, read_field(schedule, i).value_expr) for i in 1:count_fields(schedule)])
 end

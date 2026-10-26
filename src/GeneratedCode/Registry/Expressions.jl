@@ -4,9 +4,10 @@ plan's registry and keyed plan, from what the walk on the plan's type decided (`
 Registry/GeneratedValues.jl).
 
 What the type alone decides is a constant in that body, so it is neither read nor built per call: algorithms and
-handles whose type is a singleton, tuples of those, and each entry's multipliers and lookup table (shared by all plans
-of the type; a registry's are only read, adding to one copies them, `RegistryBuilder(registry)`). Structs are made by
-the generated code (`write_struct_expr`).
+handles whose type is a singleton, tuples of those, and each entry's lookup table (shared by all plans of the type; a
+registry's is only read, adding to one copies it, `RegistryBuilder(registry)`). An entry's multipliers are computed from
+the plan's schedule when the setup runs (`compute_multiplier`), a constant only for an entry of states (multiplier 1).
+Structs are made by the generated code (`write_struct_expr`).
 =#
 
 """
@@ -56,8 +57,8 @@ Base.@nospecializeinfer function build_known_entry(entry::TypeEntryBuilder)
 end
 
 """
-The expression that gives an entry's multipliers: a constant, or, when some are only known at run time (a routine
-child's repeat count, `read_routine_multiplier`), the vector built from their expressions.
+The expression that gives an entry's multipliers: a constant when all are numbers (states), else the vector built
+from their expressions (`compute_multiplier` of an algorithm's schedule entries, `read_multipliers`).
 """
 Base.@nospecializeinfer function write_multipliers_expr(multipliers::Vector{Any})
     all(m -> m isa Number, multipliers) && return QuoteNode(Float64[multipliers...])
