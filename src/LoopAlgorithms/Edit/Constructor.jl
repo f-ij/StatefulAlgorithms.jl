@@ -64,13 +64,7 @@ end
 @inline _normalize_schedule_entry(::Union{CompositeAlgorithm, ThreadedCompositeAlgorithm}, spec::Real) = Interval(round(Int, spec))
 @inline _normalize_schedule_entry(la::LoopAlgorithm, spec) = _normalize_schedule_entry(getplan(la), spec)
 
-@inline function _schedule_entries(la::Union{CompositeAlgorithm, ThreadedCompositeAlgorithm})
-    ntuple(i -> interval(la, i), length(getalgos(la)))
-end
-
-@inline function _schedule_entries(la::Routine)
-    ntuple(i -> lifetimes(la, i), length(getalgos(la)))
-end
+@inline _schedule_entries(la::Union{CompositeAlgorithm, Routine, ThreadedCompositeAlgorithm}) = Tuple(getschedule(la))
 @inline _schedule_entries(la::LoopAlgorithm) = _schedule_entries(getplan(la))
 
 @inline _collapse_schedule_spec(::Routine, entries::Tuple) = entries

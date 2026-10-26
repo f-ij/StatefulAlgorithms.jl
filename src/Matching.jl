@@ -111,7 +111,7 @@ Base.:(==)(m::MatchAnyOf, n::MatchAnyOf) = any(p -> _any_matches(m, p), matcher_
 
 Whether the matcher value `value` (an algorithm's `match_by`) is matched by the matcher type `M` (a stored SCRef,
 `scref_match`). Default `value isa M`; a matcher type as the value (a handle type's id) by `<:`.
-Extended by: `ValMatcher`, `MatchAnyOf` (below), `UniquePlanId` (Identifiable/UniquePlanId/HookExtensions.jl).
+Extended by: `ValMatcher`, `MatchAnyOf`, `MatchAny` (below), `UniquePlanId` (Identifiable/UniquePlanId/HookExtensions.jl).
 """
 matches_type(value, M) = value isa M
 matches_type(value::Type, M) = value <: M
@@ -122,14 +122,13 @@ matches_type(value::Union{MatchAnyOf, Type{<:MatchAnyOf}}, M) = any(m -> matches
 """
     is_given_id(id) -> Bool
 
-Whether `id` (value or type) was given to a handle (`Unique`, a block's `@state`, a merged state), as opposed to one it
-matches by (its type, its key): a state with a given id matches by it, and two handles with the same given id are one
-algorithm. Default `false`.
-Extended by: `SimpleId`, `MatchAnyOf` (below), `UniquePlanId` (Identifiable/UniquePlanId/HookExtensions.jl).
+Whether `id` (value or type) was given to one handle (`Unique`, a block's `@state`), as opposed to one it matches by
+(its type, its key): two handles with the same given id are one algorithm, and a DSL block's own state is the state
+with a given id. Default `false`; a merged state's `MatchAnyOf` is not one (it names several).
+Extended by: `SimpleId` (below), `UniquePlanId` (Identifiable/UniquePlanId/HookExtensions.jl).
 """
 is_given_id(@nospecialize(id)) = false
 is_given_id(::Union{SimpleId, Type{<:SimpleId}}) = true
-is_given_id(::Union{MatchAnyOf, Type{<:MatchAnyOf}}) = true
 
 ################################################
 #############   NOT USED (KEPT)   ##############

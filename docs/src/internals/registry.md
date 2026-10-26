@@ -71,7 +71,10 @@ steps below 4.7–4.8 ms). So the uuid (`origin`) is data and never changes; the
    (`is_found_by_data`).
 
 The matching and registry code ask a matcher only general questions (`matches_type`, `is_given_id`, `is_found_by_data`,
-`lower_matcher`); `UniquePlanId` answers them in `src/Identifiable/UniquePlanId/HookExtensions.jl`.
+`lower_matcher`, `carries_data`); `UniquePlanId` answers them in `src/Identifiable/UniquePlanId/HookExtensions.jl`. A
+holder says which of its type parameters come from its fields with `list_field_derived_params`
+(`src/Identifiable/UniquePlanId/Hooks.jl`). A plan's schedule is changed only through `setschedule`
+(`src/LoopAlgorithms/ParameterReplacement.jl`).
 
 This is the mechanism used when you need multiple logically separate instances of the same algorithm in one composition.
 
