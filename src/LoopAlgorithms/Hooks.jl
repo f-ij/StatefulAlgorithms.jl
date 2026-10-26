@@ -1,20 +1,30 @@
 #=
 Extendable API of loop algorithms: functions with a default that other types overload.
 
-Each function here has the default every value gets. Extended in:
+Each function here has the default every value gets (`should_run_schedule` has none: every composite schedule entry
+adds a method). Extended in:
 - `loop_final_result`: FinalizedAlgorithm/HookExtensions.jl (`FinalizedAlgorithm`);
-- `compute_multiplier`: HookExtensions.jl next to this file (`Interval`, `RunIf`);
-- `iscomposite`: a trait more than a hook (TODO.md, "Hooks" 3), so its methods stay with the types: Accessors.jl
-  (plans), FinalizedAlgorithm/FinalizedAlgorithm.jl, Threaded/CompositeAlgorithms.jl.
+- the schedule-entry hooks `should_run_schedule`, `always_runs`, `compute_multiplier`: HookExtensions.jl next to this
+  file (`Interval`, `RunIf`).
 =#
 
 """
-    iscomposite(x) -> Bool
+    should_run_schedule(entry, loopidx, context) -> Bool
 
-Whether `x` (a value or a type) is a composite plan, which steps all its children in order each step: `false` by
-default. A wrapper of a loop algorithm adds a method that asks what it wraps (`FinalizedAlgorithm`).
+Whether the composite child with schedule entry `entry` runs on tick `loopidx` of its composite. `context` is the
+persistent context, read by an entry with a condition (`RunIf`). No default: each composite schedule entry adds a
+method (HookExtensions.jl next to this file).
 """
-@inline iscomposite(x::T) where {T} = false
+function should_run_schedule end
+
+"""
+    always_runs(EntryType) -> Bool
+
+Whether a composite child with a schedule entry of type `EntryType` runs on every tick, so its step needs no branch on
+`should_run_schedule`: `false` by default. `Interval(1)` without an offset adds `true` (HookExtensions.jl next to this
+file). Asked while the step is generated, so a method added after a plan type compiled is not seen by that type.
+"""
+@inline always_runs(::Type{E}) where {E} = false
 
 """
     compute_multiplier(entry) -> Float64

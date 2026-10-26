@@ -98,6 +98,14 @@ end
     interval_result = run(init(interval_plan, Override(LoopRunIfFlag; enabled = true)); repeats = 3)
     @test context(interval_result)[LoopRunIfCounter].count == 1
 
+    # `Interval(1)` with an offset skips the first `offset` ticks, so it is not stepped without a branch (`always_runs`).
+    @test StatefulAlgorithms.always_runs(typeof(Interval(1)))
+    @test !StatefulAlgorithms.always_runs(typeof(Interval(1, :end, 3)))
+    # Broken: the offset is compared with the composite's tick, which wraps at the lcm of the intervals (here 1, so it
+    # stays 1) and never passes the offset; the child runs 0 times (TODO.md, "Interval offsets").
+    offset_result = run(init(CompositeAlgorithm(LoopRunIfCounter, (Interval(1, :end, 3),))); repeats = 5)
+    @test_broken context(offset_result)[LoopRunIfCounter].count == 2
+
     nested_plan = CompositeAlgorithm(
         CompositeAlgorithm(LoopRunIfCounter, (RunIf(x -> x, Var(LoopRunIfFlag, :enabled)),)),
         (1,),

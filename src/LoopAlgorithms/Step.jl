@@ -8,8 +8,8 @@ Terms used in this file:
   to its own `_step!`.
 - `lc`: the `LoopContext` variable: the persistent context, the runtime context, and the plan node whose scope the step
   is in (see Context/ContextBundles.jl). Every generated line that steps something reads `lc` and assigns it again.
-- schedule: when a composite child runs (`Interval{1}` = every step, `@every n` = every n-th step, `RunIf` = on its
-  interval when a condition on the context holds).
+- schedule: when a composite child runs (`Interval(1)` = every step, without a branch: `always_runs`, Hooks.jl;
+  `@every n` = every n-th step; `RunIf` = on its interval when a condition on the context holds).
 - repeat: how often a routine child runs in one step of the routine (`Repeat(n)`, `Until(...)`, ...).
 
 1. Nested plans are written inline.
@@ -99,17 +99,6 @@ Terms used in this file:
 =#
 
 """
-`true` when a child of type `ChildType` is a plan (composite or routine): its lines are written into its parent's
-step. `false` for a leaf, which is stepped by a call to its `_step!`. See the file header, 1.
-"""
-_steps_inline(::Type) = false
-_steps_inline(::Type{<:Union{CompositeAlgorithm, Routine}}) = true
-
-"""`true` when a composite child's schedule type is `Interval{1}` (it runs every step, so it needs no branch), else `false`."""
-_always_runs(::Type{<:Interval{1}}) = true
-_always_runs(::Type) = false
-
-"""
 The expression that gives schedule entry `i` (an interval or a repeat) of `plan`, a plan of type `PlanType`: the entry
 itself when its type alone decides it (`Interval`, `Indefinite`), else read from the plan's schedule field.
 """
@@ -133,7 +122,7 @@ The lines that step one child once, assigning `lc`: the child's own lines (`_pla
 otherwise the single line `lc = _step!(child, cursor, lc, wiring, namespace, process, lifetime)`.
 """
 function _child_step_exprs(ChildType::Type, child, cursor, wiring, namespace_expr, lc)
-    _steps_inline(ChildType) && return _plan_step_exprs(ChildType, child, cursor, wiring, lc)
+    steps_inline(ChildType) && return _plan_step_exprs(ChildType, child, cursor, wiring, lc)
     return Any[:($lc = @inline _step!($child, $cursor, $lc, $wiring, $namespace_expr, process, lifetime))]
 end
 
@@ -161,7 +150,7 @@ function _composite_step_exprs(PlanType::Type, plan, cursor, wiring, lc)
     i = 1
     while i <= fieldcount(children)
         schedule_type = fieldtype(schedule_types, i)
-        if _always_runs(schedule_type)
+        if always_runs(schedule_type)
             setup, child, child_cursor, child_wiring = _child_setup_exprs(algos, cursor, wiring, i)
             append!(exprs, setup)
             append!(exprs, _child_step_exprs(fieldtype(children, i), child, child_cursor, child_wiring, :($(fieldtype(namespace_types, i))()), lc))
@@ -202,7 +191,7 @@ function _routine_step_exprs(PlanType::Type, plan, cursor, wiring, lc)
         namespace_expr = :($(fieldtype(namespace_types, i))())
         setup, child, child_cursor, child_wiring = _child_setup_exprs(algos, cursor, wiring, i)
         append!(exprs, setup)
-        if _steps_inline(ChildType)
+        if steps_inline(ChildType)
             append!(exprs, _inline_routine_child_exprs(ChildType, child, child_cursor, child_wiring, namespace_expr, lc, cursor, i, repeat_value, fieldtype(fieldtype(PlanType, 2), i) <: RepeatOnce))
         else
             # A single repeat (`RepeatOnce`) needs no loop.
@@ -431,7 +420,7 @@ function _children_writes_exprs!(exprs, PlanType::Type, plan, cursor, wiring)
         child_namespace = :($(fieldtype(child_namespace_tuple_type, i))())
         setup, child, child_cursor, child_wiring = _child_setup_exprs(algos, cursor, wiring, i)
         append!(exprs, setup)
-        if _steps_inline(ChildType)
+        if steps_inline(ChildType)
             # The nested plan's writes, inline, with the runtime context type passed through its children; when it
             # ends its returns are removed, so the type afterwards is the one before it, also over repeats. Nothing
             # here asks what a plan's `_step!` returns: that would be the self-call inference stops following.

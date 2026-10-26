@@ -98,18 +98,7 @@ end
 
 @inline divides(num, runif::RunIf) = @inline divides(num, schedule_interval(runif))
 
-"""Return whether a composite schedule entry should run on this tick."""
-@inline should_run_schedule(interval::Interval, loopidx::Int, context) = @inline divides(loopidx, interval)
-
-@inline function should_run_schedule(runif::RunIf{Vars}, loopidx::Int, context) where {Vars}
-    if !(@inline divides(loopidx, runif))
-        return false
-    end
-    if isempty(Vars)
-        return @inline getcondition(runif)()
-    end
-    return @inline getcondition(runif)(getindex(context, Vars...))
-end
+# `should_run_schedule`, `always_runs`, `compute_multiplier` for these entries: HookExtensions.jl next to this file.
 
 Base.length(i::Interval) = 1
 function Base.:(*)(num, interval::Interval{I, First, Offset}) where {I, First, Offset}

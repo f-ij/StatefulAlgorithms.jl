@@ -107,11 +107,6 @@ Decided by the type alone, so it folds to a constant.
 @inline hasid(la::Union{LoopAlgorithm{Plan,O,R,C,I,Ov,id}, Type{<:LoopAlgorithm{Plan,O,R,C,I,Ov,id}}}) where {Plan,O,R,C,I,Ov,id} = !isnothing(id)
 @inline id(la::Union{LoopAlgorithm{Plan,O,R,C,I,Ov,id}, Type{<:LoopAlgorithm{Plan,O,R,C,I,Ov,id}}}) where {Plan,O,R,C,I,Ov,id} = id
 
-# `iscomposite` for plans (default and docstring in Hooks.jl)
-@inline iscomposite(::Type{<:LoopSpec}) = false
-@inline iscomposite(::Type{<:CompositeAlgorithm}) = true
-@inline iscomposite(::Type{<:LoopAlgorithm{Plan}}) where {Plan} = iscomposite(Plan)
-@inline iscomposite(la::LA) where {LA<:LoopSpec} = iscomposite(typeof(la))
 
 statetypes(::Type{<:LoopAlgorithm{Plan}}) where {Plan} = statetypes(Plan)
 algotypes(::Type{<:LoopAlgorithm{Plan}}) where {Plan} = algotypes(Plan)
