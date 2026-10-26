@@ -35,7 +35,7 @@ puts them in place (the rest are constants, `is_known_value`). When a step needs
 move a plan to the run-time path.
 """
 Base.@nospecializeinfer function generate_registry_setup(@nospecialize(LA))
-    builder = RegistryBuilder{Any}()
+    builder = RegistryBuilder{Any, TypeWalkLookupKey}()
     keyed = try
         register_tree!(builder, GeneratedValue(LA, :la))
     catch err

@@ -27,47 +27,48 @@ end
 Base.isequal(a::RuntimeLookupKey, b::RuntimeLookupKey) = isequal(a.id, b.id)
 Base.hash(a::RuntimeLookupKey, h::UInt) = hash(a.id, hash(RuntimeLookupKey, h))
 
-"""A builder's lookup table: as a registry entry's (`LookupKey` => index), plus the keys only known at run time."""
-const BuilderLookup = Dict{Union{LookupKey,RuntimeLookupKey},Int}
+"""The keys of a lookup table in the walk on types: a registry entry's (`LookupKey`), plus those only known at run time."""
+const TypeWalkLookupKey = Union{LookupKey,RuntimeLookupKey}
 
 """
-    TypeEntryBuilder(type)
+    TypeEntryBuilder{M, K}(type)
 
-One entry type of a `RegistryBuilder{M}`: the entry type `type` (`Lin`), its keyed algorithms in order, their
-multipliers (`M`: `Float64` in the walk on values; `Any` in the walk on types, where they are expressions,
-`multiply_multipliers`), the runtime lookup table (lookup key => index), and each algorithm's matcher once it has been
-computed (`entry_matcher`).
+One entry type of a `RegistryBuilder{M, K}`: the entry type `type` (`Lin`), its keyed algorithms in order, their
+multipliers (`M`), the runtime lookup table (`K` => index), and each algorithm's matcher once it has been computed
+(`entry_matcher`). In the walk on values `M` is `Float64` and `K` is `LookupKey`, as in the registry entry it becomes;
+in the walk on types `M` is `Any` (multipliers are expressions, `multiply_multipliers`) and `K` is `TypeWalkLookupKey`.
 """
-struct TypeEntryBuilder{M}
+struct TypeEntryBuilder{M, K}
     type::Any
     algos::Vector{Any}
     multipliers::Vector{M}
-    lookup::BuilderLookup
+    lookup::Dict{K,Int}
     matchers::Vector{Any}
 end
-TypeEntryBuilder{M}(@nospecialize(type)) where {M} = TypeEntryBuilder{M}(type, Any[], M[], BuilderLookup(), Any[])
+TypeEntryBuilder{M, K}(@nospecialize(type)) where {M, K} = TypeEntryBuilder{M, K}(type, Any[], M[], Dict{K,Int}(), Any[])
 
 struct MatcherNotComputed end   # an entry whose matcher is not computed yet
 
 """
     RegistryBuilder()
-    RegistryBuilder{Any}()
     RegistryBuilder(registry)
+    RegistryBuilder{Any, TypeWalkLookupKey}()
 
 A registry under construction, as plain values: its entry types in registry order (`TypeEntryBuilder`s). Empty, or
 holding what `registry` (a `NameSpaceRegistry`) holds. Fill it with `add!`; `registry(builder)` gives the registry.
-`M` is the type of its multipliers: `Float64` (the default) for the walk on values, `Any` for the walk on types.
+`M` and `K` are the types of its multipliers and lookup keys (`TypeEntryBuilder`): `Float64` and `LookupKey` (the
+default) for the walk on values, `Any` and `TypeWalkLookupKey` for the walk on types.
 """
-struct RegistryBuilder{M}
-    entries::Vector{TypeEntryBuilder{M}}
+struct RegistryBuilder{M, K}
+    entries::Vector{TypeEntryBuilder{M, K}}
 end
-RegistryBuilder{M}() where {M} = RegistryBuilder{M}(TypeEntryBuilder{M}[])
-RegistryBuilder() = RegistryBuilder{Float64}()
+RegistryBuilder{M, K}() where {M, K} = RegistryBuilder{M, K}(TypeEntryBuilder{M, K}[])
+RegistryBuilder() = RegistryBuilder{Float64, LookupKey}()
 function RegistryBuilder(reg::NameSpaceRegistry)
     b = RegistryBuilder()
     for rte in getentries(reg)
         algos = Any[getalgos(rte)...]
-        push!(b.entries, TypeEntryBuilder{Float64}(getentrytype(rte), algos, copy(getmultipliers(rte)), BuilderLookup(getdynamiclookup(rte)),
+        push!(b.entries, TypeEntryBuilder{Float64, LookupKey}(getentrytype(rte), algos, copy(getmultipliers(rte)), copy(getdynamiclookup(rte)),
             Any[MatcherNotComputed() for _ in algos]))
     end
     return b
@@ -113,11 +114,11 @@ end
 The entry of `builder` that algorithms of entry type `E` go into: the first whose type `E` is a subtype of, else a new
 one, put first or last (`entrytype_goes_first`).
 """
-Base.@nospecializeinfer function find_or_add_entry!(b::RegistryBuilder{M}, @nospecialize(E)) where {M}
+Base.@nospecializeinfer function find_or_add_entry!(b::RegistryBuilder{M, K}, @nospecialize(E)) where {M, K}
     for entry in b.entries
         E <: entry.type && return entry
     end
-    entry = TypeEntryBuilder{M}(E)
+    entry = TypeEntryBuilder{M, K}(E)
     entrytype_goes_first(E) ? pushfirst!(b.entries, entry) : push!(b.entries, entry)
     return entry
 end
@@ -233,11 +234,11 @@ end
 The registry `builder` (filled with values) holds: one `RegistryTypeEntry{E, Tuple{algorithm types...}}` per entry
 type, in order, with its multipliers and lookup table. Each type is built once, its constructor called on the values.
 """
-Base.@nospecializeinfer function registry(b::RegistryBuilder{Float64})
+Base.@nospecializeinfer function registry(b::RegistryBuilder{Float64, LookupKey})
     typeentries = Vector{Any}(undef, length(b.entries))
     for (i, entry) in enumerate(b.entries)
         algos = Tuple(entry.algos)
-        typeentries[i] = RegistryTypeEntry{entry.type, typeof(algos)}(algos, entry.multipliers, Dict{LookupKey,Int}(entry.lookup))
+        typeentries[i] = RegistryTypeEntry{entry.type, typeof(algos)}(algos, entry.multipliers, entry.lookup)
     end
     all_entries = Tuple(typeentries)
     return NameSpaceRegistry{typeof(all_entries)}(all_entries)

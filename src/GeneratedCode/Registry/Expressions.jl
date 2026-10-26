@@ -72,7 +72,7 @@ The expression that gives an entry's lookup table `lookup` (of a builder filled 
 its fixed keys as a constant, or, when some keys are only known at run time (normalized handles), a copy of it with
 those keys added.
 """
-Base.@nospecializeinfer function write_lookup_table_expr(lookup::BuilderLookup)
+Base.@nospecializeinfer function write_lookup_table_expr(lookup::Dict{TypeWalkLookupKey,Int})
     fixed_keys, fixed_idxs = LookupKey[], Int[]
     runtime = Any[]
     for (k, i) in lookup
