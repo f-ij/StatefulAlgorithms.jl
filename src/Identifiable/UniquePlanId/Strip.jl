@@ -19,4 +19,5 @@ end
 
 struct _StripIds end
 rewrite_id(::_StripIds, @nospecialize(id::UniquePlanId)) = is_held_unique_id(id) ? UniquePlanId{ValueId}(origin(id)) : id
-rewrite_type_id(::_StripIds, @nospecialize(T::Type{<:UniquePlanId})) = plan_number(T) isa UUID ? UniquePlanId{ValueId} : T
+# An id only a type holds (a handle's type given as an SCRef) keeps its uuid: without a value, it is all there is.
+rewrite_type_id(::_StripIds, @nospecialize(T::Type{<:UniquePlanId})) = T

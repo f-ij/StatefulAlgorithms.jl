@@ -42,23 +42,36 @@ Key consequences:
 ## 3. `Unique` and Distinguishability
 
 `Unique(f)` builds an `IdentifiableAlgo` with a fresh UUID identity: its matcher is `UniquePlanId{uuid}(uuid)`
-(`src/Matching.jl`), kept as data in the handle's `matcher` field, with its type in the handle's type.
+(`src/Identifiable/UniquePlanId/`), kept as data in the handle's `matcher` field, with its type in the handle's type.
 
 That gives a guaranteed distinct match identity even when the wrapped value is otherwise indistinguishable.
 
-The uuid is in the handle's type only on the handle the user holds. Inside plans it is replaced
-(`src/Identifiable/UniquePlanIds.jl`):
+What it solves: a uuid in a type makes every `Unique(f)` a new type, so the same code built again with new handles
+compiled its plan constructor, `resolve`, `init` and the loop again (a `Process` rebuild compiled 251–295 ms; with the
+steps below 4.7–4.8 ms). So the uuid (`origin`) is data and never changes; the type holds `N`, which three functions set:
 
-1. Constructors and DSL blocks strip it from their inputs (`strip_unique`): `UniquePlanId{nothing}(uuid)`.
-2. Building a plan numbers its handles (`number_unique_ids`): `UniquePlanId{k}(uuid)`, in order of first appearance;
-   a nested plan is renumbered into the new plan's numbers, matched by uuid. Plans built from the same code with new
-   `Unique`s have the same type, so constructing and resolving compile once.
+| # | `N` | Set by | When |
+|---|---|---|---|
+| 1 | the uuid | `Unique(f)` | the user makes the handle: a key known from its type |
+| 2 | `ValueId` | `strip_unique` | a constructor or DSL block takes the handle: the same type for every handle |
+| 3 | `k` = 1, 2, ... | `number_unique_ids` | a plan is built: each new uuid gets the next number; a nested plan is renumbered by uuid |
+
+1. Every holder of an id keeps it as a value next to its type, so both rewrites (strip and number) reach it: a handle in
+   its `matcher` field, a route in its endpoint fields, a `Var` in its `data` field. A holder's type parameters that
+   come from those fields are worked out again from them (`list_field_derived_params`).
+2. A plan's schedule (a `Routine`'s lifetimes, a composite's intervals, which may hold `Var`s) is a field; the plan's
+   type has only the schedule's type, in which an id is `UniquePlanId{k}`: which handle within the plan.
 3. The registry stores each handle numbered, as the plan has it. No registry, context or loop that SA works with has a
    uuid in its type, so `init` and the loop compile once for every new set of `Unique`s.
 4. A context handed to the user (`context(p)`, `fetch(p)`) carries the plan's `UniqueKeyMap` (`k => uuid` pairs) in its
-   type (`with_held_ids`, `src/Identifiable/UniquePlanIds.jl`). `context[handle]` with a handle the user holds numbers it
-   from that map while compiling and looks it up from types, as a registry key. The registry itself is not changed, and
-   a context given back to SA (`Process(...; context)`) has the map stripped (`strip_held_ids`).
+   type (`with_held_ids`, `src/Identifiable/UniquePlanId/HeldIds.jl`). `context[handle]` with a handle the user holds
+   numbers it from that map while compiling and looks it up from types, as a registry key. The registry itself is not
+   changed, and a context given back to SA (`Process(...; context)`) has the map stripped (`strip_held_ids`). Asked of
+   the registry directly (`getkey(registry, handle)`), a held handle is found by its uuid in the runtime lookup table
+   (`is_found_by_data`).
+
+The matching and registry code ask a matcher only general questions (`matches_type`, `is_given_id`, `is_found_by_data`,
+`lower_matcher`); `UniquePlanId` answers them in `src/Identifiable/UniquePlanId/HookExtensions.jl`.
 
 This is the mechanism used when you need multiple logically separate instances of the same algorithm in one composition.
 
