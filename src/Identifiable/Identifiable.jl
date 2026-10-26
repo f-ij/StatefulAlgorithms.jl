@@ -14,12 +14,12 @@ autokey_basename(f) = nameoftype(f)
 
 isidentifiable(obj) = false # Trait to signify that an algorithm has an identity
 
+include("UniquePlanId/UniquePlanId.jl")
 include("VarAlias.jl")
 include("AbstractInterface.jl")
 include("StructDef.jl")
 include("Constructors.jl")
 include("IdentifiableAlgos.jl")
 include("Matching.jl")
-include("UniquePlanIds.jl")
 include("Merging.jl")
 # Init.jl is included after Context/ (it needs InitContext and LoopContext)

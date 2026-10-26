@@ -28,14 +28,13 @@ getentrytype(rte::RegistryTypeEntry) = getentrytype(typeof(rte))
 The position of `val` in the entry, found by its matcher (`match_by`), or `nothing`. The type-level part of the matcher
 (`static_id`) is what is matched, so a matcher carrying data (`UniquePlanId`) compiles once per type, not per value.
 
-A `Unique` handle the user holds (`UniquePlanId{uuid}`) is found from types through a context handed to the user, whose
-`UniqueKeyMap` numbers it first (`numbered_handle`). In a registry alone, which stores only `UniquePlanId{k}`, it is
-found through the runtime lookup table, by its uuid.
+A matcher its type does not find may still be found by its data, through the runtime lookup table
+(`is_found_by_data`).
 """
 @inline function static_findfirst_match(rte::RegistryTypeEntry, val)
     id = @inline match_by(val)
     idx = @inline static_findfirst_match(rte, Val(static_id(id)))
-    (isnothing(idx) && is_held_unique_id(id)) || return idx
+    (isnothing(idx) && is_found_by_data(id)) || return idx
     return dynamic_lookup(rte, val)
 end
 # `static_findfirst_match(rte, Val(matcher))` is generated: GeneratedCode/Registry/Lookups.jl.

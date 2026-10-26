@@ -200,13 +200,13 @@ has_given_key(@nospecialize(x)) = has_key(x) && !has_autokey(x)
     lookup_key(algo) -> LookupKey or RuntimeLookupKey
 
 The key of `algo` in its entry's runtime lookup table (`dynamic_lookup_key`). For a `GeneratedValue`, worked out from its
-type, as `dynamic_lookup_key` does for a value; for a handle whose matcher carries
-data (`UniquePlanId`), a `RuntimeLookupKey`.
+type, as `dynamic_lookup_key` does for a value; for a handle that keeps its matcher as data (`keeps_matcher_data`), a
+`RuntimeLookupKey`.
 """
 Base.@nospecializeinfer function lookup_key(@nospecialize(algo))
     algo isa GeneratedValue || return dynamic_lookup_key(algo)
     T = algo.valuetype
-    T.parameters[6] <: UniquePlanId && return RuntimeLookupKey(id(T), algo.value_expr)
+    keeps_matcher_data(T) && return RuntimeLookupKey(id(T), algo.value_expr)
     return LookupKey(lower_matcher(entry_matcher(T)))
 end
 

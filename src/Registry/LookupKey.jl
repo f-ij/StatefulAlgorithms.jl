@@ -23,16 +23,14 @@ Base.show(io::IO, k::LookupKey) = show(io, k.name)
 The name of `matcher` in a runtime lookup table. A matcher whose data is all in its type (a type, or a singleton such as
 `SimpleId{uuid}()`, `ObjectIDMatcher{id}()`, `ValMatcher{v}()`) is named after that type (`lower_type`), so a type and
 its instance get the same name. A value with fields of its own (an `isbits` algorithm that matches by value, such as a
-`ContextWrite`) is named after the value as printed (`lower_value`). A `UniquePlanId` is named after its uuid only, so
-every form of it (held by the user, stripped, numbered) gets the same name. Add a method for a matcher that needs
-another name.
+`ContextWrite`) is named after the value as printed (`lower_value`). Add a method for a matcher that needs another name.
+Extended by: `UniquePlanId` (after its uuid only), Identifiable/UniquePlanId/HookExtensions.jl.
 """
 Base.@nospecializeinfer lower_matcher(@nospecialize(T::Type)) = lower_type(T)
 Base.@nospecializeinfer function lower_matcher(@nospecialize(matcher))
     Base.issingletontype(typeof(matcher)) && return lower_type(typeof(matcher))
     return lower_value(matcher)
 end
-Base.@nospecializeinfer lower_matcher(id::UniquePlanId) = Symbol(lower_type(UniquePlanId), "_", origin(id))
 
 """
     lower_type(T) -> Symbol

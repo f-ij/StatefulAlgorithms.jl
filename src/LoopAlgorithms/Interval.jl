@@ -7,12 +7,13 @@ Composite schedule entry that runs a child only when a context predicate passes.
 
 `RunIf(cond, vars...)` defaults to every loop tick. `RunIf(interval, cond,
 vars...)` combines normal interval scheduling with a runtime predicate. The
-selector tuple lives in the type so generated composite steps can specialize on
-the context reads while the predicate function remains a value.
+selectors (`Var`s) are a field: their types decide the context reads while compiling, and a `Var` of a `Unique`
+handle may hold its id as data (`Var`), which must stay out of types.
 """
-struct RunIf{Vars, F, I}
+struct RunIf{V<:Tuple, F, I}
     cond::F
     interval::I
+    vars::V
 end
 
 getinterval(i::Interval{I, First, Offset}) where {I, First, Offset} = I
@@ -30,10 +31,11 @@ end
 Interval(f::Real, first = :end, offset = 0) = Interval(round(Int, f), first, offset)
 
 RunIf(cond::Function, vars...) = RunIf(Interval(1), cond, vars...)
-RunIf(interval::Interval, cond::Function, vars...) = RunIf{vars, typeof(cond), typeof(interval)}(cond, interval)
+RunIf(interval::Interval, cond::Function, vars...) = RunIf{typeof(vars), typeof(cond), typeof(interval)}(cond, interval, vars)
 RunIf(interval::Real, cond::Function, vars...) = RunIf(Interval(interval), cond, vars...)
 
 @inline getcondition(runif::RunIf) = getfield(runif, :cond)
+@inline getvars(runif::RunIf) = getfield(runif, :vars)
 @inline getinterval(runif::RunIf) = getinterval(getfield(runif, :interval))
 getinterval(::Type{<:RunIf{V, F, I}}) where {V, F, I} = getinterval(I)
 @inline schedule_interval(interval::Interval) = interval
@@ -101,14 +103,14 @@ end
 """Return whether a composite schedule entry should run on this tick."""
 @inline should_run_schedule(interval::Interval, loopidx::Int, context) = @inline divides(loopidx, interval)
 
-@inline function should_run_schedule(runif::RunIf{Vars}, loopidx::Int, context) where {Vars}
+@inline function should_run_schedule(runif::RunIf{V}, loopidx::Int, context) where {V}
     if !(@inline divides(loopidx, runif))
         return false
     end
-    if isempty(Vars)
+    if V === Tuple{}
         return @inline getcondition(runif)()
     end
-    return @inline getcondition(runif)(getindex(context, Vars...))
+    return @inline getcondition(runif)(getindex(context, getvars(runif)...))
 end
 
 Base.length(i::Interval) = 1
@@ -123,14 +125,14 @@ function Base.:(*)(interval1::Interval{I1, First1, Offset1}, interval2::Interval
     Interval(I1*I2, First1, Offset1*I2 + Offset2*I1)
 end
 
-Base.:(*)(runif::RunIf{Vars}, interval::Interval) where {Vars} =
-    RunIf(schedule_interval(runif) * interval, getcondition(runif), Vars...)
-Base.:(*)(interval::Interval, runif::RunIf{Vars}) where {Vars} =
-    RunIf(interval * schedule_interval(runif), getcondition(runif), Vars...)
-Base.:(*)(runif::RunIf{Vars}, num::Real) where {Vars} =
-    RunIf(schedule_interval(runif) * num, getcondition(runif), Vars...)
-Base.:(*)(num::Real, runif::RunIf{Vars}) where {Vars} =
-    RunIf(num * schedule_interval(runif), getcondition(runif), Vars...)
+Base.:(*)(runif::RunIf, interval::Interval) =
+    RunIf(schedule_interval(runif) * interval, getcondition(runif), getvars(runif)...)
+Base.:(*)(interval::Interval, runif::RunIf) =
+    RunIf(interval * schedule_interval(runif), getcondition(runif), getvars(runif)...)
+Base.:(*)(runif::RunIf, num::Real) =
+    RunIf(schedule_interval(runif) * num, getcondition(runif), getvars(runif)...)
+Base.:(*)(num::Real, runif::RunIf) =
+    RunIf(num * schedule_interval(runif), getcondition(runif), getvars(runif)...)
 
 function Base.lcm(is::Union{Interval, RunIf}...)
     nums = getinterval.(is)

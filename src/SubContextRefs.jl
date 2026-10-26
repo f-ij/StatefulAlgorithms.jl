@@ -49,12 +49,22 @@ function _scref_identity(ref)
     ref isa Symbol && return ref
     ref isa Type && ref <: AbstractMatcher && return ref
     m = ref isa Type ? nothing : match_by(ref)
-    m isa Union{UniquePlanId, MatchAnyOf} && return m
+    carries_data(m) && return m
     return scref_match(ref)
 end
 
 """The object part of an SCRef, kept until the plan is resolved; `nothing` when it is already an SCKey."""
 scref_object(ref) = ref isa Symbol ? nothing : ref
+
+"""
+The data part of an SCRef's matcher: the matcher, when it carries data its type does not hold (`carries_data`), else
+`nothing`. What a holder that keeps no object (`Var`) keeps next to `scref_match`, so the matcher can be rewritten.
+"""
+function scref_data(ref)
+    ref isa Symbol && return nothing
+    m = match_by(ref)
+    return carries_data(m) ? m : nothing
+end
 
 """
 The namespace every instance of this kind lives in, given by its SCKey, or `nothing` when each
@@ -87,6 +97,8 @@ end
 
 """The SCKey of an SCRef's object, or `nothing` when it has none."""
 @inline object_sckey(reg::NameSpaceRegistry, ::Nothing) = nothing
+# A matcher kept as the object (the data of a `Var`'s matcher, `scref_data`) has no key of its own: its type finds it.
+@inline object_sckey(reg::NameSpaceRegistry, ::AbstractMatcher) = nothing
 @inline function object_sckey(reg::NameSpaceRegistry, object)
     fixed = fixed_namespace(object)
     return isnothing(fixed) ? getkey(reg, object) : fixed
@@ -104,7 +116,7 @@ function matcher_sckey(reg::NameSpaceRegistry, ::Type{M}, object, role::String) 
 end
 function matcher_sckey(reg::NameSpaceRegistry, ::Type{M}, object, role::String) where {M<:AbstractMatcher}
     for entry in all_algos(reg)
-        _matcher_matches(match_by(entry), M) && return getkey(entry)
+        matches_type(match_by(entry), M) && return getkey(entry)
     end
     _scref_not_found_error(reg, M, role)
 end
@@ -117,18 +129,6 @@ matcher_sckey(reg::NameSpaceRegistry, match, object, role::String) = _scref_not_
 
 """Return the algorithm type carried by a `TypeMatcher` identity."""
 _typematcher_target(::Type{<:TypeMatcher{T}}) where {T} = T
-
-"""Return whether a matcher value has the same type-level identity as a stored matcher."""
-_matcher_matches(value, match) = value isa match
-# A handle type's matcher (`match_by(Child)`) can be a matcher type (`static_id`): its `UniquePlanId{k}` type.
-_matcher_matches(value::Type, match) = value <: match
-# A merged state's matcher (`MatchAnyOf`) matches if any of its parts does.
-_matcher_matches(value::Union{MatchAnyOf, Type{<:MatchAnyOf}}, match) = any(m -> _matcher_matches(m, match), matcher_parts(value))
-# A held `Unique` handle (`UniquePlanId{uuid}`, as a `Var` of it stores it) names the entry with that uuid.
-_matcher_matches(value::UniquePlanId, ::Type{UniquePlanId{N}}) where {N} = N isa UUID ? origin(value) == N : value isa UniquePlanId{N}
-_matcher_matches(value, ::Type{<:ValMatcher{V}}) where {V} = value == V || value isa ValMatcher{V}
-# A state merged from several (`@merge`) is matched by any of their ids.
-_matcher_matches(value::MatchAny, match) = any(m -> _matcher_matches(m, match), getmatchers(value))
 
 @noinline function _scref_not_found_error(reg::NameSpaceRegistry, ref, role::String)
     available = all_keys(reg)
@@ -158,7 +158,7 @@ end
 """Any other matcher names a keyed child whose own matcher matches."""
 function child_matches_scref(::Type{Child}, match::Type{<:AbstractMatcher}) where {Child}
     Child <: AbstractIdentifiableAlgo || return false
-    return _matcher_matches(match_by(Child), match)
+    return matches_type(match_by(Child), match)
 end
 
 @inline child_matches_scref(child, match) = child_matches_scref(typeof(child), match)
