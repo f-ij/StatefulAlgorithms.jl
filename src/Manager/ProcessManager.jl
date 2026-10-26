@@ -317,7 +317,7 @@ function runprocessinline!(worker::P; lifetime = nothing, repeats = nothing, rep
     # the loop directly so no scheduler task is created for short manager jobs.
     algo = getalgo(worker)
     inputs = _validate_runtime_inputs(algo, (; kwargs...))
-    base_context = _has_typed_runtime_context(worker) ? _typed_runtime_context(worker) : context(worker)
+    base_context = _has_typed_runtime_context(worker) ? _typed_runtime_context(worker) : _context(worker)
     lt = StatefulAlgorithms.lifetime(worker)
     result = loop(worker, algo, base_context, lt, inputs, Resuming{false}())
 

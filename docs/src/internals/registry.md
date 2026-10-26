@@ -69,8 +69,9 @@ steps below 4.7–4.8 ms). So the uuid (`origin`) is data and never changes; the
 5. Running the plan takes the map out (`strip_keymap`): `init`, `run(la)`, `Process`, `InlineProcess` and
    `TimedProcess` resolve the plan untyped, keep the map as a value and work on the plan without it, so `init` and the
    loop have no uuid in their types and compile once for every new set of `Unique`s. What they hand back to the user
-   (the plan `init` and `run` return, `context(p)`, `fetch(p)`) has the map put back (`with_keymap`); a context given
-   back to SA (`Process(...; context)`, `context(p, c)`) has it stripped.
+   (the plan `init` and `run` return, `context(p)`, `fetch(p)`) has the map put back (`with_keymap`): a process builds
+   the user's context once each time its context changes, at loop exit (`set_user_context!`), and `context(p)` reads
+   it; a context given back to SA (`Process(...; context)`, `context(p, c)`) has it stripped.
 
 The matching and registry code ask a matcher only general questions (`matches_type`, `is_given_id`, `is_found_by_data`,
 `lower_matcher`, `carries_data`); `UniquePlanId` answers them in `src/Identifiable/UniquePlanId/HookExtensions.jl`. A

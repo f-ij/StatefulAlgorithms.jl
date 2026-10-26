@@ -92,19 +92,22 @@ that exit, so while the loop runs the cursor never escapes and can stay in regis
 """Commit or return the persistent context produced by the loop."""
 @inline function after_while(p::P, func::F, persistent_context::C, runtime_context::RC, returnvalue, start_persistent_context::SC = persistent_context) where {P<:Process,F,C<:ProcessContext,RC<:ProcessContext,SC<:ProcessContext}
     @inline set_endtime!(p)
+    # What the loop returns goes to the user (`fetch(p)`): with the plan's `UniqueKeyMap` put back, built here once.
     if ispaused(p)
         paused_context = @inline _paused_visible_context(persistent_context, runtime_context)
         _store_runtime_context!(p, paused_context)
-        return paused_context
+        return getfield(p, :user_context)
     end
     commit_context!(p, persistent_context)
     p.loop_cursor = nothing
-    return returnvalue
+    return returnvalue === persistent_context ? getfield(p, :user_context) : with_process_keymap(p, returnvalue)
 end
 
 @inline function after_while(ip::IP, func::F, persistent_context::C, runtime_context::RC, returnvalue, start_persistent_context::SC = persistent_context) where {IP<:InlineProcess,F,C<:ProcessContext,RC<:ProcessContext,SC<:ProcessContext}
     @inline set_endtime!(ip)
-    StatefulAlgorithms.context(ip, persistent_context)
+    StatefulAlgorithms.context(ip, persistent_context)   # also builds `context(ip)`, the user's context with the map
+    # Returned as the loop has it, without the map: `run(ip)` stays inferred for the typed code an `InlineProcess` is
+    # called from.
     return returnvalue
 end
 

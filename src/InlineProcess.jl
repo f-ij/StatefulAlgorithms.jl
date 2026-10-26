@@ -16,6 +16,8 @@ mutable struct InlineProcess{TD,ContextType, Lt,Mode} <: AbstractProcess
     endtime::Union{Nothing,Float64,UInt64}
     # The plan's `UniqueKeyMap` (or `nothing`), out of the types the loop compiles for; see `Process`.
     keymap::Any
+    # The context handed to the user (`context(ip)`), built when the process's context changes; see `Process`.
+    user_context::Any
 end
 #TODO Improve context semantics
 contexttype(::Union{InlineProcess{TD,ContextType}, Type{<:InlineProcess{TD,ContextType}}}) where {TD,ContextType} = ContextType
@@ -55,6 +57,7 @@ function InlineProcess(@nospecialize(func), @nospecialize(inputs_overrides...); 
     keymap = getkeymap(algo)
     p = _new_inline_process(strip_keymap(algo), inputs_overrides...; context = strip_keymap(context), kwargs...)
     setfield!(p, :keymap, keymap)   # not `p.keymap = `: that compiles `setproperty!` for every map type
+    set_user_context!(p, _context(p))
     return p
 end
 
@@ -65,7 +68,7 @@ end
     prepared_context = getpersistentcontext(algo)
     mode = _inline_process_mode(threaded)
 
-    p = InlineProcess{typeof(algo), typeof(prepared_context), typeof(lifetime),mode}(uuid1(), algo, prepared_context, false, UInt(1), lifetime, nothing, nothing, nothing)
+    p = InlineProcess{typeof(algo), typeof(prepared_context), typeof(lifetime),mode}(uuid1(), algo, prepared_context, false, UInt(1), lifetime, nothing, nothing, nothing, nothing)
     return p
 end
 
@@ -80,15 +83,19 @@ getcontext(ip::IP) where {IP<:InlineProcess} = context(ip)
 @inline set_endtime!(ip::InlineProcess) = (ip.endtime = time_ns())
 getalgo(ip::InlineProcess) = ip.algo
 
-@inline context(ip::InlineProcess, c) = (ip.context = strip_keymap(c))
+@inline function context(ip::InlineProcess, c)
+    ip.context = strip_keymap(c)   # a context the user got from `context(ip)` carries the map
+    set_user_context!(ip, ip.context)
+    return ip.context
+end
 @inline _context(ip::InlineProcess) = ip.context::contexttype(ip)
-"""The process's context, with the plan's `UniqueKeyMap` back in its registry (`with_keymap`): `context(ip)[handle]`."""
-Base.@nospecializeinfer context(@nospecialize(ip::InlineProcess)) = with_keymap(_context(ip), ip.keymap)
+"""The process's context, with the plan's `UniqueKeyMap` back in its registry, built when it changes (`set_user_context!`): `context(ip)[handle]`."""
+Base.@nospecializeinfer context(@nospecialize(ip::InlineProcess)) = getfield(ip, :user_context)
 
 @inline function reset!(p::InlineProcess, inputs_overrides...)
     p.loopidx = 1
     initialized = _init_plan(getalgo(p), inputs_overrides...; lifetime = lifetime(p))
-    p.context = getpersistentcontext(initialized)
+    context(p, getpersistentcontext(initialized))
     # TODO: Probably remove consumed flag
     p.consumed = false
     return true

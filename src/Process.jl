@@ -26,6 +26,9 @@ mutable struct Process{F,LT,C} <: AbstractProcess
     # back into the contexts handed to the user (`context(p)`, `fetch(p)`). Untyped, so the map's type (new for every
     # set of `Unique` handles) is not in the `Process` type the loop is compiled for.
     keymap::Any
+    # The context handed to the user (`context(p)`): the process's context with `keymap` put back, built once each time
+    # the process's context changes (at loop exit, `commit_context!`, `context(p, c)`; `set_user_context!`).
+    user_context::Any
 end
 
 @setterGetter Process lock shouldrun runtime_context
@@ -176,6 +179,7 @@ function Process(@nospecialize(func), @nospecialize(inputs_overrides...); contex
     keymap = getkeymap(algo)
     p = _new_process(strip_keymap(algo), inputs_overrides...; context = strip_keymap(context), kwargs...)
     setfield!(p, :keymap, keymap)   # not `p.keymap = `: that compiles `setproperty!` for every map type
+    set_user_context!(p, _context(p))
     return p
 end
 
@@ -200,7 +204,7 @@ function _finish_process_constructor_with_context(algo::A, prepared_context::PC,
 
     # p = Process(uuid1(), context, td, timeout, nothing, UInt(1), UInt(1), Threads.ReentrantLock(), false, true, nothing, nothing, Arena(), RuntimeListeners(), 0)
     C = typeof(loop_cursor(getplan(algo), Val(true)))
-    p = Process{typeof(algo),typeof(lifetime),C}(uuid1(), algo, lifetime, nothing, nothing, timeout, nothing, UInt(1), UInt(1), Threads.ReentrantLock(), false, true, nothing, nothing, nothing, RuntimeListeners(), 0, nothing)
+    p = Process{typeof(algo),typeof(lifetime),C}(uuid1(), algo, lifetime, nothing, nothing, timeout, nothing, UInt(1), UInt(1), Threads.ReentrantLock(), false, true, nothing, nothing, nothing, RuntimeListeners(), 0, nothing, nothing)
 
     register_process!(p)
     schedule_loop_precompile!(p, lifetime)
@@ -243,9 +247,26 @@ end
     context(p)
 
 The process's context, with the plan's `UniqueKeyMap` back in its registry (`with_keymap`), so a `Unique` handle the
-user holds is a key found from types: `context(p)[handle]`.
+user holds is a key found from types: `context(p)[handle]`. Built when the process's context changes
+(`set_user_context!`), not here.
 """
-Base.@nospecializeinfer context(@nospecialize(p::Process)) = with_keymap(_context(p), p.keymap)
+Base.@nospecializeinfer context(@nospecialize(p::Process)) = getfield(p, :user_context)
+
+"""
+    set_user_context!(process, c)
+
+Builds the context `process` hands to the user from its context `c`: `c` with the plan's `UniqueKeyMap` put back
+(`with_keymap`), stored in the process's `user_context` field. Called each time the process's context changes. Untyped,
+so the loop that calls it at its exit compiles nothing per uuid.
+"""
+Base.@nospecializeinfer function set_user_context!(@nospecialize(process::AbstractProcess), @nospecialize(c))
+    setfield!(process, :user_context, with_keymap(c, getfield(process, :keymap)))
+    return nothing
+end
+
+"""`x` (a context or another value a process hands to the user) with the process's `UniqueKeyMap` put back. Untyped."""
+Base.@nospecializeinfer with_process_keymap(@nospecialize(process::AbstractProcess), @nospecialize(x)) =
+    with_keymap(x, getfield(process, :keymap))
 
 """
 Store one live process context in the dynamic runtime slot.
@@ -279,11 +300,13 @@ the typed fast path. Only genuine shape changes fall back to the dynamic
     else
         p.runtime_context = c
     end
+    set_user_context!(p, c)
     return c
 end
 
 function context(p::P, c::C) where {P<:Process, C}
     p.runtime_context = strip_keymap(c)   # a context the user got from `context(p)` carries the map
+    set_user_context!(p, p.runtime_context)
     return c
 end
 
@@ -342,7 +365,7 @@ end
 
 function createfrom!(p1::Process, p2::Process)
     p1.algo = p2.algo
-    commit_context!(p1, context(p2))
+    commit_context!(p1, _context(p2))
     p1.loop_cursor = nothing
     p1.timeout = p2.timeout
     reset!(p1)
