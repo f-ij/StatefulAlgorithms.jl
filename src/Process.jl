@@ -243,10 +243,9 @@ end
     context(p)
 
 The process's context, with the plan's `UniqueKeyMap` back in its registry (`with_keymap`), so a `Unique` handle the
-user holds is a key found from types: `context(p)[handle]`. Built once per process context (`get_user_context`,
-UserContextCache.jl).
+user holds is a key found from types: `context(p)[handle]`.
 """
-Base.@nospecializeinfer context(@nospecialize(p::Process)) = get_user_context(p, _context(p), p.keymap)
+Base.@nospecializeinfer context(@nospecialize(p::Process)) = with_keymap(_context(p), p.keymap)
 
 """
 Store one live process context in the dynamic runtime slot.

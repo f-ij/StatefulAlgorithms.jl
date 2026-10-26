@@ -3,8 +3,7 @@
 one rewrite of the ids in any value (Rewrite.jl) with its modes, strip, number and drop (RewriteModes.jl).
 
 Included before the handles (Identifiable/StructDef.jl), which hold it. Two files are included later from
-StatefulAlgorithms.jl: HeldIds.jl (the user's handles found through the registry's `UniqueKeyMap`, after the registry), UserContextCache.jl
-(the cache of the contexts a process hands to the user) and
+StatefulAlgorithms.jl: HeldIds.jl (the user's handles found through the registry's `UniqueKeyMap`, after the registry) and
 HookExtensions.jl (its answers to the matching and registry hooks).
 =#
 include("StructDef.jl")

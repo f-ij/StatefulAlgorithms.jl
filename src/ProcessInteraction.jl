@@ -213,7 +213,7 @@ end
 """The run's result as SA works with it (see `fetch`)."""
 @inline _fetch(@nospecialize(p::Process)) = if !isnothing(p.task) fetch(p.task) else p.lastresult end
 """Fetch the return value of a process; a context comes with the plan's `UniqueKeyMap` back in its registry (`with_keymap`)."""
-Base.@nospecializeinfer Base.fetch(@nospecialize(p::Process)) = get_user_context(p, _fetch(p), p.keymap)
+Base.@nospecializeinfer Base.fetch(@nospecialize(p::Process)) = with_keymap(_fetch(p), p.keymap)
 
 """
 Quit all processes in the process list
