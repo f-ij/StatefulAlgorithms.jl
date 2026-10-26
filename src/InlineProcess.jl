@@ -83,7 +83,7 @@ getalgo(ip::InlineProcess) = ip.algo
 @inline context(ip::InlineProcess, c) = (ip.context = strip_keymap(c))
 @inline _context(ip::InlineProcess) = ip.context::contexttype(ip)
 """The process's context, with the plan's `UniqueKeyMap` back in its registry (`with_keymap`): `context(ip)[handle]`."""
-Base.@nospecializeinfer context(@nospecialize(ip::InlineProcess)) = with_keymap(_context(ip), ip.keymap)
+Base.@nospecializeinfer context(@nospecialize(ip::InlineProcess)) = get_user_context(ip, _context(ip), ip.keymap)
 
 @inline function reset!(p::InlineProcess, inputs_overrides...)
     p.loopidx = 1
