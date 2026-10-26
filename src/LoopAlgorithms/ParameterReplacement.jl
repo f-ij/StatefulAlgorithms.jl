@@ -12,7 +12,8 @@ field 2, whose type is type parameter 2. Every change goes through `setschedule`
 """
     setschedule(plan, schedule) -> plan
 
-`plan` with `schedule` in its schedule field (and its type as type parameter 2).
+`plan` with `schedule` in its schedule field (and its type as type parameter 2). Every id in `schedule` must be
+numbered already (taken from this plan), as a new `Unique` handle is numbered only when a plan is built.
 """
 Base.@nospecializeinfer function setschedule(@nospecialize(plan::AbstractPlan), @nospecialize(schedule))
     T = typeof(plan)
@@ -21,7 +22,7 @@ Base.@nospecializeinfer function setschedule(@nospecialize(plan::AbstractPlan), 
     params[2] = typeof(schedule)
     fields = Any[getfield(plan, i) for i in 1:nfields(plan)]
     fields[2] = schedule
-    return Core.apply_type(T.name.wrapper, params...)(fields...)
+    return new_instance(Core.apply_type(T.name.wrapper, params...), fields...)
 end
 
 """

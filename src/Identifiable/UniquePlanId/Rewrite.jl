@@ -71,6 +71,9 @@ function _derive_params!(params::Vector{Any}, from_field::BitVector, fields::Vec
     return params
 end
 
+# An id only a type holds stays as it is, unless the rewrite says otherwise (`_NumberIds` numbers a held one).
+rewrite_type_id(rewrite, @nospecialize(T::Type{<:UniquePlanId})) = T
+
 function _rewrite_type(@nospecialize(T), rewrite, cache::IdDict{Any, Bool})
     T isa Union && return Union{_rewrite_type(T.a, rewrite, cache), _rewrite_type(T.b, rewrite, cache)}
     T isa DataType || return T

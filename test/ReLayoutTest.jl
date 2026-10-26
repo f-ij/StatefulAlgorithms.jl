@@ -81,3 +81,39 @@ end
     # The process works with the context without the key map: same type as a fresh process's
     @test typeof(StatefulAlgorithms.getalgo(q)) === typeof(StatefulAlgorithms.getalgo(p))
 end
+
+# A `Var` of a `Unique` handle in a schedule: a `Routine`'s lifetime or a composite's `RunIf`.
+rl_var_lifetime(k) = (a = Unique(RLCounter()); StatefulAlgorithms.Routine(a, RLReader, (RepeatOrUntil(x -> x >= 3.0, 100, Var(a, :x)), 1), Route(a => RLReader, :x)))
+rl_var_runif(k) = (b = Unique(RLCounter()); CompositeAlgorithm(b, RLReader, (1, RunIf(x -> x >= 4.0, Var(b, :x))), Route(b => RLReader, :x)))
+
+@testset "Re-layout with a Unique handle's Var in the schedule reuses every phase" begin
+    for layout in (rl_var_lifetime, rl_var_runif)
+        first, again = rl_phase_types(layout(0)), rl_phase_types(layout(1))
+        @test first.plan === again.plan
+        @test first.resolved === again.resolved
+        @test first.initialized === again.initialized
+    end
+end
+
+@testset "A RunIf on a Unique handle's Var in a nested composite" begin
+    b = Unique(RLCounter())
+    inner = CompositeAlgorithm(b, RLReader, (1, RunIf(x -> x >= 4.0, Var(b, :x))), Route(b => RLReader, :x))
+    ip = InlineProcess(CompositeAlgorithm(inner, (1,)); repeats = 6)
+    run(ip)
+    c = StatefulAlgorithms.context(ip)
+    @test c[b].x == 6.0
+    @test c[RLReader].seen == 6.0
+    # an edit and a new plan around it start from the schedule with its ids' data
+    @test length(StatefulAlgorithms.getalgos(insert(inner, 1, Unique(RLCounter())))) == 3
+    changed = setinterval(inner, 2, 5)
+    @test CompositeAlgorithm(changed, (1,)) isa CompositeAlgorithm
+    @test StatefulAlgorithms.getinterval(StatefulAlgorithms.intervals(StatefulAlgorithms.number_unique_ids(changed))[2]) == 5
+end
+
+@testset "A schedule changed by a setter stays changed when the plan is numbered again" begin
+    ca = setintervals(CompositeAlgorithm(Unique(RLCounter()), RLReader, (1, 2)), (1, 7))
+    @test StatefulAlgorithms.intervals(ca) == (1, 7)
+    @test StatefulAlgorithms.intervals(StatefulAlgorithms.number_unique_ids(ca)) == (1, 7)
+    r = setrepeats(StatefulAlgorithms.Routine(RLCounter, RLReader, (2, 3)), (Repeat(4), Repeat(5)))
+    @test StatefulAlgorithms.repeats(r) == (4, 5)
+end
