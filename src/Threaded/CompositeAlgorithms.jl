@@ -9,7 +9,7 @@ interval tuple, then any states and options.
 """
 struct ThreadedCompositeAlgorithm{T, Intervals, Namespaces, W, id, S, O} <: AbstractPlan
     funcs::T
-    intervals
+    intervals::Intervals
     namespaces::Namespaces
     wiring::W
     states::S
@@ -43,26 +43,19 @@ setid(tca::TCA, id = uuid4()) where {TCA<:ThreadedCompositeAlgorithm} = setparam
 statetypes(::Union{ThreadedCompositeAlgorithm, Type{<:ThreadedCompositeAlgorithm}}) = ()
 algotypes(tca::Union{ThreadedCompositeAlgorithm{FT}, Type{<:ThreadedCompositeAlgorithm{FT}}}) where FT = tuple(FT.parameters...)
 
-@inline function intervals(::Union{ThreadedCompositeAlgorithm{T,I}, Type{<:ThreadedCompositeAlgorithm{T,I}}}) where {T,I}
-    if I isa Tuple
-        return I
-    else
-        return ntuple(_ -> 1, length(T.parameters))
-    end
-end
+@inline intervals(tca::ThreadedCompositeAlgorithm) = getfield(tca, :intervals)
+@inline intervals(tca::ThreadedCompositeAlgorithm, ::Val{Idx}) where {Idx} = intervals(tca)[Idx]
+@inline interval(tca::ThreadedCompositeAlgorithm, idx) = intervals(tca)[idx]
+"""The interval of each child as a number, from the type alone (`Interval`'s type holds it)."""
+@inline interval_numbers(::Type{<:ThreadedCompositeAlgorithm{T,I}}) where {T,I} = map(getinterval, fieldtypes(I))
 
-@inline intervals(tca::Union{ThreadedCompositeAlgorithm, Type{<:ThreadedCompositeAlgorithm}}, ::Val{Idx}) where {Idx} = intervals(tca)[Idx]
-@inline interval(tca::Union{ThreadedCompositeAlgorithm{T,I}, Type{<:ThreadedCompositeAlgorithm{T,I}}}, idx) where {T,I} = I[idx]
-
-function setintervals(tca::TCA, new_intervals) where {TCA<:ThreadedCompositeAlgorithm}
+# Through `setschedule` (LoopAlgorithms/ParameterReplacement.jl).
+function setintervals(tca::ThreadedCompositeAlgorithm, new_intervals)
     @assert length(new_intervals) == length(getalgos(tca))
-    setparameter(tca, 2, new_intervals)
+    return setschedule(tca, Tuple(new_intervals))
 end
-
-function setinterval(tca::TCA, idx::Int, new_interval) where {TCA<:ThreadedCompositeAlgorithm}
-    new_intervals = ntuple(i -> i == idx ? new_interval : interval(tca, i), length(getalgos(tca)))
-    setparameter(tca, 2, new_intervals)
-end
+setinterval(tca::ThreadedCompositeAlgorithm, idx::Int, new_interval) =
+    setschedule(tca, Base.setindex(getschedule(tca), _as_interval(new_interval), idx))
 
 hasid(tca::Union{ThreadedCompositeAlgorithm{T,I,NS,W,id}, Type{<:ThreadedCompositeAlgorithm{T,I,NS,W,id}}}) where {T,I,NS,W,id} = !isnothing(id)
 id(tca::Union{ThreadedCompositeAlgorithm{T,I,NS,W,id}, Type{<:ThreadedCompositeAlgorithm{T,I,NS,W,id}}}) where {T,I,NS,W,id} = id
@@ -71,18 +64,16 @@ Base.length(tca::ThreadedCompositeAlgorithm) = length(getalgos(tca))
 Base.eachindex(tca::ThreadedCompositeAlgorithm) = eachindex(getalgos(tca))
 
 @generated function inc!(cursor::CompositeLoopCursor, tca::ThreadedCompositeAlgorithm)
-    _lcm = lcm(intervals(tca)...)
+    _lcm = lcm(interval_numbers(tca)...)
     # TODO: Use the compare/select wrap from the core inc! (LoopAlgorithms/CompositeAlgorithms.jl); mod1 costs ~3 ns per tick.
     return :(getinc(cursor)[] = mod1(getinc(cursor)[] + 1, $_lcm))
 end
 
 multipliers(tca::ThreadedCompositeAlgorithm) = tuplemap(x -> 1 / getinterval(x), intervals(tca))
-multipliers(tcaT::Type{TCA}) where {TCA<:ThreadedCompositeAlgorithm} = tuplemap(x -> 1 / getinterval(x), intervals(tcaT))
+multipliers(::Type{TCA}) where {TCA<:ThreadedCompositeAlgorithm} = map(n -> 1 / n, interval_numbers(TCA))
 multiplier(tca::ThreadedCompositeAlgorithm, idx) = 1 / interval(tca, idx)
 
-@inline function getvals(tca::ThreadedCompositeAlgorithm{FT, Is}) where {FT, Is}
-    return Val.(Is)
-end
+@inline getvals(tca::ThreadedCompositeAlgorithm) = Val.(intervals(tca))
 
 inc(cursor::CompositeLoopCursor, ::ThreadedCompositeAlgorithm) = getinc(cursor)[]
 

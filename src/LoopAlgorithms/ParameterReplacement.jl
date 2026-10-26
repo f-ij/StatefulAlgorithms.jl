@@ -1,21 +1,54 @@
-export setrepeats, setintervals, setinterval, setrepeats
+export setrepeats, setintervals, setinterval
 
-function setrepeats(r::Routine{F, Repeats, NS}, newrepeats) where {F, Repeats, NS}
-    setfield(r, :repeats, newrepeats)
+#=
+Changing a plan's schedule: the repeats of a `Routine`, the intervals of a composite. A plan keeps its schedule in
+field 2, whose type is type parameter 2. Every change goes through `setschedule`.
+=#
+
+"""The schedule of a plan (field 2): a composite's intervals, a routine's repeats."""
+@inline getschedule(plan::AbstractPlan) = getfield(plan, 2)
+@inline getschedule(la::LoopAlgorithm) = getschedule(getplan(la))
+
+"""
+    setschedule(plan, schedule) -> plan
+
+`plan` with `schedule` in its schedule field (and its type as type parameter 2).
+"""
+Base.@nospecializeinfer function setschedule(@nospecialize(plan::AbstractPlan), @nospecialize(schedule))
+    T = typeof(plan)
+    schedule = store_single_repeats_as_repeat_once(T, schedule)
+    params = Any[T.parameters...]
+    params[2] = typeof(schedule)
+    fields = Any[getfield(plan, i) for i in 1:nfields(plan)]
+    fields[2] = schedule
+    return Core.apply_type(T.name.wrapper, params...)(fields...)
 end
 
-function setintervals(r::Routine{F, Intervals, NS}, newintervals) where {F, Intervals, NS}
-    setfield(r, :repeats, newintervals)
+"""
+    store_single_repeats_as_repeat_once(PlanType, schedule) -> schedule
+
+A routine's `schedule` with each `Repeat(1)` as `RepeatOnce()`, whose type says the count, so the child's step has no
+loop. Other plans' schedules are returned as they are.
+"""
+Base.@nospecializeinfer function store_single_repeats_as_repeat_once(@nospecialize(PlanType::Type), @nospecialize(schedule))
+    (PlanType <: Routine && schedule isa Tuple) || return schedule
+    return Tuple(Any[x isa Repeat && repeats(x) == 1 ? RepeatOnce() : x for x in schedule])
 end
 
-function setinterval(r::CompositeAlgorithm{F, Intervals, NS}, idx::Int, newinterval::Interval) where {F, Intervals, NS}
-    updated_intervals = setindex(intervals(r), newinterval, idx)
-    setfield(r, :intervals, updated_intervals)
+setrepeats(r::Routine, newrepeats) = setschedule(r, newrepeats)
+setintervals(r::Routine, newintervals) = setschedule(r, newintervals)
+
+function setintervals(ca::CompositeAlgorithm, new_intervals)
+    length(new_intervals) == length(getalgos(ca)) || construction_assert_error("Length of new intervals must match number of functions in the composite algorithm, but got ", length(new_intervals), " intervals for ", length(getalgos(ca)), " functions")
+    return setschedule(ca, Tuple(new_intervals))
 end
 
-setinterval(r::CompositeAlgorithm{F, Intervals, NS}, idx::Int, newinterval::Number) where {F, Intervals, NS} = setinterval(r, idx, Interval(newinterval))
+"""`ca` with the interval of child `idx` set to `new_interval` (a number becomes an `Interval`)."""
+setinterval(ca::CompositeAlgorithm, idx::Int, new_interval) =
+    setschedule(ca, Base.setindex(getschedule(ca), _as_interval(new_interval), idx))
+setrepeats(ca::CompositeAlgorithm, idx::Int, newrepeats) = setinterval(ca, idx, newrepeats)
 
-function setrepeats(r::CompositeAlgorithm{F, Repeats, NS}, idx::Int, newrepeats) where {F, Repeats, NS}
-    updated_repeats = setindex(intervals(r), newrepeats, idx)
-    setfield(r, :intervals, updated_repeats)
-end
+# `ThreadedCompositeAlgorithm`'s are in Threaded/CompositeAlgorithms.jl (included later).
+
+_as_interval(i::Real) = Interval(i)
+_as_interval(i) = i

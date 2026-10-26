@@ -80,8 +80,10 @@ Terms used in this file:
        return lc
 
    `<context>` is `final_context(LoopContext(with_carried(start_persistent, carried), runtime))`. A child with
-   `Repeat(1)` has no loop: a leaf calls `_subroutine_step_once!`, and for a plan the loop is replaced by
-   `if resume_point <= 1; <one repeat>; <the pause check>; end` (no own stop condition).
+   `RepeatOnce` (a routine stores `Repeat(1)` as `RepeatOnce`, whose type says the count) has no loop: a leaf calls
+   `_subroutine_step_once!`, and for a plan the loop is replaced by
+   `if resume_point <= 1; <one repeat>; <the pause check>; end` (no own stop condition). Any other count is a value
+   (the `Repeat` in the routine's `repeats` field) and gets the loop.
 
 4. What `_find_writable_fields` of a plan emits (`_children_writes_expr`):
 
@@ -103,10 +105,19 @@ step. `false` for a leaf, which is stepped by a call to its `_step!`. See the fi
 _steps_inline(::Type) = false
 _steps_inline(::Type{<:Union{CompositeAlgorithm, Routine}}) = true
 
-"""`true` when a composite child's schedule value is `Interval{1}` (it runs every step, so it needs no branch), else `false`."""
-_always_runs(::Interval{1}) = true
-_always_runs(::Integer) = false
-_always_runs(::Any) = false
+"""`true` when a composite child's schedule type is `Interval{1}` (it runs every step, so it needs no branch), else `false`."""
+_always_runs(::Type{<:Interval{1}}) = true
+_always_runs(::Type) = false
+
+"""
+The expression that gives schedule entry `i` (an interval or a repeat) of `plan`, a plan of type `PlanType`: the entry
+itself when its type alone decides it (`Interval`, `Indefinite`), else read from the plan's schedule field.
+"""
+function _schedule_entry_expr(PlanType::Type, plan, i)
+    E = fieldtype(fieldtype(PlanType, 2), i)
+    Base.issingletontype(E) && return E.instance
+    return :(@inline getfield((@inline getschedule($plan)), $i))
+end
 
 """
 The lines (a `Vector` of expressions) that step `plan` once: the file header, 2. for a composite, 3. for a routine.
@@ -141,7 +152,7 @@ end
 
 """The lines that step composite `plan` once (the file header, 2.); arguments as `_plan_step_exprs`."""
 function _composite_step_exprs(PlanType::Type, plan, cursor, wiring, lc)
-    schedule_values = PlanType.parameters[2]
+    schedule_types = fieldtype(PlanType, 2)
     namespace_types = PlanType.parameters[3]
     children = fieldtype(PlanType, :funcs)
     algos, this_inc, outer = gensym(:algos), gensym(:inc), gensym(:outer)
@@ -149,24 +160,25 @@ function _composite_step_exprs(PlanType::Type, plan, cursor, wiring, lc)
                 :(local $outer = $lc), :($lc = @inline enter_scope($lc, $wiring))]
     i = 1
     while i <= fieldcount(children)
-        schedule_value = schedule_values[i]
-        if _always_runs(schedule_value)
+        schedule_type = fieldtype(schedule_types, i)
+        if _always_runs(schedule_type)
             setup, child, child_cursor, child_wiring = _child_setup_exprs(algos, cursor, wiring, i)
             append!(exprs, setup)
             append!(exprs, _child_step_exprs(fieldtype(children, i), child, child_cursor, child_wiring, :($(fieldtype(namespace_types, i))()), lc))
             i += 1
             continue
         end
-        # The children from `i` on that have the same schedule: one branch.
+        # The children from `i` on that have the same schedule: one branch. Only a schedule its type decides is known
+        # to be the same.
         last_in_group = i
-        while last_in_group < fieldcount(children) && isequal(schedule_values[last_in_group + 1], schedule_value)
+        while last_in_group < fieldcount(children) && Base.issingletontype(schedule_type) && fieldtype(schedule_types, last_in_group + 1) === schedule_type
             last_in_group += 1
         end
         group = Any[_child_setup_exprs(algos, cursor, wiring, j) for j in i:last_in_group]
         foreach(g -> append!(exprs, first(g)), group)
         tuple_of(k) = Expr(:tuple, (g[k] for g in group)...)
         namespaces = Expr(:tuple, (:($(fieldtype(namespace_types, j))()) for j in i:last_in_group)...)
-        run = :(@inline should_run_schedule($schedule_value, $this_inc, (@inline getpersistent($lc))))
+        run = :(@inline should_run_schedule($(_schedule_entry_expr(PlanType, plan, i)), $this_inc, (@inline getpersistent($lc))))
         push!(exprs, :($lc = @inline _conditional_step($run, $(tuple_of(2)), $(tuple_of(3)), $lc, $(tuple_of(4)), $namespaces, process, lifetime)))
         i = last_in_group + 1
     end
@@ -180,22 +192,21 @@ The lines that step routine `plan` once (the file header, 3.): each child runs a
 starts. Arguments as `_plan_step_exprs`.
 """
 function _routine_step_exprs(PlanType::Type, plan, cursor, wiring, lc)
-    repeat_values = PlanType.parameters[2]
     namespace_types = PlanType.parameters[3]
     children = fieldtype(PlanType, :funcs)
     algos, outer = gensym(:algos), gensym(:outer)
     exprs = Any[:(local $algos = @inline getalgos($plan)), :(local $outer = $lc), :($lc = @inline enter_scope($lc, $wiring))]
     for i in 1:fieldcount(children)
         ChildType = fieldtype(children, i)
-        repeat_value = repeat_values[i]
+        repeat_value = _schedule_entry_expr(PlanType, plan, i)
         namespace_expr = :($(fieldtype(namespace_types, i))())
         setup, child, child_cursor, child_wiring = _child_setup_exprs(algos, cursor, wiring, i)
         append!(exprs, setup)
         if _steps_inline(ChildType)
-            append!(exprs, _inline_routine_child_exprs(ChildType, child, child_cursor, child_wiring, namespace_expr, lc, cursor, i, repeat_value))
+            append!(exprs, _inline_routine_child_exprs(ChildType, child, child_cursor, child_wiring, namespace_expr, lc, cursor, i, repeat_value, fieldtype(fieldtype(PlanType, 2), i) <: RepeatOnce))
         else
-            # Repeat counts are part of the plan type: a single-repeat child needs no loop.
-            substep = repeat_value isa Repeat && repeats(repeat_value) == 1 ? :_subroutine_step_once! : :_subroutine_step!
+            # A single repeat (`RepeatOnce`) needs no loop.
+            substep = fieldtype(fieldtype(PlanType, 2), i) <: RepeatOnce ? :_subroutine_step_once! : :_subroutine_step!
             push!(exprs, :($lc = @inline $substep($lc, $child, $child_cursor, $plan, $cursor, process, lifetime, $i, $repeat_value, $child_wiring, $namespace_expr)))
         end
     end
@@ -211,9 +222,11 @@ carry only the persistent fields the child writes, as the loops do (see src/Cont
 context. That has the same type before and after each repeat (the child removes its own returns when it ends), except a
 local declared without a type that gets its first value in a repeat: from then on it has the written type (Locals.jl,
 section 3).
-`routine_cursor` is the routine's cursor (it holds the resume points) and `repeat_value` the child's repeat.
+`routine_cursor` is the routine's cursor (it holds the resume points), `repeat_value` the expression that gives the
+child's repeat (`_schedule_entry_expr`), and `is_repeat_once` whether it is `RepeatOnce`: then the child runs without
+the loop.
 """
-function _inline_routine_child_exprs(ChildType::Type, child, child_cursor, child_wiring, namespace_expr, lc, routine_cursor, i, repeat_value)
+function _inline_routine_child_exprs(ChildType::Type, child, child_cursor, child_wiring, namespace_expr, lc, routine_cursor, i, repeat_value, is_repeat_once::Bool)
     resume_point, count, lidx, done = gensym(:resume_point), gensym(:count), gensym(:lidx), gensym(:done)
     start_persistent, carried, runtime = gensym(:start_persistent_context), gensym(:carried), gensym(:runtime_context)
     # One repeat: the nested plan stepped with the carried fields, in its own `LoopContext` variable.
@@ -240,13 +253,12 @@ function _inline_routine_child_exprs(ChildType::Type, child, child_cursor, child
             $(Expr(:symbolicgoto, done))
         end
     end
-    once = repeat_value isa Repeat && repeats(repeat_value) == 1
     body = Any[:(local $resume_point = @inline get_resume_point($routine_cursor, $i)),
                :(local $start_persistent = @inline getpersistent($lc)),
                :(local $runtime = @inline getruntime($lc)),
                :(local $carried = @inline create_carried($child, $child_cursor, $lc, $child_wiring, $namespace_expr, process, lifetime))]
-    if once
-        push!(body, :(if $resume_point <= 1; $(repeat_once()...); $(paused_after(resume_point)); end))   # `Repeat(1)`: no own condition
+    if is_repeat_once
+        push!(body, :(if $resume_point <= 1; $(repeat_once()...); $(paused_after(resume_point)); end))   # `RepeatOnce`: no own condition
     else
         # One loop, every repeat the same: the child's own condition, the repeat, the pause check (see `_subroutine_step!`).
         push!(body, :(local $count = @inline routine_repeat_count($repeat_value)))
@@ -496,7 +508,7 @@ is past the last repeat.
 end
 
 """
-Run routine child `idx`, a leaf with `Repeat(1)`, once (unless already run before a pause), and return `lc` after it.
+Run routine child `idx`, a leaf with `RepeatOnce`, once (unless already run before a pause), and return `lc` after it.
 
 It is `_subroutine_step!` without the loop and without the child's own stop condition; only the pause or close check
 after the step stays.
@@ -515,7 +527,7 @@ after the step stays.
     namespace::N,
 ) where {L<:LoopContext,F,FS<:AbstractLoopCursor,R<:Routine,RS<:Union{DirectRoutineCursor,PausableRoutineCursor},P<:AbstractProcess,LT<:Lifetime,SL<:Lifetime,W,N<:Namespace}
     resume_point = @inline get_resume_point(routine_cursor, idx)
-    if resume_point <= 1   # `Repeat(1)`: no own stop condition, only a pause or close after the repeat
+    if resume_point <= 1   # `RepeatOnce`: no own stop condition, only a pause or close after the repeat
         lc = @inline _step!(func, func_cursor, lc, child_step_wiring, namespace, process, lifetime)
         @inline tick!(process)
         if @inline process_breakcondition(process)

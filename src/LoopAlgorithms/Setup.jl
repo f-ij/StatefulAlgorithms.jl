@@ -197,7 +197,8 @@ Base.@nospecializeinfer function _build_plan(PlanType::Type, @nospecialize(funcs
     funcs, child_wiring = _split_children_and_wiring(funcs, options)
     wiring = PlanWiring(_build_plan_wiring_untyped(options), child_wiring, collect_plan_locals(options))
     plan_options = _drop_wiring_options_untyped(options)
-    return PlanType{typeof(funcs), schedule, typeof(namespaces), typeof(wiring), id, typeof(states), typeof(plan_options)}(funcs, schedule, namespaces, wiring, states, plan_options)
+    schedule = store_single_repeats_as_repeat_once(PlanType, schedule)
+    return PlanType{typeof(funcs), typeof(schedule), typeof(namespaces), typeof(wiring), id, typeof(states), typeof(plan_options)}(funcs, schedule, namespaces, wiring, states, plan_options)
 end
 
 """
@@ -215,7 +216,8 @@ function _build_plan_typed(::Type{PlanType}, funcs::F, states::Tuple, options::T
     funcs, child_wiring = _split_children_and_wiring(funcs, options)
     wiring = PlanWiring(_build_plan_wiring(options), child_wiring, collect_plan_locals(options))
     plan_options = _drop_wiring_options(options)
-    return PlanType{typeof(funcs), schedule, typeof(namespaces), typeof(wiring), id, typeof(states), typeof(plan_options)}(funcs, schedule, namespaces, wiring, states, plan_options)
+    schedule = store_single_repeats_as_repeat_once(PlanType, schedule)
+    return PlanType{typeof(funcs), typeof(schedule), typeof(namespaces), typeof(wiring), id, typeof(states), typeof(plan_options)}(funcs, schedule, namespaces, wiring, states, plan_options)
 end
 
 

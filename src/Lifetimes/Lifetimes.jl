@@ -4,7 +4,7 @@ Lifetimes: how long a process runs, and how often a routine repeats a child. The
 HookExtensions.jl.
 =#
 
-export Repeat, Indefinite, Until, AtLeast, RepeatOrUntil, AtLeastAtMost
+export Repeat, RepeatOnce, Indefinite, Until, AtLeast, RepeatOrUntil, AtLeastAtMost
 export repeats
 
 abstract type Lifetime end
@@ -12,7 +12,7 @@ abstract type Lifetime end
 abstract type RepeatLifetime <: Lifetime end
 abstract type IndefiniteLifetime <: Lifetime end
 
-Base.:(/)(r::RepeatLifetime, n) = r.repeats / n
+Base.:(/)(r::RepeatLifetime, n) = repeats(r) / n
 repeats(r::RepeatLifetime) = r.repeats
 
 repeats(::IndefiniteLifetime) = Inf
@@ -27,6 +27,14 @@ struct Indefinite <: IndefiniteLifetime end
 struct Repeat <: RepeatLifetime
     repeats::Int
 end
+
+"""
+A single repeat: `Repeat(1)` whose type says the count. A routine stores a `Repeat(1)` child as `RepeatOnce()`
+(`store_single_repeats_as_repeat_once`), so its step is compiled without a loop; any other count is a value, so a new
+count does not compile the routine again.
+"""
+struct RepeatOnce <: RepeatLifetime end
+repeats(::RepeatOnce) = 1
 
 
 struct Until{Vars, F} <: IndefiniteLifetime

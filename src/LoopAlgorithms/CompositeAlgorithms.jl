@@ -14,7 +14,7 @@ interval cursor) belongs to the `LoopAlgorithm`/`AbstractLoopCursor` they create
 """
 struct CompositeAlgorithm{T, Intervals, Namespaces, W, id, S, O} <: AbstractPlan
     funcs::T
-    intervals
+    intervals::Intervals
     namespaces::Namespaces
     wiring::W
     states::S
@@ -52,8 +52,7 @@ setid(ca::CA, id = uuid4()) where {CA<:CompositeAlgorithm} = setparameter(ca, 5,
 # setname(ca::CA, name::Symbol) where CA <: CompositeAlgorithm = setparameter(ca, 6, name)
 # getname(ca::Union{CompositeAlgorithm{T,I,NSR,O,R,id,CustomName}, Type{<:CompositeAlgorithm{T,I,NSR,O,R,id,CustomName}}}) where {T,I,NSR,O,R,id,CustomName} = CustomName
 
-interval(ca::CompositeAlgorithm, idx) = typeof(ca).parameters[2][idx]
-interval(::Type{<:CompositeAlgorithm{T,I}}, idx) where {T,I} = I[idx]
+interval(ca::CompositeAlgorithm, idx) = getfield(ca, :intervals)[idx]
 
 
 ###########################################
@@ -64,21 +63,14 @@ interval(::Type{<:CompositeAlgorithm{T,I}}, idx) where {T,I} = I[idx]
 @inline numalgos(::Union{CompositeAlgorithm{T,I,NS}, Type{<:CompositeAlgorithm{T,I,NS}}}) where {T,I,NS} = length(T.parameters)
 
 
-@inline intervals(ca::CompositeAlgorithm) = typeof(ca).parameters[2]
-@inline intervals(::Type{<:CompositeAlgorithm{T,I}}) where {T,I} = I
-@inline intervals(ca::Union{CompositeAlgorithm, Type{<:CompositeAlgorithm}}, ::Val{Idx}) where Idx = @inline intervals(ca)[Idx]
+@inline intervals(ca::CompositeAlgorithm) = getfield(ca, :intervals)
+@inline intervals(ca::CompositeAlgorithm, ::Val{Idx}) where Idx = @inline intervals(ca)[Idx]
+"""The interval of each child as a number, from the type alone (`Interval`'s type holds it)."""
+@inline interval_numbers(::Type{<:CompositeAlgorithm{T,I}}) where {T,I} = map(getinterval, fieldtypes(I))
 
 get_this_interval(args) = interval(getalgo(args.process), algoidx(args))
 
-function setintervals(ca::C, new_intervals) where {C<:CompositeAlgorithm}
-    length(new_intervals) == length(getalgos(ca)) || construction_assert_error("Length of new intervals must match number of functions in the composite algorithm, but got ", length(new_intervals), " intervals for ", length(getalgos(ca)), " functions")
-    setparameter(ca, 2, new_intervals)
-end
-
-function setinterval(ca::C, idx::Int, new_interval) where {C<:CompositeAlgorithm}
-    new_intervals = ntuple(i -> i == idx ? new_interval : interval(ca, i), length(getalgos(ca)))
-    setparameter(ca, 2, new_intervals)
-end
+# `setintervals`, `setinterval`: ParameterReplacement.jl.
 
 
 #######################################
@@ -105,7 +97,7 @@ counter off the division path that `mod1` would put on every tick; with an lcm
 of 1 the counter never changes.
 """
 @inline @generated function inc!(cursor::CompositeLoopCursor, ca::CA) where CA <: CompositeAlgorithm
-    _lcm = lcm(intervals(ca)...)
+    _lcm = lcm(interval_numbers(ca)...)
     _lcm == 1 && return :(nothing)
     return quote
         cainc = getinc(cursor)
@@ -126,14 +118,12 @@ get_funcs(ca::CompositeAlgorithm{FT}) where FT = FT.parameters
 
 # repeats(ca::CompositeAlgorithm) = 1 ./ intervals(ca)
 # repeats(ca::CompositeAlgorithm, idx) = 1 / interval(ca, idx)
-function multipliers(ca::Union{CA, Type{CA}}) where {CA<:CompositeAlgorithm}
-    tuplemap(x -> 1/getinterval(x), intervals(ca))
-end
+multipliers(ca::CompositeAlgorithm) = tuplemap(x -> 1/getinterval(x), intervals(ca))
+multipliers(::Type{CA}) where {CA<:CompositeAlgorithm} = map(n -> 1/n, interval_numbers(CA))
 
 multiplier(ca::CompositeAlgorithm, idx) = 1 / getinterval(getalgo(ca, idx))
 
 tupletype_to_tuple(t) = (t.parameters...,)
-get_intervals(ct::Type{CA}) where {CA<:CompositeAlgorithm} = intervals(ct)
 
 @inline function getvals(ca::CompositeAlgorithm)
     return Val.(intervals(ca))

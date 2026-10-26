@@ -135,6 +135,8 @@ subalgotypes(a::Any) = a
 Get the multipliers in the flat representation
 """
 flat_multipliers(a::Any) = 1
+# TODO: a `Routine`'s repeat counts are values (its `repeats` field), so `multipliers(PA)` has no method for a routine
+# type; this needs the plan value.
 @generated function flat_multipliers(paT::Type{PA}) where PA <: Union{Routine, CompositeAlgorithm}
     subtypes = subalgotypes(PA)
     mtpliers = multipliers(PA)

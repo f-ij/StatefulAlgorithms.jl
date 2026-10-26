@@ -50,9 +50,18 @@ end
 """The `GeneratedValue` of the registry entry that `entry` (of a builder filled by the walk on types) holds."""
 Base.@nospecializeinfer function build_known_entry(entry::TypeEntryBuilder)
     algos = build_tuple(entry.algos, GeneratedValue(Nothing, nothing))
-    multipliers = GeneratedValue(Vector{Float64}, QuoteNode(copy(entry.multipliers)))
+    multipliers = GeneratedValue(Vector{Float64}, write_multipliers_expr(entry.multipliers))
     lookup = GeneratedValue(Dict{LookupKey,Int}, write_lookup_table_expr(entry.lookup))
     return build_from_parts(RegistryTypeEntry{entry.type, algos.valuetype}, Any[algos, multipliers, lookup])
+end
+
+"""
+The expression that gives an entry's multipliers: a constant, or, when some are only known at run time (a routine
+child's repeat count, `read_routine_multiplier`), the vector built from their expressions.
+"""
+Base.@nospecializeinfer function write_multipliers_expr(multipliers::Vector{Any})
+    all(m -> m isa Number, multipliers) && return QuoteNode(Float64[multipliers...])
+    return Expr(:call, getindex, Float64, multipliers...)   # `Float64[m1, m2, ...]`
 end
 
 """

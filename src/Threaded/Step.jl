@@ -100,7 +100,6 @@ end
 
 Base.@constprop :aggressive @inline @generated function _step!(tca::TCA, cursor::S, lc::L, wiring::W, namespace::N, process::P, lifetime::LT) where {TCA <: ThreadedCompositeAlgorithm, S<:CompositeLoopCursor, L <: LoopContext, W <: PlanWiringView, N <: Namespace, P <: AbstractProcess, LT <: Lifetime}
     algo_count = numalgos(TCA)
-    schedule_values = TCA.parameters[2]
     child_namespace_tuple_type = TCA.parameters[3]
 
     exprs = Any[]
@@ -111,7 +110,7 @@ Base.@constprop :aggressive @inline @generated function _step!(tca::TCA, cursor:
     push!(exprs, :(lc = @inline enter_scope(lc, wiring)))
 
     for i in 1:algo_count
-        schedule_value = schedule_values[i]
+        schedule_value = _schedule_entry_expr(TCA, :tca, i)
         child_namespace_type = fieldtype(child_namespace_tuple_type, i)
         push!(exprs, quote
             if @inline should_run_schedule($schedule_value, this_inc, (@inline getpersistent(lc)))

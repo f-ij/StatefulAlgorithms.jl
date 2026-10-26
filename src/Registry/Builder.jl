@@ -34,17 +34,17 @@ const BuilderLookup = Dict{Union{LookupKey,RuntimeLookupKey},Int}
     TypeEntryBuilder(type)
 
 One entry type of a `RegistryBuilder`: the entry type `type` (`Lin`), its keyed algorithms in order, their
-multipliers, the runtime lookup table (lookup key => index), and each algorithm's matcher once it has been computed
-(`entry_matcher`).
+multipliers (numbers, or expressions in the walk on types: `multiply_multipliers`), the runtime lookup table (lookup
+key => index), and each algorithm's matcher once it has been computed (`entry_matcher`).
 """
 struct TypeEntryBuilder
     type::Any
     algos::Vector{Any}
-    multipliers::Vector{Float64}
+    multipliers::Vector{Any}
     lookup::BuilderLookup
     matchers::Vector{Any}
 end
-TypeEntryBuilder(@nospecialize(type)) = TypeEntryBuilder(type, Any[], Float64[], BuilderLookup(), Any[])
+TypeEntryBuilder(@nospecialize(type)) = TypeEntryBuilder(type, Any[], Any[], BuilderLookup(), Any[])
 
 struct MatcherNotComputed end   # an entry whose matcher is not computed yet
 
@@ -63,7 +63,7 @@ function RegistryBuilder(reg::NameSpaceRegistry)
     b = RegistryBuilder()
     for rte in getentries(reg)
         algos = Any[getalgos(rte)...]
-        push!(b.entries, TypeEntryBuilder(getentrytype(rte), algos, copy(getmultipliers(rte)), BuilderLookup(getdynamiclookup(rte)),
+        push!(b.entries, TypeEntryBuilder(getentrytype(rte), algos, Any[getmultipliers(rte)...], BuilderLookup(getdynamiclookup(rte)),
             Any[MatcherNotComputed() for _ in algos]))
     end
     return b
@@ -99,7 +99,7 @@ Base.@nospecializeinfer function add!(b::RegistryBuilder, @nospecialize(algo), @
         return keyed
     end
     add_again!(entry, idx, algo)
-    entry.multipliers[idx] += multiplier
+    entry.multipliers[idx] = add_multipliers(entry.multipliers[idx], multiplier)
     return entry.algos[idx]
 end
 
@@ -233,7 +233,7 @@ Base.@nospecializeinfer function registry(b::RegistryBuilder)
     typeentries = Vector{Any}(undef, length(b.entries))
     for (i, entry) in enumerate(b.entries)
         algos = Tuple(entry.algos)
-        typeentries[i] = RegistryTypeEntry{entry.type, typeof(algos)}(algos, entry.multipliers, Dict{LookupKey,Int}(entry.lookup))
+        typeentries[i] = RegistryTypeEntry{entry.type, typeof(algos)}(algos, Float64[entry.multipliers...], Dict{LookupKey,Int}(entry.lookup))
     end
     all_entries = Tuple(typeentries)
     return NameSpaceRegistry{typeof(all_entries)}(all_entries)

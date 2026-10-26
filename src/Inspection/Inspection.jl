@@ -373,7 +373,7 @@ end
 
 """Format a routine child lifetime without displaying its condition closure."""
 function _inspection_routine_schedule_label(spec::LT) where {LT<:Lifetime}
-    if spec isa Repeat
+    if spec isa Union{Repeat, RepeatOnce}
         return string("Repeat(", repeats(spec), ")")
     elseif spec isa Indefinite
         return "Indefinite()"

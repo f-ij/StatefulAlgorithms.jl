@@ -7,9 +7,7 @@ import Base: rename
     return la
 end
 
-@inline _stored_schedule_spec(la::CompositeAlgorithm) = intervals(la)
-@inline _stored_schedule_spec(la::Routine) = lifetimes(la)
-@inline _stored_schedule_spec(::ThreadedCompositeAlgorithm{T, Spec}) where {T, Spec} = Spec
+@inline _stored_schedule_spec(la::Union{CompositeAlgorithm, Routine, ThreadedCompositeAlgorithm}) = getschedule(la)
 @inline _stored_schedule_spec(la::LoopAlgorithm) = _stored_schedule_spec(getplan(la))
 
 @inline _constructor_type(::CompositeAlgorithm) = CompositeAlgorithm

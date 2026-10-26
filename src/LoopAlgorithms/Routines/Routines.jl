@@ -9,7 +9,7 @@ options. Resume counters are allocated as loop cursors only for pausable executi
 """
 struct Routine{T, Repeats, Namespaces, W, id, S, O} <: AbstractPlan
     funcs::T
-    repeats
+    repeats::Repeats
     namespaces::Namespaces
     wiring::W
     states::S
@@ -70,19 +70,15 @@ Base.length(r::Routine) = length(getalgos(r))
 
 """Return registry multiplier weights for each routine child."""
 multipliers(r::R) where {R<:Routine} = tuplemap(_routine_schedule_multiplier, lifetimes(r))
-multipliers(rT::Type{R}) where {R<:Routine} = tuplemap(_routine_schedule_multiplier, lifetimes(rT))
 getid(r::Union{Routine{T,R,NS,W,id},Type{<:Routine{T,R,NS,W,id}}}) where {T,R,NS,W,id} = id
 
 """Return the child lifetime schedule tuple for a routine."""
-@inline lifetimes(r::Routine) = typeof(r).parameters[2]
-@inline lifetimes(::Type{<:Routine{F,R}}) where {F,R} = R
+@inline lifetimes(r::Routine) = getfield(r, :repeats)
 lifetimes(r::Routine, idx::Int) = lifetimes(r)[idx]
 lifetimes(r::Routine, ::Val{idx}) where {idx} = lifetimes(r)[idx]
-lifetimes(r::Type{<:Routine}, idx::Int) = lifetimes(r)[idx]
-lifetimes(r::Type{<:Routine}, ::Val{idx}) where {idx} = lifetimes(r)[idx]
 
 """Compatibility alias for the historical integer-only routine schedule API."""
-@inline repeats(r::Union{Routine, Type{<:Routine}}) = map(repeats, lifetimes(r))
-repeats(r::Union{Routine, Type{<:Routine}}, idx::Int) = repeats(lifetimes(r, idx))
-repeats(r::Union{Routine, Type{<:Routine}}, idx::Val) = repeats(lifetimes(r, idx))
+@inline repeats(r::Routine) = map(repeats, lifetimes(r))
+repeats(r::Routine, idx::Int) = repeats(lifetimes(r, idx))
+repeats(r::Routine, idx::Val) = repeats(lifetimes(r, idx))
 

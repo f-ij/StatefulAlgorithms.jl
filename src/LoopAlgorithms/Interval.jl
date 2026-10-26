@@ -16,6 +16,7 @@ struct RunIf{Vars, F, I}
 end
 
 getinterval(i::Interval{I, First, Offset}) where {I, First, Offset} = I
+getinterval(::Type{<:Interval{I}}) where {I} = I
 
 
 Interval(i::Int) = Interval{i, :end, 0}()
@@ -34,6 +35,7 @@ RunIf(interval::Real, cond::Function, vars...) = RunIf(Interval(interval), cond,
 
 @inline getcondition(runif::RunIf) = getfield(runif, :cond)
 @inline getinterval(runif::RunIf) = getinterval(getfield(runif, :interval))
+getinterval(::Type{<:RunIf{V, F, I}}) where {V, F, I} = getinterval(I)
 @inline schedule_interval(interval::Interval) = interval
 @inline schedule_interval(runif::RunIf) = getfield(runif, :interval)
 
