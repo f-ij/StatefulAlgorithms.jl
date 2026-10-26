@@ -8,7 +8,7 @@ execution.
 `Process(func, inputs_overrides...; repeats, lifetime, timeout)` (`src/Process.jl`):
 
 1. Wrap a bare `StepAlgorithm` as a one-child `CompositeAlgorithm` plan.
-2. Normalize stop behavior: `repeats = n` becomes `Repeat(n)`, `lifetime` accepts `Lifetime` objects, and `Routine` defaults to `Repeat(1)` when no lifetime is provided.
+2. Normalize stop behavior: `repeats = n` becomes `Repeat(n)`, `lifetime` accepts `Lifetime` objects, and a plan's `DefaultLifetime` option (which `Routine(...)` adds: `Repeat(1)`) is used when no lifetime is provided.
 3. Resolve the plan into a `LoopAlgorithm` wrapper when needed.
 4. Run lifecycle `init(algo, specs...; lifetime)` unless an initialized context is already provided.
 5. Store the initialized algorithm wrapper on the process. Its typed lifecycle
@@ -19,7 +19,8 @@ There is no `TaskData` layer. The initialized `LoopAlgorithm` carries the
 persistent context plus stored init/override specs. A `Process` normally reads
 its current persistent context from that wrapper. Its separate
 `runtime_context` slot is used only for paused or shape-divergent state, and its
-loop-cursor slot preserves scheduler position across pause/resume.
+loop-cursor slot preserves scheduler position across pause/resume, including where a step that was paused in the middle
+stopped (`PauseRecord`, LoopAlgorithms/Step.jl section 3).
 
 ## 2. Init Phase
 

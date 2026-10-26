@@ -197,21 +197,22 @@ Base.@nospecializeinfer function read_multipliers(@nospecialize(la))
     la isa GeneratedValue || return multipliers(la)
     T = la.valuetype
     T <: AbstractPlan || throw(NeedsValues())
-    # A `Routine`'s lifetimes or a composite's intervals are read from the schedule field's type, not with
-    # `multipliers(T)`, which compiles once per plan type. Any other plan type answers `multipliers(T)`
-    # (LoopAlgorithms/Interface.jl).
-    T <: Union{Routine, CompositeAlgorithm} || return multipliers(T)
+    # A `Plan`'s entries are read from the schedule field's type, not with `multipliers(T)`, which compiles once per
+    # plan type. Any other plan type answers `multipliers(T)` (LoopAlgorithms/Interface.jl).
+    T <: Plan || return multipliers(T)
     schedule = read_field(la, 2)
     ms = Vector{Any}(undef, count_fields(schedule))
     for i in eachindex(ms)
-        ms[i] = T <: Routine ? read_routine_multiplier(read_field(schedule, i)) : 1 / getinterval(read_type(read_field(schedule, i)))
+        ms[i] = read_entry_multiplier(read_field(schedule, i))
     end
     return Tuple(ms)
 end
 
-# A routine child's multiplier: `Inf` for a lifetime without a count, else its count, known or read at run time.
-Base.@nospecializeinfer function read_routine_multiplier(@nospecialize(lifetime::GeneratedValue))
-    lifetime.valuetype <: IndefiniteLifetime && return Inf
-    is_known_value(lifetime) && return _routine_schedule_multiplier(known_value(lifetime))
-    return Expr(:call, _routine_schedule_multiplier, lifetime.value_expr)
+# A child's multiplier from its schedule entry (`schedule_multiplier`): an interval entry's from its type (`1/n`); a
+# repeat entry's `Inf` for a lifetime without a count, else its count, known or read at run time.
+Base.@nospecializeinfer function read_entry_multiplier(@nospecialize(entry::GeneratedValue))
+    entry.valuetype <: Lifetime || return 1 / getinterval(read_type(entry))
+    entry.valuetype <: IndefiniteLifetime && return Inf
+    is_known_value(entry) && return schedule_multiplier(known_value(entry))
+    return Expr(:call, schedule_multiplier, entry.value_expr)
 end

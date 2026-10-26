@@ -387,19 +387,15 @@ function _analysis_mock_loopalgorithm(sa::AbstractIdentifiableAlgo)
     return sa
 end
 
-function _analysis_mock_loopalgorithm(ca::CompositeAlgorithm)
-    funcs = map(_analysis_mock_loopalgorithm, getalgos(ca))
-    mocked = newfuncs(ca, funcs)
-    mocked = setintervals(mocked, ntuple(_ -> 1, length(funcs)))
-    return mocked
+function _analysis_mock_loopalgorithm(plan::Plan)
+    funcs = map(_analysis_mock_loopalgorithm, getalgos(plan))
+    mocked = newfuncs(plan, funcs)
+    return setschedule(mocked, map(_run_once_entry, getschedule(mocked)))
 end
 
-function _analysis_mock_loopalgorithm(r::Routine)
-    funcs = map(_analysis_mock_loopalgorithm, getalgos(r))
-    mocked = newfuncs(r, funcs)
-    mocked = setrepeats(mocked, ntuple(_ -> 1, length(funcs)))
-    return mocked
-end
+"""The schedule entry of the same kind as `entry` that runs its child once per step: `Repeat(1)` or `Interval(1)`."""
+_run_once_entry(::Lifetime) = Repeat(1)
+_run_once_entry(::Union{Interval, RunIf}) = Interval(1)
 
 """Probe lifecycle initialization reads for each registered entity once."""
 function analyse_inits(la::ALA; globals = (;), inputs = (;)) where {ALA<:LoopSpec}

@@ -23,23 +23,19 @@ end
     return tuple_setindex(t, val, idx)
 end
 
-@inline _default_schedule_entry(::Routine) = Repeat(1)
-@inline _default_schedule_entry(::Union{CompositeAlgorithm, ThreadedCompositeAlgorithm}) = Interval(1)
-@inline _default_schedule_entry(la::LoopAlgorithm) = _default_schedule_entry(getplan(la))
+"""
+What a plain number means as a new entry of `la` (`_normalize_schedule_entry`): a repeat (`Val(:repeat)`) in a plan
+of repeat entries only, else an interval (`Val(:interval)`).
+"""
+@inline _entry_kind(plan::Plan) = !isempty(getschedule(plan)) && all(e -> e isa Lifetime, getschedule(plan)) ? Val(:repeat) : Val(:interval)
+@inline _entry_kind(::ThreadedCompositeAlgorithm) = Val(:interval)
+@inline _entry_kind(la::LoopAlgorithm) = _entry_kind(getplan(la))
 
-@inline _normalize_schedule_entry(::Routine, spec::Lifetime) = spec
-@inline _normalize_schedule_entry(::Routine, spec) = Repeat(spec)
-@inline _normalize_schedule_entry(::Union{CompositeAlgorithm, ThreadedCompositeAlgorithm}, spec::RunIf) = spec
-@inline _normalize_schedule_entry(::Union{CompositeAlgorithm, ThreadedCompositeAlgorithm}, spec::Interval) = spec
-@inline _normalize_schedule_entry(::Union{CompositeAlgorithm, ThreadedCompositeAlgorithm}, spec::Real) = Interval(round(Int, spec))
-@inline _normalize_schedule_entry(la::LoopAlgorithm, spec) = _normalize_schedule_entry(getplan(la), spec)
+"""The entry of a child added without one: `Repeat(1)` in a plan of repeat entries only, else `Interval(1)`."""
+@inline _default_schedule_entry(la::LoopSpec) = _normalize_schedule_entry(_entry_kind(la), 1)
 
-@inline _schedule_entries(la::Union{CompositeAlgorithm, Routine, ThreadedCompositeAlgorithm}) = Tuple(getschedule(la))
+@inline _schedule_entries(la::Union{Plan, ThreadedCompositeAlgorithm}) = Tuple(getschedule(la))
 @inline _schedule_entries(la::LoopAlgorithm) = _schedule_entries(getplan(la))
-
-@inline _collapse_schedule_spec(::Routine, entries::Tuple) = entries
-@inline _collapse_schedule_spec(::Union{CompositeAlgorithm, ThreadedCompositeAlgorithm}, entries::Tuple) = entries
-@inline _collapse_schedule_spec(la::LoopAlgorithm, entries::Tuple) = _collapse_schedule_spec(getplan(la), entries)
 
 @inline _rename_item(item, replacements::Tuple{Vararg{Pair}}) = replacecontextkeys(item, collect(replacements))
 @inline _rename_item(item, replacement::Pair) = replacecontextkeys(item, replacement)
@@ -83,11 +79,11 @@ function insert(la::LA, idx::Integer, algo, schedule_spec = _default_schedule_en
     _ensure_unresolved_for_edit(la)
     newfuncs = _tuple_insert(getalgos(la), idx, _edit_entity(algo))
     schedule_entries = _schedule_entries(la)
-    new_schedule_entries = _tuple_insert(schedule_entries, idx, _normalize_schedule_entry(la, schedule_spec))
+    new_schedule_entries = _tuple_insert(schedule_entries, idx, _normalize_schedule_entry(_entry_kind(la), schedule_spec))
     return _rebuild_loopalgorithm(
         la;
         funcs = newfuncs,
-        schedule_spec = _collapse_schedule_spec(la, new_schedule_entries),
+        schedule_spec = new_schedule_entries,
     )
 end
 
@@ -105,23 +101,19 @@ function addoption(la::LA, option) where {LA<:LoopSpec}
     return _rebuild_loopalgorithm(la; options = newoptions)
 end
 
-function changeintervals(la::Union{CompositeAlgorithm, ThreadedCompositeAlgorithm, LoopAlgorithm{<:CompositeAlgorithm}}, newintervals)
+"""`la` with one interval entry per child from `newintervals` (a number becomes an `Interval`); repeat entries can be given too."""
+function changeintervals(la::Union{Plan, ThreadedCompositeAlgorithm, LoopAlgorithm{<:Union{Plan, ThreadedCompositeAlgorithm}}}, newintervals)
     _ensure_unresolved_for_edit(la)
     interval_entries = Tuple(newintervals)
     @assert length(interval_entries) == length(getalgos(la)) "Expected $(length(getalgos(la))) intervals, but got $(length(interval_entries))"
-    normalized = map(x -> _normalize_schedule_entry(la, x), interval_entries)
-    return _rebuild_loopalgorithm(
-        la;
-        schedule_spec = _collapse_schedule_spec(la, normalized),
-    )
+    normalized = map(x -> _normalize_schedule_entry(Val(:interval), x), interval_entries)
+    return _rebuild_loopalgorithm(la; schedule_spec = normalized)
 end
 
-function changeinterval(la::Union{CompositeAlgorithm, ThreadedCompositeAlgorithm, LoopAlgorithm{<:CompositeAlgorithm}}, idx::Integer, newinterval)
+"""`la` with the entry of child `idx` set to `newinterval` (a number becomes an `Interval`)."""
+function changeinterval(la::Union{Plan, ThreadedCompositeAlgorithm, LoopAlgorithm{<:Union{Plan, ThreadedCompositeAlgorithm}}}, idx::Integer, newinterval)
     _ensure_unresolved_for_edit(la)
-    normalized = _normalize_schedule_entry(la, newinterval)
+    normalized = _normalize_schedule_entry(Val(:interval), newinterval)
     interval_entries = _tuple_replace(_schedule_entries(la), idx, normalized)
-    return _rebuild_loopalgorithm(
-        la;
-        schedule_spec = _collapse_schedule_spec(la, interval_entries),
-    )
+    return _rebuild_loopalgorithm(la; schedule_spec = interval_entries)
 end

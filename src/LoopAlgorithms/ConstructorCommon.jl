@@ -79,12 +79,16 @@ LoopAlgorithm(  func1, func2, func3, ...,
                 processstate1, processstate2, ..., 
                 options1, option2, ...)
 
+`kind` says what a plain number in the schedule tuple is (`_normalize_schedule_entry`): `Val(:interval)` for
+`CompositeAlgorithm` and `ThreadedCompositeAlgorithm`, `Val(:repeat)` for `Routine`, which also needs the tuple and
+gets `DefaultLifetime(Repeat(1))`.
+
 Plain `Route` and `Share` options are stored on the top-level plan as global
 routing metadata. DSL expansion can pass `LocalPlanOption` values when a
 route/share belongs to a specific child plan node. Non-routing options stay on
 the `LoopAlgorithm` runtime wrapper.
 """
-function parse_la_input(laType::Type{LA}, args...) where {LA<:AbstractPlan}
+function parse_la_input(laType::Type{LA}, kind::Val, args...) where {LA<:AbstractPlan}
     collected_options = tuple()
 
     ######### ALGORITHMS #########
@@ -118,24 +122,13 @@ function parse_la_input(laType::Type{LA}, args...) where {LA<:AbstractPlan}
             collected_options = (unique(collected_options)..., update_option_keys(algo)...)
         end
     end
-    ######### INTERVALS #########
-    # Now we should have intervals/repeats if theres more than one function
+    ######### SCHEDULE #########
+    # One entry per child: given as a tuple after the children, or (for interval kinds) every child every step.
     intervals_or_repeats = nothing
-    if !isempty(args)
-        firstargs = args[1]
-
-        if firstargs isa Tuple
-            intervals_or_repeats = _filter_loopalgorithm_specification(firstargs, kept_algos)
-            if iscomposite(laType)
-                intervals_or_repeats = map(x -> x isa Union{Interval, RunIf} ? x : Interval(x), intervals_or_repeats)
-            else
-                intervals_or_repeats = map(x -> x isa Lifetime ? x : Repeat(x), intervals_or_repeats)
-            end
-            args = args[2:end] # Remove the intervals from the arguments list for further processing
-        elseif iscomposite(laType)
-            intervals_or_repeats = ntuple(_ -> Interval(1), length(processalgos))
-        end
-    elseif iscomposite(laType)
+    if !isempty(args) && args[1] isa Tuple
+        intervals_or_repeats = map(x -> _normalize_schedule_entry(kind, x), _filter_loopalgorithm_specification(args[1], kept_algos))
+        args = args[2:end] # Remove the intervals from the arguments list for further processing
+    elseif kind isa Val{:interval}
         intervals_or_repeats = ntuple(_ -> Interval(1), length(processalgos))
     end
     if isnothing(intervals_or_repeats)
@@ -144,10 +137,7 @@ function parse_la_input(laType::Type{LA}, args...) where {LA<:AbstractPlan}
     end
 
     ### FLATTEN ###
-    if iscomposite(laType)
-
-        processalgos, intervals_or_repeats = flatten_comp_funcs(processalgos, tuple(intervals_or_repeats...))
-    end
+    processalgos, intervals_or_repeats = flatten_comp_funcs(processalgos, tuple(intervals_or_repeats...))
 
     ######### STATES #########
     pstates = tuple()
@@ -173,13 +163,28 @@ function parse_la_input(laType::Type{LA}, args...) where {LA<:AbstractPlan}
         all(x -> x isa Union{AbstractOption, AbstractWiring} || x isa Type{<:Union{AbstractOption, AbstractWiring}}, options) || construction_assert_error("All arguments after the AlgoStates must be options or wiring, but got: ", options)
     end
     options = tuple(collected_options..., options...)
+    options = _with_default_lifetime(kind, options)
     return LoopAlgorithm(laType, processalgos, pstates, options, intervals_or_repeats)
 end
 
 """
+A schedule entry as given to a constructor of kind `kind`: an `Interval`, `RunIf` or `Lifetime` as it is, a number as
+an `Interval` (`Val(:interval)`) or a `Repeat` (`Val(:repeat)`).
+"""
+_normalize_schedule_entry(::Val, entry::Union{Interval, RunIf, Lifetime}) = entry
+_normalize_schedule_entry(::Val{:interval}, entry::Real) = Interval(entry)
+_normalize_schedule_entry(::Val{:repeat}, entry::Real) = Repeat(entry)
+_normalize_schedule_entry(::Val, entry) = construction_error("A schedule entry must be a number, an `Interval`, a `RunIf` or a lifetime (`Repeat(n)`, `Until(...)`, ...), but got: ", entry)
+
+"""`options` with `DefaultLifetime(Repeat(1))` added for `Routine` (`Val(:repeat)`), unless one is there already."""
+Base.@nospecializeinfer _with_default_lifetime(::Val, @nospecialize(options::Tuple)) = options
+Base.@nospecializeinfer _with_default_lifetime(::Val{:repeat}, @nospecialize(options::Tuple)) =
+    isnothing(find_default_lifetime(options)) ? (options..., DefaultLifetime(Repeat(1))) : options
+
+"""
     LoopAlgorithm(PlanType, funcs, states, options, schedule; id = nothing)
 
-Build a plan of type `PlanType` (`CompositeAlgorithm`, `Routine` or `ThreadedCompositeAlgorithm`) from parsed
+Build a plan of type `PlanType` (`Plan` or `ThreadedCompositeAlgorithm`) from parsed
 constructor input: its children `funcs`, their intervals or repeats `schedule`, and its route/share wiring taken from
 `options`. Child-scoped wiring (`LocalPlanOption`) is split per child; plain routes and shares are stored on the plan.
 The plan keeps its `states` and its other options; `resolve` wraps it in a `LoopAlgorithm`.
@@ -198,7 +203,7 @@ Base.@nospecializeinfer function _build_plan(PlanType::Type, @nospecialize(funcs
     funcs, child_wiring = _split_children_and_wiring(funcs, options)
     wiring = PlanWiring(_build_plan_wiring_untyped(options), child_wiring, collect_plan_locals(options))
     plan_options = _drop_wiring_options_untyped(options)
-    schedule = store_single_repeats_as_repeat_once(PlanType, schedule)
+    schedule = store_single_repeats_as_repeat_once(schedule)
     return PlanType{typeof(funcs), typeof(schedule), typeof(namespaces), typeof(wiring), id, typeof(states), typeof(plan_options)}(funcs, schedule, namespaces, wiring, states, plan_options)
 end
 
@@ -218,7 +223,7 @@ function _build_plan_typed(::Type{PlanType}, funcs::F, states::Tuple, options::T
     funcs, child_wiring = _split_children_and_wiring(funcs, options)
     wiring = PlanWiring(_build_plan_wiring(options), child_wiring, collect_plan_locals(options))
     plan_options = _drop_wiring_options(options)
-    schedule = store_single_repeats_as_repeat_once(PlanType, schedule)
+    schedule = store_single_repeats_as_repeat_once(schedule)
     return PlanType{typeof(funcs), typeof(schedule), typeof(namespaces), typeof(wiring), id, typeof(states), typeof(plan_options)}(funcs, schedule, namespaces, wiring, states, plan_options)
 end
 
@@ -243,11 +248,10 @@ function setup_registry(las...)
     return registry(builder)
 end
 
-@inline _stored_schedule_spec(la::Union{CompositeAlgorithm, Routine}) = getschedule(la)
+@inline _stored_schedule_spec(la::Plan) = getschedule(la)
 @inline _stored_schedule_spec(la::LoopAlgorithm) = _stored_schedule_spec(getplan(la))
 
-@inline _constructor_type(::CompositeAlgorithm) = CompositeAlgorithm
-@inline _constructor_type(::Routine) = Routine
+@inline _constructor_type(::Plan) = Plan
 @inline _constructor_type(la::LoopAlgorithm) = _constructor_type(getplan(la))
 
 """
@@ -259,7 +263,7 @@ edit such as `rename` or `addalgo` would flatten local routes into top-level
 routes and change execution semantics.
 """
 @inline _stored_constructor_options(la::LA) where {LA<:LoopSpec} = (collect_wiring(la)..., getoptions(la)...)
-@inline _stored_constructor_options(la::Union{CompositeAlgorithm, Routine}) = (collect_scoped_wiring(la)..., getoptions(la)...)
+@inline _stored_constructor_options(la::Plan) = (collect_scoped_wiring(la)..., getoptions(la)...)
 @inline _stored_constructor_options(la::LoopAlgorithm) = _stored_constructor_options(getplan(la))
 
 @inline function _rebuild_loopalgorithm(

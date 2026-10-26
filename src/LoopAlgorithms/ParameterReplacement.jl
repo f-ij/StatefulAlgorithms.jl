@@ -1,11 +1,11 @@
 export setrepeats, setintervals, setinterval
 
 #=
-Changing a plan's schedule: the repeats of a `Routine`, the intervals of a composite. A plan keeps its schedule in
-field 2, whose type is type parameter 2. Every change goes through `setschedule`.
+Changing a plan's schedule: the interval or repeat entry of each child. A plan keeps its schedule in field 2, whose
+type is type parameter 2. Every change goes through `setschedule`.
 =#
 
-"""The schedule of a plan (field 2): a composite's intervals, a routine's repeats."""
+"""The schedule of a plan (field 2): one interval or repeat entry per child."""
 @inline getschedule(plan::AbstractPlan) = getfield(plan, 2)
 @inline getschedule(la::LoopAlgorithm) = getschedule(getplan(la))
 
@@ -17,7 +17,7 @@ numbered already (taken from this plan), as a new `Unique` handle is numbered on
 """
 Base.@nospecializeinfer function setschedule(@nospecialize(plan::AbstractPlan), @nospecialize(schedule))
     T = typeof(plan)
-    schedule = store_single_repeats_as_repeat_once(T, schedule)
+    schedule = store_single_repeats_as_repeat_once(schedule)
     params = Any[T.parameters...]
     params[2] = typeof(schedule)
     fields = Any[getfield(plan, i) for i in 1:nfields(plan)]
@@ -26,28 +26,32 @@ Base.@nospecializeinfer function setschedule(@nospecialize(plan::AbstractPlan), 
 end
 
 """
-    store_single_repeats_as_repeat_once(PlanType, schedule) -> schedule
+    store_single_repeats_as_repeat_once(schedule) -> schedule
 
-A routine's `schedule` with each `Repeat(1)` as `RepeatOnce()`, whose type says the count, so the child's step has no
-loop. Other plans' schedules are returned as they are.
+A plan's `schedule` with each `Repeat(1)` entry as `RepeatOnce()`, whose type says the count, so the child's step has
+no loop. The other entries are returned as they are.
 """
-Base.@nospecializeinfer function store_single_repeats_as_repeat_once(@nospecialize(PlanType::Type), @nospecialize(schedule))
-    (PlanType <: Routine && schedule isa Tuple) || return schedule
+Base.@nospecializeinfer function store_single_repeats_as_repeat_once(@nospecialize(schedule))
+    schedule isa Tuple || return schedule
     return Tuple(Any[x isa Repeat && repeats(x) == 1 ? RepeatOnce() : x for x in schedule])
 end
 
-setrepeats(r::Routine, newrepeats) = setschedule(r, newrepeats)
-setintervals(r::Routine, newintervals) = setschedule(r, newintervals)
-
-function setintervals(ca::CompositeAlgorithm, new_intervals)
-    length(new_intervals) == length(getalgos(ca)) || construction_assert_error("Length of new intervals must match number of functions in the composite algorithm, but got ", length(new_intervals), " intervals for ", length(getalgos(ca)), " functions")
-    return setschedule(ca, Tuple(new_intervals))
+"""`plan` with one entry per child from `new_entries`; a number becomes an `Interval` (`setintervals`) or a `Repeat` (`setrepeats`)."""
+function setintervals(plan::Plan, new_entries)
+    length(new_entries) == length(getalgos(plan)) || construction_assert_error("Length of new intervals must match number of functions in the plan, but got ", length(new_entries), " intervals for ", length(getalgos(plan)), " functions")
+    return setschedule(plan, map(x -> _normalize_schedule_entry(Val(:interval), x), Tuple(new_entries)))
+end
+function setrepeats(plan::Plan, new_entries)
+    length(new_entries) == length(getalgos(plan)) || construction_assert_error("Length of new repeats must match number of functions in the plan, but got ", length(new_entries), " repeats for ", length(getalgos(plan)), " functions")
+    return setschedule(plan, map(x -> _normalize_schedule_entry(Val(:repeat), x), Tuple(new_entries)))
 end
 
-"""`ca` with the interval of child `idx` set to `new_interval` (a number becomes an `Interval`)."""
-setinterval(ca::CompositeAlgorithm, idx::Int, new_interval) =
-    setschedule(ca, Base.setindex(getschedule(ca), _as_interval(new_interval), idx))
-setrepeats(ca::CompositeAlgorithm, idx::Int, newrepeats) = setinterval(ca, idx, newrepeats)
+"""`plan` with the entry of child `idx` set to `new_interval` (a number becomes an `Interval`)."""
+setinterval(plan::Plan, idx::Int, new_interval) =
+    setschedule(plan, Base.setindex(getschedule(plan), _normalize_schedule_entry(Val(:interval), new_interval), idx))
+"""`plan` with the entry of child `idx` set to `newrepeats` (a number becomes a `Repeat`)."""
+setrepeats(plan::Plan, idx::Int, newrepeats) =
+    setschedule(plan, Base.setindex(getschedule(plan), _normalize_schedule_entry(Val(:repeat), newrepeats), idx))
 
 # `ThreadedCompositeAlgorithm`'s are in Threaded/CompositeAlgorithms.jl (included later).
 

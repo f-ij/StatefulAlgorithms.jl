@@ -1,11 +1,10 @@
-export CompositeAlgorithm, Routine
 export step!, init, getmultiplier, getoptions, setoptions, get_shares, get_routes
 
 """
 Return the execution plan carried by a loop wrapper.
 
 For plan nodes this returns the plan itself, so callers can accept either an
-unresolved plan (`CompositeAlgorithm`/`Routine`) or a runtime `LoopAlgorithm`
+unresolved `Plan` or a runtime `LoopAlgorithm`
 without branching.
 """
 @inline getplan(la::LoopAlgorithm) = getfield(la, :plan)
@@ -63,9 +62,8 @@ Base.@nospecializeinfer context(@nospecialize(cla::LoopAlgorithm)) = with_held_i
 @inline repeats(cla::LoopAlgorithm, idx::Int) = repeats(getplan(cla), idx)
 @inline repeats(cla::LoopAlgorithm, idx::Val{I}) where {I} = repeats(getplan(cla), idx)
 @inline multipliers(cla::LoopAlgorithm) = multipliers(getplan(cla))
-@inline multiplier(cla::LoopAlgorithm, idx) = multiplier(getplan(cla), idx)
 """Return the namespace symbol stored for one child of a resolved plan."""
-@inline function plan_child_namespace(la::LA, idx::Int) where {LA<:Union{CompositeAlgorithm,Routine}}
+@inline function plan_child_namespace(la::LA, idx::Int) where {LA<:Plan}
     name = namesymbol(getfield(getfield(la, :namespaces), idx))
     isnothing(name) || return name
 
@@ -110,7 +108,7 @@ Decided by the type alone, so it folds to a constant.
 
 # `iscomposite` for plans (default and docstring in Hooks.jl)
 @inline iscomposite(::Type{<:LoopSpec}) = false
-@inline iscomposite(::Type{<:CompositeAlgorithm}) = true
+@inline iscomposite(::Type{<:Plan{T, Schedule}}) where {T, Schedule} = !any(is_repeat_entry, fieldtypes(Schedule))
 @inline iscomposite(::Type{<:LoopAlgorithm{Plan}}) where {Plan} = iscomposite(Plan)
 @inline iscomposite(la::LA) where {LA<:LoopSpec} = iscomposite(typeof(la))
 
@@ -122,7 +120,7 @@ algotypes(::Type{<:LoopAlgorithm{Plan}}) where {Plan} = algotypes(Plan)
 @inline getalgotype(::Union{LoopAlgorithm{Plan}, Type{<:LoopAlgorithm{Plan}}}, idx) where {Plan} = getalgotype(Plan, idx)
 
 """
-Get the numbers Val(1), Val(2), ... Val(N) for the N algorithms in a composite or routine, as a tuple.
+Get the numbers Val(1), Val(2), ... Val(N) for the N algorithms in a plan, as a tuple.
 """
 @generated function algonvalumbers(ca::LA) where {LA<:LoopSpec}
     nums = ntuple(i -> Val(i), numalgos(ca))

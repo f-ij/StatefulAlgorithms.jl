@@ -234,7 +234,7 @@ const CASES = PerfCase[
     PerfCase(name = "Routine in Routine", N = 10^6, inner = 3,
         plan = () -> Routine(Routine(LIN[1], LIN[2], (1, 1)), LIN[3], (1, 1)),
         hand = hand_routine3, result = c -> xs(c, 1, 2, 3),
-        note = "inner _subroutine_step! becomes a dynamic invoke (recursion limit)"),
+        note = "the inner routine is written inline (Step.jl, file header 1.)"),
     PerfCase(name = "Routine in Routine, repeats", N = 2 * 10^5, inner = 47,
         plan = () -> Routine(Routine(LIN[1], LIN[2], (10, 5)), LIN[3], (3, 2)),
         hand = hand_routine_nested_repeats, result = c -> xs(c, 1, 2, 3)),

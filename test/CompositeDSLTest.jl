@@ -295,9 +295,9 @@ end
         resolved = resolve(algo)
 
         @test resolved isa StatefulAlgorithms.LoopAlgorithm
-        @test StatefulAlgorithms.getplan(resolved) isa CompositeAlgorithm
+        @test StatefulAlgorithms.getplan(resolved) isa Plan
         # Before resolve the block is its plan, holding its routes and its `@state`
-        @test algo isa CompositeAlgorithm
+        @test algo isa Plan
         @test length(StatefulAlgorithms.getstates(algo)) == 1
         @test !isempty(StatefulAlgorithms.get_routes(algo))
         @test !isempty(StatefulAlgorithms.get_routes(StatefulAlgorithms.getplan(resolved)))
@@ -384,7 +384,7 @@ end
             @route source.produced => sink.value
         end
 
-        @test algo isa CompositeAlgorithm
+        @test algo isa Plan
         plan = StatefulAlgorithms.getplan(algo)
         @test length(StatefulAlgorithms.get_routes(plan)) == 2
         plan_wiring = StatefulAlgorithms.getwiring(plan)
@@ -546,7 +546,7 @@ end
 
         resolved_routine = resolve(routine)
         @test resolved_routine isa StatefulAlgorithms.LoopAlgorithm
-        @test StatefulAlgorithms.getplan(resolved_routine) isa Routine
+        @test StatefulAlgorithms.getplan(resolved_routine) isa Plan
         @test repeats(resolved_routine) == (3,)
 
         # `x = @repeat n f()` is the repeated block `@repeat n begin x = f() end`, with `local x` before it.
@@ -676,7 +676,7 @@ end
 
         resolved_outer = resolve(outer)
         @test resolved_outer isa StatefulAlgorithms.LoopAlgorithm
-        @test StatefulAlgorithms.getplan(resolved_outer) isa CompositeAlgorithm
+        @test StatefulAlgorithms.getplan(resolved_outer) isa Plan
     end
 
     @testset "Nested blocks keep their state and wiring when flattened into the parent" begin
@@ -1574,7 +1574,7 @@ end
         # The legacy macros keep binding the names by field.
         @test StatefulAlgorithms.getplan(resolve(@eval @CompositeAlgorithm_legacy begin
             s = $nested_plan()
-        end)) isa CompositeAlgorithm
+        end)) isa Plan
     end
 
     @testset "A nested block reads the names of the blocks around it" begin

@@ -106,14 +106,15 @@ end
     # an edit and a new plan around it start from the schedule with its ids' data
     @test length(StatefulAlgorithms.getalgos(insert(inner, 1, Unique(RLCounter())))) == 3
     changed = setinterval(inner, 2, 5)
-    @test CompositeAlgorithm(changed, (1,)) isa CompositeAlgorithm
+    @test CompositeAlgorithm(changed, (1,)) isa Plan
     @test StatefulAlgorithms.getinterval(StatefulAlgorithms.intervals(StatefulAlgorithms.number_unique_ids(changed))[2]) == 5
 end
 
 @testset "A schedule changed by a setter stays changed when the plan is numbered again" begin
     ca = setintervals(CompositeAlgorithm(Unique(RLCounter()), RLReader, (1, 2)), (1, 7))
-    @test StatefulAlgorithms.intervals(ca) == (1, 7)
-    @test StatefulAlgorithms.intervals(StatefulAlgorithms.number_unique_ids(ca)) == (1, 7)
+    # A number given to a setter becomes an `Interval`, as in the constructor.
+    @test StatefulAlgorithms.intervals(ca) == (Interval(1), Interval(7))
+    @test StatefulAlgorithms.intervals(StatefulAlgorithms.number_unique_ids(ca)) == (Interval(1), Interval(7))
     r = setrepeats(StatefulAlgorithms.Routine(RLCounter, RLReader, (2, 3)), (Repeat(4), Repeat(5)))
     @test StatefulAlgorithms.repeats(r) == (4, 5)
 end

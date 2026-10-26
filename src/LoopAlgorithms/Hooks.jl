@@ -10,8 +10,8 @@ Each function here has the default every value gets. Extended in:
 """
     iscomposite(x) -> Bool
 
-Whether `x` (a value or a type) is a composite plan, which steps all its children in order each step: `false` by
-default. A wrapper of a loop algorithm adds a method that asks what it wraps (`FinalizedAlgorithm`).
+Whether `x` (a value or a type) is a composite plan, which steps all its children in order each step, each at most
+once (only interval entries, no repeats): `false` by default. A wrapper of a loop algorithm adds a method that asks what it wraps (`FinalizedAlgorithm`).
 """
 @inline iscomposite(x::T) where {T} = false
 

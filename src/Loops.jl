@@ -135,7 +135,11 @@ Run a single function in a loop indefinitely.
     # Carry only the fields the steps write, not the whole context: fields left unchanged would otherwise be copied every
     # step (see src/Context/Carried/Carry.jl).
     carried = @inline create_carried(step_plan, step_cursor, LoopContext(persistent_context, runtime_context), step_wiring, Namespace{nothing}(), process, lifetime)
-    carried, runtime_context = _run_steps(carried, runtime_context, step_plan, step_cursor, persistent_context, step_wiring, process, lifetime)
+    carried, runtime_context = if isresuming && (@inline is_paused_in_step(step_cursor))
+        _finish_paused_step(carried, runtime_context, step_plan, step_cursor, persistent_context, step_wiring, process, lifetime)
+    else
+        _run_steps(carried, runtime_context, step_plan, step_cursor, persistent_context, step_wiring, process, lifetime)
+    end
     persistent_context = @inline with_carried(persistent_context, carried)
 
     if @inline _loop_ispaused(process)
@@ -172,7 +176,11 @@ Base.@constprop :aggressive @inline function loop(process::P, algo::F, start_per
     # Carry only the fields the steps write, not the whole context: fields left unchanged would otherwise be copied every
     # step (see src/Context/Carried/Carry.jl).
     carried = @inline create_carried(step_plan, step_cursor, LoopContext(persistent_context, runtime_context), step_wiring, Namespace{nothing}(), process, lifetime)
-    carried, runtime_context = _repeat_steps((@inline loopidx(process)), carried, runtime_context, step_plan, step_cursor, persistent_context, step_wiring, process, lifetime)
+    carried, runtime_context = if isresuming && (@inline is_paused_in_step(step_cursor))
+        _finish_paused_step(carried, runtime_context, step_plan, step_cursor, persistent_context, step_wiring, process, lifetime)
+    else
+        _repeat_steps((@inline loopidx(process)), carried, runtime_context, step_plan, step_cursor, persistent_context, step_wiring, process, lifetime)
+    end
     persistent_context = @inline with_carried(persistent_context, carried)
 
     if @inline _loop_ispaused(process)
@@ -206,7 +214,8 @@ up to 1.9x slower); the call for a new type stays a call.
         stepped_persistent_context, stepped_runtime_context = (@inline getpersistent(stepped_lc)), (@inline getruntime(stepped_lc))
         carried = @inline next_carried(carried, stepped_persistent_context)
         @inline tick!(process)
-        @inline inc!(process)
+        # A step that stopped for a pause is not done: the next run finishes it (`_finish_paused_step`).
+        (@inline is_paused_in_step(step_cursor)) || (@inline inc!(process))
         # After the step: a pause or close of the process.
         (@inline process_breakcondition(process)) && return carried, stepped_runtime_context
         stepped_runtime_context isa RuntimeContextType || return _repeat_steps(j + 1, carried, stepped_runtime_context, step_plan, step_cursor, persistent_context, step_wiring, process, lifetime)
@@ -214,6 +223,30 @@ up to 1.9x slower); the call for a new type stays a call.
     end
     return carried, runtime_context
 end
+
+"""
+    _finish_paused_step(carried, runtime_context, step_plan, step_cursor, persistent_context, step_wiring, process, lifetime)
+
+The first thing a resumed run does when its last run stopped in the middle of a step: finish that step
+(`resume_step!`, LoopAlgorithms/Step.jl, "Resuming"), then run the remaining steps (`_continue_steps`), and return the
+carried fields and the runtime context after them. The step was counted by `tick!` before it stopped; it is counted
+as done (`inc!`) now. The finished step's types are only known at run time, so the remaining steps are a call compiled
+for them.
+"""
+function _finish_paused_step(carried::CarriedType, runtime_context::RuntimeContextType, step_plan::PlanType, step_cursor::CursorType, persistent_context::PersistentContextType, step_wiring::WiringViewType, process::ProcessType, lifetime::LifetimeType) where {CarriedType, RuntimeContextType, PlanType, CursorType, PersistentContextType, WiringViewType, ProcessType, LifetimeType}
+    stepped_lc = resume_step!(step_plan, step_cursor, LoopContext(with_carried(persistent_context, carried), runtime_context), step_wiring, Namespace{nothing}(), process, lifetime)
+    carried = next_carried(carried, getpersistent(stepped_lc))
+    runtime_context = getruntime(stepped_lc)
+    is_paused_in_step(step_cursor) || inc!(process)
+    process_breakcondition(process) && return carried, runtime_context
+    return _continue_steps(lifetime, carried, runtime_context, step_plan, step_cursor, persistent_context, step_wiring, process, lifetime)
+end
+
+"""The steps after a finished paused step: `_repeat_steps` from the process's next step for a counted lifetime, `_run_steps` otherwise."""
+_continue_steps(::RepeatLifetime, carried::CarriedType, runtime_context::RuntimeContextType, step_plan::PlanType, step_cursor::CursorType, persistent_context::PersistentContextType, step_wiring::WiringViewType, process::ProcessType, lifetime::LifetimeType) where {CarriedType, RuntimeContextType, PlanType, CursorType, PersistentContextType, WiringViewType, ProcessType, LifetimeType} =
+    _repeat_steps(loopidx(process), carried, runtime_context, step_plan, step_cursor, persistent_context, step_wiring, process, lifetime)
+_continue_steps(::IndefiniteLifetime, carried::CarriedType, runtime_context::RuntimeContextType, step_plan::PlanType, step_cursor::CursorType, persistent_context::PersistentContextType, step_wiring::WiringViewType, process::ProcessType, lifetime::LifetimeType) where {CarriedType, RuntimeContextType, PlanType, CursorType, PersistentContextType, WiringViewType, ProcessType, LifetimeType} =
+    _run_steps(carried, runtime_context, step_plan, step_cursor, persistent_context, step_wiring, process, lifetime)
 
 """
     _run_steps(carried, runtime_context, step_plan, step_cursor, persistent_context, step_wiring, process, lifetime)
@@ -233,7 +266,8 @@ last one; a runtime context of another type continues in a call compiled for tha
         stepped_persistent_context, stepped_runtime_context = (@inline getpersistent(stepped_lc)), (@inline getruntime(stepped_lc))
         carried = @inline next_carried(carried, stepped_persistent_context)
         @inline tick!(process)
-        @inline inc!(process)
+        # A step that stopped for a pause is not done: the next run finishes it (`_finish_paused_step`).
+        (@inline is_paused_in_step(step_cursor)) || (@inline inc!(process))
         # After the step: a pause or close of the process.
         (@inline process_breakcondition(process)) && return carried, stepped_runtime_context
         stepped_runtime_context isa RuntimeContextType || return _run_steps(carried, stepped_runtime_context, step_plan, step_cursor, persistent_context, step_wiring, process, lifetime)

@@ -26,7 +26,8 @@ For `Process`, the `lifetime` keyword is reserved for `Lifetime` objects. Use
 If you do not pass `lifetime`:
 
 - most processes default to `Indefinite()`
-- `Routine` defaults to one pass (`Repeat(1)`) when `lifetime = nothing`
+- a plan built with `Routine(...)` / `@Routine` defaults to one pass (`Repeat(1)`): `Routine` adds the plan option
+  `DefaultLifetime(Repeat(1))`, which any plan can be given
 
 ## Explicit Lifetime Types
 
@@ -60,6 +61,19 @@ loop algorithms run inside a `CompositeAlgorithm` or `Routine`. Those schedules
 are loop-algorithm settings: use `changeinterval`, `changeintervals`, or the
 schedule argument to `addalgo`. See
 [Algorithms and States](@ref algorithms_states_user).
+
+`CompositeAlgorithm(...)` and `Routine(...)` build the same kind of plan (`Plan`): each child has a schedule entry,
+either an interval (`Interval(n)`, `RunIf`: at most once per step of the plan) or a lifetime (`Repeat(n)`, `Until`,
+...: that many repeats in every step of the plan). The two constructors only differ in what a plain number means
+(`CompositeAlgorithm`: an interval, `Routine`: a repeat) and in the default lifetime above, so entries can be mixed:
+
+```julia
+plan = CompositeAlgorithm(Measure, Sweep, (10, Repeat(100)))   # Measure every 10th step, Sweep 100 times every step
+```
+
+A `Process` is checked for a pause or close after every repeat. A pause in the middle of a step is resumed there by
+the next `run(p)`: the repeats left and the children after them run, the children before do not run again, and the
+returns they captured (`y = Algo()`) are still there.
 
 ## `Until`: Stop on a Condition
 

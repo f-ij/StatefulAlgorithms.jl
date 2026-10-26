@@ -13,15 +13,14 @@ value type, such as every `Unique` handle. Here the message is only built when t
 @inline normalize_process_algo(func::F) where {F} = CompositeAlgorithm(func)
 
 @inline normalize_process_lifetime(func, lifetime::Integer) = Repeat(lifetime)
-@inline _is_routine_plan(func) = func isa Routine || func isa Type{<:Routine}
-@inline _is_routine_plan(func::LoopAlgorithm) = _is_routine_plan(getplan(func))
+"""The lifetime of a process of `func` when none is given: its plan's `DefaultLifetime` (`Routine`: `Repeat(1)`), else `Indefinite()`."""
 @inline function normalize_process_lifetime(@nospecialize(func), ::Nothing)
-    if _is_routine_plan(func)
-        return Repeat(1)
-    else
-        return Indefinite()
-    end
+    lifetime = _plan_default_lifetime(func)
+    return isnothing(lifetime) ? Indefinite() : lifetime
 end
+Base.@nospecializeinfer _plan_default_lifetime(@nospecialize(func)) = nothing
+Base.@nospecializeinfer _plan_default_lifetime(@nospecialize(func::AbstractPlan)) = find_default_lifetime(getoptions(func))
+Base.@nospecializeinfer _plan_default_lifetime(@nospecialize(func::LoopAlgorithm)) = _plan_default_lifetime(getplan(func))
 @inline normalize_process_lifetime(func, lifetime::LT) where {LT<:Lifetime} = lifetime
 normalize_process_lifetime(func, lifetime) =
     construction_error("Unsupported process lifetime `", lifetime, "` for `", func, "`.")

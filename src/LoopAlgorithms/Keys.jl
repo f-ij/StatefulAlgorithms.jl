@@ -36,8 +36,7 @@ end
 @inline _namespace_key(::Nothing, idx::Int) = nothing
 
 @inline _namespace_tuple(loop::AbstractPlan) = getfield(loop, :namespaces)
-@inline _namespace_tuple(::Type{<:CompositeAlgorithm{FT,S,NS}}) where {FT,S,NS} = NS
-@inline _namespace_tuple(::Type{<:Routine{FT,S,NS}}) where {FT,S,NS} = NS
+@inline _namespace_tuple(::Type{<:Plan{FT,S,NS}}) where {FT,S,NS} = NS
 @inline _namespace_tuple(loop::LoopAlgorithm) = _namespace_tuple(getplan(loop))
 @inline _namespace_tuple(::Type{<:LoopAlgorithm{Plan}}) where {Plan} = _namespace_tuple(Plan)
 @inline _namespace_tuple(loop::FinalizedAlgorithm) = _namespace_tuple(inneralgorithm(loop))

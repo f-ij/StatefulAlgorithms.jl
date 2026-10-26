@@ -12,7 +12,7 @@ disagree, this one describes what the code does (branch `refactor/dsl-locals`).
 
 | Term | Meaning |
 |---|---|
-| block | The body of one `@CompositeAlgorithm`, `@Routine` or `@repeat n begin … end`. It becomes one plan node (`CompositeAlgorithm` / `Routine`). |
+| block | The body of one `@CompositeAlgorithm`, `@Routine` or `@repeat n begin … end`. It becomes one plan node (a `Plan`, as `CompositeAlgorithm(...)` / `Routine(...)` build it). |
 | statement | One line of a block. Each is a *declaration* (it names something; nothing runs per step), a *step* (it runs in the steps its schedule picks), or *wiring* (it connects names; nothing runs). |
 | step | One run of a block's statements, top to bottom. The root block runs one step per loop iteration; a nested block runs as often as its parent schedules it. |
 | build | Evaluating the macro's output: `algo = @CompositeAlgorithm begin … end`. Values written in the block that are not block names are taken then. Separate from `resolve`, `init` and `run`. |
@@ -22,7 +22,7 @@ disagree, this one describes what the code does (branch `refactor/dsl-locals`).
 
 ## What a block is
 
-A block builds a plan (`CompositeAlgorithm` or `Routine`) that holds, apart from each other:
+A block builds a plan (a `Plan`, as `CompositeAlgorithm(...)` or `Routine(...)` would) that holds, apart from each other:
 
 | Part | Accessor | Comes from |
 |---|---|---|

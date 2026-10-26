@@ -446,8 +446,8 @@ This performs these exact mutations:
 - `process.shouldrun = true`
 - `process.starttime = nothing`
 - `process.endtime = nothing`
-- `process.loop_cursor = nothing`: the next run builds a fresh cursor, so every interval counter and resume point
-  starts over.
+- `process.loop_cursor = nothing`: the next run builds a fresh cursor, so every interval counter starts over and a
+  step stopped by a pause is not resumed.
 
 It does not reset counters an algorithm keeps in its own value: a `Package`'s interval counter goes on from where it
 was (TODO.md, "Packaging and threaded composites"). It does not change `process.runtime_context`, `process.task`, or

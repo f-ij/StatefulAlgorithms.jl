@@ -3,21 +3,22 @@ export fuse, isfused
 include("ContextExt.jl")
 
 """
-Return `true` when the nested composite `el` is dissolved into its parent by flattening: always without
-`stop_at_options`, and with it only a composite plan that carries nothing of its own (no route/share wiring, declared
-locals, states or other options): one with declared locals is a scope of its own. A `LoopAlgorithm` is resolved and then
-stays whole.
+Return `true` when the nested plan `el`, run on schedule entry `trait` in its parent, is dissolved into its parent by
+flattening: a plan of interval entries only (`iscomposite`) run on an interval entry; a repeat runs it as a whole.
+Always without `stop_at_options`, and with it only a plan that carries nothing of its own (no route/share wiring,
+declared locals, states or other options): one with declared locals is a scope of its own. A `LoopAlgorithm` is
+resolved and then stays whole.
 """
-Base.@nospecializeinfer function _flattens_into_parent(@nospecialize(el), stop_at_options::Bool)
-    el isa LoopSpec && iscomposite(el) || return false
+Base.@nospecializeinfer function _flattens_into_parent(@nospecialize(el), @nospecialize(trait), stop_at_options::Bool)
+    el isa LoopSpec && iscomposite(el) && !(trait isa Lifetime) || return false
     stop_at_options || return true
     el isa AbstractPlan || return false
     return isempty(collect_wiring(el)) && isempty(getfield(getwiring(el), :locals)) && isempty(getoptions(el)) && isempty(getstates(el))
 end
 
 """
-Replace every nested `CompositeAlgorithm` in `funcs` by its children, in place and recursively, multiplying the
-children's intervals by the parent's interval. With `stop_at_options`, a composite that carries anything of its own
+Replace every nested plan of interval entries in `funcs` (run on an interval entry) by its children, in place and
+recursively, multiplying the children's intervals by the parent's interval. With `stop_at_options`, a composite that carries anything of its own
 (wiring, options or states) is kept whole.
 
 Runs on untyped values in a loop: the input is only known at run time, and a typed tuple recursion here compiled
@@ -35,7 +36,7 @@ Base.@nospecializeinfer function _flatten_comp_funcs!(flat_funcs::Vector{Any}, f
         el = funcs[i]
         trait = _intervals[i]
         # `el isa LoopSpec` first: `iscomposite(el)` on any other value would compile once per value type.
-        if _flattens_into_parent(el, stop_at_options)
+        if _flattens_into_parent(el, trait, stop_at_options)
             child_intervals = getschedule(el)
             multiplied = Any[child_intervals[j] * trait for j in eachindex(child_intervals)]
             _flatten_comp_funcs!(flat_funcs, flat_intervals, getalgos(el), Tuple(multiplied), stop_at_options)
@@ -50,7 +51,7 @@ end
 """
     flatten_comp_funcs_typed(funcs::Tuple, intervals::Tuple, stop_at_options = true)
 
-Typed version of `flatten_comp_funcs`, with the same result: the children with every nested `CompositeAlgorithm`
+Typed version of `flatten_comp_funcs`, with the same result: the children with every nested plan of interval entries
 replaced by its own children (intervals multiplied), keeping composites with wiring, options or states whole when
 `stop_at_options`. Written as typed tuple recursion (`flat_tree_property_recursion`), so the result type is known to
 the compiler when the input types are.
@@ -62,7 +63,7 @@ recursion like `_add_algo_tuple_in_order` would avoid the compiler failure.
 """
 function flatten_comp_funcs_typed(funcs, _intervals, stop_at_options = true)
     flat_funcs, flat_intervals = flat_tree_property_recursion(funcs, _intervals) do el, trait
-        if !_flattens_into_parent(el, stop_at_options)
+        if !_flattens_into_parent(el, trait, stop_at_options)
             return nothing, nothing
         end
         newels = getalgos(el)
@@ -74,18 +75,18 @@ function flatten_comp_funcs_typed(funcs, _intervals, stop_at_options = true)
 end
 
 """
-Deconstruct a `CompositeAlgorithm` into its leaf child algorithms and intervals.
+Deconstruct a plan of interval entries into its leaf child algorithms and intervals.
 
 This is the public "old flatten" behavior: wiring, options and states do not make
 the composite opaque here. Constructor parsing uses `flatten_comp_funcs` instead so
 nested composites with local plan metadata are not flattened accidentally.
 """
-function flatten(comp::CompositeAlgorithm)
+function flatten(comp::Plan)
     # `false` keeps the old public flatten behavior: options do not stop descent.
     return flatten_comp_funcs((comp,), (1,), false)
 end
 
-function flatten(comp::LoopAlgorithm{<:CompositeAlgorithm})
+function flatten(comp::LoopAlgorithm{<:Plan})
     return flatten(getplan(comp))
 end
 

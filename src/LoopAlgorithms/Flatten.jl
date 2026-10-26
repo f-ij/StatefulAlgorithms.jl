@@ -31,9 +31,9 @@ end
 
 flat_comp(t::Tuple) = flat_comp(t...)
 flat_comp(a, b) = (a, b)
-function flat_comp(ca::CompositeAlgorithm, interval)
+function flat_comp(ca::Plan, interval)
     funcs = tree_flatten(ca) do func
-        if func isa StatefulAlgorithms.CompositeAlgorithm
+        if func isa Plan && iscomposite(func)
             return StatefulAlgorithms.getalgos(func)
         else
             return nothing
@@ -41,7 +41,7 @@ function flat_comp(ca::CompositeAlgorithm, interval)
     end
 
     intervals = tree_trait_flatten(ca, interval) do func, interval
-        if func isa StatefulAlgorithms.CompositeAlgorithm
+        if func isa Plan && iscomposite(func)
             return getalgos(func), interval .* StatefulAlgorithms.getschedule(func)
         else 
             return nothing, nothing

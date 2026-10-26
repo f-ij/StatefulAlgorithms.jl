@@ -57,7 +57,7 @@ end
 
 """
 The expression that gives an entry's multipliers: a constant, or, when some are only known at run time (a routine
-child's repeat count, `read_routine_multiplier`), the vector built from their expressions.
+child's repeat count, `read_entry_multiplier`), the vector built from their expressions.
 """
 Base.@nospecializeinfer function write_multipliers_expr(multipliers::Vector{Any})
     all(m -> m isa Number, multipliers) && return QuoteNode(Float64[multipliers...])

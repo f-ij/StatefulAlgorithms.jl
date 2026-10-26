@@ -14,11 +14,6 @@
 #     end
 # end
 
-function total_incs(ca::CompositeAlgorithm)
-    return 1 + sum(total_incs(getalgo(ca, i))/interval(ca,i) for i in 1:length(ca))
+function total_incs(plan::Plan)
+    return 1 + sum(total_incs(getalgo(plan, i)) * schedule_multiplier(getschedule(plan)[i]) for i in 1:length(plan))
 end
-
-function total_incs(r::Routine)
-    return sum(total_incs(getleaf(r, i)) for i in 1:leafs(r))
-end
-

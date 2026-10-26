@@ -52,10 +52,8 @@ end
 
     direct_cursor = StatefulAlgorithms.loop_cursor(routine, Val(false))
     pausable_cursor = StatefulAlgorithms.loop_cursor(routine, Val(true))
-    @test direct_cursor isa StatefulAlgorithms.DirectRoutineCursor
-    @test StatefulAlgorithms.resume_idxs(direct_cursor) == ()
-    @test pausable_cursor isa StatefulAlgorithms.PausableRoutineCursor
-    @test StatefulAlgorithms.resume_idxs(pausable_cursor) isa StatefulAlgorithms.TupleBox{1, Int}
+    @test direct_cursor isa StatefulAlgorithms.PlanCursor{Nothing, Nothing}
+    @test pausable_cursor isa StatefulAlgorithms.PlanCursor{Nothing, StatefulAlgorithms.PauseRecord}
 
     long_routine = init(Routine(LoopCursorYieldCounter, (10^8,)))
     paused = Process(long_routine; lifetime = Indefinite())
@@ -63,8 +61,8 @@ end
     sleep(0.01)
     pause(paused)
     wait(paused)
-    @test paused.loop_cursor isa StatefulAlgorithms.PausableRoutineCursor
-    @test !isempty(StatefulAlgorithms.resume_idxs(paused.loop_cursor))
+    @test paused.loop_cursor isa StatefulAlgorithms.PlanCursor{Nothing, StatefulAlgorithms.PauseRecord}
+    @test StatefulAlgorithms.is_paused_in_step(paused.loop_cursor)
     resumed_cursor = @inferred StatefulAlgorithms._loop_cursor(paused, StatefulAlgorithms.getplan(paused.algo), StatefulAlgorithms.Resuming{true}())
     @test resumed_cursor === paused.loop_cursor
     @test @inferred(StatefulAlgorithms.getloopcursor(paused)) === paused.loop_cursor

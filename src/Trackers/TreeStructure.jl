@@ -1,16 +1,13 @@
 is_decomposable(::Any) = false
-is_decomposable(r::Routine) = true
-is_decomposable(ca::CompositeAlgorithm) = true
+is_decomposable(plan::Plan) = true
 # is_decomposable(sr::SubRoutine) = is_decomposable(sr.func)
 
 # getbranch(::Any, idx) = nothing
-getbranch(r::Routine, idx) = getalgos(r)[idx]
-getbranch(ca::CompositeAlgorithm, idx) = getalgos(ca)[idx]
+getbranch(plan::Plan, idx) = getalgos(plan)[idx]
 # getbranch(sr::SubRoutine, idx) = getbranch(sr.func, idx)
 
 nbranches(::Any) = 0
-nbranches(r::Routine) = length(getalgos(r))
-nbranches(ca::CompositeAlgorithm) = numalgos(ca)
+nbranches(plan::Plan) = numalgos(plan)
 
 """
 Give the number of total leafs in the algorithm
@@ -86,16 +83,11 @@ end
 ##### NEW IMP
 _flattypes(a::Any) = (typeof(a),)
 _flattypes(ta::Type) = (ta,)
-@generated function _flattypes(caT::Type{<:CompositeAlgorithm{CA}}) where CA
-    flat = (Iterators.Flatten(_flattypes.(CA.parameters))...,)
+@generated function _flattypes(planT::Type{<:Plan{FT}}) where FT
+    flat = (Iterators.Flatten(_flattypes.(FT.parameters))...,)
     return :(tuple($(flat)...))
 end
-_flattypes(ca::CompositeAlgorithm) = _flattypes(typeof(ca))
-@generated function _flattypes(rT::Type{<:Routine{RA}}) where RA
-    flat = (Iterators.Flatten(_flattypes.(RA.parameters))...,)
-    return :(tuple($(flat)...))
-end
-_flattypes(r::Routine) = _flattypes(typeof(r))
+_flattypes(plan::Plan) = _flattypes(typeof(plan))
 
 Base.Flatten(pa::ProcessAlgorithm) = _flattypes(pa)
 Base.Flatten(paT::Type{PA}) where PA <: ProcessAlgorithm = _flattypes(paT)
@@ -135,9 +127,9 @@ subalgotypes(a::Any) = a
 Get the multipliers in the flat representation
 """
 flat_multipliers(a::Any) = 1
-# TODO: a `Routine`'s repeat counts are values (its `repeats` field), so `multipliers(PA)` has no method for a routine
-# type; this needs the plan value.
-@generated function flat_multipliers(paT::Type{PA}) where PA <: Union{Routine, CompositeAlgorithm}
+# TODO: a plan's repeat counts are values (its `schedule` field), so `multipliers(PA)` has no method for a plan type;
+# this needs the plan value.
+@generated function flat_multipliers(paT::Type{PA}) where PA <: Plan
     subtypes = subalgotypes(PA)
     mtpliers = multipliers(PA)
     flat = tuple(Base.Flatten(map((s,m) -> m.* flat_multipliers(s), subtypes, mtpliers))...)
@@ -163,7 +155,7 @@ end
 Get the multipliers per algorithm for the unique algorithms only
 """
 unique_multipliers(pa::ProcessAlgorithm) = unique_multipliers(typeof(pa))
-@generated function unique_multipliers(paT::Type{PA}) where PA <: Union{Routine, CompositeAlgorithm}
+@generated function unique_multipliers(paT::Type{PA}) where PA <: Plan
     f_mults = flat_multipliers(PA)
     f_map = flatmap(PA)
     uniques = UniqueFlatten(PA)

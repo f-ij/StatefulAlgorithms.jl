@@ -12,10 +12,10 @@ macro state(args...)
     return _dsl_expand_state_expr(fields)
 end
 
-"""Return the concrete loop-algorithm constructor represented by a DSL macro."""
-@inline _dsl_loopalgorithm_type(::Val{:CompositeAlgorithm}) = CompositeAlgorithm
-@inline _dsl_loopalgorithm_type(::Val{:Routine}) = Routine
-@inline _dsl_loopalgorithm_type(::Val{Name}) where {Name} =
+"""What a plain number in a DSL block's schedule is (see `_normalize_schedule_entry`), by the block's macro."""
+@inline _dsl_schedule_kind(::Val{:CompositeAlgorithm}) = Val(:interval)
+@inline _dsl_schedule_kind(::Val{:Routine}) = Val(:repeat)
+@inline _dsl_schedule_kind(::Val{Name}) where {Name} =
     error("Unsupported DSL loop algorithm constructor `$Name`.")
 
 """Normalize DSL-collected process state entries without a large vararg parse."""
@@ -36,7 +36,7 @@ end
 
 """Build a loop algorithm from DSL vectors without compiling a giant vararg call."""
 function _dsl_build_loopalgorithm(::Val{Name}, algos, specification, states, options) where {Name}
-    laType = _dsl_loopalgorithm_type(Val(Name))
+    kind = _dsl_schedule_kind(Val(Name))
     length(algos) == length(specification) || error("DSL produced $(length(algos)) algorithms but $(length(specification)) schedule entries.")
 
     processalgos = Any[]
@@ -57,15 +57,8 @@ function _dsl_build_loopalgorithm(::Val{Name}, algos, specification, states, opt
 
     processalgos_tuple = Tuple(processalgos)
     schedule_tuple = Tuple(kept_specification)
-    normalized_schedule = if iscomposite(laType)
-        map(x -> x isa Interval ? x : Interval(x), schedule_tuple)
-    else
-        map(x -> x isa Lifetime ? x : Repeat(x), schedule_tuple)
-    end
-
-    if iscomposite(laType)
-        processalgos_tuple, normalized_schedule = flatten_comp_funcs(processalgos_tuple, normalized_schedule)
-    end
+    normalized_schedule = map(x -> _normalize_schedule_entry(kind, x), schedule_tuple)
+    processalgos_tuple, normalized_schedule = flatten_comp_funcs(processalgos_tuple, normalized_schedule)
 
     collected_options = ()
     for algo in processalgos_tuple
@@ -75,11 +68,11 @@ function _dsl_build_loopalgorithm(::Val{Name}, algos, specification, states, opt
     end
 
     state_tuple = _dsl_normalize_state_entries(states)
-    option_tuple = (collected_options..., Tuple(options)...)
-    return LoopAlgorithm(laType, processalgos_tuple, state_tuple, option_tuple, normalized_schedule)
+    option_tuple = _with_default_lifetime(kind, (collected_options..., Tuple(options)...))
+    return LoopAlgorithm(Plan, processalgos_tuple, state_tuple, option_tuple, normalized_schedule)
 end
 
-"""Expand a top-level DSL block into either a `CompositeAlgorithm` or a `Routine`."""
+"""Expand a top-level DSL block into a `Plan`, as `CompositeAlgorithm(...)` or `Routine(...)` would build it."""
 function _dsl_expand_loopalgorithm(block, constructor_name::Symbol, expected_schedule::Symbol; print_constructor::Bool = false, rules = :(StatefulAlgorithms.CurrentDSL()),
                                    repeat_assignments_as_blocks::Bool = true)
     statements = block isa Expr && block.head == :block ? block.args : Any[block]

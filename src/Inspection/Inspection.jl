@@ -266,33 +266,23 @@ function _inspection_execution_plan(la::LA) where {LA<:AbstractLoopAlgorithm}
     return InspectionExecutionNode(_inspection_loop_label(la), _inspection_execution_children(getplan(la)))
 end
 
-"""Build display nodes for children scheduled by composite-style intervals."""
-function _inspection_execution_children(la::LA) where {LA<:CompositeAlgorithm}
+"""Build display nodes for the children of a plan, each labelled with its schedule entry."""
+function _inspection_execution_children(la::LA) where {LA<:Plan}
     funcs = getalgos(la)
-    schedule = intervals(la)
+    schedule = getschedule(la)
     return InspectionExecutionNode[
         _inspection_execution_node(
             funcs[i],
-            _inspection_schedule_label(:every, schedule[i]),
+            _inspection_entry_schedule_label(schedule[i]),
             plan_child_namespace(la, i),
         )
         for i in eachindex(funcs)
     ]
 end
 
-"""Build display nodes for children scheduled by routine lifetimes."""
-function _inspection_execution_children(la::LA) where {LA<:Routine}
-    funcs = getalgos(la)
-    schedule = lifetimes(la)
-    return InspectionExecutionNode[
-        _inspection_execution_node(
-            funcs[i],
-            _inspection_routine_schedule_label(schedule[i]),
-            plan_child_namespace(la, i),
-        )
-        for i in eachindex(funcs)
-    ]
-end
+"""The label of a schedule entry: `every n` for an interval, the lifetime (`Repeat(n)`, ...) for a repeat."""
+_inspection_entry_schedule_label(entry::Lifetime) = _inspection_routine_schedule_label(entry)
+_inspection_entry_schedule_label(entry) = _inspection_schedule_label(:every, entry)
 
 """Delegate child-tree display from a runtime wrapper to its stored plan."""
 function _inspection_execution_children(la::LA) where {LA<:AbstractLoopAlgorithm}
@@ -355,12 +345,8 @@ function _inspection_entry_label(obj)
 end
 
 """Return a concise kind label for a loop plan or runtime wrapper."""
-function _inspection_loop_label(la::LA) where {LA<:CompositeAlgorithm}
-    return "CompositeAlgorithm"
-end
-
-function _inspection_loop_label(la::LA) where {LA<:Routine}
-    return "Routine"
+function _inspection_loop_label(la::LA) where {LA<:Plan}
+    return _plan_label(LA)
 end
 
 function _inspection_loop_label(la::LA) where {LA<:AbstractLoopAlgorithm}

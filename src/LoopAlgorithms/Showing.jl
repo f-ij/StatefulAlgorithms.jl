@@ -24,47 +24,36 @@ end
 _plan_child_string(child, wiring, ctx) = repr(child; context = ctx)
 _plan_child_string(child::Callable, wiring::Wiring, ctx) = _callable_string(child, wiring)
 
-function Base.show(io::IO, ca::CompositeAlgorithm)
-    println(io, "CompositeAlgorithm")
-    funcs = getalgos(ca)
-    if isempty(funcs)
-        print(io, "└── (empty)")
-        return
-    end
-    _intervals = StatefulAlgorithms.intervals(ca)
-    limit = get(io, :limit, false)
-    show_ctx = IOContext(io, :limit => limit, :color => get(io, :color, false))
-    total = length(funcs)
-    for (idx, thisfunc) in enumerate(funcs)
-        interval = _intervals[idx]
-        func_str = _plan_child_string(thisfunc, getfield(child_wiring(getwiring(ca)), idx), show_ctx)
-        lines = split(func_str, '\n')
-        suffix = " (every " * string(interval) * " time(s))"
-        _print_tree_lines(io, idx, total, lines; suffix)
-        if idx < total
-            print(io, "\n")
-        end
-    end
+"""
+The name a plan is shown with: `CompositeAlgorithm` when all its entries are intervals, `Routine` when all are
+repeats, else `Plan`. `P` is the plan's type.
+"""
+function _plan_label(P::Type)
+    entries = fieldtypes(fieldtype(P, 2))
+    all(is_repeat_entry, entries) && !isempty(entries) && return "Routine"
+    any(is_repeat_entry, entries) && return "Plan"
+    return "CompositeAlgorithm"
 end
 
-function Base.show(io::IO, r::Routine)
-    println(io, "Routine")
-    funcs = getalgos(r)
+"""How a child's schedule entry is shown after it: `(every n time(s))` for an interval, `(repeats n time(s))` for a repeat."""
+_entry_suffix(entry::Union{Interval, RunIf}) = " (every " * string(entry) * " time(s))"
+_entry_suffix(entry::Lifetime) = " (repeats " * string(repeats(entry)) * " time(s))"
+
+function Base.show(io::IO, plan::Plan)
+    println(io, _plan_label(typeof(plan)))
+    funcs = getalgos(plan)
     if isempty(funcs)
         print(io, "└── (empty)")
         return
     end
-    reps = repeats(r)
-    reps_is_type = reps isa Type
+    entries = getschedule(plan)
     limit = get(io, :limit, false)
     show_ctx = IOContext(io, :limit => limit, :color => get(io, :color, false))
     total = length(funcs)
     for (idx, thisfunc) in enumerate(funcs)
-        rep = reps_is_type ? reps : reps[idx]
-        suffix = reps_is_type ? " (repeats " * string(rep) * ")" : " (repeats " * string(rep) * " time(s))"
-        func_str = _plan_child_string(thisfunc, getfield(child_wiring(getwiring(r)), idx), show_ctx)
+        func_str = _plan_child_string(thisfunc, getfield(child_wiring(getwiring(plan)), idx), show_ctx)
         lines = split(func_str, '\n')
-        _print_tree_lines(io, idx, total, lines; suffix)
+        _print_tree_lines(io, idx, total, lines; suffix = _entry_suffix(entries[idx]))
         if idx < total
             print(io, "\n")
         end
@@ -107,78 +96,33 @@ function _composite_algo_type_labels(types::Core.SimpleVector)
     return _composite_algo_type_labels(tuple(types...))
 end
 
-function Base.summary(io::IO, ca::CompositeAlgorithm)
-    funcs = getalgos(ca)
+function Base.summary(io::IO, plan::Plan)
+    label = _plan_label(typeof(plan))
+    funcs = getalgos(plan)
     if isempty(funcs)
-        print(io, "CompositeAlgorithm (empty)")
+        print(io, label, " (empty)")
         return
     end
-    _intervals = StatefulAlgorithms.intervals(ca)
-    println(io, "CompositeAlgorithm")
+    entries = getschedule(plan)
+    println(io, label)
     total = length(funcs)
     for (idx, f) in enumerate(funcs)
-        interval = _intervals[idx]
-        suffix = " (every " * string(interval) * " time(s))"
         lines = split(_algo_label(f), '\n')
-        _print_tree_lines(io, idx, total, lines; suffix)
+        _print_tree_lines(io, idx, total, lines; suffix = _entry_suffix(entries[idx]))
         if idx < total
             print(io, "\n")
         end
     end
 end
 
-function Base.show(io::IO, caT::Type{<:CompositeAlgorithm})
-    dt = Base.unwrap_unionall(caT)
-    if length(dt.parameters) == 0
-        print(io, "CompositeAlgorithm")
+function Base.show(io::IO, planT::Type{<:Plan})
+    dt = Base.unwrap_unionall(planT)
+    if length(dt.parameters) == 0 || dt.parameters[1] isa TypeVar || dt.parameters[2] isa TypeVar
+        print(io, "Plan")
         return
     end
-    ft = dt.parameters[1]
-    if ft isa TypeVar
-        print(io, "CompositeAlgorithm")
-        return
-    end
-    labels = _composite_algo_type_labels(ft.parameters)
-    print(io, "CompositeAlgorithm(", join(labels, ", "), ")")
-end
-
-function Base.summary(io::IO, r::Routine)
-    funcs = getalgos(r)
-    if isempty(funcs)
-        print(io, "Routine (empty)")
-        return
-    end
-    reps = repeats(r)
-    reps_is_type = reps isa Type
-    println(io, "Routine")
-    limit = get(io, :limit, false)
-    show_ctx = IOContext(io, :limit => limit, :color => get(io, :color, false))
-    total = length(funcs)
-    for (idx, f) in enumerate(funcs)
-        rep = reps_is_type ? reps : reps[idx]
-        suffix = reps_is_type ? " (repeats " * string(rep) * ")" : " (repeats " * string(rep) * " time(s))"
-        func_str = repr(f; context = show_ctx)
-        lines = split(func_str, '\n')
-        _print_tree_lines(io, idx, total, lines; suffix)
-        if idx < total
-            print(io, "\n")
-        end
-    end
-end
-
-function Base.show(io::IO, rT::Type{<:Routine})
-    dt = Base.unwrap_unionall(rT)
-    if length(dt.parameters) == 0
-        print(io, "Routine")
-        return
-    end
-    ft = dt.parameters[1]
-    if ft isa TypeVar
-        print(io, "Routine")
-        return
-    end
-    labels = _composite_algo_type_labels(ft.parameters)
-    print(io, "Routine(", join(labels, ", "), ")")
+    labels = _composite_algo_type_labels(dt.parameters[1].parameters)
+    print(io, _plan_label(dt), "(", join(labels, ", "), ")")
 end
 
 """
@@ -227,20 +171,18 @@ function Base.show(io::IO, laT::Type{<:LoopAlgorithm})
 end
 
 """
-When composite is wrapped by a scope
+When a plan is wrapped by a scope
 """
-function Base.show(io::IO, sa::IdentifiableAlgo{F, Id, Aliases, AlgoName, ScopeName}) where {F<:CompositeAlgorithm, Id, Aliases, AlgoName, ScopeName}
-    header = isnothing(algoname(sa)) ? "CompositeAlgorithm" : string(algoname(sa))
+function Base.show(io::IO, sa::IdentifiableAlgo{F, Id, Aliases, AlgoName, ScopeName}) where {F<:Plan, Id, Aliases, AlgoName, ScopeName}
+    plan = getalgo(sa)
+    header = isnothing(algoname(sa)) ? _plan_label(typeof(plan)) : string(algoname(sa))
     println(io, header, "@", getkey(sa))
-    ca = getalgo(sa)
-    funcs = getalgos(ca)
-    _intervals = intervals(ca)
+    funcs = getalgos(plan)
+    entries = getschedule(plan)
     total = length(funcs)
     for (idx, f) in enumerate(funcs)
-        interval = _intervals[idx]
-        suffix = " (every " * string(interval) * " time(s))"
         lines = split(_algo_label(f), '\n')
-        _print_tree_lines(io, idx, total, lines; suffix)
+        _print_tree_lines(io, idx, total, lines; suffix = _entry_suffix(entries[idx]))
         if idx < total
             print(io, "\n")
         end

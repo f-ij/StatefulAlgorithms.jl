@@ -16,8 +16,8 @@ using StatefulAlgorithms
     )
 
     @test length(StatefulAlgorithms.get_routes(algo)) == 1
-    @test algo isa StatefulAlgorithms.CompositeAlgorithm
-    @test StatefulAlgorithms.getplan(algo) isa StatefulAlgorithms.CompositeAlgorithm
+    @test algo isa StatefulAlgorithms.Plan
+    @test StatefulAlgorithms.getplan(algo) isa StatefulAlgorithms.Plan
     @test length(StatefulAlgorithms.get_routes(StatefulAlgorithms.getplan(algo))) == 1
 
     resolved = StatefulAlgorithms.resolve(algo)
@@ -28,7 +28,7 @@ using StatefulAlgorithms
     other_name = StatefulAlgorithms.static_findkey(registry, PrepOther)
 
     @test resolved isa StatefulAlgorithms.LoopAlgorithm
-    @test StatefulAlgorithms.getplan(resolved) isa StatefulAlgorithms.CompositeAlgorithm
+    @test StatefulAlgorithms.getplan(resolved) isa StatefulAlgorithms.Plan
     @test StatefulAlgorithms.isresolved(resolved)
     @test all(child -> !(child isa StatefulAlgorithms.AbstractIdentifiableAlgo), StatefulAlgorithms.getalgos(resolved))
     @test all(entry -> entry isa StatefulAlgorithms.AbstractIdentifiableAlgo, StatefulAlgorithms.all_algos(registry))
@@ -57,9 +57,9 @@ using StatefulAlgorithms
     nested_comp = first(StatefulAlgorithms.getalgos(resolved_routine))
 
     @test resolved_routine isa StatefulAlgorithms.LoopAlgorithm
-    @test StatefulAlgorithms.getplan(resolved_routine) isa StatefulAlgorithms.Routine
+    @test StatefulAlgorithms.getplan(resolved_routine) isa StatefulAlgorithms.Plan
     @test StatefulAlgorithms.isresolved(resolved_routine)
-    @test nested_comp isa StatefulAlgorithms.CompositeAlgorithm
+    @test nested_comp isa StatefulAlgorithms.Plan
     @test all(child -> !(child isa StatefulAlgorithms.AbstractIdentifiableAlgo), StatefulAlgorithms.getalgos(resolved_routine))
     @test all(child -> !(child isa StatefulAlgorithms.AbstractIdentifiableAlgo), StatefulAlgorithms.getalgos(nested_comp))
     @test all(StatefulAlgorithms.plan_child_namespace(nested_comp, i) != Symbol() for i in eachindex(StatefulAlgorithms.getalgos(nested_comp)))

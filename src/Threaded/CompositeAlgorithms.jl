@@ -21,7 +21,7 @@ const BarrieredCompositeAlgorithm = ThreadedCompositeAlgorithm
 iscomposite(::Type{TCA}) where {TCA<:ThreadedCompositeAlgorithm} = true
 
 # The inputs are stripped of `Unique` uuids first (`strip_unique`), so the typed parsing compiles once for new handles.
-Base.@nospecializeinfer ThreadedCompositeAlgorithm(@nospecialize(args...)) = parse_la_input(ThreadedCompositeAlgorithm, strip_unique(args)...)
+Base.@nospecializeinfer ThreadedCompositeAlgorithm(@nospecialize(args...)) = parse_la_input(ThreadedCompositeAlgorithm, Val(:interval), strip_unique(args)...)
 
 
 """Rebuild the route/share wiring of `tca` from `wiring` (`Route`s, `Share`s, `LocalPlanOption`s)."""

@@ -1,6 +1,6 @@
 #=
-Interface of `AbstractPlan` (`Routine`, `CompositeAlgorithm`, `ThreadedCompositeAlgorithm`, or a new plan type): what
-every plan provides. The type itself is in AbstractTypeDefs.jl.
+Interface of `AbstractPlan` (`Plan`, built by `CompositeAlgorithm(...)` and `Routine(...)`; `ThreadedCompositeAlgorithm`;
+or a new plan type): what every plan provides. The type itself is in AbstractTypeDefs.jl.
 
 A plan stores its children in `funcs`, its states in `states`, its route/share wiring in `wiring` (a `PlanWiring`), its
 options in `options`, and, once resolved, its children's context names in `namespaces` (one `Namespace` type per

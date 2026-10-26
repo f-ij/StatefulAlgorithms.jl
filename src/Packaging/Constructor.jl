@@ -25,16 +25,17 @@ function Package(la::LoopAlgorithm, name = Symbol())
 end
 
 """
-Build a package from a composite execution plan.
+Build a package from a composite execution plan (a `Plan` of interval entries only).
 
 Route metadata is converted into a child-aligned `aliases` tuple. The composite's
 states, and any extra `states` passed, are stored as explicit package `states`.
 """
-function Package(comp::CompositeAlgorithm, name = Symbol())
+function Package(comp::Plan, name = Symbol())
     return Package(comp, (), name)
 end
 
-function Package(comp::CompositeAlgorithm, states::States, name = Symbol()) where {States<:Tuple}
+function Package(comp::Plan, states::States, name = Symbol()) where {States<:Tuple}
+    iscomposite(comp) || throw(ArgumentError("Package needs a plan of interval entries only (a `CompositeAlgorithm`), but got one with repeats: $(getschedule(comp))."))
     identifiable_funcs = getalgos(comp)
     package_intervals = intervals(comp)
     routes = typefilter(Route, collect_wiring(comp))

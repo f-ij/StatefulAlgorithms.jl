@@ -59,7 +59,7 @@ steps below 4.7–4.8 ms). So the uuid (`origin`) is data and never changes; the
 1. Every holder of an id keeps it as a value next to its type, so both rewrites (strip and number) reach it: a handle in
    its `matcher` field, a route in its endpoint fields, a `Var` in its `data` field. A holder's type parameters that
    come from those fields are worked out again from them (`list_field_derived_params`).
-2. A plan's schedule (a `Routine`'s lifetimes, a composite's intervals, which may hold `Var`s) is a field; the plan's
+2. A plan's schedule (an interval or repeat entry per child, which may hold `Var`s) is a field; the plan's
    type has only the schedule's type, in which an id is `UniquePlanId{k}`: which handle within the plan.
 3. The registry stores each handle numbered, as the plan has it. No registry, context or loop that SA works with has a
    uuid in its type, so `init` and the loop compile once for every new set of `Unique`s.

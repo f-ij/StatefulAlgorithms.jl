@@ -444,7 +444,7 @@ Base.@nospecializeinfer function _composite_dsl_map_states_changed(func::F, @nos
         plan, plan_changed = _composite_dsl_map_states_changed(func, getfield(entity, :plan))
         plan_changed || return entity, false
         return setfield(entity, :plan, plan), true
-    elseif entity isa Union{CompositeAlgorithm, Routine}
+    elseif entity isa Plan
         funcs, funcs_changed = _composite_dsl_map_state_children(func, getfield(entity, :funcs))
         states, states_changed = _composite_dsl_map_state_entries(func, getfield(entity, :states))
         (funcs_changed || states_changed) || return entity, false
@@ -495,7 +495,7 @@ function _composite_dsl_map_states_changed_typed(func::F, entity::LA) where {F, 
     return setfield(entity, :plan, plan), true
 end
 
-function _composite_dsl_map_states_changed_typed(func::F, entity::LA) where {F, LA<:Union{CompositeAlgorithm, Routine}}
+function _composite_dsl_map_states_changed_typed(func::F, entity::LA) where {F, LA<:Plan}
     funcs, funcs_changed = _composite_dsl_map_state_children_typed(func, getalgos(entity))
     states, states_changed = _composite_dsl_map_state_entries_typed(func, getstates(entity))
     (funcs_changed || states_changed) || return entity, false

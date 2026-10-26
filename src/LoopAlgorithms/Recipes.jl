@@ -1,17 +1,17 @@
 export CompositeAlgorithmRecipe, RoutineRecipe
 
 """
-Unresolved `CompositeAlgorithm` recipe.
+Unresolved `CompositeAlgorithm` recipe: a `Plan`.
 
 This is the constructor-time form before a registry is attached by `resolve` or
 `ProcessContext`.
 """
-const CompositeAlgorithmRecipe = CompositeAlgorithm
+const CompositeAlgorithmRecipe = Plan
 
 """
-Unresolved `Routine` recipe.
+Unresolved `Routine` recipe: a `Plan`.
 
 This is the constructor-time form before a registry is attached by `resolve` or
 `ProcessContext`.
 """
-const RoutineRecipe = Routine
+const RoutineRecipe = Plan

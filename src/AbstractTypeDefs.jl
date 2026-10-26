@@ -91,8 +91,8 @@ const LoopSpec = Union{AbstractPlan, AbstractLoopAlgorithm}
 """
 Runtime wrapper for a loop execution plan.
 
-The `plan` field is the block as written, a `CompositeAlgorithm`, `Routine` or
-`ThreadedCompositeAlgorithm`, holding its children, wiring and states. The remaining
+The `plan` field is the block as written, a `Plan` or `ThreadedCompositeAlgorithm`, holding its children, wiring and
+states. The remaining
 fields are what `resolve` and `init` add: the options collected from the whole plan
 tree, the registry, persistent context, initializers, and overrides. Reinitialization
 replaces these without changing the type of the wrapped plan.
@@ -112,20 +112,32 @@ abstract type AbstractLoopCursor end
 """Cursor sentinel for children that do not need counters."""
 struct NoLoopCursor <: AbstractLoopCursor end
 
-"""Per-run cursor for composite-style interval plans."""
+"""Per-run cursor for a `ThreadedCompositeAlgorithm`: its step count and its children's cursors."""
 struct CompositeLoopCursor{Children} <: AbstractLoopCursor
     inc::Base.RefValue{Int}
     children::Children
 end
 
-"""Non-pausable routine cursor that carries only nested child cursors."""
-struct DirectRoutineCursor{Children} <: AbstractLoopCursor
-    children::Children
+"""
+Where a paused step of a plan stops, to resume there (see `PlanCursor`). `child` is the child it stopped in (0: the
+step is not paused), `repeat` the repeat of that child to continue at (1 for an interval entry), and `lc` the
+`LoopContext` at that point: at the start of that repeat (or of that child), with the returns of the children before.
+"""
+mutable struct PauseRecord
+    child::Int
+    repeat::Int
+    lc::Any
 end
+PauseRecord() = PauseRecord(0, 0, nothing)
 
-"""Pausable routine cursor that records child resume points for one process."""
-struct PausableRoutineCursor{MV, Children} <: AbstractLoopCursor
-    resume_idxs::MV
+"""
+Per-run cursor of a `Plan`: its step count (`inc`, a `Ref`, or `nothing` when no interval entry needs one), where a
+paused step stops (`pause`, a `PauseRecord`, or `nothing` when the run cannot pause or the plan has no pause point),
+and its children's cursors.
+"""
+struct PlanCursor{Inc, Pause, Children} <: AbstractLoopCursor
+    inc::Inc
+    pause::Pause
     children::Children
 end
 
@@ -177,7 +189,7 @@ avoid writing returns that nothing reads.
 struct ReturnDemand{Names} end
 
 """
-Plan-level wiring propagated through composite and routine execution.
+Plan-level wiring propagated through plan execution.
 
 `global_wiring` records grouped plan-global wiring for inspection and
 propagation during resolution. After resolution, global wiring is already

@@ -12,6 +12,7 @@ const TEST_FILES = [
     "CopyManagerTest.jl",
     "RuntimeInputsLifecycleTest.jl",
     "LoopCursorScheduleTest.jl",
+    "PlanPauseTest.jl",
     "PackageTest.jl",
     "RouteWalkerTest.jl",
     "ShareContextTest.jl",

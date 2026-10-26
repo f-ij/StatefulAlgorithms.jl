@@ -33,9 +33,9 @@ struct Repeat <: RepeatLifetime
 end
 
 """
-A single repeat: `Repeat(1)` whose type says the count. A routine stores a `Repeat(1)` child as `RepeatOnce()`
+A single repeat: `Repeat(1)` whose type says the count. A plan stores a `Repeat(1)` entry as `RepeatOnce()`
 (`store_single_repeats_as_repeat_once`), so its step is compiled without a loop; any other count is a value, so a new
-count does not compile the routine again.
+count does not compile the plan again.
 """
 struct RepeatOnce <: RepeatLifetime end
 repeats(::RepeatOnce) = 1
