@@ -33,37 +33,41 @@ const BuilderLookup = Dict{Union{LookupKey,RuntimeLookupKey},Int}
 """
     TypeEntryBuilder(type)
 
-One entry type of a `RegistryBuilder`: the entry type `type` (`Lin`), its keyed algorithms in order, their
-multipliers (numbers, or expressions in the walk on types: `multiply_multipliers`), the runtime lookup table (lookup
-key => index), and each algorithm's matcher once it has been computed (`entry_matcher`).
+One entry type of a `RegistryBuilder{M}`: the entry type `type` (`Lin`), its keyed algorithms in order, their
+multipliers (`M`: `Float64` in the walk on values; `Any` in the walk on types, where they are expressions,
+`multiply_multipliers`), the runtime lookup table (lookup key => index), and each algorithm's matcher once it has been
+computed (`entry_matcher`).
 """
-struct TypeEntryBuilder
+struct TypeEntryBuilder{M}
     type::Any
     algos::Vector{Any}
-    multipliers::Vector{Any}
+    multipliers::Vector{M}
     lookup::BuilderLookup
     matchers::Vector{Any}
 end
-TypeEntryBuilder(@nospecialize(type)) = TypeEntryBuilder(type, Any[], Any[], BuilderLookup(), Any[])
+TypeEntryBuilder{M}(@nospecialize(type)) where {M} = TypeEntryBuilder{M}(type, Any[], M[], BuilderLookup(), Any[])
 
 struct MatcherNotComputed end   # an entry whose matcher is not computed yet
 
 """
     RegistryBuilder()
+    RegistryBuilder{Any}()
     RegistryBuilder(registry)
 
 A registry under construction, as plain values: its entry types in registry order (`TypeEntryBuilder`s). Empty, or
 holding what `registry` (a `NameSpaceRegistry`) holds. Fill it with `add!`; `registry(builder)` gives the registry.
+`M` is the type of its multipliers: `Float64` (the default) for the walk on values, `Any` for the walk on types.
 """
-struct RegistryBuilder
-    entries::Vector{TypeEntryBuilder}
+struct RegistryBuilder{M}
+    entries::Vector{TypeEntryBuilder{M}}
 end
-RegistryBuilder() = RegistryBuilder(TypeEntryBuilder[])
+RegistryBuilder{M}() where {M} = RegistryBuilder{M}(TypeEntryBuilder{M}[])
+RegistryBuilder() = RegistryBuilder{Float64}()
 function RegistryBuilder(reg::NameSpaceRegistry)
     b = RegistryBuilder()
     for rte in getentries(reg)
         algos = Any[getalgos(rte)...]
-        push!(b.entries, TypeEntryBuilder(getentrytype(rte), algos, Any[getmultipliers(rte)...], BuilderLookup(getdynamiclookup(rte)),
+        push!(b.entries, TypeEntryBuilder{Float64}(getentrytype(rte), algos, copy(getmultipliers(rte)), BuilderLookup(getdynamiclookup(rte)),
             Any[MatcherNotComputed() for _ in algos]))
     end
     return b
@@ -109,11 +113,11 @@ end
 The entry of `builder` that algorithms of entry type `E` go into: the first whose type `E` is a subtype of, else a new
 one, put first or last (`entrytype_goes_first`).
 """
-Base.@nospecializeinfer function find_or_add_entry!(b::RegistryBuilder, @nospecialize(E))
+Base.@nospecializeinfer function find_or_add_entry!(b::RegistryBuilder{M}, @nospecialize(E)) where {M}
     for entry in b.entries
         E <: entry.type && return entry
     end
-    entry = TypeEntryBuilder(E)
+    entry = TypeEntryBuilder{M}(E)
     entrytype_goes_first(E) ? pushfirst!(b.entries, entry) : push!(b.entries, entry)
     return entry
 end
@@ -229,11 +233,11 @@ end
 The registry `builder` (filled with values) holds: one `RegistryTypeEntry{E, Tuple{algorithm types...}}` per entry
 type, in order, with its multipliers and lookup table. Each type is built once, its constructor called on the values.
 """
-Base.@nospecializeinfer function registry(b::RegistryBuilder)
+Base.@nospecializeinfer function registry(b::RegistryBuilder{Float64})
     typeentries = Vector{Any}(undef, length(b.entries))
     for (i, entry) in enumerate(b.entries)
         algos = Tuple(entry.algos)
-        typeentries[i] = RegistryTypeEntry{entry.type, typeof(algos)}(algos, Float64[entry.multipliers...], Dict{LookupKey,Int}(entry.lookup))
+        typeentries[i] = RegistryTypeEntry{entry.type, typeof(algos)}(algos, entry.multipliers, Dict{LookupKey,Int}(entry.lookup))
     end
     all_entries = Tuple(typeentries)
     return NameSpaceRegistry{typeof(all_entries)}(all_entries)
