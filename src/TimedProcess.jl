@@ -6,8 +6,15 @@ mutable struct TimedProcess{TD, C} <: AbstractProcess
     paused::Bool
 end
 
-function TimedProcess(func::F; lifetime = Indefinite(), interval::Real = 0., context = nothing) where F
-    algo = isnothing(context) ? init(normalize_process_algo(func)) : _with_lifecycle(resolve(normalize_process_algo(func)), context, (), ())
+function TimedProcess(@nospecialize(func); kwargs...)
+    algo = func isa LoopSpec ? func : normalize_process_algo(func)
+    algo isa LoopSpec && (algo = resolve(algo))
+    return _new_timed_process(strip_keymap(algo); kwargs...)
+end
+
+function _new_timed_process(algo::F; lifetime = Indefinite(), interval::Real = 0., context = nothing) where F
+    context = strip_keymap(context)
+    algo = isnothing(context) ? _init_plan(algo) : _with_lifecycle(resolve(algo), context, (), ())
     prepared_context = getpersistentcontext(algo)
 
     callback = let context = prepared_context
@@ -18,7 +25,7 @@ function TimedProcess(func::F; lifetime = Indefinite(), interval::Real = 0., con
 end
 
 function init!(tp::TimedProcess)
-    tp.algo = init(tp.algo)
+    tp.algo = _init_plan(tp.algo)
     tp.context = getpersistentcontext(tp.algo)
     tp.callback = let context = tp.context
         timer -> @inline step!(tp.algo, context)

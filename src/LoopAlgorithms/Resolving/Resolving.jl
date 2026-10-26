@@ -33,13 +33,16 @@ on it. A bare plan is wrapped in a `LoopAlgorithm` first; a `FinalizedAlgorithm`
 resolved. An already resolved `la` is returned as it is.
 
 `resolve` itself is compiled once (its result is not inferred; a caller gets `Any`). The steps are run by
-`_resolve_plan`, compiled once per plan type; a plan's `Unique` handles are numbered when it is built
+`_resolve_plan`, compiled once per plan type, on a registry without a `UniqueKeyMap`; `resolve` puts the plan's map
+into the registry at the end (`unique_key_map`, `with_keymap`), so a `Unique` handle the user holds is found from types
+(`getregistry(la)[handle]`, `context(la)[handle]`); a plan's `Unique` handles are numbered when it is built
 (`number_unique_ids`), so the same layout with new handles is the same plan type, and so are its registry and context:
 nothing compiles again. The inferred version, for a caller that knows the plan type, is `_resolve_plan_typed` (Typed.jl).
 """
 Base.@nospecializeinfer function resolve(@nospecialize(la::LoopSpec))
-    isresolved(la) && return la
-    return _resolve_plan(la)
+    _registry_field(la) isa NameSpaceRegistry && return la   # resolved; read untyped, as its type carries the map
+    resolved = _resolve_plan(la)
+    return with_keymap(resolved, unique_key_map(getregistry(resolved)))
 end
 
 """
@@ -84,7 +87,8 @@ function resolve(la1::LA1, la2::LA2, las::Vararg{LoopSpec}) where {LA1<:LoopSpec
     # Each plan numbered its `Unique` handles on its own; one registry needs one numbering over all of them.
     loopalgorithms = number_unique_ids((la1, la2, las...))
     registry, keyed_loopalgorithms = _build_shared_registry_and_key_plans(loopalgorithms)
-    return map(keyed -> _resolve_keyed_plan(keyed, registry), keyed_loopalgorithms)
+    keymap = unique_key_map(registry)
+    return map(keyed -> with_keymap(_resolve_keyed_plan(keyed, registry), keymap), keyed_loopalgorithms)
 end
 
 @inline resolve(loopalgorithms::Tuple{Vararg{LoopSpec}}) = resolve(loopalgorithms...)

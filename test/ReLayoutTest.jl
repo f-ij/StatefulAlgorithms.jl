@@ -28,12 +28,14 @@ rl_uniques(k) = (b = Unique(RLCounter()); CompositeAlgorithm(Unique(RLCounter())
 rl_nested(k) = CompositeAlgorithm(CompositeAlgorithm(Unique(RLCounter()), Callable(RLScale(1.0 + k), (:n,), :m), (1, 1), Declaration(m = 0.0)),
                                   StatefulAlgorithms.Routine(Unique(RLCounter()), Callable(rl_bump, (:n,), :n), (3, 2)), (1, 1), Declaration(n = 1.0 * k))
 
-# The types each phase gives for one build: the plan, the resolved plan and the initialized one.
+# The types each phase compiles for, for one build: the plan, the resolved plan and the initialized one, without the
+# registry's `UniqueKeyMap` (`strip_keymap`), as `init` and the loop get them; `keymap` the map `resolve` put in.
 function rl_phase_types(plan)
     resolved = resolve(plan)
     return (; plan = typeof(plan),
-              resolved = typeof(resolved),
-              initialized = typeof(StatefulAlgorithms.init(resolved)))
+              resolved = typeof(StatefulAlgorithms.strip_keymap(resolved)),
+              initialized = typeof(StatefulAlgorithms.strip_keymap(StatefulAlgorithms.init(resolved))),
+              keymap = StatefulAlgorithms.getkeymap(resolved))
 end
 
 @testset "Re-layout with other values reuses every phase" begin
@@ -50,12 +52,15 @@ end
         @test first.plan === again.plan
         @test first.resolved === again.resolved
         @test first.initialized === again.initialized
+        # Until it is run, the resolved plan's registry carries the uuids, as its `UniqueKeyMap`.
+        @test first.keymap isa StatefulAlgorithms.UniqueKeyMap
+        @test first.keymap !== again.keymap
     end
 end
 
 @testset "The untyped and the typed resolve give the same type" begin
     for plan in (rl_values(0), rl_nested(0))
-        @test typeof(resolve(plan)) === typeof(StatefulAlgorithms._resolve_plan_typed(plan))
+        @test typeof(StatefulAlgorithms.strip_keymap(resolve(plan))) === typeof(StatefulAlgorithms._resolve_plan_typed(plan))
     end
 end
 

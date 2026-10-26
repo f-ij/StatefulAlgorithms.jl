@@ -148,7 +148,8 @@ end
 @inline getstoredinits(la::LA) where {LA<:LoopSpec} = hasfield(LA, :inits) ? getfield(la, :inits) : ()
 @inline getstoredoverrides(la::LA) where {LA<:LoopSpec} = hasfield(LA, :overrides) ? getfield(la, :overrides) : ()
 @inline getpersistentcontext(la::LA) where {LA<:LoopSpec} = hasfield(LA, :context) ? getfield(la, :context) : nothing
-Base.@nospecializeinfer context(@nospecialize(la::LoopSpec)) = with_held_ids(getpersistentcontext(la))
+"""The plan's persistent context; its registry carries the plan's `UniqueKeyMap` until the plan is run."""
+Base.@nospecializeinfer context(@nospecialize(la::LoopSpec)) = getpersistentcontext(la)
 @inline _without_lifecycle(la::LA) where {LA<:LoopSpec} = _with_lifecycle(la, nothing, (), ())
 
 # Merge newly passed `Init`/`Override` specs over previously stored specs by
@@ -234,9 +235,17 @@ end
     init(la::LoopAlgorithm, Init(...), Override(...))
 
 Fully initialize `la`, replaying stored init/override specs and letting passed
-specs override stored specs per target.
+specs override stored specs per target. Resolves `la` first (untyped) and initializes it without its
+`UniqueKeyMap` (`strip_keymap`), which the returned plan carries again, so a new set of `Unique` handles compiles
+nothing again.
 """
-@inline function init(la::LA, specs::InputInterface...; lifetime = Indefinite()) where {LA<:LoopSpec}
+Base.@nospecializeinfer function init(@nospecialize(la::LoopSpec), @nospecialize(specs::InputInterface...); lifetime = Indefinite())
+    resolved = resolve(la)
+    return with_keymap(_init_plan(strip_keymap(resolved), specs...; lifetime), getkeymap(resolved))
+end
+
+"""`init` of a resolved plan without a `UniqueKeyMap`: what `init`, `run` and the processes call."""
+@inline function _init_plan(la::LA, specs::InputInterface...; lifetime = Indefinite()) where {LA<:LoopSpec}
     resolved = _without_lifecycle(resolve(la))
     new_specs = _resolve_lifecycle_specs(getregistry(resolved), specs)
     new_inits, new_overrides, new_interactives = _split_lifecycle_specs(new_specs)
@@ -279,10 +288,15 @@ end
 Run an initialized loop algorithm with per-run runtime inputs. The inputs are
 validated, merged into the transient `ProcessContext._inputs` field for the loop
 call, and removed before the returned loop algorithm stores its next persistent
-context.
+context. Runs `la` without its `UniqueKeyMap` (`strip_keymap`); the returned plan carries it again.
 """
-function Base.run(la::LA; repeats = 1, lifetime = nothing, kwargs...) where {LA<:LoopSpec}
-    initialized = isnothing(getpersistentcontext(la)) ? init(la) : la
+Base.@nospecializeinfer function Base.run(@nospecialize(la::LoopSpec); kwargs...)
+    resolved = resolve(la)
+    return with_keymap(_run_plan(strip_keymap(resolved); kwargs...), getkeymap(resolved))
+end
+
+function _run_plan(la::LA; repeats = 1, lifetime = nothing, kwargs...) where {LA<:LoopSpec}
+    initialized = isnothing(getpersistentcontext(la)) ? _init_plan(la) : la
     persistent_context = getpersistentcontext(initialized)
     lt = isnothing(lifetime) ? normalize_process_lifetime(initialized, repeats) : normalize_process_lifetime(initialized, lifetime)
     inputs = _validate_runtime_inputs(initialized, (; kwargs...))

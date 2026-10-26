@@ -28,11 +28,11 @@ Base.length(reg::NameSpaceRegistry) = length(getentries(reg))
 ###############################################################################
 
 """The types of the registry's entries (`RegistryTypeEntry{Lin, ...}`, ...), as a tuple; for a registry or its type."""
-@inline typeentry_types(reg::Union{NameSpaceRegistry{T}, Type{NameSpaceRegistry{T}}}) where {T} = tuple(T.parameters...)
+@inline typeentry_types(reg::Union{NameSpaceRegistry{T}, Type{<:NameSpaceRegistry{T}}}) where {T} = tuple(T.parameters...)
 
 # TODO: check whether this is dead: grep finds no callers (2026-10-19); check generated code, a call probe and other branches.
 """The registry's entry types (`Lin`, ...) as a tuple type, `Tuple{Lin, ...}`; for a registry or its type."""
-@inline entrytypes(reg::Union{NameSpaceRegistry{T}, Type{NameSpaceRegistry{T}}}) where {T} =
+@inline entrytypes(reg::Union{NameSpaceRegistry{T}, Type{<:NameSpaceRegistry{T}}}) where {T} =
     Tuple{map(getentrytype, typeentry_types(reg))...}
 
 """
@@ -70,12 +70,21 @@ end
 ###############################################################################
 
 """
+    number_held_handle(reg, obj) -> obj
+
+`obj` as `reg` stores it: a `Unique` handle the user holds (`UniquePlanId{uuid}`) numbered by `reg`'s `UniqueKeyMap`
+(`numbered_handle`), decided while compiling; anything else, or any `obj` when `reg` has no map, as it is.
+"""
+@inline number_held_handle(reg::NameSpaceRegistry{E, M}, obj) where {E, M} = numbered_handle(obj, M)
+
+"""
     reg[algo] -> keyed algo
 
 The algorithm `algo` as `reg` stores it (keyed, `Lin_1`); errors when it is not in `reg`. Found by its matcher, or
 through the runtime lookup table for values that are not `isstaticallyfindable`.
 """
 @inline function Base.getindex(reg::NameSpaceRegistry{T}, obj) where {T}
+    obj = @inline number_held_handle(reg, obj)
     if isstaticallyfindable(obj)
         return static_get(reg, obj)
     else
@@ -87,6 +96,7 @@ end
 
 """`reg[algo]`, or `default` when `algo` is not in `reg`."""
 @inline function Base.get(reg::NameSpaceRegistry, obj, default = nothing)
+    obj = @inline number_held_handle(reg, obj)
     if isstaticallyfindable(obj)
         try
             return static_get(reg, obj)
@@ -244,6 +254,7 @@ end
 
 """How often `val` runs per root step (its multiplier), found by its matcher; errors when it is not in `reg`."""
 function static_get_multiplier(reg::NameSpaceRegistry, val)
+    val = @inline number_held_handle(reg, val)
     loc = static_findfirst_match(reg, val)
     if isnothing(getidx(loc))
         error("Found other values of type $(getentrytype(loc)), but no match found for value: $val in registry: $reg")
@@ -254,6 +265,7 @@ end
 
 """How often `val` runs per root step (its multiplier); 0 when it is not in `reg`."""
 function getmultiplier(reg::NameSpaceRegistry, val)
+    val = @inline number_held_handle(reg, val)
     entry = get_type_entries(reg, val)
     entry_idx = if isstaticallyfindable(val)
         static_findfirst_match(entry, val)

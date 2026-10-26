@@ -61,14 +61,16 @@ steps below 4.7–4.8 ms). So the uuid (`origin`) is data and never changes; the
    come from those fields are worked out again from them (`list_field_derived_params`).
 2. A plan's schedule (a `Routine`'s lifetimes, a composite's intervals, which may hold `Var`s) is a field; the plan's
    type has only the schedule's type, in which an id is `UniquePlanId{k}`: which handle within the plan.
-3. The registry stores each handle numbered, as the plan has it. No registry, context or loop that SA works with has a
-   uuid in its type, so `init` and the loop compile once for every new set of `Unique`s.
-4. A context handed to the user (`context(p)`, `fetch(p)`) carries the plan's `UniqueKeyMap` (`k => uuid` pairs) in its
-   type (`with_held_ids`, `src/Identifiable/UniquePlanId/HeldIds.jl`). `context[handle]` with a handle the user holds
-   numbers it from that map while compiling and looks it up from types, as a registry key. The registry itself is not
-   changed, and a context given back to SA (`Process(...; context)`) has the map stripped (`strip_held_ids`). Asked of
-   the registry directly (`getkey(registry, handle)`), a held handle is found by its uuid in the runtime lookup table
-   (`is_found_by_data`).
+3. The registry stores each handle numbered, as the plan has it.
+4. `resolve` puts the plan's `UniqueKeyMap` (`k => uuid` pairs) into the registry's type (its `keymap`,
+   `src/Identifiable/UniquePlanId/HeldIds.jl`). `registry[handle]`, `getkey(registry, handle)` and `context[handle]` with
+   a handle the user holds number it from that map while compiling (`numbered_handle`) and look it up from types, as
+   a registry key.
+5. Running the plan takes the map out (`strip_keymap`): `init`, `run(la)`, `Process`, `InlineProcess` and
+   `TimedProcess` resolve the plan untyped, keep the map as a value and work on the plan without it, so `init` and the
+   loop have no uuid in their types and compile once for every new set of `Unique`s. What they hand back to the user
+   (the plan `init` and `run` return, `context(p)`, `fetch(p)`) has the map put back (`with_keymap`); a context given
+   back to SA (`Process(...; context)`, `context(p, c)`) has it stripped.
 
 The matching and registry code ask a matcher only general questions (`matches_type`, `is_given_id`, `is_found_by_data`,
 `lower_matcher`, `carries_data`); `UniquePlanId` answers them in `src/Identifiable/UniquePlanId/HookExtensions.jl`. A

@@ -22,10 +22,10 @@ mutable struct Process{F,LT,C} <: AbstractProcess
     # allocator::Allocator
     rls::RuntimeListeners
     threadid::Int
-    # The context last handed to the user (`context(p)`) with its `UniqueKeyMap` (`_HeldContextCache`), or `nothing`.
-    # Untyped, so the map's type (new for every set of `Unique` handles) is not in the `Process` type the loop is
-    # compiled for.
-    held_keymap::Any
+    # The plan's `UniqueKeyMap` (or `nothing`), taken out of the registry the loop runs on (`strip_keymap`) and put
+    # back into the contexts handed to the user (`context(p)`, `fetch(p)`). Untyped, so the map's type (new for every
+    # set of `Unique` handles) is not in the `Process` type the loop is compiled for.
+    keymap::Any
 end
 
 @setterGetter Process lock shouldrun runtime_context
@@ -164,10 +164,23 @@ end
     end
 end
 
-function Process(func::Func, inputs_overrides::Vararg{Any,N}; context::C = nothing, repeats = nothing, lifetime = nothing, repeat = nothing, timeout = 1.0) where {Func,N,C}
-    lifetime = _process_constructor_lifetime(repeats, lifetime, repeat)
+"""
+    Process(func, Init(...), Override(...); context, repeats, lifetime, timeout)
 
-    algo = normalize_process_algo(func)
+A process running `func`. Resolves it first (untyped), keeps the plan's `UniqueKeyMap` on the process and builds the
+process on the plan without it (`strip_keymap`), so a new set of `Unique` handles compiles nothing again.
+"""
+function Process(@nospecialize(func), @nospecialize(inputs_overrides...); context = nothing, kwargs...)
+    algo = func isa LoopSpec ? func : normalize_process_algo(func)
+    algo isa LoopSpec && (algo = resolve(algo))
+    keymap = getkeymap(algo)
+    p = _new_process(strip_keymap(algo), inputs_overrides...; context = strip_keymap(context), kwargs...)
+    setfield!(p, :keymap, keymap)   # not `p.keymap = `: that compiles `setproperty!` for every map type
+    return p
+end
+
+function _new_process(algo::A, inputs_overrides::Vararg{Any,N}; context::C = nothing, repeats = nothing, lifetime = nothing, repeat = nothing, timeout = 1.0) where {A,N,C}
+    lifetime = _process_constructor_lifetime(repeats, lifetime, repeat)
     lifetime = normalize_process_lifetime(algo, lifetime)
     algo = _process_constructor_algo(algo, context, inputs_overrides, lifetime)
     return _finish_process_constructor(algo, context, lifetime, timeout)
@@ -179,8 +192,7 @@ end
 end
 
 @inline function _finish_process_constructor(algo::A, context::C, lifetime::LT, timeout) where {A<:AbstractLoopAlgorithm, C, LT}
-    # A context the user got from SA carries a `UniqueKeyMap`; the process works with it without (`strip_held_ids`).
-    return _finish_process_constructor_with_context(algo, strip_held_ids(context), lifetime, timeout)
+    return _finish_process_constructor_with_context(algo, context, lifetime, timeout)
 end
 
 function _finish_process_constructor_with_context(algo::A, prepared_context::PC, lifetime::LT, timeout) where {A<:AbstractLoopAlgorithm, PC, LT}
@@ -200,11 +212,11 @@ end
 
 @inline function _process_constructor_algo(algo::LA, ::Nothing, inputs_overrides::Tuple{}, lifetime::LT) where {LA<:LoopSpec, LT}
     isnothing(getpersistentcontext(algo)) || return algo
-    return init(algo; lifetime)
+    return _init_plan(algo; lifetime)
 end
 
 @inline function _process_constructor_algo(algo::LA, ::Nothing, inputs_overrides::IO, lifetime::LT) where {LA<:LoopSpec, IO<:Tuple, LT}
-    return init(algo, inputs_overrides...; lifetime)
+    return _init_plan(algo, inputs_overrides...; lifetime)
 end
 
 @inline function _process_constructor_algo(algo::LA, context::C, inputs_overrides::IO, lifetime::LT) where {LA<:LoopSpec, C, IO<:Tuple, LT}
@@ -230,30 +242,10 @@ end
 """
     context(p)
 
-The process's context, with the `Unique` handles the user holds as keys found from types (`with_held_ids`):
-`context(p)[handle]`.
+The process's context, with the plan's `UniqueKeyMap` back in its registry (`with_keymap`), so a `Unique` handle the
+user holds is a key found from types: `context(p)[handle]`.
 """
-Base.@nospecializeinfer function context(@nospecialize(p::Process))
-    c = _context(p)
-    cached = p.held_keymap
-    # The context handed out last, while the process's context is still that one.
-    cached isa _HeldContextCache && cached.context === c && return cached.held
-    c isa ProcessContext || return c
-    ref = registryref(c)
-    ref isa Base.RefValue || return c
-    keymap = cached isa _HeldContextCache && cached.ref === ref ? cached.keymap : cached_key_map(ref)
-    held = with_held_ids(c, keymap)
-    p.held_keymap = _HeldContextCache(ref, keymap, c, held)
-    return held
-end
-
-"""What `context(p)` handed out last: for the context `context` (registry `ref`, map `keymap`), the user's `held`."""
-struct _HeldContextCache
-    ref::Any
-    keymap::Any
-    context::Any
-    held::Any
-end
+Base.@nospecializeinfer context(@nospecialize(p::Process)) = with_keymap(_context(p), p.keymap)
 
 """
 Store one live process context in the dynamic runtime slot.
@@ -291,7 +283,7 @@ the typed fast path. Only genuine shape changes fall back to the dynamic
 end
 
 function context(p::P, c::C) where {P<:Process, C}
-    p.runtime_context = c
+    p.runtime_context = strip_keymap(c)   # a context the user got from `context(p)` carries the map
     return c
 end
 

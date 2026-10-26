@@ -14,6 +14,8 @@ mutable struct InlineProcess{TD,ContextType, Lt,Mode} <: AbstractProcess
     lifetime::Lt
     starttime::Union{Nothing,Float64,UInt64}
     endtime::Union{Nothing,Float64,UInt64}
+    # The plan's `UniqueKeyMap` (or `nothing`), out of the types the loop compiles for; see `Process`.
+    keymap::Any
 end
 #TODO Improve context semantics
 contexttype(::Union{InlineProcess{TD,ContextType}, Type{<:InlineProcess{TD,ContextType}}}) where {TD,ContextType} = ContextType
@@ -41,15 +43,29 @@ end
     end
 end
 
-@inline function InlineProcess(func, inputs_overrides...; threaded=false, repeats=nothing, lifetime=nothing, context=nothing)
-    lifetime = _inline_process_lifetime(func, repeats, lifetime)
-    algo = normalize_process_algo(func)
+"""
+    InlineProcess(func, Init(...), Override(...); threaded, repeats, lifetime, context)
+
+Resolves `func` first (untyped), keeps the plan's `UniqueKeyMap` on the process and builds the process on the plan
+without it (`strip_keymap`), as `Process` does.
+"""
+function InlineProcess(@nospecialize(func), @nospecialize(inputs_overrides...); context = nothing, kwargs...)
+    algo = func isa LoopSpec ? func : normalize_process_algo(func)
+    algo isa LoopSpec && (algo = resolve(algo))
+    keymap = getkeymap(algo)
+    p = _new_inline_process(strip_keymap(algo), inputs_overrides...; context = strip_keymap(context), kwargs...)
+    setfield!(p, :keymap, keymap)   # not `p.keymap = `: that compiles `setproperty!` for every map type
+    return p
+end
+
+@inline function _new_inline_process(algo, inputs_overrides...; threaded=false, repeats=nothing, lifetime=nothing, context=nothing)
+    lifetime = _inline_process_lifetime(algo, repeats, lifetime)
     lifetime = normalize_process_lifetime(algo, lifetime)
-    algo = isnothing(context) ? init(algo, inputs_overrides...; lifetime) : _with_lifecycle(resolve(algo), context, (), ())
+    algo = isnothing(context) ? _init_plan(algo, inputs_overrides...; lifetime) : _with_lifecycle(resolve(algo), context, (), ())
     prepared_context = getpersistentcontext(algo)
     mode = _inline_process_mode(threaded)
 
-    p = InlineProcess{typeof(algo), typeof(prepared_context), typeof(lifetime),mode}(uuid1(), algo, prepared_context, false, UInt(1), lifetime, nothing, nothing)
+    p = InlineProcess{typeof(algo), typeof(prepared_context), typeof(lifetime),mode}(uuid1(), algo, prepared_context, false, UInt(1), lifetime, nothing, nothing, nothing)
     return p
 end
 
@@ -64,14 +80,14 @@ getcontext(ip::IP) where {IP<:InlineProcess} = context(ip)
 @inline set_endtime!(ip::InlineProcess) = (ip.endtime = time_ns())
 getalgo(ip::InlineProcess) = ip.algo
 
-@inline context(ip::InlineProcess, c) = (ip.context = c)
+@inline context(ip::InlineProcess, c) = (ip.context = strip_keymap(c))
 @inline _context(ip::InlineProcess) = ip.context::contexttype(ip)
-"""The process's context, with the `Unique` handles the user holds as keys found from types (`with_held_ids`)."""
-Base.@nospecializeinfer context(@nospecialize(ip::InlineProcess)) = with_held_ids(_context(ip))
+"""The process's context, with the plan's `UniqueKeyMap` back in its registry (`with_keymap`): `context(ip)[handle]`."""
+Base.@nospecializeinfer context(@nospecialize(ip::InlineProcess)) = with_keymap(_context(ip), ip.keymap)
 
 @inline function reset!(p::InlineProcess, inputs_overrides...)
     p.loopidx = 1
-    initialized = init(getalgo(p), inputs_overrides...; lifetime = lifetime(p))
+    initialized = _init_plan(getalgo(p), inputs_overrides...; lifetime = lifetime(p))
     p.context = getpersistentcontext(initialized)
     # TODO: Probably remove consumed flag
     p.consumed = false
@@ -96,7 +112,7 @@ end
     run_context = if isnothing(context)
         _context(p)
     else
-        context = strip_held_ids(context)
+        context = strip_keymap(context)
         @assert context isa contexttype(p) "Wrong context shape for this process\n Context is of type $(typeof(context)), but expected $(contexttype(p))."
         context
     end
@@ -121,7 +137,7 @@ end
     run_context = if isnothing(context)
         _context(p)
     else
-        context = strip_held_ids(context)
+        context = strip_keymap(context)
         @assert context isa contexttype(p) "Wrong context shape for this process\n Context is of type $(typeof(context)), but expected $(contexttype(p))."
         context
     end
