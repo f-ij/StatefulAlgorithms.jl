@@ -1,6 +1,6 @@
 #=
-Rewriting the `UniquePlanId`s in a value: `strip_unique` (Strip.jl) and `number_unique_ids` (Number.jl) are both this
-one walk, with another `rewrite_id`.
+Rewriting the `UniquePlanId`s in a value: `strip_unique` and `number_unique_ids` (RewriteModes.jl) are both this one
+walk, with another `rewrite_id`.
 
 `rewrite_unique_ids(v, rewrite)` rebuilds every part of `v` whose type mentions a `UniquePlanId`, giving each id
 `rewrite_id(rewrite, id)`. A rebuilt struct gets its type parameters from its new fields: a parameter a field is declared
