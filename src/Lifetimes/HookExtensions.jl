@@ -21,21 +21,21 @@ before the loop runs. A pause or close is not checked here: that is
     done >= lt.atleast && lt.cond(getindex(context, lt.vars...))
 
 # The same lifetime with its `Var`s given their context keys (`resolve_var_keys`, Hooks.jl).
-@inline _resolve_var_keys(vars::V, registry::R) where {V<:Tuple, R} = map(var -> (@inline resolve_var_key(var, registry)), vars)
+@inline _resolve_var_keys(vars::V, context::C) where {V<:Tuple, C} = map(var -> (@inline resolve_var_key(var, context)), vars)
 
-@inline function resolve_var_keys(lt::U, registry::R) where {V, F, U<:Until{V, F}, R}
-    vars = @inline _resolve_var_keys(lt.vars, registry)
+@inline function resolve_var_keys(lt::U, context::C) where {V, F, U<:Until{V, F}, C}
+    vars = @inline _resolve_var_keys(lt.vars, context)
     return Until{typeof(vars), F}(lt.cond, vars)
 end
-@inline function resolve_var_keys(lt::AL, registry::R) where {V, F, AL<:AtLeast{V, F}, R}
-    vars = @inline _resolve_var_keys(lt.vars, registry)
+@inline function resolve_var_keys(lt::AL, context::C) where {V, F, AL<:AtLeast{V, F}, C}
+    vars = @inline _resolve_var_keys(lt.vars, context)
     return AtLeast{typeof(vars), F}(lt.atleast, lt.cond, vars)
 end
-@inline function resolve_var_keys(lt::ROU, registry::R) where {V, F, ROU<:RepeatOrUntil{V, F}, R}
-    vars = @inline _resolve_var_keys(lt.vars, registry)
+@inline function resolve_var_keys(lt::ROU, context::C) where {V, F, ROU<:RepeatOrUntil{V, F}, C}
+    vars = @inline _resolve_var_keys(lt.vars, context)
     return RepeatOrUntil{typeof(vars), F}(lt.repeats, lt.cond, vars)
 end
-@inline function resolve_var_keys(lt::AAM, registry::R) where {V, F, AAM<:AtLeastAtMost{V, F}, R}
-    vars = @inline _resolve_var_keys(lt.vars, registry)
+@inline function resolve_var_keys(lt::AAM, context::C) where {V, F, AAM<:AtLeastAtMost{V, F}, C}
+    vars = @inline _resolve_var_keys(lt.vars, context)
     return AtLeastAtMost{typeof(vars), F}(lt.atleast, lt.repeats, lt.cond, vars)
 end

@@ -5,7 +5,7 @@ keep), with defaults a session type can overload. The stop check is a hook: Hook
 =#
 
 loopidx(s::ProcessSession) = s.loopidx
-setloopidx!(s::ProcessSession, value) = (s.loopidx = value)
+@inline setloopidx!(s::ProcessSession, value) = (s.loopidx = value)
 reset_loopidx!(s::ProcessSession) = setloopidx!(s, oneunit(loopidx(s)))
 
 # `% Int`, not `Int(…)`: the loop reads this before every step (the lifetime's stop check), and a conversion that can

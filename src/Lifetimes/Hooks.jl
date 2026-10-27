@@ -23,11 +23,13 @@ lifetime runs is the loop's bound, not this check.
 @inline lifetime_breakcondition(lifetime::LT, context::C, done::D) where {LT<:Lifetime, C, D<:Integer} = false
 
 """
-    resolve_var_keys(lifetime, registry) -> lifetime
+    resolve_var_keys(lifetime, context) -> lifetime
 
-`lifetime` with the `Var`s its condition reads given their context keys (`resolve_var_key`). The loop calls it once
-before the first step, so the stop check before every step reads its variables by key and never loads the registry
-(a load and a null check per step, which also made LLVM store the step counter to the session every step).
-`lifetime` itself by default (no `Var`s).
+`lifetime` with the `Var`s its condition reads given their context keys (`resolve_var_key`, from `context`'s
+registry, while compiling). Done before the loop: when an `InlineProcess` is built, in `run(ip; lifetime)`, and at the
+start of the loop for the other runs (which keeps a `Var` that has its key as it is, without reading the registry).
+So the stop check before every step reads its variables by key and never loads the registry (a load and a null check
+per step, which also made LLVM store the step counter to the session every step). `lifetime` itself by default (no
+`Var`s).
 """
-@inline resolve_var_keys(lifetime::LT, registry::R) where {LT<:Lifetime, R} = lifetime
+@inline resolve_var_keys(lifetime::LT, context::C) where {LT<:Lifetime, C} = lifetime

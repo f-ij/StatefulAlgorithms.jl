@@ -72,9 +72,8 @@ steps below 4.7–4.8 ms). So the uuid (`origin`) is data and never changes; the
    loop have no uuid in their types and compile once for every new set of `Unique`s. `Process` and `InlineProcess`
    hold the map in their own type (`keymap::K`, zero bytes); the loop and the steps get a session instead of the
    process (`ProcessSession`, `src/Sessions/`), reached through `run_session_loop`, whose arguments have no map, so
-   the loop is compiled once for every set of `Unique`s. An `InlineProcess` inlines the loop into `run(ip)` instead (`run_session_loop!`, on the
-   context its session holds), so a compiled run has no call around the loop: `run(ip)` is compiled for every set of
-   `Unique`s (when the process is built), reusing the loop's inference, as its argument types have no map.
+   the loop is compiled once for every set of `Unique`s (`run_session_loop!` for an `InlineProcess`, on the context
+   its session holds).
 6. What a process hands back has the map put back: `context(ip)` builds it typed (`attach_keymap`); a `Process`
    builds the user's context once each time its context changes (`set_user_context!`, after a run in `_finish_run!`)
    and `context(p)` reads it; `fetch(p)` and the plan `init` and `run(la)` return have it too (`with_keymap`). A

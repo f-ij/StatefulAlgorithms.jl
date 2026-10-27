@@ -91,12 +91,17 @@ so LLVM keeps the session's counters (`tickidx`) in registers.
     run_session_loop!(session::InlineSession, algo, lifetime, inputs) -> result
 
 The loop of an `InlineProcess` run on the context the session holds: it reads the context from the session and writes
-the context after the run back to it. Inlined into `run(ip)`, so a compiled run costs what the loop costs and nothing
-more (a call of its own costs about 2 ns per run). `run(ip)` is compiled for every set of `Unique` handles, and the
-loop with it; its inference is reused, as its argument types have no map, so only its machine code is made again (1-18
-ms per new set of handles, measured for 2-16 children). `InlineProcess` compiles `run(ip)` when it is built.
+the context after the run back to it. A call of its own, like `run_session_loop`: its arguments have no map in their
+types, so its machine code is made once for every set of `Unique` handles, and `run(ip)`, which is compiled per set,
+only calls it (2.2 ns per run; inlined, LLVM would make the loop's machine code again for every set, 24-28 ms for 16
+children). Its arguments are pointers and small values, so the call does not copy the context in or out. The
+lifetime's `Var`s have their keys before the call (`resolve_var_keys`, in `run(ip)` or when the process was built).
 """
-@inline function run_session_loop!(session::S, algo::A, lifetime::LT, inputs::I) where {C, S<:InlineSession{C}, A, LT, I<:NamedTuple}
+@noinline function run_session_loop!(session::S, algo::A, lifetime::LT, inputs::I) where {C, S<:InlineSession{C}, A, LT, I<:NamedTuple}
+    # Here, not in the caller: LLVM then knows the counter starts at 1 and that its memory is written before the loop,
+    # so it keeps the counter in a register (written once, at the end) and vectorizes steps the stop check cannot end.
+    # In the caller it made the loop store the counter every step, 5x slower for light steps.
+    reset_loopidx!(session)
     persistent_context, returnvalue = @inline loop(session, algo, session.context, lifetime, inputs, Resuming{false}())
     session.context = persistent_context
     return returnvalue
@@ -110,8 +115,9 @@ Run a single function in a loop indefinitely.
 
 @inline function loop(session::S, func::F, start_persistent_context::C, lifetime::LT, inputs::NamedTuple, ::Resuming{isresuming}, ::NonGenerated) where {S<:ProcessSession,F<:AbstractLoopAlgorithm,C<:ProcessContext,LT<:IndefiniteLifetime,isresuming}
     @inline before_while(session)
-    # The lifetime's `Var`s by key: the stop check before every step does not load the registry.
-    lifetime = @inline resolve_var_keys(lifetime, (@inline getregistry(start_persistent_context)))
+    # The lifetime's `Var`s by key: the stop check before every step does not load the registry. A lifetime whose
+    # `Var`s have their keys already (an `InlineProcess` gives them before the loop) stays as it is.
+    lifetime = @inline resolve_var_keys(lifetime, start_persistent_context)
 
     step_plan = @inline getplan(func)
     step_wiring = @inline _root_wiring_view(func, step_plan)
@@ -148,8 +154,9 @@ Base.@constprop :aggressive @inline function loop(session::S, algo::F, start_per
     @DebugMode "Running the loop for $repeats times from thread $(Threads.threadid())"
     @assert isresolved(algo) "Algo must be resolved before running the loop. Got algo $(algo) which is not resolved."
     @inline before_while(session)
-    # The lifetime's `Var`s by key: the stop check before every step does not load the registry.
-    lifetime = @inline resolve_var_keys(lifetime, (@inline getregistry(start_persistent_context)))
+    # The lifetime's `Var`s by key: the stop check before every step does not load the registry. A lifetime whose
+    # `Var`s have their keys already (an `InlineProcess` gives them before the loop) stays as it is.
+    lifetime = @inline resolve_var_keys(lifetime, start_persistent_context)
 
     step_plan = @inline getplan(algo)
     step_wiring = @inline _root_wiring_view(algo, step_plan)

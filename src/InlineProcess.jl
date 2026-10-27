@@ -58,8 +58,8 @@ Base.@nospecializeinfer function InlineProcess(@nospecialize(func), @nospecializ
     algo, prepared_context, lifetime, mode = _prepare_inline_process(strip_keymap(algo), inputs_overrides...;
         context = strip_keymap(context), lifetime = number_by_keymap_dynamic(lifetime, keymap), kwargs...)
     ip = _construct_inline_process(algo, prepared_context, lifetime, Val(mode), keymap)
-    # `run(ip)` has the loop inlined and is compiled for every set of `Unique` handles: compiled here, so the first
-    # run does not wait for it.
+    # `run(ip)` is compiled for every set of `Unique` handles (it is typed on the map): compiled here, so the first run
+    # does not wait for it. It is small: the loop is a call of its own (`run_session_loop!`).
     precompile(run, (typeof(ip),))
     return ip
 end
@@ -68,7 +68,10 @@ end
     lifetime = _inline_process_lifetime(algo, repeats, lifetime)
     lifetime = normalize_process_lifetime(algo, lifetime)
     algo = isnothing(context) ? _init_plan(algo, inputs_overrides...; lifetime) : _with_lifecycle(resolve(algo), context, (), ())
-    return algo, getpersistentcontext(algo), lifetime, _inline_process_mode(threaded)
+    prepared_context = getpersistentcontext(algo)
+    # The lifetime's `Var`s by key (`resolve_var_keys`), once: the loop reads them without the registry.
+    lifetime = resolve_var_keys(lifetime, prepared_context)
+    return algo, prepared_context, lifetime, _inline_process_mode(threaded)
 end
 
 # The only step typed on the map: compiled once per set of `Unique` handles, and small.
@@ -122,9 +125,12 @@ end
     return nothing
 end
 
-# A lifetime given to `run(ip)`: numbered as the plan numbers its handles while compiling (`number_by_keymap`).
+# A lifetime given to `run(ip)`: numbered as the plan numbers its handles while compiling (`number_by_keymap`), and its
+# `Var`s given their keys (`resolve_var_keys`; the key is found while compiling), before the call to the loop. The
+# process's own lifetime got its keys when the process was built.
 @inline _inline_run_lifetime(p::InlineProcess, algo, repeats, ::Nothing) = _inline_process_lifetime(algo, repeats, lifetime(p))
-@inline _inline_run_lifetime(p::InlineProcess, algo, repeats, lt) = _inline_process_lifetime(algo, repeats, number_by_keymap(lt, getfield(p, :keymap)))
+@inline _inline_run_lifetime(p::InlineProcess, algo, repeats, lt) =
+    resolve_var_keys(_inline_process_lifetime(algo, repeats, number_by_keymap(lt, getfield(p, :keymap))), _context(p))
 
 @inline function Base.run(p::InlineProcess, inputs_overrides...; context = nothing, repeats=nothing, lifetime=nothing, threaded=nothing, kwargs...)
     algo = getalgo(p)
@@ -151,12 +157,11 @@ end
 
 """
 One run of `p`: the loop on the process's session, which holds the process's context and keeps the context after the
-run (`run_session_loop!`, inlined, so a compiled run costs only the loop).
+run (`run_session_loop!`, a call whose arguments have no map, so the loop is compiled once for every set of `Unique`
+handles).
 """
 @inline function _run_inline!(p::InlineProcess, algo::A, run_lifetime::LT, runtime_inputs::I) where {A, LT, I}
-    session = getsession(p)
-    reset_loopidx!(session)
-    return run_session_loop!(session, algo, run_lifetime, runtime_inputs)
+    return run_session_loop!(getsession(p), algo, run_lifetime, runtime_inputs)
 end
 
 @inline function init_and_run(p::InlineProcess, inputs_overrides...)
