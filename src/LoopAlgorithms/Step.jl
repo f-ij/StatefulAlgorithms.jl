@@ -30,12 +30,12 @@ Terms used in this file:
        local child1 = getfield(algos, 1)
        local cursor1 = child_loop_cursor(cursor, Val(1))
        local wiring1 = child_wiring_view(wiring, Val(1))
-       lc = _step!(child1, cursor1, lc, wiring1, Namespace1(), process, lifetime)
+       lc = _step!(child1, cursor1, lc, wiring1, Namespace1(), session, lifetime)
        # child 2, every step, a plan: the same three locals, then the lines of 2. or 3. for child 2, here
        # children 3 and 4, on the same schedule (say `@every 2`): the locals of both, then one branch
        lc = _conditional_step(should_run_schedule(schedule3, inc, getpersistent(lc)),
                               (child3, child4), (cursor3, cursor4), lc, (wiring3, wiring4), (Namespace3(), Namespace4()),
-                              process, lifetime)
+                              session, lifetime)
        inc!(cursor, ca)
        lc = leave_scope(lc, outer)
        return lc
@@ -53,12 +53,12 @@ Terms used in this file:
        local outer = lc
        lc = enter_scope(lc, wiring)
        # child 1, a leaf: the three locals, then one call that runs all its repeats
-       lc = _subroutine_step!(lc, child1, cursor1, r, cursor, process, lifetime, 1, repeat1, wiring1, Namespace1())
+       lc = _subroutine_step!(lc, child1, cursor1, r, cursor, session, lifetime, 1, repeat1, wiring1, Namespace1())
        # child 2, a plan: the three locals, then its repeat loop, here (`_inline_routine_child_exprs`)
        local resume_point = get_resume_point(cursor, 2)
        local start_persistent = getpersistent(lc)
        local runtime = getruntime(lc)
-       local carried = create_carried(child2, cursor2, lc, wiring2, Namespace2(), process, lifetime)   # the fields child 2 writes
+       local carried = create_carried(child2, cursor2, lc, wiring2, Namespace2(), session, lifetime)   # the fields child 2 writes
        local count = routine_repeat_count(repeat2)
        for lidx in resume_point:count
            if lifetime_breakcondition(repeat2, <context>, lidx - 1)    # child 2's own stop condition
@@ -68,8 +68,8 @@ Terms used in this file:
            # the lines of 2. or 3. for child 2, on `stepped` instead of `lc`
            runtime = getruntime(stepped)
            carried = next_carried(carried, getpersistent(stepped))
-           tick!(process)
-           if process_breakcondition(process)                          # pause or close of the process
+           tick!(session)
+           if process_breakcondition(session)                          # pause or close of the process
                set_resume_point!(cursor, 2, lidx + 1)
                @goto done
            end
@@ -91,8 +91,8 @@ Terms used in this file:
        local runtime_context_type = RuntimeContextType
        local algos = getalgos(plan)
        # child 1, a leaf: the three locals, then
-       writes = _merge_writable_fields(writes, _find_writable_fields(child1, cursor1, persistent_context, runtime_context_type, wiring1, Namespace1(), process, lifetime))
-       runtime_context_type = _runtime_context_type_after_node_step(child1, cursor1, persistent_context, runtime_context_type, wiring1, Namespace1(), process, lifetime)
+       writes = _merge_writable_fields(writes, _find_writable_fields(child1, cursor1, persistent_context, runtime_context_type, wiring1, Namespace1(), session, lifetime))
+       runtime_context_type = _runtime_context_type_after_node_step(child1, cursor1, persistent_context, runtime_context_type, wiring1, Namespace1(), session, lifetime)
        # child 2, a plan: the three locals, then the lines of 4. for child 2's children, here, then
        runtime_context_type = _runtime_context_type_after_leaving(runtime_context_type, typeof(wiring2))
        return writes
@@ -119,11 +119,11 @@ _plan_step_exprs(PlanType::Type{<:Routine}, plan, cursor, wiring, lc) = _routine
 
 """
 The lines that step one child once, assigning `lc`: the child's own lines (`_plan_step_exprs`) when it is a plan,
-otherwise the single line `lc = _step!(child, cursor, lc, wiring, namespace, process, lifetime)`.
+otherwise the single line `lc = _step!(child, cursor, lc, wiring, namespace, session, lifetime)`.
 """
 function _child_step_exprs(ChildType::Type, child, cursor, wiring, namespace_expr, lc)
     steps_inline(ChildType) && return _plan_step_exprs(ChildType, child, cursor, wiring, lc)
-    return Any[:($lc = @inline _step!($child, $cursor, $lc, $wiring, $namespace_expr, process, lifetime))]
+    return Any[:($lc = @inline _step!($child, $cursor, $lc, $wiring, $namespace_expr, session, lifetime))]
 end
 
 """
@@ -168,7 +168,7 @@ function _composite_step_exprs(PlanType::Type, plan, cursor, wiring, lc)
         tuple_of(k) = Expr(:tuple, (g[k] for g in group)...)
         namespaces = Expr(:tuple, (:($(fieldtype(namespace_types, j))()) for j in i:last_in_group)...)
         run = :(@inline should_run_schedule($(_schedule_entry_expr(PlanType, plan, i)), $this_inc, (@inline getpersistent($lc))))
-        push!(exprs, :($lc = @inline _conditional_step($run, $(tuple_of(2)), $(tuple_of(3)), $lc, $(tuple_of(4)), $namespaces, process, lifetime)))
+        push!(exprs, :($lc = @inline _conditional_step($run, $(tuple_of(2)), $(tuple_of(3)), $lc, $(tuple_of(4)), $namespaces, session, lifetime)))
         i = last_in_group + 1
     end
     push!(exprs, :(@inline inc!($cursor, $plan)))
@@ -196,7 +196,7 @@ function _routine_step_exprs(PlanType::Type, plan, cursor, wiring, lc)
         else
             # A single repeat (`RepeatOnce`) needs no loop.
             substep = fieldtype(fieldtype(PlanType, 2), i) <: RepeatOnce ? :_subroutine_step_once! : :_subroutine_step!
-            push!(exprs, :($lc = @inline $substep($lc, $child, $child_cursor, $plan, $cursor, process, lifetime, $i, $repeat_value, $child_wiring, $namespace_expr)))
+            push!(exprs, :($lc = @inline $substep($lc, $child, $child_cursor, $plan, $cursor, session, lifetime, $i, $repeat_value, $child_wiring, $namespace_expr)))
         end
     end
     push!(exprs, :($lc = @inline leave_scope($lc, $outer)))
@@ -225,7 +225,7 @@ function _inline_routine_child_exprs(ChildType::Type, child, child_cursor, child
                    _child_step_exprs(ChildType, child, child_cursor, child_wiring, namespace_expr, stepped)...,
                    :($runtime = @inline getruntime($stepped)),
                    :($carried = @inline next_carried($carried, (@inline getpersistent($stepped)))),
-                   :(@inline tick!(process))]
+                   :(@inline tick!(session))]
     end
     # Before a repeat, with `done_expr` repeats done: the child's own stop condition (`Until`, ...) ends the child, as a
     # `while` loop's condition (if it already holds, the child does not run). It may read declared locals, so it sees
@@ -237,7 +237,7 @@ function _inline_routine_child_exprs(ChildType::Type, child, child_cursor, child
     end
     # After repeat `idx_expr`: a pause or close of the process stops the child; it resumes at the next repeat.
     paused_after(idx_expr) = quote
-        if @inline process_breakcondition(process)
+        if @inline process_breakcondition(session)
             @inline set_resume_point!($routine_cursor, $i, $idx_expr + 1)
             $(Expr(:symbolicgoto, done))
         end
@@ -245,7 +245,7 @@ function _inline_routine_child_exprs(ChildType::Type, child, child_cursor, child
     body = Any[:(local $resume_point = @inline get_resume_point($routine_cursor, $i)),
                :(local $start_persistent = @inline getpersistent($lc)),
                :(local $runtime = @inline getruntime($lc)),
-               :(local $carried = @inline create_carried($child, $child_cursor, $lc, $child_wiring, $namespace_expr, process, lifetime))]
+               :(local $carried = @inline create_carried($child, $child_cursor, $lc, $child_wiring, $namespace_expr, session, lifetime))]
     if is_repeat_once
         push!(body, :(if $resume_point <= 1; $(repeat_once()...); $(paused_after(resume_point)); end))   # `RepeatOnce`: no own condition
     else
@@ -266,10 +266,10 @@ end
 Step composite `ca` once and return the `LoopContext` after it: each child whose schedule is due, in order, nested
 plans inline (the file header, 2.).
 
-`process` and `lifetime` are passed down to the children so that routines inside can check for a pause or close
+`session` and `lifetime` are passed down to the children so that routines inside can check for a pause or close
 without keeping them in the context.
 """
-Base.@constprop :aggressive @inline @generated function _step!(ca::PlanType, cursor::CursorType, lc::LoopContextType, wiring::WiringViewType, namespace::NamespaceType, process::ProcessType, lifetime::LifetimeType) where {PlanType <: CompositeAlgorithm, CursorType<:CompositeLoopCursor, LoopContextType <: LoopContext, WiringViewType <: PlanWiringView, NamespaceType <: Namespace, ProcessType <: AbstractProcess, LifetimeType <: Lifetime}
+Base.@constprop :aggressive @inline @generated function _step!(ca::PlanType, cursor::CursorType, lc::LoopContextType, wiring::WiringViewType, namespace::NamespaceType, session::SessionType, lifetime::LifetimeType) where {PlanType <: CompositeAlgorithm, CursorType<:CompositeLoopCursor, LoopContextType <: LoopContext, WiringViewType <: PlanWiringView, NamespaceType <: Namespace, SessionType <: ProcessSession, LifetimeType <: Lifetime}
     return Expr(:block, _plan_step_exprs(PlanType, :ca, :cursor, :wiring, :lc)..., :(return lc))
 end
 
@@ -279,7 +279,7 @@ what follows it before the condition is known. Without it, LLVM turns a schedule
 `select`: the block is computed every step and the next step waits for the schedule check. As a jump, the CPU's branch
 predictor learns the taken/not-taken pattern, which repeats exactly for a fixed interval, so the block costs only on
 the steps it runs. The asm is marked as touching only memory no Julia object lives in (`inaccessiblemem`), so values
-held in memory (a process's counters, a cursor) need not be reloaded after it.
+held in memory (a session's counters, a cursor) need not be reloaded after it.
 """
 @inline _keep_branch() = Base.llvmcall(("""
     define void @entry() #0 {
@@ -291,7 +291,7 @@ held in memory (a process's counters, a cursor) need not be reloaded after it.
     """, "entry"), Cvoid, Tuple{})
 
 """
-    _conditional_step(run, children, cursors, lc, wirings, namespaces, process, lifetime)
+    _conditional_step(run, children, cursors, lc, wirings, namespaces, session, lifetime)
 
 Return `lc` after `_step!` of each child in order when `run` is `true`, else `lc` unchanged. `children`, `cursors`,
 `wirings` and `namespaces` are tuples, one entry per child.
@@ -302,17 +302,17 @@ they ran and its placeholder when not. When inference cannot tell which `LoopCon
 chosen: each result is returned as it is, and the call's return type is their union. The steps run on their own
 branch (`_keep_branch`).
 """
-@inline function _conditional_step(run::Bool, children::ChildrenType, cursors::CursorsType, lc::LoopContextType, wirings::WiringViewsType, namespaces::NamespacesType, process::ProcessType, lifetime::LifetimeType) where {ChildrenType<:Tuple, CursorsType<:Tuple, LoopContextType<:LoopContext, WiringViewsType<:Tuple, NamespacesType<:Tuple, ProcessType, LifetimeType}
-    Stepped = Core.Compiler.return_type(_step_children!, Tuple{LoopContextType, ChildrenType, CursorsType, WiringViewsType, NamespacesType, ProcessType, LifetimeType})
+@inline function _conditional_step(run::Bool, children::ChildrenType, cursors::CursorsType, lc::LoopContextType, wirings::WiringViewsType, namespaces::NamespacesType, session::SessionType, lifetime::LifetimeType) where {ChildrenType<:Tuple, CursorsType<:Tuple, LoopContextType<:LoopContext, WiringViewsType<:Tuple, NamespacesType<:Tuple, SessionType, LifetimeType}
+    Stepped = Core.Compiler.return_type(_step_children!, Tuple{LoopContextType, ChildrenType, CursorsType, WiringViewsType, NamespacesType, SessionType, LifetimeType})
     RanType = _compute_conditional_loopcontext_type(LoopContextType, Stepped, true)
-    RanType === Nothing && return run ? (_keep_branch(); @inline _step_children!(lc, children, cursors, wirings, namespaces, process, lifetime)) : lc
-    run && (_keep_branch(); return @inline _as_conditional((@inline _step_children!(lc, children, cursors, wirings, namespaces, process, lifetime)), RanType))
+    RanType === Nothing && return run ? (_keep_branch(); @inline _step_children!(lc, children, cursors, wirings, namespaces, session, lifetime)) : lc
+    run && (_keep_branch(); return @inline _as_conditional((@inline _step_children!(lc, children, cursors, wirings, namespaces, session, lifetime)), RanType))
     return @inline _as_conditional(lc, _compute_conditional_loopcontext_type(LoopContextType, Stepped, false))
 end
 
 """Return `lc` after `_step!` of each child in turn; the arguments are tuples as in `_conditional_step`."""
-@inline @generated function _step_children!(lc::LoopContextType, children::ChildrenType, cursors, wirings, namespaces, process, lifetime) where {LoopContextType<:LoopContext, ChildrenType<:Tuple}
-    steps = (:(lc = @inline _step!(getfield(children, $k), getfield(cursors, $k), lc, getfield(wirings, $k), getfield(namespaces, $k), process, lifetime)) for k in 1:fieldcount(ChildrenType))
+@inline @generated function _step_children!(lc::LoopContextType, children::ChildrenType, cursors, wirings, namespaces, session, lifetime) where {LoopContextType<:LoopContext, ChildrenType<:Tuple}
+    steps = (:(lc = @inline _step!(getfield(children, $k), getfield(cursors, $k), lc, getfield(wirings, $k), getfield(namespaces, $k), session, lifetime)) for k in 1:fieldcount(ChildrenType))
     return Expr(:block, steps..., :(return lc))
 end
 
@@ -427,17 +427,17 @@ function _children_writes_exprs!(exprs, PlanType::Type, plan, cursor, wiring)
             _children_writes_exprs!(exprs, ChildType, child, child_cursor, child_wiring)
             push!(exprs, :(runtime_context_type = @inline _runtime_context_type_after_leaving(runtime_context_type, typeof($child_wiring))))
         else
-            push!(exprs, :(writes = @inline _merge_writable_fields(writes, (@inline _find_writable_fields($child, $child_cursor, persistent_context, runtime_context_type, $child_wiring, $child_namespace, process, lifetime)))))
-            push!(exprs, :(runtime_context_type = @inline _runtime_context_type_after_node_step($child, $child_cursor, persistent_context, runtime_context_type, $child_wiring, $child_namespace, process, lifetime)))
+            push!(exprs, :(writes = @inline _merge_writable_fields(writes, (@inline _find_writable_fields($child, $child_cursor, persistent_context, runtime_context_type, $child_wiring, $child_namespace, session, lifetime)))))
+            push!(exprs, :(runtime_context_type = @inline _runtime_context_type_after_node_step($child, $child_cursor, persistent_context, runtime_context_type, $child_wiring, $child_namespace, session, lifetime)))
         end
     end
     return exprs
 end
 
 # The persistent fields a composite or routine writes in one step, as a `Val` of names (see src/Context/Carried/Writes.jl).
-@inline @generated _find_writable_fields(plan::PlanType, cursor::CursorType, persistent_context::PersistentContextType, ::Type{RuntimeContextType}, wiring::WiringViewType, namespace::NamespaceType, process::ProcessType, lifetime::LifetimeType) where {PlanType<:CompositeAlgorithm, CursorType, PersistentContextType<:ProcessContext, RuntimeContextType, WiringViewType, NamespaceType, ProcessType, LifetimeType} =
+@inline @generated _find_writable_fields(plan::PlanType, cursor::CursorType, persistent_context::PersistentContextType, ::Type{RuntimeContextType}, wiring::WiringViewType, namespace::NamespaceType, session::SessionType, lifetime::LifetimeType) where {PlanType<:CompositeAlgorithm, CursorType, PersistentContextType<:ProcessContext, RuntimeContextType, WiringViewType, NamespaceType, SessionType, LifetimeType} =
     _children_writes_expr(PlanType)
-@inline @generated _find_writable_fields(plan::PlanType, cursor::CursorType, persistent_context::PersistentContextType, ::Type{RuntimeContextType}, wiring::WiringViewType, namespace::NamespaceType, process::ProcessType, lifetime::LifetimeType) where {PlanType<:Routine, CursorType, PersistentContextType<:ProcessContext, RuntimeContextType, WiringViewType, NamespaceType, ProcessType, LifetimeType} =
+@inline @generated _find_writable_fields(plan::PlanType, cursor::CursorType, persistent_context::PersistentContextType, ::Type{RuntimeContextType}, wiring::WiringViewType, namespace::NamespaceType, session::SessionType, lifetime::LifetimeType) where {PlanType<:Routine, CursorType, PersistentContextType<:ProcessContext, RuntimeContextType, WiringViewType, NamespaceType, SessionType, LifetimeType} =
     _children_writes_expr(PlanType)
 
 """
@@ -454,13 +454,13 @@ is past the last repeat.
     func_cursor::FS,
     r::R,
     routine_cursor::RS,
-    process::P,
+    session::P,
     lifetime::LT,
     idx::Int,
     subroutine_lifetime::SL,
     child_step_wiring::W,
     namespace::N,
-) where {L<:LoopContext,F,FS<:AbstractLoopCursor,R<:Routine,RS<:Union{DirectRoutineCursor,PausableRoutineCursor},P<:AbstractProcess,LT<:Lifetime,SL<:Lifetime,W,N<:Namespace}
+) where {L<:LoopContext,F,FS<:AbstractLoopCursor,R<:Routine,RS<:Union{DirectRoutineCursor,PausableRoutineCursor},P<:ProcessSession,LT<:Lifetime,SL<:Lifetime,W,N<:Namespace}
     resume_point = @inline get_resume_point(routine_cursor, idx)
     this_repeat_count = @inline routine_repeat_count(subroutine_lifetime)
     persistent_context = @inline getpersistent(lc)
@@ -468,7 +468,7 @@ is past the last repeat.
     if resume_point <= this_repeat_count
         # The repeats carry only the fields the child writes, as the loops do (see src/Context/Carried/Carry.jl);
         # `persistent_context` stays the routine's starting context, only `carried` changes.
-        carried = @inline create_carried(func, func_cursor, lc, child_step_wiring, namespace, process, lifetime)
+        carried = @inline create_carried(func, func_cursor, lc, child_step_wiring, namespace, session, lifetime)
         # Every repeat the same:
         # - before it, the child's own stop condition (`Until`, ...), as a `while` loop's condition: if it already holds,
         #   the child does not run. It gets the number of repeats done.
@@ -482,11 +482,11 @@ is past the last repeat.
             if @inline lifetime_breakcondition(subroutine_lifetime, (@inline final_context(LoopContext((@inline with_carried(persistent_context, carried)), runtime_context))), lidx - 1)
                 break
             end
-            stepped_lc = @inline _step!(func, func_cursor, (@inline withcontexts(lc, (@inline with_carried(persistent_context, carried)), runtime_context)), child_step_wiring, namespace, process, lifetime)
+            stepped_lc = @inline _step!(func, func_cursor, (@inline withcontexts(lc, (@inline with_carried(persistent_context, carried)), runtime_context)), child_step_wiring, namespace, session, lifetime)
             runtime_context = @inline getruntime(stepped_lc)
             carried = @inline next_carried(carried, (@inline getpersistent(stepped_lc)))
-            @inline tick!(process)
-            if @inline process_breakcondition(process)
+            @inline tick!(session)
+            if @inline process_breakcondition(session)
                 @inline set_resume_point!(routine_cursor, idx, lidx + 1)
                 break
             end
@@ -508,18 +508,18 @@ after the step stays.
     func_cursor::FS,
     r::R,
     routine_cursor::RS,
-    process::P,
+    session::P,
     lifetime::LT,
     idx::Int,
     subroutine_lifetime::SL,
     child_step_wiring::W,
     namespace::N,
-) where {L<:LoopContext,F,FS<:AbstractLoopCursor,R<:Routine,RS<:Union{DirectRoutineCursor,PausableRoutineCursor},P<:AbstractProcess,LT<:Lifetime,SL<:Lifetime,W,N<:Namespace}
+) where {L<:LoopContext,F,FS<:AbstractLoopCursor,R<:Routine,RS<:Union{DirectRoutineCursor,PausableRoutineCursor},P<:ProcessSession,LT<:Lifetime,SL<:Lifetime,W,N<:Namespace}
     resume_point = @inline get_resume_point(routine_cursor, idx)
     if resume_point <= 1   # `RepeatOnce`: no own stop condition, only a pause or close after the repeat
-        lc = @inline _step!(func, func_cursor, lc, child_step_wiring, namespace, process, lifetime)
-        @inline tick!(process)
-        if @inline process_breakcondition(process)
+        lc = @inline _step!(func, func_cursor, lc, child_step_wiring, namespace, session, lifetime)
+        @inline tick!(session)
+        if @inline process_breakcondition(session)
             @inline set_resume_point!(routine_cursor, idx, resume_point + 1)
         end
     end
@@ -531,7 +531,7 @@ Step routine `r` once and return the `LoopContext` after it: each child in order
 resume point, until its repeat is done, its stop condition holds, or the process is paused or closed. Nested plans are
 written inline (the file header, 3.).
 """
-Base.@constprop :aggressive @inline @generated function _step!(r::PlanType, cursor::CursorType, lc::LoopContextType, wiring::WiringViewType, namespace::NamespaceType, process::ProcessType, lifetime::LifetimeType) where {PlanType <: Routine, CursorType<:Union{DirectRoutineCursor,PausableRoutineCursor}, LoopContextType <: LoopContext, WiringViewType <: PlanWiringView, NamespaceType <: Namespace, ProcessType <: AbstractProcess, LifetimeType <: Lifetime}
+Base.@constprop :aggressive @inline @generated function _step!(r::PlanType, cursor::CursorType, lc::LoopContextType, wiring::WiringViewType, namespace::NamespaceType, session::SessionType, lifetime::LifetimeType) where {PlanType <: Routine, CursorType<:Union{DirectRoutineCursor,PausableRoutineCursor}, LoopContextType <: LoopContext, WiringViewType <: PlanWiringView, NamespaceType <: Namespace, SessionType <: ProcessSession, LifetimeType <: Lifetime}
     return Expr(:block, _plan_step_exprs(PlanType, :r, :cursor, :wiring, :lc)..., :(return lc))
 end
 
@@ -539,15 +539,15 @@ end
 Step the plan of `la` once on `persistent_context` and return the persistent context after it. For tests and for
 driving a plan by hand.
 
-It builds what `run` would provide (a `LoopRunProcess` with an `Indefinite` lifetime, a fresh cursor, an empty
+It builds what `run` would provide (an `InlineSession` with an `Indefinite` lifetime, a fresh cursor, an empty
 runtime context) and calls the same `_step!` that `run` calls.
 """
 @inline function _step!(la::LA, persistent_context::C) where {LA<:LoopSpec, C<:AbstractContext}
     lifetime = Indefinite()
-    process = LoopRunProcess(lifetime)
+    session = InlineSession()
     plan = @inline getplan(la)
     cursor = @inline loop_cursor(plan, Val(false))
     runtime_context = @inline _empty_context()
-    stepped_lc = @inline _step!(plan, cursor, LoopContext(persistent_context, runtime_context), PlanWiringView(getwiring(plan)), Namespace{nothing}(), process, lifetime)
+    stepped_lc = @inline _step!(plan, cursor, LoopContext(persistent_context, runtime_context), PlanWiringView(getwiring(plan)), Namespace{nothing}(), session, lifetime)
     return @inline getpersistent(stepped_lc)
 end

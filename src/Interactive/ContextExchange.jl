@@ -246,9 +246,9 @@ end
     lc::L,
     ::W,
     ::Namespace{Name},
-    process::P,
+    session::P,
     lifetime::LT,
-) where {E<:ContextExchange, L<:LoopContext, W<:PlanWiringView, Name, P<:AbstractProcess, LT<:Lifetime}
+) where {E<:ContextExchange, L<:LoopContext, W<:PlanWiringView, Name, P<:ProcessSession, LT<:Lifetime}
     persistent_context = @inline getpersistent(lc)
     store = _context_exchange_store(persistent_context, Name)
     _context_exchange_due!(store) || return lc

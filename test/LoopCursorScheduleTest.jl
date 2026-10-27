@@ -47,8 +47,8 @@ end
     run(p2); wait(p2)
     @test context(p1)[LoopCursorIntervalCounter].count == 0
     @test context(p2)[LoopCursorIntervalCounter].count == 0
-    @test isnothing(p1.loop_cursor)
-    @test isnothing(p2.loop_cursor)
+    @test isnothing(StatefulAlgorithms.getsession(p1).loop_cursor)
+    @test isnothing(StatefulAlgorithms.getsession(p2).loop_cursor)
 
     direct_cursor = StatefulAlgorithms.loop_cursor(routine, Val(false))
     pausable_cursor = StatefulAlgorithms.loop_cursor(routine, Val(true))
@@ -63,13 +63,13 @@ end
     sleep(0.01)
     pause(paused)
     wait(paused)
-    @test paused.loop_cursor isa StatefulAlgorithms.PausableRoutineCursor
-    @test !isempty(StatefulAlgorithms.resume_idxs(paused.loop_cursor))
-    resumed_cursor = @inferred StatefulAlgorithms._loop_cursor(paused, StatefulAlgorithms.getplan(paused.algo), StatefulAlgorithms.Resuming{true}())
-    @test resumed_cursor === paused.loop_cursor
-    @test @inferred(StatefulAlgorithms.getloopcursor(paused)) === paused.loop_cursor
+    @test StatefulAlgorithms.getsession(paused).loop_cursor isa StatefulAlgorithms.PausableRoutineCursor
+    @test !isempty(StatefulAlgorithms.resume_idxs(StatefulAlgorithms.getsession(paused).loop_cursor))
+    resumed_cursor = @inferred StatefulAlgorithms._loop_cursor(StatefulAlgorithms.getsession(paused), StatefulAlgorithms.getplan(paused.algo), StatefulAlgorithms.Resuming{true}())
+    @test resumed_cursor === StatefulAlgorithms.getsession(paused).loop_cursor
+    @test @inferred(StatefulAlgorithms.getloopcursor(paused)) === StatefulAlgorithms.getsession(paused).loop_cursor
     close(paused)
-    @test isnothing(paused.loop_cursor)
+    @test isnothing(StatefulAlgorithms.getsession(paused).loop_cursor)
     @test_throws TypeError StatefulAlgorithms.getloopcursor(paused)
 
     struct LoopRunIfFlag <: AlgoState end

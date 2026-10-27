@@ -34,8 +34,13 @@ module StatefulAlgorithms
     include("Lifetimes/Lifetimes.jl")
     include("Lifetimes/Hooks.jl")
     include("Lifetimes/HookExtensions.jl")
+    include("Sessions/Sessions.jl")
+    include("Sessions/Interface.jl")
+    include("Sessions/Hooks.jl")
+    include("Sessions/InlineSession.jl")
+    include("Sessions/InteractiveSession.jl")
+    include("Sessions/HookExtensions.jl")
     include("AbstractProcesses/Interface.jl")
-    include("AbstractProcesses/Hooks.jl")
     include("ProcessEntities/ProcessEntities.jl")
 
 
@@ -52,6 +57,7 @@ module StatefulAlgorithms
 
     include("RoutingInterface/RoutingInterface.jl")
     include("Context/Context.jl")
+    include("Identifiable/UniquePlanId/ContextKeymap.jl")
     include("Identifiable/Init.jl")
     include("Reports/Reports.jl")
 

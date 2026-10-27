@@ -4,7 +4,7 @@ Extendable API of lifetimes: the logical stop check, whether a lifetime's own co
 Each function here has the default every lifetime gets. Extended in HookExtensions.jl next to this file: `Until`,
 `AtLeast`, `RepeatOrUntil`, `AtLeastAtMost`.
 
-The interactive stop check, a pause or close of the process, is `process_breakcondition` (AbstractProcesses/Hooks.jl).
+The interactive stop check, a pause or close of the process, is `process_breakcondition` (Sessions/Hooks.jl).
 =#
 
 """

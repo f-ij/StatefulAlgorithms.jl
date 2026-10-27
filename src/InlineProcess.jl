@@ -5,19 +5,18 @@ Mainly used to compose algorithms in tight loops, plugging into the ProcessLoopA
 
 This doesn't provide the multitasking features of Process, but is faster to restart
 """
-mutable struct InlineProcess{TD,ContextType, Lt,Mode} <: AbstractProcess
+mutable struct InlineProcess{TD,ContextType, Lt,Mode,K} <: AbstractProcess
     const id::UUID
-    algo::TD
-    context::ContextType
+    algo::TD            # the plan, without the map (the loop's type)
+    context::ContextType # its context, without the map (the loop's type)
     consumed::Bool
-    loopidx::UInt
-    lifetime::Lt
-    starttime::Union{Nothing,Float64,UInt64}
-    endtime::Union{Nothing,Float64,UInt64}
-    # The plan's `UniqueKeyMap` (or `nothing`), out of the types the loop compiles for; see `Process`.
-    keymap::Any
-    # The context handed to the user (`context(ip)`), built when the process's context changes; see `Process`.
-    user_context::Any
+    lifetime::Lt        # its `Var`s numbered as the plan numbers its handles
+    # The plan's `UniqueKeyMap` (zero bytes) or `nothing`: in the type, so what the user does with the process is typed
+    # (`context(ip)[handle]`, `run(ip; lifetime)` numbering while compiling). Never passed to the loop.
+    const keymap::K
+    # The run's counter and times, one session for every run (Sessions/InlineSession.jl): what the loop gets instead of
+    # the process.
+    const session::InlineSession
 end
 #TODO Improve context semantics
 contexttype(::Union{InlineProcess{TD,ContextType}, Type{<:InlineProcess{TD,ContextType}}}) where {TD,ContextType} = ContextType
@@ -48,31 +47,30 @@ end
 """
     InlineProcess(func, Init(...), Override(...); threaded, repeats, lifetime, context)
 
-Resolves `func` first (untyped), keeps the plan's `UniqueKeyMap` on the process and builds the process on the plan
-without it (`strip_keymap`), as `Process` does.
+Resolves `func` first (untyped) and prepares the plan, its context and the lifetime without the plan's `UniqueKeyMap`
+(`strip_keymap`, `number_by_keymap_dynamic`), so a new set of `Unique` handles compiles none of that again. Only the
+process itself has the map in its type (`keymap`).
 """
 Base.@nospecializeinfer function InlineProcess(@nospecialize(func), @nospecialize(inputs_overrides...); context = nothing, @nospecialize(lifetime = nothing), kwargs...)
     algo = func isa LoopSpec ? func : normalize_process_algo(func)
     algo isa LoopSpec && (algo = resolve(algo))
     keymap = getkeymap(algo)
-    # The lifetime is not part of the plan: its `Var`s get the plan's numbers here, while the map is known (as `Process`).
-    p = _new_inline_process(strip_keymap(algo), inputs_overrides...; context = strip_keymap(context),
-        lifetime = number_by_keymap(lifetime, keymap), kwargs...)
-    setfield!(p, :keymap, keymap)   # not `p.keymap = `: that compiles `setproperty!` for every map type
-    set_user_context!(p, _context(p))
-    return p
+    # The lifetime is not part of the plan: its `Var`s get the plan's numbers here, while the map is known.
+    algo, prepared_context, lifetime, mode = _prepare_inline_process(strip_keymap(algo), inputs_overrides...;
+        context = strip_keymap(context), lifetime = number_by_keymap_dynamic(lifetime, keymap), kwargs...)
+    return _construct_inline_process(algo, prepared_context, lifetime, Val(mode), keymap)
 end
 
-@inline function _new_inline_process(algo, inputs_overrides...; threaded=false, repeats=nothing, lifetime=nothing, context=nothing)
+@inline function _prepare_inline_process(algo, inputs_overrides...; threaded=false, repeats=nothing, lifetime=nothing, context=nothing)
     lifetime = _inline_process_lifetime(algo, repeats, lifetime)
     lifetime = normalize_process_lifetime(algo, lifetime)
     algo = isnothing(context) ? _init_plan(algo, inputs_overrides...; lifetime) : _with_lifecycle(resolve(algo), context, (), ())
-    prepared_context = getpersistentcontext(algo)
-    mode = _inline_process_mode(threaded)
-
-    p = InlineProcess{typeof(algo), typeof(prepared_context), typeof(lifetime),mode}(uuid1(), algo, prepared_context, false, UInt(1), lifetime, nothing, nothing, nothing, nothing)
-    return p
+    return algo, getpersistentcontext(algo), lifetime, _inline_process_mode(threaded)
 end
+
+# The only step typed on the map: compiled once per set of `Unique` handles, and small.
+_construct_inline_process(algo::TD, context::C, lifetime::Lt, ::Val{mode}, keymap::K) where {TD, C, Lt, mode, K} =
+    InlineProcess{TD, C, Lt, mode, K}(uuid1(), algo, context, false, lifetime, keymap, InlineSession())
 
 @inline isthreaded(ip::InlineProcess{TD,ContextType,Lt,Mode}) where {TD,ContextType,Lt,Mode} = Mode == :threaded
 @inline isasync(ip::InlineProcess{TD,ContextType,Lt,Mode}) where {TD,ContextType,Lt,Mode} = Mode == :async
@@ -81,21 +79,19 @@ end
 @inline lifetime(ip::IP) where {IP<:InlineProcess} = ip.lifetime
 getcontext(ip::IP) where {IP<:InlineProcess} = context(ip)
 
-@inline set_starttime!(ip::InlineProcess) = (ip.starttime = time_ns())
-@inline set_endtime!(ip::InlineProcess) = (ip.endtime = time_ns())
 getalgo(ip::InlineProcess) = ip.algo
 
+"""Set the process's context to `c` (a context from `context(ip)` has the map: it is taken out)."""
 @inline function context(ip::InlineProcess, c)
-    ip.context = strip_keymap(c)   # a context the user got from `context(ip)` carries the map
-    set_user_context!(ip, ip.context)
+    ip.context = detach_keymap(c)
     return ip.context
 end
 @inline _context(ip::InlineProcess) = ip.context::contexttype(ip)
-"""The process's context, with the plan's `UniqueKeyMap` back in its registry, built when it changes (`set_user_context!`): `context(ip)[handle]`."""
-Base.@nospecializeinfer context(@nospecialize(ip::InlineProcess)) = getfield(ip, :user_context)
+"""The process's context with the plan's `UniqueKeyMap` in its registry (`attach_keymap`), typed: `context(ip)[handle]`."""
+@inline context(ip::InlineProcess) = attach_keymap(_context(ip), getfield(ip, :keymap))
 
 @inline function reset!(p::InlineProcess, inputs_overrides...)
-    p.loopidx = 1
+    reset_loopidx!(getsession(p))
     initialized = _init_plan(getalgo(p), inputs_overrides...; lifetime = lifetime(p))
     context(p, getpersistentcontext(initialized))
     # TODO: Probably remove consumed flag
@@ -115,52 +111,51 @@ stays on `reset!`, where the process can rebuild its persistent context.
     return _validate_runtime_inputs(algo, kwargs)
 end
 
+@inline function _inline_run_context(p::InlineProcess, context)
+    isnothing(context) && return _context(p)
+    context = detach_keymap(context)   # a context from `context(ip)` has the map
+    @assert context isa contexttype(p) "Wrong context shape for this process\n Context is of type $(typeof(context)), but expected $(contexttype(p))."
+    return context
+end
+
+# A lifetime given to `run(ip)`: numbered as the plan numbers its handles while compiling (`number_by_keymap`).
+@inline _inline_run_lifetime(p::InlineProcess, algo, repeats, ::Nothing) = _inline_process_lifetime(algo, repeats, lifetime(p))
+@inline _inline_run_lifetime(p::InlineProcess, algo, repeats, lt) = _inline_process_lifetime(algo, repeats, number_by_keymap(lt, getfield(p, :keymap)))
+
 @inline function Base.run(p::InlineProcess, inputs_overrides...; context = nothing, repeats=nothing, lifetime=nothing, threaded=nothing, kwargs...)
     algo = getalgo(p)
-    
-    run_context = if isnothing(context)
-        _context(p)
-    else
-        context = strip_keymap(context)
-        @assert context isa contexttype(p) "Wrong context shape for this process\n Context is of type $(typeof(context)), but expected $(contexttype(p))."
-        context
-    end
-
-    p.loopidx = 1
+    run_context = _inline_run_context(p, context)
     runtime_inputs = _inline_runtime_inputs(algo, inputs_overrides, (; kwargs...))
-    # A lifetime given here gets the plan's numbers for its `Unique` handles (`number_by_keymap`), as in the constructor.
-    inputlifetime = isnothing(lifetime) ? StatefulAlgorithms.lifetime(p) : number_by_keymap(lifetime, getfield(p, :keymap))
-    run_lifetime = _inline_process_lifetime(algo, repeats, inputlifetime)
+    run_lifetime = _inline_run_lifetime(p, algo, repeats, lifetime)
 
     if (isnothing(threaded) && isthreaded(p)) || threaded === true
-        return Threads.@spawn @inline loop(p, algo, run_context, run_lifetime, runtime_inputs)
+        return Threads.@spawn _run_inline!(p, algo, run_context, run_lifetime, runtime_inputs)
     elseif (isnothing(threaded) && isasync(p)) || threaded === :async
-        return @async @inline loop(p, algo, run_context, run_lifetime, runtime_inputs)
-    else 
-        return @inline @inline loop(p, algo, run_context, run_lifetime, runtime_inputs)
+        return @async _run_inline!(p, algo, run_context, run_lifetime, runtime_inputs)
+    else
+        return @inline _run_inline!(p, algo, run_context, run_lifetime, runtime_inputs)
     end
 end
 
 @inline function run_nogen(p::InlineProcess, inputs_overrides...; context = nothing, repeats=nothing, lifetime=nothing, threaded=nothing, kwargs...)
     algo = getalgo(p)
-    
-    run_context = if isnothing(context)
-        _context(p)
-    else
-        context = strip_keymap(context)
-        @assert context isa contexttype(p) "Wrong context shape for this process\n Context is of type $(typeof(context)), but expected $(contexttype(p))."
-        context
-    end
-
-    p.loopidx = 1
-    # loopdispatch = isnothing(repeat) ? lifetime(p) : _inline_process_lifetime(algo, repeat, nothing)
-    # A lifetime given here gets the plan's numbers for its `Unique` handles (`number_by_keymap`), as in the constructor.
-    inputlifetime = isnothing(lifetime) ? StatefulAlgorithms.lifetime(p) : number_by_keymap(lifetime, getfield(p, :keymap))
-    run_lifetime = _inline_process_lifetime(algo, repeats, inputlifetime)
+    run_context = _inline_run_context(p, context)
+    run_lifetime = _inline_run_lifetime(p, algo, repeats, lifetime)
     runtime_inputs = _inline_runtime_inputs(algo, inputs_overrides, (; kwargs...))
+    return @inline _run_inline!(p, algo, run_context, run_lifetime, runtime_inputs)
+end
 
-    # p.consumed = true
-    return @inline loop(p, algo, run_context, run_lifetime, runtime_inputs)
+"""
+One run of `p`: the loop on the process's session, then its context kept on the process. The loop is reached through
+`run_session_loop`, whose arguments have no map in their types, so it is compiled once for every set of `Unique`
+handles, while `p`'s own methods are typed on the map.
+"""
+@inline function _run_inline!(p::InlineProcess, algo::A, run_context::C, run_lifetime::LT, runtime_inputs::I) where {A, C, LT, I}
+    session = getsession(p)
+    reset_loopidx!(session)
+    persistent_context, returnvalue = run_session_loop(session, algo, run_context, run_lifetime, runtime_inputs)
+    p.context = persistent_context
+    return returnvalue
 end
 
 @inline function init_and_run(p::InlineProcess, inputs_overrides...)

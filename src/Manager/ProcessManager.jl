@@ -193,13 +193,8 @@ Reset `slot.worker` by calling `reset!(slot.worker)` and return `slot`.
 
 For a `Process`, this performs these exact mutations:
 
-- `slot.worker.loopidx = 1`
-- `slot.worker.tickidx = 1`
-- `slot.worker.paused = false`
-- `slot.worker.shouldrun = true`
-- `slot.worker.starttime = nothing`
-- `slot.worker.endtime = nothing`
-- `slot.worker.loop_cursor = nothing`
+- in the worker's session (`getsession(slot.worker)`): `loopidx = 1`, `tickidx = 1`, `paused = false`,
+  `shouldrun = true`, `starttime = nothing`, `endtime = nothing`, `loop_cursor = nothing`
 
 It does not change `slot.worker.runtime_context`, `slot.worker.task`, or
 `slot.worker.lastresult`. It also does not rebuild or clear values stored in the
@@ -303,8 +298,6 @@ threaded manager jobs.
 """
 function runprocessinline!(worker::P; lifetime = nothing, repeats = nothing, repeat = nothing, kwargs...) where {P<:Process}
     @assert isidle(worker) "Process is already in use"
-    @atomic worker.shouldrun = true
-    @atomic worker.paused = false
     worker.lastresult = nothing
 
     launch_kwargs = (; lifetime, repeats, repeat)
@@ -319,12 +312,16 @@ function runprocessinline!(worker::P; lifetime = nothing, repeats = nothing, rep
     inputs = _validate_runtime_inputs(algo, (; kwargs...))
     base_context = _has_typed_runtime_context(worker) ? _typed_runtime_context(worker) : _context(worker)
     lt = StatefulAlgorithms.lifetime(worker)
-    result = loop(worker, algo, base_context, lt, inputs, Resuming{false}())
+    session = _session_for_run!(worker, lt)
+    @atomic session.paused = false
+    @atomic session.shouldrun = true
+    persistent_context, returnvalue = run_session_loop(session, algo, base_context, lt, inputs, Resuming{false}())
+    result = _finish_run!(worker, session, persistent_context, returnvalue)
 
     worker.lastresult = result
     worker.task = nothing
-    worker.loopidx = 1
-    @atomic worker.shouldrun = false
+    reset_loopidx!(session)
+    @atomic session.shouldrun = false
     return worker
 end
 

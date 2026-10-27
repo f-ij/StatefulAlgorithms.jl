@@ -32,10 +32,10 @@ through that view.
     lc::L,
     wiring::W,
     namespace::Namespace{Name},
-    process::P,
+    session::P,
     lifetime::LT,
-) where {A<:ProcessAlgorithm,L<:LoopContext,W<:PlanWiringView,Name,P<:AbstractProcess,LT<:Lifetime}
-    return @inline _step!(algo, lc, wiring, namespace, process, lifetime)
+) where {A<:ProcessAlgorithm,L<:LoopContext,W<:PlanWiringView,Name,P<:ProcessSession,LT<:Lifetime}
+    return @inline _step!(algo, lc, wiring, namespace, session, lifetime)
 end
 
 @inline function _step!(
@@ -43,9 +43,9 @@ end
     lc::L,
     wiring::W,
     namespace::Namespace{Name},
-    process::P,
+    session::P,
     lifetime::LT,
-) where {A<:ProcessAlgorithm,L<:LoopContext,W<:PlanWiringView,Name,P<:AbstractProcess,LT<:Lifetime}
+) where {A<:ProcessAlgorithm,L<:LoopContext,W<:PlanWiringView,Name,P<:ProcessSession,LT<:Lifetime}
     contextview = @inline _leaf_view(algo, lc, wiring, namespace)
     retval = @inline step!(algo, contextview)
     return @inline _merge_step_return(contextview, retval, wiring, namespace)
@@ -56,7 +56,7 @@ end
     @inline view(lc, algo, namespace; shares = (@inline shares(wiring)), routes = (@inline routes(wiring)))
 
 # The persistent fields a leaf writes (see src/Context/Carried/Writes.jl).
-@inline _find_writable_fields(algo::AlgoType, ::NoLoopCursor, persistent_context::PersistentContextType, ::Type{RuntimeContextType}, wiring::WiringViewType, namespace::NamespaceType, process::ProcessType, lifetime::LifetimeType) where {AlgoType<:ProcessAlgorithm, PersistentContextType<:ProcessContext, RuntimeContextType, WiringViewType, NamespaceType, ProcessType, LifetimeType} =
+@inline _find_writable_fields(algo::AlgoType, ::NoLoopCursor, persistent_context::PersistentContextType, ::Type{RuntimeContextType}, wiring::WiringViewType, namespace::NamespaceType, session::SessionType, lifetime::LifetimeType) where {AlgoType<:ProcessAlgorithm, PersistentContextType<:ProcessContext, RuntimeContextType, WiringViewType, NamespaceType, SessionType, LifetimeType} =
     @inline _find_leaf_writable_fields(algo, persistent_context, RuntimeContextType, wiring, namespace)
 
 """The persistent fields one step of an algorithm can write: those of the payload its merge writes, read off its type."""

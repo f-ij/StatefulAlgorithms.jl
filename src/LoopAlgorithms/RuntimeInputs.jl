@@ -1,27 +1,5 @@
 export RuntimeInput, RuntimeInputState, RuntimeInputs, partialinit
 
-"""
-Lightweight process handle used by `run(::LoopAlgorithm; ...)`.
-
-Direct loop-algorithm runs need the same loop counter, timing, and lifetime
-interface as a normal `Process`, but they should not allocate or store an
-interactive task handle. `LoopRunProcess` is that minimal runtime object.
-"""
-mutable struct LoopRunProcess{LT} <: AbstractProcess
-    loopidx::UInt
-    tickidx::UInt
-    lifetime::LT
-    starttime::Union{Nothing, Float64, UInt64}
-    endtime::Union{Nothing, Float64, UInt64}
-    threadid::Int
-end
-
-LoopRunProcess(lifetime::LT) where {LT} = LoopRunProcess{LT}(UInt(1), UInt(1), lifetime, nothing, nothing, 0)
-@inline lifetime(p::LoopRunProcess) = p.lifetime
-@inline tick!(p::LoopRunProcess) = (p.tickidx += UInt(1))
-@inline set_starttime!(p::LoopRunProcess) = (p.starttime = time_ns())
-@inline set_endtime!(p::LoopRunProcess) = (p.endtime = time_ns())
-@inline context(::LoopRunProcess, ::Any) = nothing
 
 """
 Runtime input declaration produced by DSL `@input`.
@@ -242,7 +220,7 @@ nothing again.
 Base.@nospecializeinfer function init(@nospecialize(la::LoopSpec), @nospecialize(specs::InputInterface...); @nospecialize(lifetime = Indefinite()))
     resolved = resolve(la)
     keymap = getkeymap(resolved)
-    return with_keymap(_init_plan(strip_keymap(resolved), specs...; lifetime = number_by_keymap(lifetime, keymap)), keymap)
+    return with_keymap(_init_plan(strip_keymap(resolved), specs...; lifetime = number_by_keymap_dynamic(lifetime, keymap)), keymap)
 end
 
 """`init` of a resolved plan without a `UniqueKeyMap`: what `init`, `run` and the processes call."""
@@ -294,8 +272,8 @@ context. Runs `la` without its `UniqueKeyMap` (`strip_keymap`); the returned pla
 Base.@nospecializeinfer function Base.run(@nospecialize(la::LoopSpec); @nospecialize(lifetime = nothing), kwargs...)
     resolved = resolve(la)
     keymap = getkeymap(resolved)
-    # The lifetime is not part of the plan: its `Var`s get the plan's numbers here (`number_by_keymap`).
-    return with_keymap(_run_plan(strip_keymap(resolved); lifetime = number_by_keymap(lifetime, keymap), kwargs...), keymap)
+    # The lifetime is not part of the plan: its `Var`s get the plan's numbers here (`number_by_keymap_dynamic`).
+    return with_keymap(_run_plan(strip_keymap(resolved); lifetime = number_by_keymap_dynamic(lifetime, keymap), kwargs...), keymap)
 end
 
 function _run_plan(la::LA; repeats = 1, lifetime = nothing, kwargs...) where {LA<:LoopSpec}
@@ -303,7 +281,7 @@ function _run_plan(la::LA; repeats = 1, lifetime = nothing, kwargs...) where {LA
     persistent_context = getpersistentcontext(initialized)
     lt = isnothing(lifetime) ? normalize_process_lifetime(initialized, repeats) : normalize_process_lifetime(initialized, lifetime)
     inputs = _validate_runtime_inputs(initialized, (; kwargs...))
-    process = LoopRunProcess(lt)
-    persistent_context = loop(process, initialized, persistent_context, lt, inputs)
+    # One session per run, as the loop needs a counter and times; nothing can pause or close a direct run.
+    persistent_context, _ = run_session_loop(InlineSession(), initialized, persistent_context, lt, inputs)
     return _with_lifecycle(initialized, persistent_context, getstoredinits(initialized), getstoredoverrides(initialized))
 end

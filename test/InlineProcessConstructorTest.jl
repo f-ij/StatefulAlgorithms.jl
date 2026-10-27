@@ -16,7 +16,7 @@ using StatefulAlgorithms
     ctx = run(ip)
 
     @test ctx[InlineAccumulator].delta == 2
-    @test ip.loopidx == 5
+    @test loopidx(ip) == 5
     @test ctx[InlineAccumulator].value == 11
 end
 

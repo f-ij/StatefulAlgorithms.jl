@@ -28,8 +28,8 @@ end
 Base.@nospecializeinfer function Base.run(@nospecialize(p::Process), @nospecialize(run_lifetime = nothing),
         @nospecialize(inputs_and_overrides...); repeats = nothing, @nospecialize(lifetime = nothing), kwargs...)
     keymap = getfield(p, :keymap)
-    return _run_process(p, number_by_keymap(run_lifetime, keymap), inputs_and_overrides...;
-        repeats, lifetime = number_by_keymap(lifetime, keymap), kwargs...)
+    return _run_process(p, number_by_keymap_dynamic(run_lifetime, keymap), inputs_and_overrides...;
+        repeats, lifetime = number_by_keymap_dynamic(lifetime, keymap), kwargs...)
 end
 
 function _run_process(p::Process, run_lifetime = nothing, inputs_and_overrides...; repeats = nothing, lifetime = nothing, kwargs...)
@@ -45,9 +45,6 @@ function _run_process(p::Process, run_lifetime = nothing, inputs_and_overrides..
     end
     isempty(inputs_and_overrides) || error("Process run accepts runtime inputs as keywords only. Reinitialize the Process context before running to apply init/override specs.")
 
-    @atomic p.shouldrun = true
-    @atomic p.paused = false
-
     lt = _process_run_lifetime(getalgo(p), run_lifetime, repeats, lifetime)
     if !isnothing(lt)
         p.lifetime = lt
@@ -58,8 +55,6 @@ end
 
 function Base.run(p::AP, lifetime = nothing, inputs_and_overrides...; kwargs...) where AP <: AbstractProcess
     @assert isidle(p) "Process is already in use"
-    @atomic p.shouldrun = true
-    @atomic p.paused = false
     makeloop!(p, (; kwargs...))
 end
 
@@ -91,8 +86,9 @@ Close a process, stopping it from running
 """
 function Base.close(p::Process)
     was_paused = ispaused(p)
-    @atomic p.paused = false
-    @atomic p.shouldrun = false
+    session = getsession(p)
+    @atomic session.paused = false
+    @atomic session.shouldrun = false
 
     fetched_result = nothing
     try
@@ -113,15 +109,16 @@ function Base.close(p::Process)
 
     p.task = nothing 
 
-    p.loopidx = 1
-    p.loop_cursor = nothing
+    session = getsession(p)
+    reset_loopidx!(session)
+    session.loop_cursor = nothing
     return true
 end
 
 function restart(p::Process)
     close(p)
     wait(p)
-    @atomic p.paused = false # Force reinit
+    @atomic getsession(p).paused = false # Force reinit
     run(p)
 end
 
@@ -129,8 +126,9 @@ end
 Pause a process, allowing it to be unpaused later
 """
 function pause(p::Process)
-    @atomic p.paused = true
-    @atomic p.shouldrun = false
+    session = getsession(p)
+    @atomic session.paused = true
+    @atomic session.shouldrun = false
     return true
 end
 

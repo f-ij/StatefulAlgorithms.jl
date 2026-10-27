@@ -119,3 +119,71 @@ end
 set of `Unique` handles compiles nothing again.
 """
 Base.@nospecializeinfer strip_keymap(@nospecialize(x)) = with_keymap(x, nothing)
+
+"""
+    number_by_keymap(x, keymap::UniqueKeyMap) -> x, numbered as the plan numbers its handles
+
+What `number_by_keymap_dynamic` does, decided while compiling: the numbered value is built by code generated for
+`typeof(x)` and the map's type, so it is inferred and costs no walk at run time. Used by the typed handles
+(`run(ip; lifetime)`, `run(p; lifetime)`), whose type has the map. Compiled once per value type and map, as the handle's
+own methods are. Where the type alone does not say how to number (an id stripped or numbered elsewhere, whose uuid is
+only in the value; a holder whose type parameters are worked out from its fields, `list_field_derived_params`; a
+field of an abstract type), it numbers at run time (`number_by_keymap_dynamic`), not inferred. With no map (`nothing`)
+`x` as it is.
+"""
+@generated function number_by_keymap(x::X, keymap::K) where {X, K<:UniqueKeyMap}
+    numbers = Dict{UUID, Int}()
+    for pair in K.parameters[1]
+        numbers[pair.second] = pair.first
+    end
+    built = _build_numbered_expr(X, :x, _MapIds(numbers), IdDict{Any, Bool}())
+    isnothing(built) && return :(number_by_keymap_dynamic(x, keymap))
+    return first(built)
+end
+@inline number_by_keymap(x, ::Nothing) = x
+
+# `(expression, type)` of `ex` (a value of type `T`) numbered by `mode`, worked out from `T` alone, or `nothing` when
+# `T` does not say how (see `number_by_keymap`). Runs while generating code.
+function _build_numbered_expr(@nospecialize(T), ex, mode::_MapIds, cache::IdDict{Any, Bool})
+    T isa DataType || return nothing
+    _may_hold_unique_ids(T, cache) || return (ex, T)
+    if T <: UniquePlanId
+        N = plan_number(T)
+        N isa UUID || return nothing
+        k = get(mode.numbers, N, nothing)
+        isnothing(k) && return (ex, T)
+        return (:(UniquePlanId{$k}(origin($ex))), UniquePlanId{k})
+    end
+    if T <: Type
+        NewType = _rewrite_type(T.parameters[1], mode, cache)
+        return (QuoteNode(NewType), Type{NewType})
+    end
+    ismutabletype(T) && return nothing
+    isempty(list_field_derived_params(T)) || return nothing
+    exprs = Any[]
+    types = Any[]
+    for i in 1:fieldcount(T)
+        built = _build_numbered_expr(fieldtype(T, i), :(getfield($ex, $i)), mode, cache)
+        isnothing(built) && return nothing
+        push!(exprs, built[1])
+        push!(types, built[2])
+    end
+    T <: Tuple && return (:(tuple($(exprs...))), Tuple{types...})
+    if T <: NamedTuple
+        names = T.parameters[1]
+        return (:(NamedTuple{$names}(tuple($(exprs...)))), NamedTuple{names, Tuple{types...}})
+    end
+    params = Any[T.parameters...]
+    from_field = falses(length(params))
+    for i in eachindex(types)
+        j = _field_parameter_index(T, i)
+        isnothing(j) && continue
+        params[j] = types[i]
+        from_field[j] = true
+    end
+    for j in eachindex(params)
+        from_field[j] || params[j] isa TypeVar || (params[j] = _rewrite_value(params[j], mode, cache))
+    end
+    NT = Core.apply_type(T.name.wrapper, params...)
+    return (Expr(:new, NT, exprs...), NT)
+end

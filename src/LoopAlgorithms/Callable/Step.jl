@@ -77,7 +77,7 @@ end
 end
 
 """Step a `Callable` child: view the context from the shared `_captured_returns` namespace, call, merge the returns."""
-@inline function _step!(ex::EX, lc::L, wiring::W, namespace::Namespace, process::P, lifetime::LT) where {EX<:Callable, L<:LoopContext, W<:PlanWiringView, P<:AbstractProcess, LT<:Lifetime}
+@inline function _step!(ex::EX, lc::L, wiring::W, namespace::Namespace, session::P, lifetime::LT) where {EX<:Callable, L<:LoopContext, W<:PlanWiringView, P<:ProcessSession, LT<:Lifetime}
     contextview = @inline _leaf_view(ex, lc, wiring, Namespace{:_captured_returns}())
     retval = @inline step!(ex, contextview)
     return @inline merge_call_return(contextview, retval)

@@ -36,20 +36,21 @@ const DELTA_OFFSET = 5.0
 function written_fields_of(plan)
     p = Process(plan; repeats = 10)
     captured = Ref{Any}(nothing)
-    StatefulAlgorithms.makeloop!(p; threaded = false, loopfunc = (args...) -> (captured[] = args; nothing))
+    # A loop function gets the run's session and returns `(persistent_context, result)`, as `loop` does.
+    StatefulAlgorithms.makeloop!(p; threaded = false, loopfunc = (args...) -> (captured[] = args; (args[3], nothing)))
     wait(p.task)
-    process, func, stored, lifetime, inputs, resume = captured[]
+    session, func, stored, lifetime, inputs, resume = captured[]
     step_plan = StatefulAlgorithms.getplan(func)
     carried = StatefulAlgorithms.create_carried(
         step_plan,
-        StatefulAlgorithms._loop_cursor(process, step_plan, resume),
+        StatefulAlgorithms._loop_cursor(session, step_plan, resume),
         StatefulAlgorithms.LoopContext(
             StatefulAlgorithms._loop_persistent_context(stored, resume),
-            StatefulAlgorithms._loop_runtime_context(func, inputs, process, lifetime, stored, resume),
+            StatefulAlgorithms._loop_runtime_context(func, inputs, session, lifetime, stored, resume),
         ),
         StatefulAlgorithms._root_wiring_view(func, step_plan),
         StatefulAlgorithms.Namespace{nothing}(),
-        process,
+        session,
         lifetime,
     )
     return StatefulAlgorithms._carried_fields(typeof(carried))
@@ -125,7 +126,7 @@ end
 @testset "Context delta: the write set is a compile-time constant" begin
     p = Process(CompositeAlgorithm(DeltaReader, DeltaWriter, (1, 10)); repeats = 10)
     captured = Ref{Any}(nothing)
-    StatefulAlgorithms.makeloop!(p; threaded = false, loopfunc = (args...) -> (captured[] = args; nothing))
+    StatefulAlgorithms.makeloop!(p; threaded = false, loopfunc = (args...) -> (captured[] = args; (args[3], nothing)))
     wait(p.task)
     code, _ = only(Base.code_typed(StatefulAlgorithms.loop, Tuple{map(typeof, captured[])...}; debuginfo = :none))
     typed = sprint(show, code)

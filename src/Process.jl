@@ -1,70 +1,44 @@
 export Process, getallocator, getnewallocator, getcontext, getticks
 
 
-mutable struct Process{F,LT,C} <: AbstractProcess
+mutable struct Process{F,C,K} <: AbstractProcess
     id::UUID
-    algo::F
-    lifetime::Lifetime
+    algo::F           # the plan, without the map (the loop's type)
+    lifetime::Lifetime # its `Var`s numbered as the plan numbers its handles
     runtime_context::Union{Nothing, ProcessContext}
-    loop_cursor::Union{Nothing, C} # Kept across pause/resume; C is fixed by the plan type
     timeout::Float64
     task::Union{Nothing, Task}
-    loopidx::UInt # To track the current loop index for resuming
-    tickidx::UInt # To track ticks for performance monitoring
     # To make sure other processes don't interfere
-    lock::ReentrantLock 
-    @atomic shouldrun::Bool
-    @atomic paused::Bool
-    starttime ::Union{Nothing, Float64, UInt64}
-    endtime::Union{Nothing, Float64, UInt64}
+    lock::ReentrantLock
     lastresult::Any
-    # linked_processes::Vector{Process} # Maybe do only with UUIDs for flexibility
-    # allocator::Allocator
     rls::RuntimeListeners
-    threadid::Int
-    # The plan's `UniqueKeyMap` (or `nothing`), taken out of the registry the loop runs on (`strip_keymap`) and put
-    # back into the contexts handed to the user (`context(p)`, `fetch(p)`). Untyped, so the map's type (new for every
-    # set of `Unique` handles) is not in the `Process` type the loop is compiled for.
-    keymap::Any
+    # The current or last run (Sessions/InteractiveSession.jl): what the loop gets instead of the process. The run's
+    # counters, times, cursor and the flags `pause(p)` and `close(p)` set are its fields.
+    session::InteractiveSession{C}
+    # The plan's `UniqueKeyMap` (zero bytes) or `nothing`: in the type, so what the user does with the process is typed
+    # (`run(p; lifetime)` numbers while compiling). Never passed to the loop.
+    const keymap::K
     # The context handed to the user (`context(p)`): the process's context with `keymap` put back, built once each time
     # the process's context changes (at loop exit, `commit_context!`, `context(p, c)`; `set_user_context!`).
     user_context::Any
 end
 
-@setterGetter Process lock shouldrun runtime_context
+@setterGetter Process lock runtime_context session keymap user_context
 """
     getloopcursor(p::Process)
 
 Return the loop cursor stored by a paused run, always as the plan's cursor type `C`.
 Throws a `TypeError` when no cursor is stored.
 """
-@inline getloopcursor(p::Process{F,LT,C}) where {F,LT,C} = p.loop_cursor::C
+@inline getloopcursor(p::Process{F,C}) where {F,C} = getsession(p).loop_cursor::C
 
-"""
-Get value of run of a process, denoting wether it should run or not
-"""
-shouldrun(p::Process) = @atomic :monotonic p.shouldrun   # atomic (no ordering barrier): re-read every step, so pause/close are seen
+"""Whether the process should run (`false` after `pause(p)` or `close(p)`): its session's `shouldrun` flag."""
+shouldrun(p::Process) = shouldrun(getsession(p))
+"""Set whether the process should run."""
+shouldrun(p::Process, val) = @atomic getsession(p).shouldrun = val
 
-"""
-    process_breakcondition(p::Process) -> Bool
-
-Extends the hook `process_breakcondition` (AbstractProcesses/Hooks.jl): a `Process` is interrupted when its `shouldrun`
-flag is off (`pause` or `close`). Checked after every step and after every routine repeat. Routine repeats can run for
-a very long time, so the check must stay per repeat: checking only once per routine child (or every n repeats) would
-make a pause or close wait for the child's remaining repeats and kill interactivity. The check costs a little per
-repeat and keeps the compiler from writing a routine's repeats out one after another (perf/README.md shows the cost).
-"""
-@inline process_breakcondition(p::P) where {P<:Process} = @inline !shouldrun(p)
-"""
-Set value of run of a process, denoting wether it should run or not
-"""
-shouldrun(p::Process, val) = @atomic p.shouldrun = val
-
-# Loop counting
-@inline looptick!(p::Process) = (p.tickidx = p.tickidx + UInt(1))
-@inline tick!(p::Process) = (p.tickidx = p.tickidx + UInt(1))
-@inline getticks(p::Process) = p.tickidx
-@inline reset_ticks!(p::Process) = (p.tickidx = UInt(1))
+@inline getticks(p::Process) = getsession(p).tickidx
+@inline reset_ticks!(p::Process) = (getsession(p).tickidx = UInt(1))
 
 @inline function _process_state_label(p::Process)
     if ispaused(p)
@@ -170,48 +144,41 @@ end
 """
     Process(func, Init(...), Override(...); context, repeats, lifetime, timeout)
 
-A process running `func`. Resolves it first (untyped), keeps the plan's `UniqueKeyMap` on the process and builds the
-process on the plan without it (`strip_keymap`), so a new set of `Unique` handles compiles nothing again.
+A process running `func`. Resolves it first (untyped) and prepares the plan, its context and the lifetime without the
+plan's `UniqueKeyMap` (`strip_keymap`, `number_by_keymap_dynamic`), so a new set of `Unique` handles compiles none of that
+again. Only the process itself has the map in its type (`keymap`).
 """
 Base.@nospecializeinfer function Process(@nospecialize(func), @nospecialize(inputs_overrides...); context = nothing, @nospecialize(lifetime = nothing), kwargs...)
     algo = func isa LoopSpec ? func : normalize_process_algo(func)
     algo isa LoopSpec && (algo = resolve(algo))
     keymap = getkeymap(algo)
     # The lifetime is not part of the plan: its `Var`s get the plan's numbers here, while the map is known.
-    p = _new_process(strip_keymap(algo), inputs_overrides...; context = strip_keymap(context),
-        lifetime = number_by_keymap(lifetime, keymap), kwargs...)
-    setfield!(p, :keymap, keymap)   # not `p.keymap = `: that compiles `setproperty!` for every map type
+    algo, lifetime, timeout = _prepare_process(strip_keymap(algo), inputs_overrides...; context = strip_keymap(context),
+        lifetime = number_by_keymap_dynamic(lifetime, keymap), kwargs...)
+    p = _construct_process(algo, lifetime, timeout, keymap)
     set_user_context!(p, _context(p))
     return p
 end
 
-function _new_process(algo::A, inputs_overrides::Vararg{Any,N}; context::C = nothing, repeats = nothing, lifetime = nothing, repeat = nothing, timeout = 1.0) where {A,N,C}
+function _prepare_process(algo::A, inputs_overrides::Vararg{Any,N}; context::C = nothing, repeats = nothing, lifetime = nothing, repeat = nothing, timeout = 1.0) where {A,N,C}
     lifetime = _process_constructor_lifetime(repeats, lifetime, repeat)
     lifetime = normalize_process_lifetime(algo, lifetime)
     algo = _process_constructor_algo(algo, context, inputs_overrides, lifetime)
-    return _finish_process_constructor(algo, context, lifetime, timeout)
-end
-
-@inline function _finish_process_constructor(algo::A, ::Nothing, lifetime::LT, timeout) where {A<:AbstractLoopAlgorithm, LT}
-    prepared_context = getpersistentcontext(algo)
-    return _finish_process_constructor_with_context(algo, prepared_context, lifetime, timeout)
-end
-
-@inline function _finish_process_constructor(algo::A, context::C, lifetime::LT, timeout) where {A<:AbstractLoopAlgorithm, C, LT}
-    return _finish_process_constructor_with_context(algo, context, lifetime, timeout)
-end
-
-function _finish_process_constructor_with_context(algo::A, prepared_context::PC, lifetime::LT, timeout) where {A<:AbstractLoopAlgorithm, PC, LT}
+    prepared_context = isnothing(context) ? getpersistentcontext(algo) : context
     algo = _with_lifecycle(algo, prepared_context, getstoredinits(algo), getstoredoverrides(algo))
+    return algo, lifetime, timeout
+end
 
-    # p = Process(uuid1(), context, td, timeout, nothing, UInt(1), UInt(1), Threads.ReentrantLock(), false, true, nothing, nothing, Arena(), RuntimeListeners(), 0)
+# The only constructor step typed on the map: compiled once per set of `Unique` handles, and small.
+function _construct_process(algo::F, lifetime::LT, timeout, keymap::K) where {F<:AbstractLoopAlgorithm, LT, K}
     C = typeof(loop_cursor(getplan(algo), Val(true)))
-    p = Process{typeof(algo),typeof(lifetime),C}(uuid1(), algo, lifetime, nothing, nothing, timeout, nothing, UInt(1), UInt(1), Threads.ReentrantLock(), false, true, nothing, nothing, nothing, RuntimeListeners(), 0, nothing, nothing)
+    session = InteractiveSession{C, LT}()
+    p = Process{F, C, K}(uuid1(), algo, lifetime, nothing, timeout, nothing, Threads.ReentrantLock(), nothing, RuntimeListeners(), session, keymap, nothing)
 
     register_process!(p)
     schedule_loop_precompile!(p, lifetime)
     @DebugMode "Created process with id $(p.id), now preparing data"
-    
+
     finalizer(remove_process!, p)
     return p
 end
@@ -320,9 +287,6 @@ function getcontext(p::Process)
 end
 
 getcontext(p::Process, context) = getcontext(p)[context]
-set_starttime!(p::Process) = p.starttime = time_ns()
-set_endtime!(p::Process) = p.endtime = time_ns()
-reset_times!(p::Process) = (p.starttime = nothing; p.endtime = nothing)
 
 runtimelisteners(::Any) = nothing
 runtimelisteners(p::Process) = p.rls
@@ -345,13 +309,14 @@ end
 # end
 
 function runtime(p::Process)
-    @assert !isnothing(p.starttime) "Process has not started"
+    @assert !isnothing(getsession(p).starttime) "Process has not started"
     return runtime_ns(p) / 1e9
 end
 
 function runtime_ns(p::Process)
-    @assert !isnothing(p.starttime) "Process has not started"
-    timens = isnothing(p.endtime) ? time_ns() - p.starttime : p.endtime - p.starttime
+    session = getsession(p)
+    @assert !isnothing(session.starttime) "Process has not started"
+    timens = isnothing(session.endtime) ? time_ns() - session.starttime : session.endtime - session.starttime
     return Int(timens)
 end
 export runtime_ns, runtime
@@ -359,7 +324,7 @@ export runtime_ns, runtime
 # Exact time the process stopped in hh:mm:ss
 function stop_time(p::Process)
     if isdone(p)
-        return Dates.format(Dates.DateTime(p.endtime), "HH:MM:SS")
+        return Dates.format(Dates.DateTime(getsession(p).endtime), "HH:MM:SS")
     else
         return nothing
     end
@@ -368,7 +333,7 @@ end
 function createfrom!(p1::Process, p2::Process)
     p1.algo = p2.algo
     commit_context!(p1, _context(p2))
-    p1.loop_cursor = nothing
+    getsession(p1).loop_cursor = nothing
     p1.timeout = p2.timeout
     reset!(p1)
 end
@@ -415,36 +380,79 @@ end
     _makeloop!(p, inputs, lt, _context(p); threaded, loopfunc)
 
 function _makeloop!(p::Process, inputs::NamedTuple, lt, base_context; threaded = true, loopfunc::LF = loop) where {LF}
-    @atomic p.paused = false
-    @atomic p.shouldrun = true
+    session = _session_for_run!(p, lt)
+    @atomic session.paused = false
+    @atomic session.shouldrun = true
     p.lastresult = nothing
 
     func = getalgo(p)
     inputs = _validate_runtime_inputs(func, inputs)
-    return _makeloop_prepared!(p, func, base_context, lt, inputs; threaded, loopfunc)
+    return _makeloop_prepared!(p, session, func, base_context, lt, inputs; threaded, loopfunc)
 end
 
-function _makeloop_prepared!(p::P, func::F, runtime_context::C, lt::LT, inputs::I; threaded::Bool = true, loopfunc::LF = loop, resume::R = Resuming{false}()) where {P<:Process, F, C, LT, I<:NamedTuple, LF, R<:Resuming}
+"""
+    _session_for_run!(p, lifetime) -> InteractiveSession
+
+The session a run of `p` with `lifetime` runs in: the process's session when it has that lifetime's type, else a new
+one with the same counters, times and thread (as one `Process` kept them before sessions), set as the process's
+session. Never while a run is going on, so the loop and the process always share the one session.
+"""
+function _session_for_run!(p::Process{F, C}, lt::LT) where {F, C, LT}
+    session = getsession(p)
+    session isa InteractiveSession{C, LT} && return session
+    new = InteractiveSession{C, LT}(@atomic(session.shouldrun), @atomic(session.paused), session.loopidx, session.tickidx,
+        session.starttime, session.endtime, session.loop_cursor, session.threadid)
+    p.session = new
+    return new
+end
+
+function _makeloop_prepared!(p::P, session::S, func::F, runtime_context::C, lt::LT, inputs::I; threaded::Bool = true, loopfunc::LF = loop, resume::R = Resuming{false}()) where {P<:Process, S<:InteractiveSession, F, C, LT, I<:NamedTuple, LF, R<:Resuming}
     wait_loop_precompile!(p, func, runtime_context, lt, inputs, resume; loopfunc)
-    # `@noinline`: the loop is compiled as its own function with `p` as an argument, so LLVM knows `p` can be read and
-    # keeps counters such as `p.tickidx` in a register (inlined into the task closure, it wrote them to memory every repeat).
     if threaded
-        p.task = Threads.@spawn @noinline loopfunc(p, func, runtime_context, lt, inputs, resume)
+        p.task = Threads.@spawn _run_process_task(p, loopfunc, session, func, runtime_context, lt, inputs, resume)
     else
-        p.task = @async @noinline loopfunc(p, func, runtime_context, lt, inputs, resume)
+        p.task = @async _run_process_task(p, loopfunc, session, func, runtime_context, lt, inputs, resume)
     end
     return p
 end
 
+"""
+What a `Process` task runs: the loop on the session (`run_session_loop`, a call whose arguments have no map in their
+types, so the loop is compiled once for every set of `Unique` handles), then the run's end on the process
+(`_finish_run!`). Its result is what `fetch(p)` returns.
+"""
+function _run_process_task(p::P, loopfunc::LF, session::S, func::F, runtime_context::C, lt::LT, inputs::I, resume::R) where {P<:Process, LF, S<:InteractiveSession, F, C, LT, I<:NamedTuple, R<:Resuming}
+    persistent_context, returnvalue = run_session_loop(loopfunc, session, func, runtime_context, lt, inputs, resume)
+    return _finish_run!(p, session, persistent_context, returnvalue)
+end
+
+"""
+    _finish_run!(p, session, persistent_context, returnvalue) -> what the user gets (`fetch(p)`)
+
+A run's end on the process: on a pause, the paused context is kept (with the cursor, kept by the loop in the session) so
+the run resumes from it; otherwise the context is committed and the cursor dropped. Returns the result with the plan's
+`UniqueKeyMap` put back, built here once.
+"""
+function _finish_run!(p::Process, session::InteractiveSession, persistent_context, returnvalue)
+    if _loop_ispaused(session)
+        _store_runtime_context!(p, persistent_context)
+        return getfield(p, :user_context)
+    end
+    commit_context!(p, persistent_context)
+    session.loop_cursor = nothing
+    return returnvalue === persistent_context ? getfield(p, :user_context) : with_process_keymap(p, returnvalue)
+end
+
 function _resume_paused_loop!(p::Process; threaded = true)
     wait(p)
-    @atomic p.shouldrun = true
+    session = getsession(p)
+    @atomic session.shouldrun = true
     p.lastresult = nothing
 
     func = getalgo(p)
     runtime_context = _context(p)
     lt = lifetime(p)
-    return _makeloop_prepared!(p, func, runtime_context, lt, (;); threaded, resume = Resuming{true}())
+    return _makeloop_prepared!(p, session, func, runtime_context, lt, (;); threaded, resume = Resuming{true}())
 end
 
 makeloop!(p::Process, lt::Lifetime; threaded = true, loopfunc::LF = loop) where {LF} =
@@ -457,14 +465,9 @@ Reset selected `Process` fields without rebuilding its context.
 
 This performs these exact mutations:
 
-- `process.loopidx = 1`
-- `process.tickidx = 1`
-- `process.paused = false`
-- `process.shouldrun = true`
-- `process.starttime = nothing`
-- `process.endtime = nothing`
-- `process.loop_cursor = nothing`: the next run builds a fresh cursor, so every interval counter and resume point
-  starts over.
+- in its session (`getsession(process)`): `loopidx = 1`, `tickidx = 1`, `paused = false`, `shouldrun = true`,
+  `starttime = nothing`, `endtime = nothing`, and `loop_cursor = nothing`: the next run builds a fresh cursor, so every
+  interval counter and resume point starts over.
 
 It does not reset counters an algorithm keeps in its own value: a `Package`'s interval counter goes on from where it
 was (TODO.md, "Packaging and threaded composites"). It does not change `process.runtime_context`, `process.task`, or
@@ -472,12 +475,13 @@ was (TODO.md, "Packaging and threaded composites"). It does not change `process.
 `context(process)`.
 """
 function reset!(p::Process)
-    reset_loopidx!(p)
-    reset_ticks!(p)
-    p.loop_cursor = nothing
-    @atomic p.paused = false
-    @atomic p.shouldrun = true
-    reset_times!(p)
+    session = getsession(p)
+    reset_loopidx!(session)
+    session.tickidx = UInt(1)
+    session.loop_cursor = nothing
+    @atomic session.paused = false
+    @atomic session.shouldrun = true
+    reset_times!(session)
     return p
 end
 

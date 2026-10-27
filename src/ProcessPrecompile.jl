@@ -1,7 +1,8 @@
 _is_generating_package_output() = ccall(:jl_generating_output, Cint, ()) != 0
 
-@inline function precompile_loop!(loopfunc, p::Process, func, context, lt, inputs::NamedTuple = (;), resume::Resuming = Resuming{false}())
-    precompile_loop!(typeof(loopfunc), typeof(p), typeof(func), typeof(context), typeof(lt), typeof(inputs), typeof(resume))
+@inline function precompile_loop!(loopfunc, p::Process{F, C}, func, context, lt, inputs::NamedTuple = (;), resume::Resuming = Resuming{false}()) where {F, C}
+    # The loop runs on the session of a run with this lifetime (`_session_for_run!`), not on the process.
+    precompile_loop!(typeof(loopfunc), InteractiveSession{C, typeof(lt)}, typeof(func), typeof(context), typeof(lt), typeof(inputs), typeof(resume))
     return nothing
 end
 
@@ -13,7 +14,7 @@ end
 
 function precompile_loop!(
     loopfunc_type::Type,
-    process_type::Type,
+    session_type::Type,
     func_type::Type,
     context_type::Type,
     lifetime_type::Type,
@@ -22,13 +23,13 @@ function precompile_loop!(
 )
     loopfunc = _callable_instance(loopfunc_type)
     isnothing(loopfunc) && return nothing
-    Base.precompile(loopfunc, (process_type, func_type, context_type, lifetime_type, inputs_type, resume_type, NonGenerated))
+    Base.precompile(loopfunc, (session_type, func_type, context_type, lifetime_type, inputs_type, resume_type, NonGenerated))
     return nothing
 end
 
 function _schedule_loop_precompile!(
     loopfunc_type::Type,
-    process_type::Type,
+    session_type::Type,
     func_type::Type,
     context_type::Type,
     lifetime_type::Type,
@@ -36,9 +37,9 @@ function _schedule_loop_precompile!(
     resume_type::Type,
 )
     if _is_generating_package_output()
-        precompile_loop!(loopfunc_type, process_type, func_type, context_type, lifetime_type, inputs_type, resume_type)
+        precompile_loop!(loopfunc_type, session_type, func_type, context_type, lifetime_type, inputs_type, resume_type)
     else
-        Threads.@spawn precompile_loop!(loopfunc_type, process_type, func_type, context_type, lifetime_type, inputs_type, resume_type)
+        Threads.@spawn precompile_loop!(loopfunc_type, session_type, func_type, context_type, lifetime_type, inputs_type, resume_type)
     end
     return nothing
 end

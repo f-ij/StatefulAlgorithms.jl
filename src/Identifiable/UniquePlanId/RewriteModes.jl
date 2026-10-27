@@ -7,7 +7,7 @@ walk, and that struct's `rewrite_id` (and `rewrite_type_id`, where an id only a 
 |:-------------|:--------------------|:--------------------------------------------|:------------------------|:---------------------|
 | `_StripIds`  | `strip_unique`      | a constructor or DSL block takes its inputs | `UniquePlanId{ValueId}` | kept                 |
 | `_NumberIds` | `number_unique_ids` | a plan is built, `resolve(la1, la2, ...)`   | `UniquePlanId{k}`       | `UniquePlanId{k}`    |
-| `_MapIds`    | `number_by_keymap`  | a lifetime from outside the plan is given to a process or run | `UniquePlanId{k}` of the plan | `UniquePlanId{k}` of the plan |
+| `_MapIds`    | `number_by_keymap_dynamic`, `number_by_keymap` | a lifetime from outside the plan is given to a process or run | `UniquePlanId{k}` of the plan | `UniquePlanId{k}` of the plan |
 
 In that order: a held id (`UniquePlanId{uuid}`) is stripped at the constructor and numbered when its plan is built. A
 value from outside the plan (a process's lifetime) is numbered with the plan's numbers (`_MapIds`) when it is given.
@@ -74,16 +74,17 @@ end
 ################################################
 
 """
-    number_by_keymap(x, keymap) -> x, numbered as the plan numbers its handles
+    number_by_keymap_dynamic(x, keymap) -> x, numbered as the plan numbers its handles
 
 `x`, a value from outside a plan that names the plan's `Unique` handles (a lifetime given to `Process`, `InlineProcess`
 or `run`), with every id the plan has numbered as the plan numbered it (`keymap`, the plan's `UniqueKeyMap`): held,
 stripped or numbered elsewhere, it becomes `UniquePlanId{k}`, the form the plan's registry stores. A `Var` in `x` is
 then found while compiling instead of by uuid on every read in the loop, and `x`'s type has no uuid, so the loop
 compiles once. Ids the plan does not have stay as they are; with no map (`nothing`) `x` is returned as it is. Untyped;
-compiles nothing per uuid.
+compiles nothing per uuid; used where `x` comes in untyped (the `Process`, `InlineProcess` and plan `run`/`init`
+entry points). A typed handle numbers while compiling instead (`number_by_keymap`).
 """
-Base.@nospecializeinfer function number_by_keymap(@nospecialize(x), @nospecialize(keymap))
+Base.@nospecializeinfer function number_by_keymap_dynamic(@nospecialize(x), @nospecialize(keymap))
     keymap isa UniqueKeyMap || return x
     numbers = Dict{UUID, Int}()
     for pair in typeof(keymap).parameters[1]

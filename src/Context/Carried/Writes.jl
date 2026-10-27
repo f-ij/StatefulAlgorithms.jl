@@ -1,7 +1,7 @@
 #=
 Which fields of the persistent context one step of a plan can write, worked out from the plan's types.
 
-`_find_writable_fields(node, cursor, persistent_context, RuntimeContextType, wiring, namespace, process, lifetime)` gives the
+`_find_writable_fields(node, cursor, persistent_context, RuntimeContextType, wiring, namespace, session, lifetime)` gives the
 `(subcontext, field)` pairs one `_step!` of `node` can write, as `Val(written)`. Its arguments are those of the `_step!`
 call, except that the runtime context is passed as its type. It follows the plan the way `_step!` does, with the same
 child cursors, wiring views and namespaces at each position: the same algorithm can write different fields in
@@ -26,7 +26,7 @@ context type in every repeat: a step removes what it adds (a return lives until 
 """`written` and `new` as one sorted tuple of `(subcontext, field)` pairs without repeats."""
 _union_written(written::Tuple, new::Tuple) = Tuple(sort!(unique!(Any[written..., new...]); by = string))
 
-@inline _find_writable_fields(node::NodeType, cursor::CursorType, persistent_context::PersistentContextType, ::Type{RuntimeContextType}, wiring::WiringViewType, namespace::NamespaceType, process::ProcessType, lifetime::LifetimeType) where {NodeType, CursorType, PersistentContextType<:ProcessContext, RuntimeContextType, WiringViewType, NamespaceType, ProcessType, LifetimeType} =
+@inline _find_writable_fields(node::NodeType, cursor::CursorType, persistent_context::PersistentContextType, ::Type{RuntimeContextType}, wiring::WiringViewType, namespace::NamespaceType, session::SessionType, lifetime::LifetimeType) where {NodeType, CursorType, PersistentContextType<:ProcessContext, RuntimeContextType, WiringViewType, NamespaceType, SessionType, LifetimeType} =
     _every_field(PersistentContextType)
 
 """Every `(subcontext, field)` pair of the persistent context type, as `Val(written)`."""
@@ -76,9 +76,9 @@ cannot be answered, and the loop falls back to dynamic dispatch.
 The runtime context type after `_step!(node, ...)`, given the type `RuntimeContextType` before it: the union of both,
 since the node may not run in a step (a child on an interval). `Any` when inference cannot tell.
 """
-@inline function _runtime_context_type_after_node_step(node::NodeType, cursor::CursorType, persistent_context::PersistentContextType, ::Type{RuntimeContextType}, wiring::WiringViewType, namespace::NamespaceType, process::ProcessType, lifetime::LifetimeType) where {NodeType, CursorType, PersistentContextType, RuntimeContextType, WiringViewType, NamespaceType, ProcessType, LifetimeType}
+@inline function _runtime_context_type_after_node_step(node::NodeType, cursor::CursorType, persistent_context::PersistentContextType, ::Type{RuntimeContextType}, wiring::WiringViewType, namespace::NamespaceType, session::SessionType, lifetime::LifetimeType) where {NodeType, CursorType, PersistentContextType, RuntimeContextType, WiringViewType, NamespaceType, SessionType, LifetimeType}
     RuntimeContextType <: ProcessContext || return Any
-    stepped = Core.Compiler.return_type(_step!, Tuple{NodeType, CursorType, _loop_context_type(PersistentContextType, RuntimeContextType, WiringViewType), WiringViewType, NamespaceType, ProcessType, LifetimeType})
+    stepped = Core.Compiler.return_type(_step!, Tuple{NodeType, CursorType, _loop_context_type(PersistentContextType, RuntimeContextType, WiringViewType), WiringViewType, NamespaceType, SessionType, LifetimeType})
     return Union{RuntimeContextType, _runtime_context_types_of(stepped)}
 end
 
