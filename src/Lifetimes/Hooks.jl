@@ -1,5 +1,6 @@
 #=
-Extendable API of lifetimes: the logical stop check, whether a lifetime's own condition ends the repeats.
+Extendable API of lifetimes: the logical stop check, whether a lifetime's own condition ends the repeats, and the
+`Var`s it reads, given their context keys before the loop runs.
 
 Each function here has the default every lifetime gets. Extended in HookExtensions.jl next to this file: `Until`,
 `AtLeast`, `RepeatOrUntil`, `AtLeastAtMost`.
@@ -20,3 +21,13 @@ first repeat, nothing runs. `context` holds the persistent and the runtime value
 lifetime runs is the loop's bound, not this check.
 """
 @inline lifetime_breakcondition(lifetime::LT, context::C, done::D) where {LT<:Lifetime, C, D<:Integer} = false
+
+"""
+    resolve_var_keys(lifetime, registry) -> lifetime
+
+`lifetime` with the `Var`s its condition reads given their context keys (`resolve_var_key`). The loop calls it once
+before the first step, so the stop check before every step reads its variables by key and never loads the registry
+(a load and a null check per step, which also made LLVM store the step counter to the session every step).
+`lifetime` itself by default (no `Var`s).
+"""
+@inline resolve_var_keys(lifetime::LT, registry::R) where {LT<:Lifetime, R} = lifetime

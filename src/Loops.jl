@@ -64,8 +64,8 @@ end
     after_while(session, persistent_context, returnvalue) -> (persistent_context, returnvalue)
 
 The loop's exit: records the end time (a session that keeps times) and returns the persistent context and the run's
-result (on a pause, the paused context as both). Returned as the loop has them, without the plan's `UniqueKeyMap`; the process that started the run
-commits them (`Process`: `_finish_run!`, which also puts the map back into what `fetch(p)` returns; `InlineProcess`:
+result (on a pause, the paused context as both). Returned as the loop has them, without the plan's `UniqueKeyMap`; the
+process that started the run commits them (`Process`: `_finish_run!`, which also puts the map back into what `fetch(p)` returns; `InlineProcess`:
 `run_session_loop!`, which keeps the context on the session, and whose `run(ip)` returns the result without the map,
 while `context(ip)` has it).
 """
@@ -77,7 +77,7 @@ end
 """
     run_session_loop([loopfunc,] session, algo, context, lifetime, inputs, resume = Resuming{false}()) -> (persistent_context, result)
 
-The loop as a call of its own, where a process hands a run to it (`Process`, `InlineProcess`, `run(plan)`). Its
+The loop as a call of its own, where a `Process` or a plan run directly (`run(plan)`) hands a run to it. Its
 arguments are the session and the plan, context and lifetime without the plan's `UniqueKeyMap`, so it is compiled once
 for every set of `Unique` handles while the process calling it is typed on the map. Also compiled as its own function,
 so LLVM keeps the session's counters (`tickidx`) in registers.
@@ -90,12 +90,13 @@ so LLVM keeps the session's counters (`tickidx`) in registers.
 """
     run_session_loop!(session::InlineSession, algo, lifetime, inputs) -> result
 
-The loop of an `InlineProcess` run, as a call of its own like `run_session_loop`, on the context the session holds: it
-reads the context from the session and writes the context after the run back to it. Its arguments are pointers and
-small values, so the call costs what an inlined loop costs (measured: 14.2-14.6 ns against 14.0-14.3 ns per 10-step
-run), while passing the context in and returning it costs about 3 ns per call more.
+The loop of an `InlineProcess` run on the context the session holds: it reads the context from the session and writes
+the context after the run back to it. Inlined into `run(ip)`, so a compiled run costs what the loop costs and nothing
+more (a call of its own costs about 2 ns per run). `run(ip)` is compiled for every set of `Unique` handles, and the
+loop with it; its inference is reused, as its argument types have no map, so only its machine code is made again (1-18
+ms per new set of handles, measured for 2-16 children). `InlineProcess` compiles `run(ip)` when it is built.
 """
-@noinline function run_session_loop!(session::S, algo::A, lifetime::LT, inputs::I) where {C, S<:InlineSession{C}, A, LT, I<:NamedTuple}
+@inline function run_session_loop!(session::S, algo::A, lifetime::LT, inputs::I) where {C, S<:InlineSession{C}, A, LT, I<:NamedTuple}
     persistent_context, returnvalue = @inline loop(session, algo, session.context, lifetime, inputs, Resuming{false}())
     session.context = persistent_context
     return returnvalue
@@ -109,6 +110,8 @@ Run a single function in a loop indefinitely.
 
 @inline function loop(session::S, func::F, start_persistent_context::C, lifetime::LT, inputs::NamedTuple, ::Resuming{isresuming}, ::NonGenerated) where {S<:ProcessSession,F<:AbstractLoopAlgorithm,C<:ProcessContext,LT<:IndefiniteLifetime,isresuming}
     @inline before_while(session)
+    # The lifetime's `Var`s by key: the stop check before every step does not load the registry.
+    lifetime = @inline resolve_var_keys(lifetime, (@inline getregistry(start_persistent_context)))
 
     step_plan = @inline getplan(func)
     step_wiring = @inline _root_wiring_view(func, step_plan)
@@ -145,7 +148,9 @@ Base.@constprop :aggressive @inline function loop(session::S, algo::F, start_per
     @DebugMode "Running the loop for $repeats times from thread $(Threads.threadid())"
     @assert isresolved(algo) "Algo must be resolved before running the loop. Got algo $(algo) which is not resolved."
     @inline before_while(session)
-    
+    # The lifetime's `Var`s by key: the stop check before every step does not load the registry.
+    lifetime = @inline resolve_var_keys(lifetime, (@inline getregistry(start_persistent_context)))
+
     step_plan = @inline getplan(algo)
     step_wiring = @inline _root_wiring_view(algo, step_plan)
     resume = Resuming{isresuming}()

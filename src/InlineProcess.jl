@@ -57,7 +57,11 @@ Base.@nospecializeinfer function InlineProcess(@nospecialize(func), @nospecializ
     # The lifetime is not part of the plan: its `Var`s get the plan's numbers here, while the map is known.
     algo, prepared_context, lifetime, mode = _prepare_inline_process(strip_keymap(algo), inputs_overrides...;
         context = strip_keymap(context), lifetime = number_by_keymap_dynamic(lifetime, keymap), kwargs...)
-    return _construct_inline_process(algo, prepared_context, lifetime, Val(mode), keymap)
+    ip = _construct_inline_process(algo, prepared_context, lifetime, Val(mode), keymap)
+    # `run(ip)` has the loop inlined and is compiled for every set of `Unique` handles: compiled here, so the first
+    # run does not wait for it.
+    precompile(run, (typeof(ip),))
+    return ip
 end
 
 @inline function _prepare_inline_process(algo, inputs_overrides...; threaded=false, repeats=nothing, lifetime=nothing, context=nothing)
@@ -147,8 +151,7 @@ end
 
 """
 One run of `p`: the loop on the process's session, which holds the process's context and keeps the context after the
-run. The loop is reached through `run_session_loop!`, whose arguments have no map in their types, so it is compiled
-once for every set of `Unique` handles, while `p`'s own methods are typed on the map.
+run (`run_session_loop!`, inlined, so a compiled run costs only the loop).
 """
 @inline function _run_inline!(p::InlineProcess, algo::A, run_lifetime::LT, runtime_inputs::I) where {A, LT, I}
     session = getsession(p)

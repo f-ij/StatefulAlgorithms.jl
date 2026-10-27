@@ -55,6 +55,22 @@ matcher matches (resolved as a route endpoint, so the key is found at compile ti
     return getproperty(c, resolve_scref(reg, M, nothing, "Var subcontext"))
 end
 
+"""
+    resolve_var_key(var, registry) -> the `Var` reading the same variable by its context key
+
+`var` with its matcher replaced by the key of the subcontext it reads (`KeyMatcher{key}`), found from `registry` while
+compiling (`resolve_scref`). Reading the result needs no registry: the loop resolves its lifetime's `Var`s once
+before the first step (`resolve_var_keys`), so the stop check before every step does not load the registry. A `Var`
+that already has a key, anything else a lifetime reads (a context key as a `Symbol`), or with no registry, is
+returned as it is.
+"""
+@inline resolve_var_key(var::V, registry::R) where {V, R} = var
+@inline resolve_var_key(var::Var{M}, registry::NameSpaceRegistry) where {M<:AbstractMatcher} =
+    _var_with_key(var, Val(resolve_scref(registry, M, nothing, "Var subcontext")))
+@inline resolve_var_key(var::Var{KeyMatcher{key}}, registry::NameSpaceRegistry) where {key} = var
+@inline _var_with_key(::Var{M, name, transform}, ::Val{key}) where {M, name, transform, key} =
+    Var{KeyMatcher{key}, name, transform}(KeyMatcher{key}())
+
 @inline _var_transform(::Var{M, N, nothing}, value) where {M, N} = value
 @inline _var_transform(::Var{M, N, transform}, value) where {M, N, transform} = transform(value)
 
