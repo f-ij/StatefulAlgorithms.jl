@@ -98,6 +98,28 @@ end
     @test c[Var(b, :x)] == 10.0
 end
 
+@testset "A lifetime from outside the plan gets the plan's numbers for its Unique handles" begin
+    @StepAlgorithm function NumberedLifetimeCounter(@managed(x = 0))
+        @update x += 1
+    end
+    a, b = Unique(NumberedLifetimeCounter()), Unique(NumberedLifetimeCounter())
+    plan = CompositeAlgorithm(a, b, (1, 1))
+    # The lifetime's `Var` names `a` as the plan numbers it (no uuid in its type), so the loop finds it while compiling.
+    numbered(lt) = StatefulAlgorithms.plan_number(typeof(only(getfield(lt, :vars))).parameters[1]) isa Int
+    p = Process(plan; lifetime = RepeatOrUntil(x -> x >= 5, 100, Var(a, :x)))
+    @test numbered(StatefulAlgorithms.lifetime(p))
+    run(p); wait(p)
+    @test StatefulAlgorithms.context(p)[a].x == 5
+    q = Process(plan)
+    run(q; lifetime = RepeatOrUntil(x -> x >= 7, 100, Var(b, :x))); wait(q)
+    @test numbered(StatefulAlgorithms.lifetime(q))
+    @test StatefulAlgorithms.context(q)[b].x == 7
+    ip = InlineProcess(plan; lifetime = RepeatOrUntil(x -> x >= 4, 100, Var(a, :x)))
+    @test numbered(StatefulAlgorithms.lifetime(ip))
+    @test run(ip)[a].x == 4
+    @test StatefulAlgorithms.context(run(plan; lifetime = RepeatOrUntil(x -> x >= 3, 100, Var(a, :x))))[a].x == 3
+end
+
 @testset "A Var reconstructed from its type" begin
     @StepAlgorithm function ReconstructCounter(@managed(x = 0))
         @update x += 1

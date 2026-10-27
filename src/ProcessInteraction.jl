@@ -23,7 +23,16 @@ otherwise different lifetime without rebuilding its initialized context.
     end
 end
 
-function Base.run(p::Process, run_lifetime = nothing, inputs_and_overrides...; repeats = nothing, lifetime = nothing, kwargs...)
+# Untyped: a lifetime given here gets the plan's numbers for its `Unique` handles (`number_by_keymap`, from the map the
+# process keeps), so it compiles nothing per uuid and its `Var`s are found while compiling in the loop.
+Base.@nospecializeinfer function Base.run(@nospecialize(p::Process), @nospecialize(run_lifetime = nothing),
+        @nospecialize(inputs_and_overrides...); repeats = nothing, @nospecialize(lifetime = nothing), kwargs...)
+    keymap = getfield(p, :keymap)
+    return _run_process(p, number_by_keymap(run_lifetime, keymap), inputs_and_overrides...;
+        repeats, lifetime = number_by_keymap(lifetime, keymap), kwargs...)
+end
+
+function _run_process(p::Process, run_lifetime = nothing, inputs_and_overrides...; repeats = nothing, lifetime = nothing, kwargs...)
     @assert isidle(p) "Process is already in use"
 
     if ispaused(p)

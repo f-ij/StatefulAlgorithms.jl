@@ -239,9 +239,10 @@ specs override stored specs per target. Resolves `la` first (untyped) and initia
 `UniqueKeyMap` (`strip_keymap`), which the returned plan carries again, so a new set of `Unique` handles compiles
 nothing again.
 """
-Base.@nospecializeinfer function init(@nospecialize(la::LoopSpec), @nospecialize(specs::InputInterface...); lifetime = Indefinite())
+Base.@nospecializeinfer function init(@nospecialize(la::LoopSpec), @nospecialize(specs::InputInterface...); @nospecialize(lifetime = Indefinite()))
     resolved = resolve(la)
-    return with_keymap(_init_plan(strip_keymap(resolved), specs...; lifetime), getkeymap(resolved))
+    keymap = getkeymap(resolved)
+    return with_keymap(_init_plan(strip_keymap(resolved), specs...; lifetime = number_by_keymap(lifetime, keymap)), keymap)
 end
 
 """`init` of a resolved plan without a `UniqueKeyMap`: what `init`, `run` and the processes call."""
@@ -290,9 +291,11 @@ validated, merged into the transient `ProcessContext._inputs` field for the loop
 call, and removed before the returned loop algorithm stores its next persistent
 context. Runs `la` without its `UniqueKeyMap` (`strip_keymap`); the returned plan carries it again.
 """
-Base.@nospecializeinfer function Base.run(@nospecialize(la::LoopSpec); kwargs...)
+Base.@nospecializeinfer function Base.run(@nospecialize(la::LoopSpec); @nospecialize(lifetime = nothing), kwargs...)
     resolved = resolve(la)
-    return with_keymap(_run_plan(strip_keymap(resolved); kwargs...), getkeymap(resolved))
+    keymap = getkeymap(resolved)
+    # The lifetime is not part of the plan: its `Var`s get the plan's numbers here (`number_by_keymap`).
+    return with_keymap(_run_plan(strip_keymap(resolved); lifetime = number_by_keymap(lifetime, keymap), kwargs...), keymap)
 end
 
 function _run_plan(la::LA; repeats = 1, lifetime = nothing, kwargs...) where {LA<:LoopSpec}

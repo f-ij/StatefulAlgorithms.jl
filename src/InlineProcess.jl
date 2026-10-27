@@ -51,11 +51,13 @@ end
 Resolves `func` first (untyped), keeps the plan's `UniqueKeyMap` on the process and builds the process on the plan
 without it (`strip_keymap`), as `Process` does.
 """
-function InlineProcess(@nospecialize(func), @nospecialize(inputs_overrides...); context = nothing, kwargs...)
+Base.@nospecializeinfer function InlineProcess(@nospecialize(func), @nospecialize(inputs_overrides...); context = nothing, @nospecialize(lifetime = nothing), kwargs...)
     algo = func isa LoopSpec ? func : normalize_process_algo(func)
     algo isa LoopSpec && (algo = resolve(algo))
     keymap = getkeymap(algo)
-    p = _new_inline_process(strip_keymap(algo), inputs_overrides...; context = strip_keymap(context), kwargs...)
+    # The lifetime is not part of the plan: its `Var`s get the plan's numbers here, while the map is known (as `Process`).
+    p = _new_inline_process(strip_keymap(algo), inputs_overrides...; context = strip_keymap(context),
+        lifetime = number_by_keymap(lifetime, keymap), kwargs...)
     setfield!(p, :keymap, keymap)   # not `p.keymap = `: that compiles `setproperty!` for every map type
     set_user_context!(p, _context(p))
     return p
@@ -126,7 +128,8 @@ end
 
     p.loopidx = 1
     runtime_inputs = _inline_runtime_inputs(algo, inputs_overrides, (; kwargs...))
-    inputlifetime = isnothing(lifetime) ? StatefulAlgorithms.lifetime(p) : lifetime
+    # A lifetime given here gets the plan's numbers for its `Unique` handles (`number_by_keymap`), as in the constructor.
+    inputlifetime = isnothing(lifetime) ? StatefulAlgorithms.lifetime(p) : number_by_keymap(lifetime, getfield(p, :keymap))
     run_lifetime = _inline_process_lifetime(algo, repeats, inputlifetime)
 
     if (isnothing(threaded) && isthreaded(p)) || threaded === true
@@ -151,7 +154,8 @@ end
 
     p.loopidx = 1
     # loopdispatch = isnothing(repeat) ? lifetime(p) : _inline_process_lifetime(algo, repeat, nothing)
-    inputlifetime = isnothing(lifetime) ? StatefulAlgorithms.lifetime(p) : lifetime
+    # A lifetime given here gets the plan's numbers for its `Unique` handles (`number_by_keymap`), as in the constructor.
+    inputlifetime = isnothing(lifetime) ? StatefulAlgorithms.lifetime(p) : number_by_keymap(lifetime, getfield(p, :keymap))
     run_lifetime = _inline_process_lifetime(algo, repeats, inputlifetime)
     runtime_inputs = _inline_runtime_inputs(algo, inputs_overrides, (; kwargs...))
 

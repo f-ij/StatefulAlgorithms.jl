@@ -173,11 +173,13 @@ end
 A process running `func`. Resolves it first (untyped), keeps the plan's `UniqueKeyMap` on the process and builds the
 process on the plan without it (`strip_keymap`), so a new set of `Unique` handles compiles nothing again.
 """
-function Process(@nospecialize(func), @nospecialize(inputs_overrides...); context = nothing, kwargs...)
+Base.@nospecializeinfer function Process(@nospecialize(func), @nospecialize(inputs_overrides...); context = nothing, @nospecialize(lifetime = nothing), kwargs...)
     algo = func isa LoopSpec ? func : normalize_process_algo(func)
     algo isa LoopSpec && (algo = resolve(algo))
     keymap = getkeymap(algo)
-    p = _new_process(strip_keymap(algo), inputs_overrides...; context = strip_keymap(context), kwargs...)
+    # The lifetime is not part of the plan: its `Var`s get the plan's numbers here, while the map is known.
+    p = _new_process(strip_keymap(algo), inputs_overrides...; context = strip_keymap(context),
+        lifetime = number_by_keymap(lifetime, keymap), kwargs...)
     setfield!(p, :keymap, keymap)   # not `p.keymap = `: that compiles `setproperty!` for every map type
     set_user_context!(p, _context(p))
     return p
