@@ -41,27 +41,32 @@ struct RepeatOnce <: RepeatLifetime end
 repeats(::RepeatOnce) = 1
 
 
+# The lifetimes with a condition are built untyped: a `Var` of a `Unique` handle puts its uuid in `vars`' type, so a
+# typed constructor would compile once for every new handle. They are only built while constructing a plan or process.
 struct Until{V<:Tuple, F} <: IndefiniteLifetime
     cond::F
     vars::V
-    Until(cond::Function, vars...) = new{typeof(vars), typeof(cond)}(cond, vars)
 end
+Base.@nospecializeinfer Until(@nospecialize(cond::Function), @nospecialize(vars...)) =
+    new_instance(Core.apply_type(Until, typeof(vars), typeof(cond)), cond, vars)
 
 
 struct AtLeast{V<:Tuple, F} <: IndefiniteLifetime
     atleast::Int
     cond::F
     vars::V
-    AtLeast(cond::Function, atleast::Int, vars...) = new{typeof(vars), typeof(cond)}(atleast, cond, vars)
 end
+Base.@nospecializeinfer AtLeast(@nospecialize(cond::Function), atleast::Int, @nospecialize(vars...)) =
+    new_instance(Core.apply_type(AtLeast, typeof(vars), typeof(cond)), atleast, cond, vars)
 
 
 struct RepeatOrUntil{V<:Tuple, F} <: RepeatLifetime
     repeats::Int
     cond::F
     vars::V
-    RepeatOrUntil(cond::Function, repeats::Int, vars...) = new{typeof(vars), typeof(cond)}(repeats, cond, vars)
 end
+Base.@nospecializeinfer RepeatOrUntil(@nospecialize(cond::Function), repeats::Int, @nospecialize(vars...)) =
+    new_instance(Core.apply_type(RepeatOrUntil, typeof(vars), typeof(cond)), repeats, cond, vars)
 repeats(rou::RepeatOrUntil) = rou.repeats
 
 
@@ -70,6 +75,7 @@ struct AtLeastAtMost{V<:Tuple, F} <: RepeatLifetime
     repeats::Int
     cond::F
     vars::V
-    AtLeastAtMost(cond::Function, atleast::Int, atmost::Int, vars...) = new{typeof(vars), typeof(cond)}(atleast, atmost, cond, vars)
 end
+Base.@nospecializeinfer AtLeastAtMost(@nospecialize(cond::Function), atleast::Int, atmost::Int, @nospecialize(vars...)) =
+    new_instance(Core.apply_type(AtLeastAtMost, typeof(vars), typeof(cond)), atleast, atmost, cond, vars)
 repeats(aam::AtLeastAtMost) = aam.repeats

@@ -22,10 +22,16 @@ struct Var{M, name, transform}
 end
 
 # Typed: `c[Var(:key, :x)]` in a function is inferred and does not allocate.
-function Var(subcontext_ref, name::Symbol; transform = nothing)
-    matcher = scref_matcher(subcontext_ref)
-    return Var{typeof(matcher), name, transform}(matcher)
+Var(subcontext_ref, name::Symbol; transform = nothing) = _typed_var(scref_matcher(subcontext_ref), name, transform)
+Var(subcontext_ref::IdentifiableAlgo{F, Id, VA, AN, K, Nothing}, name::Symbol; transform = nothing) where {F, Id, VA, AN, K} =
+    _typed_var(scref_matcher(subcontext_ref), name, transform)
+# A handle whose matcher carries data (a `Unique` handle) has a new type for every uuid: built untyped from its
+# `matcher` field (which is what it is found by), so a new handle compiles nothing. The result is not inferred.
+Base.@nospecializeinfer function Var(@nospecialize(subcontext_ref::IdentifiableAlgo), name::Symbol; transform = nothing)
+    matcher = getfield(subcontext_ref, :matcher)
+    return new_instance(Core.apply_type(Var, typeof(matcher), name, transform), matcher)
 end
+@inline _typed_var(matcher::M, name::Symbol, transform::T) where {M, T} = Var{M, name, transform}(matcher)
 Var(name::Symbol) = Var(:_captured_returns, name)
 
 """
