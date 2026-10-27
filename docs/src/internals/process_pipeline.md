@@ -88,7 +88,8 @@ High-level structure:
 2. build or restore the per-run loop cursor and runtime context
 3. execute the repeat/while body with tick/index increments
 4. either keep the cursor (pause) or run cleanup/final-result projection, and return `(persistent_context, result)`;
-   the process commits them (`_finish_run!`, `_run_inline!`)
+   the process commits them (`Process`: `_finish_run!`; `InlineProcess`: `run_session_loop!` keeps the context on the
+   process's session)
 
 Composite and routine steps receive an explicit loop cursor. Composite cursors
 own the interval counter for that run. Pausable process runs allocate routine

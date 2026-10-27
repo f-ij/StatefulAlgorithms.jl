@@ -8,15 +8,14 @@ This doesn't provide the multitasking features of Process, but is faster to rest
 mutable struct InlineProcess{TD,ContextType, Lt,Mode,K} <: AbstractProcess
     const id::UUID
     algo::TD            # the plan, without the map (the loop's type)
-    context::ContextType # its context, without the map (the loop's type)
     consumed::Bool
     lifetime::Lt        # its `Var`s numbered as the plan numbers its handles
     # The plan's `UniqueKeyMap` (zero bytes) or `nothing`: in the type, so what the user does with the process is typed
     # (`context(ip)[handle]`, `run(ip; lifetime)` numbering while compiling). Never passed to the loop.
     const keymap::K
-    # The run's counter and times, one session for every run (Sessions/InlineSession.jl): what the loop gets instead of
-    # the process.
-    const session::InlineSession
+    # The run's counter and the process's context, without the map (the loop's type), one session for every run
+    # (Sessions/InlineSession.jl): what the loop gets instead of the process.
+    const session::InlineSession{ContextType}
 end
 #TODO Improve context semantics
 contexttype(::Union{InlineProcess{TD,ContextType}, Type{<:InlineProcess{TD,ContextType}}}) where {TD,ContextType} = ContextType
@@ -70,7 +69,7 @@ end
 
 # The only step typed on the map: compiled once per set of `Unique` handles, and small.
 _construct_inline_process(algo::TD, context::C, lifetime::Lt, ::Val{mode}, keymap::K) where {TD, C, Lt, mode, K} =
-    InlineProcess{TD, C, Lt, mode, K}(uuid1(), algo, context, false, lifetime, keymap, InlineSession())
+    InlineProcess{TD, C, Lt, mode, K}(uuid1(), algo, false, lifetime, keymap, InlineSession(context))
 
 @inline isthreaded(ip::InlineProcess{TD,ContextType,Lt,Mode}) where {TD,ContextType,Lt,Mode} = Mode == :threaded
 @inline isasync(ip::InlineProcess{TD,ContextType,Lt,Mode}) where {TD,ContextType,Lt,Mode} = Mode == :async
@@ -82,10 +81,10 @@ getalgo(ip::InlineProcess) = ip.algo
 
 """Set the process's context to `c` (a context from `context(ip)` has the map: it is taken out)."""
 @inline function context(ip::InlineProcess, c)
-    ip.context = detach_keymap(c)
-    return ip.context
+    getsession(ip).context = detach_keymap(c)
+    return _context(ip)
 end
-@inline _context(ip::InlineProcess) = ip.context::contexttype(ip)
+@inline _context(ip::InlineProcess) = getsession(ip).context
 """The process's context with the plan's `UniqueKeyMap` in its registry (`attach_keymap`), typed: `context(ip)[handle]`."""
 @inline context(ip::InlineProcess) = attach_keymap(_context(ip), getfield(ip, :keymap))
 
@@ -110,11 +109,13 @@ stays on `reset!`, where the process can rebuild its persistent context.
     return _validate_runtime_inputs(algo, kwargs)
 end
 
-@inline function _inline_run_context(p::InlineProcess, context)
-    isnothing(context) && return _context(p)
+# A context given to `run(ip)`: the run starts from it, so it becomes the process's context (on its session) first.
+@inline _set_inline_run_context!(p::InlineProcess, ::Nothing) = nothing
+@inline function _set_inline_run_context!(p::InlineProcess, context)
     context = detach_keymap(context)   # a context from `context(ip)` has the map
     @assert context isa contexttype(p) "Wrong context shape for this process\n Context is of type $(typeof(context)), but expected $(contexttype(p))."
-    return context
+    getsession(p).context = context
+    return nothing
 end
 
 # A lifetime given to `run(ip)`: numbered as the plan numbers its handles while compiling (`number_by_keymap`).
@@ -123,38 +124,36 @@ end
 
 @inline function Base.run(p::InlineProcess, inputs_overrides...; context = nothing, repeats=nothing, lifetime=nothing, threaded=nothing, kwargs...)
     algo = getalgo(p)
-    run_context = _inline_run_context(p, context)
+    _set_inline_run_context!(p, context)
     runtime_inputs = _inline_runtime_inputs(algo, inputs_overrides, (; kwargs...))
     run_lifetime = _inline_run_lifetime(p, algo, repeats, lifetime)
 
     if (isnothing(threaded) && isthreaded(p)) || threaded === true
-        return Threads.@spawn _run_inline!(p, algo, run_context, run_lifetime, runtime_inputs)
+        return Threads.@spawn _run_inline!(p, algo, run_lifetime, runtime_inputs)
     elseif (isnothing(threaded) && isasync(p)) || threaded === :async
-        return @async _run_inline!(p, algo, run_context, run_lifetime, runtime_inputs)
+        return @async _run_inline!(p, algo, run_lifetime, runtime_inputs)
     else
-        return @inline _run_inline!(p, algo, run_context, run_lifetime, runtime_inputs)
+        return @inline _run_inline!(p, algo, run_lifetime, runtime_inputs)
     end
 end
 
 @inline function run_nogen(p::InlineProcess, inputs_overrides...; context = nothing, repeats=nothing, lifetime=nothing, threaded=nothing, kwargs...)
     algo = getalgo(p)
-    run_context = _inline_run_context(p, context)
+    _set_inline_run_context!(p, context)
     run_lifetime = _inline_run_lifetime(p, algo, repeats, lifetime)
     runtime_inputs = _inline_runtime_inputs(algo, inputs_overrides, (; kwargs...))
-    return @inline _run_inline!(p, algo, run_context, run_lifetime, runtime_inputs)
+    return @inline _run_inline!(p, algo, run_lifetime, runtime_inputs)
 end
 
 """
-One run of `p`: the loop on the process's session, then its context kept on the process. The loop is reached through
-`run_session_loop`, whose arguments have no map in their types, so it is compiled once for every set of `Unique`
-handles, while `p`'s own methods are typed on the map.
+One run of `p`: the loop on the process's session, which holds the process's context and keeps the context after the
+run. The loop is reached through `run_session_loop!`, whose arguments have no map in their types, so it is compiled
+once for every set of `Unique` handles, while `p`'s own methods are typed on the map.
 """
-@inline function _run_inline!(p::InlineProcess, algo::A, run_context::C, run_lifetime::LT, runtime_inputs::I) where {A, C, LT, I}
+@inline function _run_inline!(p::InlineProcess, algo::A, run_lifetime::LT, runtime_inputs::I) where {A, LT, I}
     session = getsession(p)
     reset_loopidx!(session)
-    persistent_context, returnvalue = run_session_loop(session, algo, run_context, run_lifetime, runtime_inputs)
-    p.context = persistent_context
-    return returnvalue
+    return run_session_loop!(session, algo, run_lifetime, runtime_inputs)
 end
 
 @inline function init_and_run(p::InlineProcess, inputs_overrides...)

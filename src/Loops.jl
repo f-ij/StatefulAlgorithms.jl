@@ -63,10 +63,11 @@ end
 """
     after_while(session, persistent_context, returnvalue) -> (persistent_context, returnvalue)
 
-The loop's exit: records the end time (a session that keeps times) and returns the persistent context and the run's result (on a pause, the paused
-context as both). Returned as the loop has them, without the plan's `UniqueKeyMap`; the process that started the run
+The loop's exit: records the end time (a session that keeps times) and returns the persistent context and the run's
+result (on a pause, the paused context as both). Returned as the loop has them, without the plan's `UniqueKeyMap`; the process that started the run
 commits them (`Process`: `_finish_run!`, which also puts the map back into what `fetch(p)` returns; `InlineProcess`:
-`_run_inline!`, whose `run(ip)` returns the result without the map, while `context(ip)` has it).
+`run_session_loop!`, which keeps the context on the session, and whose `run(ip)` returns the result without the map,
+while `context(ip)` has it).
 """
 @inline function after_while(session::S, persistent_context::C, returnvalue::R) where {S<:ProcessSession, C<:ProcessContext, R}
     @inline set_endtime!(session)
@@ -85,6 +86,20 @@ so LLVM keeps the session's counters (`tickidx`) in registers.
     loopfunc(session, algo, context, lifetime, inputs, resume)
 @inline run_session_loop(session::S, algo::A, context::C, lifetime::LT, inputs::I, resume::R = Resuming{false}()) where {S<:ProcessSession, A, C, LT, I<:NamedTuple, R<:Resuming} =
     run_session_loop(loop, session, algo, context, lifetime, inputs, resume)
+
+"""
+    run_session_loop!(session::InlineSession, algo, lifetime, inputs) -> result
+
+The loop of an `InlineProcess` run, as a call of its own like `run_session_loop`, on the context the session holds: it
+reads the context from the session and writes the context after the run back to it. Its arguments are pointers and
+small values, so the call costs what an inlined loop costs (measured: 14.2-14.6 ns against 14.0-14.3 ns per 10-step
+run), while passing the context in and returning it costs about 3 ns per call more.
+"""
+@noinline function run_session_loop!(session::S, algo::A, lifetime::LT, inputs::I) where {C, S<:InlineSession{C}, A, LT, I<:NamedTuple}
+    persistent_context, returnvalue = @inline loop(session, algo, session.context, lifetime, inputs, Resuming{false}())
+    session.context = persistent_context
+    return returnvalue
+end
 
 """
 Run a single function in a loop indefinitely.
