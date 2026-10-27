@@ -57,8 +57,9 @@ steps below 4.7–4.8 ms). So the uuid (`origin`) is data and never changes; the
 | 3 | `k` = 1, 2, ... | `number_unique_ids` | a plan is built: each new uuid gets the next number; a nested plan is renumbered by uuid |
 
 1. Every holder of an id keeps it as a value next to its type, so both rewrites (strip and number) reach it: a handle in
-   its `matcher` field, a route in its endpoint fields, a `Var` in its `data` field. A holder's type parameters that
-   come from those fields are worked out again from them (`list_field_derived_params`).
+   its `matcher` field, a route in its endpoint fields, a `Var` in its `matcher` field. A `Var`'s type parameter is
+   that field's type, so the rewrite updates it with the field. The other holders also copy the id into a separate
+   type parameter, which is worked out again from the field (`list_field_derived_params`).
 2. A plan's schedule (a `Routine`'s lifetimes, a composite's intervals, which may hold `Var`s) is a field; the plan's
    type has only the schedule's type, in which an id is `UniquePlanId{k}`: which handle within the plan.
 3. The registry stores each handle numbered, as the plan has it.

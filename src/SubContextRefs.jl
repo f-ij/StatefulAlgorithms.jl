@@ -26,16 +26,22 @@ An SCRef is used in three steps:
 ################################################
 
 """
+The matcher an SCRef is found by: an SCKey as a `KeyMatcher`, anything else as its `match_by` made a matcher (a type
+as a `TypeMatcher`, a plain value as a `ValMatcher`). What a `Var` holds.
+"""
+function scref_matcher(ref)
+    ref isa Symbol && return KeyMatcher(ref)
+    matcher = match_by(ref)
+    matcher isa AbstractMatcher && return matcher
+    matcher isa Type && return TypeMatcher(matcher)
+    return ValMatcher(matcher)
+end
+
+"""
 The type-level part of an SCRef: an SCKey stays itself, anything else becomes its matcher type.
 Only the matcher goes into a route's type, so the object's value identity does not.
 """
-function scref_match(ref)
-    ref isa Symbol && return ref
-    matcher = match_by(ref)
-    matcher isa AbstractMatcher && return typeof(matcher)
-    matcher isa Type && return typeof(TypeMatcher(matcher))
-    return typeof(ValMatcher(matcher))
-end
+scref_match(ref) = ref isa Symbol ? ref : typeof(scref_matcher(ref))
 
 """
     same_scref(a, b) -> Bool
@@ -55,16 +61,6 @@ end
 
 """The object part of an SCRef, kept until the plan is resolved; `nothing` when it is already an SCKey."""
 scref_object(ref) = ref isa Symbol ? nothing : ref
-
-"""
-The data part of an SCRef's matcher: the matcher, when it carries data its type does not hold (`carries_data`), else
-`nothing`. What a holder that keeps no object (`Var`) keeps next to `scref_match`, so the matcher can be rewritten.
-"""
-function scref_data(ref)
-    ref isa Symbol && return nothing
-    m = match_by(ref)
-    return carries_data(m) ? m : nothing
-end
 
 """
 The namespace every instance of this kind lives in, given by its SCKey, or `nothing` when each
@@ -97,7 +93,7 @@ end
 
 """The SCKey of an SCRef's object, or `nothing` when it has none."""
 @inline object_sckey(reg::NameSpaceRegistry, ::Nothing) = nothing
-# A matcher kept as the object (the data of a `Var`'s matcher, `scref_data`) has no key of its own: its type finds it.
+# A matcher kept as the object (a `Var`'s matcher, as a `From` wire's source) has no key of its own: its type finds it.
 @inline object_sckey(reg::NameSpaceRegistry, ::AbstractMatcher) = nothing
 @inline function object_sckey(reg::NameSpaceRegistry, object)
     fixed = fixed_namespace(object)

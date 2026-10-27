@@ -41,6 +41,12 @@ subcontext (an algorithm, its type or key, `:_captured_returns` for a captured r
 declared local), optionally transformed, as `alias`.
 """
 From(wire::Pair{<:Var, Symbol}) = _var_route(first(wire), last(wire))
-# A `Var` already stores its reference as a route stores an endpoint: the matcher type, and its data as the object.
-_var_route(var::Var{Ref, name, transform, D}, alias::Symbol) where {Ref, name, transform, D} =
-    Route{Ref, OwnerMatcher, transform, nothing, (name,), (alias,), D, ThisChild}(getfield(var, :data), ThisChild())
+# The route's source endpoint from the `Var`'s matcher: a context key as itself; any other matcher as its type, with
+# the matcher as the object when it carries data (a `Unique` handle's `UniquePlanId`), else `nothing`.
+_var_route(var::Var{KeyMatcher{key}, name, transform}, alias::Symbol) where {key, name, transform} =
+    Route{key, OwnerMatcher, transform, nothing, (name,), (alias,), Nothing, ThisChild}(nothing, ThisChild())
+function _var_route(var::Var{M, name, transform}, alias::Symbol) where {M, name, transform}
+    matcher = getfield(var, :matcher)
+    object = carries_data(matcher) ? matcher : nothing
+    return Route{M, OwnerMatcher, transform, nothing, (name,), (alias,), typeof(object), ThisChild}(object, ThisChild())
+end

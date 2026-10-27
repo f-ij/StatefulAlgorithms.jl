@@ -10,44 +10,41 @@ state as it was put into the plan (its type, or the instance), or a context key 
 `transform`, reading it gives `transform(value)`. Read with `context[var]`, used by lifetimes
 (`Until(cond, Var(counter, :count))`), and as the source of a wire in `WithWiring` (`From`).
 
-`subcontext_ref` is stored as a route stores an endpoint, without the object: in the type, a context key as itself and
-anything else (a type, an instance) as its matcher type (`scref_match`); in the `data` field, the matcher when it
-carries data its type does not hold (`scref_data`, a `Unique` handle's `UniquePlanId`), else `nothing`. Reading the
-`Var` resolves the matcher type to a key in the context's registry (`resolve_scref`), while compiling; a type reads
-the first registered algorithm of that type. The transform must be a plain function or a closure without captured
+`subcontext_ref` is stored as its matcher (`scref_matcher`) in the `matcher` field: a context key as a `KeyMatcher`,
+anything else (a type, an instance, a `Unique` handle) as the matcher it is found by. The field's type `M` decides
+the read while compiling: a key reads that subcontext, any other matcher the registry entry it matches
+(`resolve_scref`); a type reads the first registered algorithm of that type. Only a matcher that carries data (a
+`Unique` handle's `UniquePlanId`) takes bytes. The transform must be a plain function or a closure without captured
 values, as for routes.
 """
-struct Var{SubcontextRef, name, transform, D}
-    data::D
+struct Var{M, name, transform}
+    matcher::M
 end
 
 # Typed: `c[Var(:key, :x)]` in a function is inferred and does not allocate.
 function Var(subcontext_ref, name::Symbol; transform = nothing)
-    data = scref_data(subcontext_ref)
-    return Var{scref_match(subcontext_ref), name, transform, typeof(data)}(data)
+    matcher = scref_matcher(subcontext_ref)
+    return Var{typeof(matcher), name, transform}(matcher)
 end
-Var(name::Symbol) = Var{:_captured_returns, name, nothing, Nothing}(nothing)
-
-# The matcher type (parameter 1) is that of the `data` field, as a route's endpoints are those of its endpoint fields.
-list_field_derived_params(::Type{<:Var}) = ((1, 1, scref_match),)
+Var(name::Symbol) = Var(:_captured_returns, name)
 
 """
-Return the subcontext a `Var` refers to: the one named by its SCKey, or the registry entry its
+Return the subcontext a `Var` refers to: the one its `KeyMatcher` names, or the registry entry its
 matcher matches (resolved as a route endpoint, so the key is found at compile time).
 """
-@inline _var_subcontext(c::ProcessContext, key::Symbol) = c[key]
+@inline _var_subcontext(c::ProcessContext, ::Type{KeyMatcher{key}}) where {key} = c[key]
 @inline function _var_subcontext(c::ProcessContext, ::Type{M}) where {M<:AbstractMatcher}
     reg = getregistry(c)
     isnothing(reg) && error("Cannot look up a `Var`'s subcontext without a registry in this context.")
     return getproperty(c, resolve_scref(reg, M, nothing, "Var subcontext"))
 end
 
-@inline _var_transform(::Var{E, N, nothing}, value) where {E, N} = value
-@inline _var_transform(::Var{E, N, transform}, value) where {E, N, transform} = transform(value)
+@inline _var_transform(::Var{M, N, nothing}, value) where {M, N} = value
+@inline _var_transform(::Var{M, N, transform}, value) where {M, N, transform} = transform(value)
 
-@inline function Base.getindex(c::ProcessContext, var::Var{SubcontextRef, name}) where {SubcontextRef, name}
+@inline function Base.getindex(c::ProcessContext, var::Var{M, name}) where {M, name}
     # A field redirected by `Redirect` reads the value of the field it points to, not its `RedirectedVar` marker.
-    @inline _var_transform(var, (@inline _follow_reads(c, getproperty(_var_subcontext(c, SubcontextRef), name))))
+    @inline _var_transform(var, (@inline _follow_reads(c, getproperty(_var_subcontext(c, M), name))))
 end
 
 """The value stored at the state location `subcontext.field` of `c`, as stored: what a `ReadFrom` goes on with."""
@@ -69,6 +66,6 @@ end
 """
 Read a DSL runtime variable selector from `ProcessContext._captured_returns`.
 """
-@inline function Base.getindex(c::ProcessContext, var::Var{:_captured_returns, name}) where {name}
+@inline function Base.getindex(c::ProcessContext, var::Var{KeyMatcher{:_captured_returns}, name}) where {name}
     _var_transform(var, get_captured_returns(c)[name])
 end
