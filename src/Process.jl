@@ -206,6 +206,14 @@ end
 Base.:(==)(p1::Process, p2::Process) = p1.id == p2.id
 
 getalgo(p::P) where {P<:Process} = p.algo
+"""
+    getalgo_with_keymap(p)
+
+The process's plan with the plan's `UniqueKeyMap` back in its registry (`with_keymap`): the plan as the user gives it to
+`Process`, for building another process on it (a copy, a manager's worker) that keeps the map. `getalgo(p)` is the plan
+without it, as the loop runs it. Untyped.
+"""
+Base.@nospecializeinfer getalgo_with_keymap(@nospecialize(p::AbstractProcess)) = with_keymap(getalgo(p), getfield(p, :keymap))
 """The process's context as SA works with it: its registry stores `Unique` handles numbered (see `context`)."""
 function _context(p::P) where {P<:Process}
     runtime_context = p.runtime_context
@@ -225,8 +233,8 @@ Base.@nospecializeinfer context(@nospecialize(p::Process)) = getfield(p, :user_c
     set_user_context!(process, c)
 
 Builds the context `process` hands to the user from its context `c`: `c` with the plan's `UniqueKeyMap` put back
-(`with_keymap`), stored in the process's `user_context` field. Called each time the process's context changes. Untyped,
-so the loop that calls it at its exit compiles nothing per uuid.
+(`with_keymap`), stored in the process's `user_context` field. Called each time the process's context changes (after a
+run, `_finish_run!`; `commit_context!`; `context(p, c)`). Untyped: the context's type can change between runs.
 """
 Base.@nospecializeinfer function set_user_context!(@nospecialize(process::AbstractProcess), @nospecialize(c))
     setfield!(process, :user_context, with_keymap(c, getfield(process, :keymap)))

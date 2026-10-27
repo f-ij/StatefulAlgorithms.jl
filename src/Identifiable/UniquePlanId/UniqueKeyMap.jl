@@ -3,8 +3,9 @@ The `Unique` handles the user holds, found from types. The registry stores every
 the user holds `UniquePlanId{uuid}`. `resolve` puts the plan's `k => uuid` pairs into the registry's type
 (`UniqueKeyMap`, the registry's `keymap`), so `registry[held]` and `context[held]` number the handle while compiling
 (`numbered_handle`) and are lookups decided from types, as a registry key is. Running the plan (`init`, the loop) takes
-the map out first (`strip_keymap`), so nothing they compile has a uuid in its type; a process keeps the map as a value
-and puts it back into the contexts it hands to the user.
+the map out first (`strip_keymap`), so nothing they compile has a uuid in its type. A process (`Process`,
+`InlineProcess`) holds the map in its own type (`keymap::K`) and puts it back into what it hands to the user; the loop
+gets a session and the plan without it (Sessions/Sessions.jl).
 =#
 
 """
@@ -120,30 +121,11 @@ set of `Unique` handles compiles nothing again.
 """
 Base.@nospecializeinfer strip_keymap(@nospecialize(x)) = with_keymap(x, nothing)
 
-"""
-    number_by_keymap(x, keymap::UniqueKeyMap) -> x, numbered as the plan numbers its handles
-
-What `number_by_keymap_dynamic` does, decided while compiling: the numbered value is built by code generated for
-`typeof(x)` and the map's type, so it is inferred and costs no walk at run time. Used by the typed handles
-(`run(ip; lifetime)`, `run(p; lifetime)`), whose type has the map. Compiled once per value type and map, as the handle's
-own methods are. Where the type alone does not say how to number (an id stripped or numbered elsewhere, whose uuid is
-only in the value; a holder whose type parameters are worked out from its fields, `list_field_derived_params`; a
-field of an abstract type), it numbers at run time (`number_by_keymap_dynamic`), not inferred. With no map (`nothing`)
-`x` as it is.
-"""
-@generated function number_by_keymap(x::X, keymap::K) where {X, K<:UniqueKeyMap}
-    numbers = Dict{UUID, Int}()
-    for pair in K.parameters[1]
-        numbers[pair.second] = pair.first
-    end
-    built = _build_numbered_expr(X, :x, _MapIds(numbers), IdDict{Any, Bool}())
-    isnothing(built) && return :(number_by_keymap_dynamic(x, keymap))
-    return first(built)
-end
-@inline number_by_keymap(x, ::Nothing) = x
-
 # `(expression, type)` of `ex` (a value of type `T`) numbered by `mode`, worked out from `T` alone, or `nothing` when
-# `T` does not say how (see `number_by_keymap`). Runs while generating code.
+# `T` does not say how (see `number_by_keymap`). Runs while generating code, so it is defined before `number_by_keymap`
+# and uses no hook a later file extends (a generator sees only the methods defined before its function). A type
+# parameter a holder works out from a field (`list_field_derived_params`) needs no hook here: a held id in it is
+# numbered from its own uuid (`rewrite_type_id`), as the field's is.
 function _build_numbered_expr(@nospecialize(T), ex, mode::_MapIds, cache::IdDict{Any, Bool})
     T isa DataType || return nothing
     _may_hold_unique_ids(T, cache) || return (ex, T)
@@ -159,7 +141,6 @@ function _build_numbered_expr(@nospecialize(T), ex, mode::_MapIds, cache::IdDict
         return (QuoteNode(NewType), Type{NewType})
     end
     ismutabletype(T) && return nothing
-    isempty(list_field_derived_params(T)) || return nothing
     exprs = Any[]
     types = Any[]
     for i in 1:fieldcount(T)
@@ -187,3 +168,24 @@ function _build_numbered_expr(@nospecialize(T), ex, mode::_MapIds, cache::IdDict
     NT = Core.apply_type(T.name.wrapper, params...)
     return (Expr(:new, NT, exprs...), NT)
 end
+
+"""
+    number_by_keymap(x, keymap::UniqueKeyMap) -> x, numbered as the plan numbers its handles
+
+What `number_by_keymap_dynamic` does, decided while compiling: the numbered value is built by code generated for
+`typeof(x)` and the map's type, so it is inferred and costs no walk at run time. Used by the typed handles
+(`run(ip; lifetime)`, `run(p; lifetime)`, a manager's per-job lifetime), whose type has the map. Compiled once per value type and map, as the handle's
+own methods are. Where the type alone does not say how to number (an id stripped or numbered elsewhere, whose uuid is
+only in the value; a mutable value; a field of an abstract type), it numbers at run time (`number_by_keymap_dynamic`), not inferred. With no map (`nothing`)
+`x` as it is.
+"""
+@generated function number_by_keymap(x::X, keymap::K) where {X, K<:UniqueKeyMap}
+    numbers = Dict{UUID, Int}()
+    for pair in K.parameters[1]
+        numbers[pair.second] = pair.first
+    end
+    built = _build_numbered_expr(X, :x, _MapIds(numbers), IdDict{Any, Bool}())
+    isnothing(built) && return :(number_by_keymap_dynamic(x, keymap))
+    return first(built)
+end
+@inline number_by_keymap(x, ::Nothing) = x

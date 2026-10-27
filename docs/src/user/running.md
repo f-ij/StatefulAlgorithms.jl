@@ -115,7 +115,8 @@ count. For `Process`, use `repeats = 10_000` or `lifetime = Repeat(10_000)`.
 Unlike `Process`, `InlineProcess` stores a context that can be absorbed back
 into an algorithm, so the run's runtime values (inputs and declared locals) are
 stripped after the loop. `run(ip)` returns the same final context as `fetch(p)`
-does for a `Process` (or the finalizer's result).
+does for a `Process` (or the finalizer's result), but without the plan's `Unique` handle numbers in its type, so it
+stays inferred; `context(ip)[handle]` reads a `Unique` handle's subcontext from types.
 Like finished `Process` runs, this means the persistent context is the persistent
 context shape rather than the transient loop context.
 

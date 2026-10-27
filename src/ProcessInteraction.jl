@@ -23,16 +23,7 @@ otherwise different lifetime without rebuilding its initialized context.
     end
 end
 
-# Untyped: a lifetime given here gets the plan's numbers for its `Unique` handles (`number_by_keymap`, from the map the
-# process keeps), so it compiles nothing per uuid and its `Var`s are found while compiling in the loop.
-Base.@nospecializeinfer function Base.run(@nospecialize(p::Process), @nospecialize(run_lifetime = nothing),
-        @nospecialize(inputs_and_overrides...); repeats = nothing, @nospecialize(lifetime = nothing), kwargs...)
-    keymap = getfield(p, :keymap)
-    return _run_process(p, number_by_keymap_dynamic(run_lifetime, keymap), inputs_and_overrides...;
-        repeats, lifetime = number_by_keymap_dynamic(lifetime, keymap), kwargs...)
-end
-
-function _run_process(p::Process, run_lifetime = nothing, inputs_and_overrides...; repeats = nothing, lifetime = nothing, kwargs...)
+function Base.run(p::Process, run_lifetime = nothing, inputs_and_overrides...; repeats = nothing, lifetime = nothing, kwargs...)
     @assert isidle(p) "Process is already in use"
 
     if ispaused(p)
@@ -45,7 +36,9 @@ function _run_process(p::Process, run_lifetime = nothing, inputs_and_overrides..
     end
     isempty(inputs_and_overrides) || error("Process run accepts runtime inputs as keywords only. Reinitialize the Process context before running to apply init/override specs.")
 
-    lt = _process_run_lifetime(getalgo(p), run_lifetime, repeats, lifetime)
+    # A lifetime given here gets the plan's numbers for its `Unique` handles while compiling (`number_by_keymap`, from the
+    # map in the process's type), so the loop finds its `Var`s while compiling.
+    lt = number_by_keymap(_process_run_lifetime(getalgo(p), run_lifetime, repeats, lifetime), getfield(p, :keymap))
     if !isnothing(lt)
         p.lifetime = lt
     end
@@ -66,9 +59,9 @@ Wait for a process to finish
 @inline Base.wait(@nospecialize(p::Process)) = if !isnothing(p.task) wait(p.task) else nothing end
 
 function _cleanup_paused_process!(p::Process, fetched_result)
-    # A paused task already stored its live runtime context when the loop exited.
+    # A paused task already stored its live runtime context when its run ended (`_finish_run!`).
     # `close` turns that paused lifecycle into a final one, so cleanup must run
-    # here because the loop will not re-enter `after_while`.
+    # here because the loop will not run again for it.
     cleanup_context = fetched_result isa AbstractContext ? fetched_result : _context(p)
     cleanup_runtime_context = @inline _initial_runtime_context(get_inputs(cleanup_context), get_declared_locals(cleanup_context))
     cleanup_state_context = @inline _paused_state_context(cleanup_context)
@@ -219,7 +212,7 @@ end
 
 """The run's result as SA works with it (see `fetch`)."""
 @inline _fetch(@nospecialize(p::Process)) = if !isnothing(p.task) fetch(p.task) else p.lastresult end
-"""Fetch the return value of a process; the loop put the plan's `UniqueKeyMap` back into it at its exit (`after_while`)."""
+"""Fetch the return value of a process; the run's end put the plan's `UniqueKeyMap` back into it (`_finish_run!`)."""
 Base.@nospecializeinfer Base.fetch(@nospecialize(p::Process)) = _fetch(p)
 
 """

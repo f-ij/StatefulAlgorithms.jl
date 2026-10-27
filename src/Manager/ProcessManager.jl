@@ -274,7 +274,9 @@ function _manager_launch_lifetime(worker::P, kwargs::K) where {P<:Process, K<:Na
     else
         nothing
     end
-    return isnothing(raw_lifetime) ? nothing : normalize_process_lifetime(getalgo(worker), raw_lifetime)
+    isnothing(raw_lifetime) && return nothing
+    # Numbered as the worker's plan numbers its `Unique` handles (`number_by_keymap`), as `run(p; lifetime)` does.
+    return number_by_keymap(normalize_process_lifetime(getalgo(worker), raw_lifetime), getfield(worker, :keymap))
 end
 
 """
@@ -306,8 +308,9 @@ function runprocessinline!(worker::P; lifetime = nothing, repeats = nothing, rep
         worker.lifetime = launch_lifetime
     end
 
-    # Build the same runtime context as the asynchronous Process path, but call
-    # the loop directly so no scheduler task is created for short manager jobs.
+    # Build the same runtime context as the asynchronous Process path, but run the
+    # loop on the worker's session in this task (`run_session_loop`, then `_finish_run!`
+    # as a `Process` task does), so no scheduler task is created for short manager jobs.
     algo = getalgo(worker)
     inputs = _validate_runtime_inputs(algo, (; kwargs...))
     base_context = _has_typed_runtime_context(worker) ? _typed_runtime_context(worker) : _context(worker)
@@ -767,7 +770,7 @@ Build a worker from a template and a slot-specific context. The default
 implementation supports `Process` templates.
 """
 function _process_with_context(template::Process, idx::Integer, prepared_context)
-    return Process(getalgo(template); context = prepared_context, lifetime = lifetime(template), timeout = template.timeout)
+    return Process(getalgo_with_keymap(template); context = prepared_context, lifetime = lifetime(template), timeout = template.timeout)
 end
 
 """
@@ -1066,7 +1069,7 @@ Default worker-copy rule. `Process` workers keep the same algorithm/lifetime and
 deep-copy context; other worker objects are deep-copied directly.
 """
 function _default_copyworker(template::Process, idx, manager)
-    return Process(getalgo(template); context = deepcopy(context(template)), lifetime = lifetime(template), timeout = template.timeout)
+    return Process(getalgo_with_keymap(template); context = deepcopy(context(template)), lifetime = lifetime(template), timeout = template.timeout)
 end
 _default_copyworker(template, idx, manager) = deepcopy(template)
 

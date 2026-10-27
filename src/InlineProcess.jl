@@ -75,7 +75,6 @@ _construct_inline_process(algo::TD, context::C, lifetime::Lt, ::Val{mode}, keyma
 @inline isthreaded(ip::InlineProcess{TD,ContextType,Lt,Mode}) where {TD,ContextType,Lt,Mode} = Mode == :threaded
 @inline isasync(ip::InlineProcess{TD,ContextType,Lt,Mode}) where {TD,ContextType,Lt,Mode} = Mode == :async
 
-# getlidx(ip::InlineProcess) = Int(ip.loopidx)
 @inline lifetime(ip::IP) where {IP<:InlineProcess} = ip.lifetime
 getcontext(ip::IP) where {IP<:InlineProcess} = context(ip)
 

@@ -68,11 +68,19 @@ steps below 4.7–4.8 ms). So the uuid (`origin`) is data and never changes; the
    a handle the user holds number it from that map while compiling (`numbered_handle`) and look it up from types, as
    a registry key.
 5. Running the plan takes the map out (`strip_keymap`): `init`, `run(la)`, `Process`, `InlineProcess` and
-   `TimedProcess` resolve the plan untyped, keep the map as a value and work on the plan without it, so `init` and the
-   loop have no uuid in their types and compile once for every new set of `Unique`s. What they hand back to the user
-   (the plan `init` and `run` return, `context(p)`, `fetch(p)`) has the map put back (`with_keymap`): a process builds
-   the user's context once each time its context changes, at loop exit (`set_user_context!`), and `context(p)` reads
-   it; a context given back to SA (`Process(...; context)`, `context(p, c)`) has it stripped.
+   `TimedProcess` resolve the plan untyped and prepare the plan and its context without the map, so `init` and the
+   loop have no uuid in their types and compile once for every new set of `Unique`s. `Process` and `InlineProcess`
+   hold the map in their own type (`keymap::K`, zero bytes); the loop and the steps get a session instead of the
+   process (`ProcessSession`, `src/Sessions/`), reached through `run_session_loop`, whose arguments have no map.
+6. What a process hands back has the map put back: `context(ip)` builds it typed (`attach_keymap`); a `Process`
+   builds the user's context once each time its context changes (`set_user_context!`, after a run in `_finish_run!`)
+   and `context(p)` reads it; `fetch(p)` and the plan `init` and `run(la)` return have it too (`with_keymap`). A
+   context given back to SA has it stripped: `Process(...; context)`, `context(p, c)` (`strip_keymap`),
+   `context(ip, c)`, `run(ip; context)` (`detach_keymap`, typed).
+7. A lifetime given to a process or a run is not part of the plan: its `Var`s get the plan's numbers when it is given,
+   so the loop finds them while compiling: while compiling for a typed handle (`number_by_keymap`: `run(ip;
+   lifetime)`, `run(p; lifetime)`, a manager's per-job lifetime), at run time at the untyped entry points
+   (`number_by_keymap_dynamic`: `Process(...; lifetime)`, `InlineProcess(...; lifetime)`, `init`/`run(la)`).
 
 The matching and registry code ask a matcher only general questions (`matches_type`, `is_given_id`, `is_found_by_data`,
 `lower_matcher`, `carries_data`); `UniquePlanId` answers them in `src/Identifiable/UniquePlanId/HookExtensions.jl`. A

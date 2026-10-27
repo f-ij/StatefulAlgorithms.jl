@@ -2,7 +2,8 @@
 Process sessions: what the loop runs with instead of the process the user holds.
 
 A process (`Process`, `InlineProcess`) is the user's handle: it holds the plan, its context and the plan's
-`UniqueKeyMap` as a type, so everything the user does with it (`context(p)[handle]`, `run(p; lifetime)`) is typed. The
+`UniqueKeyMap` as a type, so what the user does with it is typed (`run(p; lifetime)` numbers the lifetime while
+compiling; `context(ip)[handle]`; a `Process`'s `context(p)` is a stored context, as its type may change between runs). The
 loop and the steps get a `ProcessSession` instead: the run's mutable record (its counters and times, and for an
 interactive process the pause and stop flags and the resume point), shared with the process, and with no map in its
 type. The plan, the context and the lifetime go to the loop without the map as well, so the loop is compiled once for

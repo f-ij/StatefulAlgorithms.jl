@@ -18,8 +18,9 @@ execution.
 There is no `TaskData` layer. The initialized `LoopAlgorithm` carries the
 persistent context plus stored init/override specs. A `Process` normally reads
 its current persistent context from that wrapper. Its separate
-`runtime_context` slot is used only for paused or shape-divergent state, and its
-loop-cursor slot preserves scheduler position across pause/resume.
+`runtime_context` slot is used only for paused or shape-divergent state. The run itself (counters, times, the
+pause and stop flags, the loop cursor that preserves scheduler position across pause/resume) is the process's
+session (`getsession(p)`, an `InteractiveSession`; `src/Sessions/`), which the loop gets instead of the process.
 
 ## 2. Init Phase
 
@@ -50,8 +51,10 @@ the targeted subcontexts.
 
 - validates runtime keyword arguments against the loop algorithm's `@input` metadata,
 - selects the current persistent or paused context,
-- passes that context and the runtime-input `NamedTuple` to `loop`, and
-- spawns the loop task.
+- picks the run's session (`_session_for_run!`),
+- spawns the loop task, which passes the session, the plan, that context and the runtime-input `NamedTuple` to the
+  loop (`run_session_loop`) and then ends the run on the process (`_finish_run!`: commits the context, or keeps it
+  and the cursor on a pause).
 
 The entered `loop` method then builds or restores the per-run
 `AbstractLoopCursor` from the resolved plan.
@@ -66,25 +69,26 @@ The loop wrappers in `src/Loops.jl` build a separate runtime context before the
 while/for loop:
 
 ```julia
-loop(process, algo, context, lifetime, inputs)
+loop(session, algo, context, lifetime, inputs, resume)
 ```
 
 The runtime context starts with the run's inputs (`:_inputs`, when there are
 any) and declared locals (`:_declared_locals`). A step adds a return
 (`:_captured_returns`, or the owner's entry in `:_subcontext_returns`) where it is
 assigned, and the return is removed when its plan node ends, so every step gets
-and returns a runtime context of the same type. The process and the lifetime are
+and returns a runtime context of the same type. The session and the lifetime are
 not in it. None of these fields are added to the persistent context.
 
 Repeat and indefinite loops are defined in `src/Loops.jl`; generated loops live
-in `src/GeneratedCode/GeneratedLoops.jl`.
+in `src/Legacy/GeneratedLoops.jl`.
 
 High-level structure:
 
-1. `before_while(process)`
+1. `before_while(session)`
 2. build or restore the per-run loop cursor and runtime context
 3. execute the repeat/while body with tick/index increments
-4. either store paused state or run cleanup/final-result projection
+4. either keep the cursor (pause) or run cleanup/final-result projection, and return `(persistent_context, result)`;
+   the process commits them (`_finish_run!`, `_run_inline!`)
 
 Composite and routine steps receive an explicit loop cursor. Composite cursors
 own the interval counter for that run. Pausable process runs allocate routine

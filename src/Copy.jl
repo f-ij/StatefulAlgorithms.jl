@@ -22,7 +22,7 @@ Return the stored `Override` specs for an initialized process or loop algorithm.
 Build a new process from the stored initialized loop algorithm recipe. Extra
 init/override specs are merged by `init`.
 """
-function copyprocess(p::Process, specs...; lifetime = StatefulAlgorithms.lifetime(p), timeout = p.timeout, context = nothing, func = getalgo(p), kwargs...)
+function copyprocess(p::Process, specs...; lifetime = StatefulAlgorithms.lifetime(p), timeout = p.timeout, context = nothing, func = getalgo_with_keymap(p), kwargs...)
     algo = isnothing(context) ? init(func, specs...) : _with_lifecycle(resolve(func), context, copyinputs(func), copyoverrides(func))
     return Process(algo; lifetime, timeout)
 end

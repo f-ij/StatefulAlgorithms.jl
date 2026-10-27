@@ -1103,3 +1103,39 @@ end
     @test totals == [1, 3, 6]
     @test manager.dispatched == 1
 end
+
+@testset "Copied Process workers keep the plan's Unique handles: context reads and a per-job lifetime on a Var" begin
+    @StepAlgorithm function ManagerUniqueCounter(@managed(count = 0))
+        @update count += 1
+    end
+    a, b = Unique(ManagerUniqueCounter()), Unique(ManagerUniqueCounter())
+    plan = CompositeAlgorithm(a, b, (1, 1))
+    counts = Dict{Int, Int}()
+    recipe = (;
+        makeworker = (idx, manager) -> Process(plan; repeats = 1),
+        loadjob! = (slot, job, manager) -> nothing,
+        # Each job runs until `a` has counted to `job` more steps, through a lifetime on a `Var` of the held handle.
+        start! = (slot, job, manager) -> runprocessinline!(slot.worker;
+            lifetime = RepeatOrUntil(x -> x >= job, 1000, Var(a, :count))),
+        isdone = (slot, manager) -> true,
+        finalize! = (slot, job, manager) -> nothing,
+        afterjob! = (slot, job, manager) -> (counts[job] = context(slot.worker)[a].count; nothing),
+    )
+    manager = ProcessManager(recipe; nworkers = 2, sync_policy = NoSync(), job_type = Int, result_type = Nothing)
+    for slot in manager.slots
+        # Every worker, the template and its copies, has the plan's map, so its lifetime is numbered for the plan.
+        @test getfield(slot.worker, :keymap) isa StatefulAlgorithms.UniqueKeyMap
+    end
+    run!(manager, [3, 5])
+    @test counts[3] >= 3 && counts[5] >= 5
+    # A worker that ran a job has that job's lifetime, its `Var` numbered as the plan numbers `a`.
+    ran = [StatefulAlgorithms.lifetime(slot.worker) for slot in manager.slots if StatefulAlgorithms.lifetime(slot.worker) isa RepeatOrUntil]
+    @test !isempty(ran)
+    @test all(lt -> StatefulAlgorithms.plan_number(typeof(only(getfield(lt, :vars))).parameters[1]) isa Int, ran)
+
+    p = Process(plan; repeats = 2)
+    copy = copyprocess(p)
+    @test getfield(copy, :keymap) === getfield(p, :keymap)
+    run(copy); wait(copy)
+    @test context(copy)[a].count == 2
+end
