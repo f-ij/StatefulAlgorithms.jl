@@ -30,6 +30,10 @@ InteractiveSession{C, LT}() where {C, LT} = InteractiveSession{C, LT}(false, tru
 @inline shouldrun(s::InteractiveSession) = @atomic :monotonic s.shouldrun
 @inline tick!(s::InteractiveSession) = (s.tickidx = s.tickidx + UInt(1))
 
+@inline set_starttime!(s::InteractiveSession) = (s.starttime = time_ns())
+@inline set_endtime!(s::InteractiveSession) = (s.endtime = time_ns())
+@inline reset_times!(s::InteractiveSession) = (s.starttime = nothing; s.endtime = nothing)
+
 @inline function before_while(s::InteractiveSession)
     start_finished[] = true
     s.threadid = Threads.threadid()

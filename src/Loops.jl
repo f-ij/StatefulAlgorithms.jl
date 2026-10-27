@@ -63,7 +63,7 @@ end
 """
     after_while(session, persistent_context, returnvalue) -> (persistent_context, returnvalue)
 
-The loop's exit: records the end time and returns the persistent context and the run's result (on a pause, the paused
+The loop's exit: records the end time (a session that keeps times) and returns the persistent context and the run's result (on a pause, the paused
 context as both). Returned as the loop has them, without the plan's `UniqueKeyMap`; the process that started the run
 commits them (`Process`: `_finish_run!`, which also puts the map back into what `fetch(p)` returns; `InlineProcess`:
 `_run_inline!`, whose `run(ip)` returns the result without the map, while `context(ip)` has it).

@@ -1,6 +1,6 @@
 #=
-Interface of `ProcessSession`: what every session provides (its loop counter and its times), with defaults a session
-type can overload. The stop check is a hook: Hooks.jl (`process_breakcondition`). A process gives its session with
+Interface of `ProcessSession`: what every session provides (its loop counter; its times, which by default it does not
+keep), with defaults a session type can overload. The stop check is a hook: Hooks.jl (`process_breakcondition`). A process gives its session with
 `getsession`, and forwards the counter to it (`loopidx(p)`).
 =#
 
@@ -8,17 +8,20 @@ loopidx(s::ProcessSession) = s.loopidx
 setloopidx!(s::ProcessSession, value) = (s.loopidx = value)
 reset_loopidx!(s::ProcessSession) = setloopidx!(s, oneunit(loopidx(s)))
 
-loopint(s::ProcessSession) = Int(loopidx(s))
+# `% Int`, not `Int(…)`: the loop reads this before every step (the lifetime's stop check), and a conversion that can
+# throw makes LLVM store the counter to the session on every step, as the error could observe it.
+loopint(s::ProcessSession) = loopidx(s) % Int
 
 @inline inc!(s::ProcessSession) = s.loopidx += oneunit(s.loopidx)
 @inline tick!(s::ProcessSession) = nothing
 
-@inline set_starttime!(s::ProcessSession) = (s.starttime = time_ns())
-@inline set_endtime!(s::ProcessSession) = (s.endtime = time_ns())
-@inline reset_times!(s::ProcessSession) = (s.starttime = nothing; s.endtime = nothing)
+# Times: none by default; a session that keeps them overloads these (`InteractiveSession`).
+@inline set_starttime!(::ProcessSession) = nothing
+@inline set_endtime!(::ProcessSession) = nothing
+@inline reset_times!(::ProcessSession) = nothing
 
-"""Called by the loop before its first step: records the start (and, for an interactive session, the thread)."""
-@inline before_while(s::ProcessSession) = @inline set_starttime!(s)
+"""Called by the loop before its first step: for an interactive session, records the start and the thread."""
+@inline before_while(s::ProcessSession) = nothing
 
 """Whether the loop's exit is a pause (the run resumes later) rather than its end. Only an interactive session pauses."""
 @inline _loop_ispaused(s::ProcessSession) = false
