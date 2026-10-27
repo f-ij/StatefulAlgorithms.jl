@@ -32,6 +32,16 @@ Base.@nospecializeinfer function Var(@nospecialize(subcontext_ref::IdentifiableA
     return new_instance(Core.apply_type(Var, typeof(matcher), name, transform), matcher)
 end
 @inline _typed_var(matcher::M, name::Symbol, transform::T) where {M, T} = Var{M, name, transform}(matcher)
+
+"""
+    reconstruct_var(V) -> the `Var` of type `V`
+
+The `Var` of type `V`, from the type alone: its matcher from the matcher type (`reconstruct_matcher`). Works for a key,
+a type, a plain instance and a held `Unique` handle; errors for a stripped or numbered `Unique` handle, whose uuid is
+only in the value (reading such a `Var` needs only its type).
+"""
+reconstruct_var(::Type{Var{M, name, transform}}) where {M, name, transform} =
+    Var{M, name, transform}(reconstruct_matcher(M))
 Var(name::Symbol) = Var(:_captured_returns, name)
 
 """

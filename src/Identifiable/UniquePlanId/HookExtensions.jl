@@ -19,6 +19,12 @@ Base.:(==)(x::Union{UniquePlanId, Type{<:UniquePlanId}}, m::Type{<:MatchAnyOf}) 
 # Given to the handle by `Unique(f)` or a block's `@state`.
 is_given_id(::Union{UniquePlanId, Type{<:UniquePlanId}}) = true
 
+# A held id (`UniquePlanId{uuid}`) has its uuid in the type. A stripped or numbered one has it only in the value.
+function reconstruct_matcher(::Type{UniquePlanId{N}}) where {N}
+    N isa UUID && return UniquePlanId{N}(N)
+    error("Cannot reconstruct `UniquePlanId{$N}` from its type: its uuid is only in the value (a stripped or numbered id).")
+end
+
 # The registry stores only numbered ids: a held one (`UniquePlanId{uuid}`) is found by its uuid in the runtime table.
 is_found_by_data(id::UniquePlanId) = is_held_unique_id(id)
 

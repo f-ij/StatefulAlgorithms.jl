@@ -97,3 +97,16 @@ end
     @test c[b].x == 10.0
     @test c[Var(b, :x)] == 10.0
 end
+
+@testset "A Var reconstructed from its type" begin
+    @StepAlgorithm function ReconstructCounter(@managed(x = 0))
+        @update x += 1
+    end
+    h = Unique(ReconstructCounter())
+    reconstruct_var = StatefulAlgorithms.reconstruct_var
+    for v in (Var(:Sensor_1, :x), Var(:y), Var(ReconstructCounter, :x), Var(ReconstructCounter, :x; transform = abs), Var(h, :x))
+        @test reconstruct_var(typeof(v)) === v
+    end
+    stripped = StatefulAlgorithms.strip_unique(Var(h, :x))
+    @test_throws ErrorException reconstruct_var(typeof(stripped))
+end
