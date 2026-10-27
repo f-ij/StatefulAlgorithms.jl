@@ -63,7 +63,7 @@ steps below 4.7–4.8 ms). So the uuid (`origin`) is data and never changes; the
    type has only the schedule's type, in which an id is `UniquePlanId{k}`: which handle within the plan.
 3. The registry stores each handle numbered, as the plan has it.
 4. `resolve` puts the plan's `UniqueKeyMap` (`k => uuid` pairs) into the registry's type (its `keymap`,
-   `src/Identifiable/UniquePlanId/HeldIds.jl`). `registry[handle]`, `getkey(registry, handle)` and `context[handle]` with
+   `src/Identifiable/UniquePlanId/UniqueKeyMap.jl`). `registry[handle]`, `getkey(registry, handle)` and `context[handle]` with
    a handle the user holds number it from that map while compiling (`numbered_handle`) and look it up from types, as
    a registry key.
 5. Running the plan takes the map out (`strip_keymap`): `init`, `run(la)`, `Process`, `InlineProcess` and

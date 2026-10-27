@@ -26,7 +26,7 @@ which three functions set as the handle moves:
 | `k` = 1, 2, ... | `number_unique_ids` | a plan is built: each new `origin` gets the next number | is the same in every rebuild of the same code |
 
 The registry, the context, `init` and the loop only see form 3. From `resolve` until the plan is run, the registry also
-carries the plan's `k => uuid` pairs (`UniqueKeyMap`, HeldIds.jl), so a handle the user holds (form 1) is found from
+carries the plan's `k => uuid` pairs (`UniqueKeyMap`, UniqueKeyMap.jl), so a handle the user holds (form 1) is found from
 types there too.
 
 Two values are the same handle when their `origin`s are equal; a value and a type match as `matches_type` says.

@@ -47,7 +47,7 @@ module StatefulAlgorithms
     # the matching and registry merge rules above.
     include("ProcessEntities/AlgoStates/GeneralState.jl")
     include("SubContextRefs.jl")
-    include("Identifiable/UniquePlanId/HeldIds.jl")
+    include("Identifiable/UniquePlanId/UniqueKeyMap.jl")
     include("Identifiable/UniquePlanId/HookExtensions.jl")
 
     include("RoutingInterface/RoutingInterface.jl")
