@@ -22,18 +22,16 @@ precompile_interface(x::X) where {X} = nothing
 
 # A run: `run(p)`, the run's start with the process's own lifetime (`_makeloop!`, which makes the run's session), and
 # the task's body (`ProcessTaskBody`: the loop's contexts, the run's end), in parallel (49-56 -> 25-28 ms per build on
-# 15 threads). `run(p)` reads the context from a field of abstract type, so its call into `_makeloop!` is dynamic and
-# is compiled here by itself. `pause`, `close` and a resumed run compile when first used (16 ms together). Each task
-# captures `p`, untyped, and takes the types from it: a task over a type (`P = typeof(p)` outside it) is compiled for
-# that type, 1.1-1.4 ms for every set of handles.
+# 15 threads). `run(p)` reads the lifetime and the context from fields of abstract type, so its call into `_makeloop!`
+# is dispatched at run time and is compiled here by itself. `pause`, `close` and a resumed run compile when first used
+# (16 ms together).
 Base.@nospecializeinfer function precompile_interface(@nospecialize(p::Process))
+    P = typeof(p); F = typeof(getfield(p, :algo)); C = P.parameters[2]; LT = typeof(getfield(p, :lifetime))
+    Ctx = typeof(getpersistentcontext(getfield(p, :algo)))
     @sync begin
-        Threads.@spawn precompile(run, (typeof(p),))
-        Threads.@spawn precompile(Core.kwcall, (NamedTuple{(:threaded, :loopfunc), Tuple{Bool, typeof(loop)}}, typeof(_makeloop!),
-            typeof(p), NamedTuple{(), Tuple{}}, typeof(getfield(p, :lifetime)), typeof(getpersistentcontext(getfield(p, :algo)))))
-        Threads.@spawn precompile(Tuple{ProcessTaskBody{typeof(p), typeof(loop),
-            InteractiveSession{typeof(p).parameters[2], typeof(getfield(p, :lifetime))}, typeof(getfield(p, :algo)),
-            typeof(getpersistentcontext(getfield(p, :algo))), typeof(getfield(p, :lifetime)), NamedTuple{(), Tuple{}}, Resuming{false}}})
+        Threads.@spawn precompile(run, (P,))
+        Threads.@spawn precompile(Core.kwcall, (NamedTuple{(:threaded, :loopfunc), Tuple{Bool, typeof(loop)}}, typeof(_makeloop!), P, NamedTuple{(), Tuple{}}, LT, Ctx))
+        Threads.@spawn precompile(Tuple{ProcessTaskBody{P, typeof(loop), InteractiveSession{C, LT}, F, Ctx, LT, NamedTuple{(), Tuple{}}, Resuming{false}}})
     end
     return nothing
 end
@@ -45,22 +43,24 @@ Base.@nospecializeinfer function precompile_interface(@nospecialize(ip::InlinePr
     return nothing
 end
 
-# The manager's own calls for its manager, slot and job types, in parallel; each task captures `manager`, untyped, as
-# for `Process`. Its workers are processes, which compile theirs when they are built.
+# The manager's own calls for its manager, slot and job types, in parallel. Its workers are processes, which compile
+# theirs when they are built.
 Base.@nospecializeinfer function precompile_interface(@nospecialize(manager::ProcessManager))
     isempty(slots(manager)) && return nothing
+    M = typeof(manager); Slot = typeof(first(slots(manager))); Job = _slot_job_type(first(slots(manager)))
     @sync begin
-        for f in (poll!, wait, drain!, _wait_active_slots!, _wait_for_free_slot!, _finish_done_slots!)
-            Threads.@spawn precompile(f, (typeof(manager),))
-        end
-        for f in (_finish_slot!, _slot_isdone)
-            Threads.@spawn precompile(f, (typeof(manager), typeof(first(slots(manager)))))
-        end
-        for f in (_start_slot!, _run_kwargs)
-            Threads.@spawn precompile(f, (typeof(manager), typeof(first(slots(manager))), _slot_job_type(first(slots(manager)))))
-        end
-        Threads.@spawn precompile(dispatch!, (typeof(manager), _slot_job_type(first(slots(manager)))))
-        Threads.@spawn precompile(run!, (typeof(manager), Vector{_slot_job_type(first(slots(manager)))}))
+        Threads.@spawn precompile(dispatch!, (M, Job))
+        Threads.@spawn precompile(poll!, (M,))
+        Threads.@spawn precompile(wait, (M,))
+        Threads.@spawn precompile(drain!, (M,))
+        Threads.@spawn precompile(run!, (M, Vector{Job}))
+        Threads.@spawn precompile(_wait_active_slots!, (M,))
+        Threads.@spawn precompile(_wait_for_free_slot!, (M,))
+        Threads.@spawn precompile(_finish_done_slots!, (M,))
+        Threads.@spawn precompile(_finish_slot!, (M, Slot))
+        Threads.@spawn precompile(_start_slot!, (M, Slot, Job))
+        Threads.@spawn precompile(_run_kwargs, (M, Slot, Job))
+        Threads.@spawn precompile(_slot_isdone, (M, Slot))
     end
     return nothing
 end
