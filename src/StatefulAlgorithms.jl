@@ -57,7 +57,7 @@ module StatefulAlgorithms
 
     include("RoutingInterface/RoutingInterface.jl")
     include("Context/Context.jl")
-    include("Identifiable/UniquePlanId/ContextKeymap.jl")
+    include("Identifiable/UniquePlanId/Accessors.jl")   # getters/setters of the map; after Context/
     include("Identifiable/Init.jl")
     include("Reports/Reports.jl")
 
