@@ -93,11 +93,17 @@ so LLVM keeps the session's counters (`tickidx`) in registers.
 The loop of an `InlineProcess` run on the context the session holds: it reads the context from the session and writes
 the context after the run back to it. A call of its own, like `run_session_loop`: its arguments have no map in their
 types, so its machine code is made once for every set of `Unique` handles, and `run(ip)`, which is compiled per set,
-only calls it (2.2 ns per run; inlined, LLVM would make the loop's machine code again for every set, 24-28 ms for 16
-children). Its arguments are pointers and small values, so the call does not copy the context in or out. The
-lifetime's `Var`s have their keys before the call (`resolve_var_keys`, in `run(ip)` or when the process was built).
+only calls it (1.1 ns per run). `run(ip; inlined = Val(true))` pastes the same body into `run(ip)` instead
+(`run_session_loop_body!`): no call, but LLVM makes the loop's machine code again for every set of handles (5 ms for 2
+children, 36 ms for 16). Its arguments are pointers and small values, so the call does not copy the context in or out.
+The lifetime's `Var`s have their keys before the call (`resolve_var_keys`, in `run(ip)` or when the process was built).
 """
-@noinline function run_session_loop!(session::S, algo::A, lifetime::LT, inputs::I) where {C, S<:InlineSession{C}, A, LT, I<:NamedTuple}
+@noinline run_session_loop!(session::S, algo::A, lifetime::LT, inputs::I) where {C, S<:InlineSession{C}, A, LT, I<:NamedTuple} =
+    @inline run_session_loop_body!(session, algo, lifetime, inputs)
+
+# The body of `run_session_loop!`, inlined into its caller: into `run_session_loop!`, or into `run(ip)` for
+# `inlined = Val(true)`.
+@inline function run_session_loop_body!(session::S, algo::A, lifetime::LT, inputs::I) where {C, S<:InlineSession{C}, A, LT, I<:NamedTuple}
     # Here, not in the caller: LLVM then knows the counter starts at 1 and that its memory is written before the loop,
     # so it keeps the counter in a register (written once, at the end) and vectorizes steps the stop check cannot end.
     # In the caller it made the loop store the counter every step, 5x slower for light steps.

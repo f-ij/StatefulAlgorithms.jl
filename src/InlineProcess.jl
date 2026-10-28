@@ -141,18 +141,26 @@ end
 @inline _inline_run_lifetime(p::InlineProcess, algo, repeats, lt) =
     resolve_var_keys(_inline_process_lifetime(algo, repeats, number_by_keymap(lt, getfield(p, :keymap))), _context(p))
 
-@inline function Base.run(p::InlineProcess, inputs_overrides...; context = nothing, repeats=nothing, lifetime=nothing, threaded=nothing, kwargs...)
+"""
+    run(ip; context, repeats, lifetime, threaded, inlined = Val(false), inputs...)
+
+One run of `ip`, from the context it holds, returning the final context. `inlined = Val(true)` pastes the loop into
+`run(ip)`: 1.1 ns less per call, but the loop's machine code is made again for every set of `Unique` handles at the
+first such run (5 ms for 2 children, 36 ms for 16), while the default call into the loop is compiled once for all
+(`run_session_loop!`). The choice is in the `Val`'s type, so the branch is decided while compiling.
+"""
+@inline function Base.run(p::InlineProcess, inputs_overrides...; context = nothing, repeats=nothing, lifetime=nothing, threaded=nothing, inlined::Val = Val(false), kwargs...)
     algo = getalgo(p)
     _set_inline_run_context!(p, context)
     runtime_inputs = _inline_runtime_inputs(algo, inputs_overrides, (; kwargs...))
     run_lifetime = _inline_run_lifetime(p, algo, repeats, lifetime)
 
     if (isnothing(threaded) && isthreaded(p)) || threaded === true
-        return Threads.@spawn _run_inline!(p, algo, run_lifetime, runtime_inputs)
+        return Threads.@spawn _run_inline!(p, algo, run_lifetime, runtime_inputs, inlined)
     elseif (isnothing(threaded) && isasync(p)) || threaded === :async
-        return @async _run_inline!(p, algo, run_lifetime, runtime_inputs)
+        return @async _run_inline!(p, algo, run_lifetime, runtime_inputs, inlined)
     else
-        return @inline _run_inline!(p, algo, run_lifetime, runtime_inputs)
+        return @inline _run_inline!(p, algo, run_lifetime, runtime_inputs, inlined)
     end
 end
 
@@ -161,16 +169,20 @@ end
     _set_inline_run_context!(p, context)
     run_lifetime = _inline_run_lifetime(p, algo, repeats, lifetime)
     runtime_inputs = _inline_runtime_inputs(algo, inputs_overrides, (; kwargs...))
-    return @inline _run_inline!(p, algo, run_lifetime, runtime_inputs)
+    return @inline _run_inline!(p, algo, run_lifetime, runtime_inputs, Val(false))
 end
 
 """
 One run of `p`: the loop on the process's session, which holds the process's context and keeps the context after the
 run (`run_session_loop!`, a call whose arguments have no map, so the loop is compiled once for every set of `Unique`
-handles).
+handles; with `Val(true)`, the loop pasted in, `run_session_loop_body!`).
 """
-@inline function _run_inline!(p::InlineProcess, algo::A, run_lifetime::LT, runtime_inputs::I) where {A, LT, I}
-    return run_session_loop!(getsession(p), algo, run_lifetime, runtime_inputs)
+@inline function _run_inline!(p::InlineProcess, algo::A, run_lifetime::LT, runtime_inputs::I, ::Val{inlined}) where {A, LT, I, inlined}
+    if inlined
+        return @inline run_session_loop_body!(getsession(p), algo, run_lifetime, runtime_inputs)
+    else
+        return run_session_loop!(getsession(p), algo, run_lifetime, runtime_inputs)
+    end
 end
 
 @inline function init_and_run(p::InlineProcess, inputs_overrides...)

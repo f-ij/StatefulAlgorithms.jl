@@ -120,5 +120,10 @@ stays inferred; `context(ip)[handle]` reads a `Unique` handle's subcontext from 
 Like finished `Process` runs, this means the persistent context is the persistent
 context shape rather than the transient loop context.
 
+`run(ip)` calls the loop, which is compiled once for every set of `Unique` handles. `run(ip; inlined = Val(true))`
+pastes the loop into `run(ip)` instead: about 1 ns less per call, for a compile of the loop at the first such run for
+every set of handles (5 ms for 2 children, 36 ms for 16). It only shows when `run(ip)` is called very often with a few
+light steps.
+
 If you need buffered external updates to context variables, see
 [Interactive Contexts](@ref interactive_user).
