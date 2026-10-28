@@ -269,7 +269,7 @@ plans inline (the file header, 2.).
 `session` and `lifetime` are passed down to the children so that routines inside can check for a pause or close
 without keeping them in the context.
 """
-Base.@constprop :aggressive @inline @generated function _step!(ca::PlanType, cursor::CursorType, lc::LoopContextType, wiring::WiringViewType, namespace::NamespaceType, session::SessionType, lifetime::LifetimeType) where {PlanType <: CompositeAlgorithm, CursorType<:CompositeLoopCursor, LoopContextType <: LoopContext, WiringViewType <: PlanWiringView, NamespaceType <: Namespace, SessionType <: ProcessSession, LifetimeType <: Lifetime}
+@inline @generated function _step!(ca::PlanType, cursor::CursorType, lc::LoopContextType, wiring::WiringViewType, namespace::NamespaceType, session::SessionType, lifetime::LifetimeType) where {PlanType <: CompositeAlgorithm, CursorType<:CompositeLoopCursor, LoopContextType <: LoopContext, WiringViewType <: PlanWiringView, NamespaceType <: Namespace, SessionType <: ProcessSession, LifetimeType <: Lifetime}
     return Expr(:block, _plan_step_exprs(PlanType, :ca, :cursor, :wiring, :lc)..., :(return lc))
 end
 
@@ -531,7 +531,7 @@ Step routine `r` once and return the `LoopContext` after it: each child in order
 resume point, until its repeat is done, its stop condition holds, or the process is paused or closed. Nested plans are
 written inline (the file header, 3.).
 """
-Base.@constprop :aggressive @inline @generated function _step!(r::PlanType, cursor::CursorType, lc::LoopContextType, wiring::WiringViewType, namespace::NamespaceType, session::SessionType, lifetime::LifetimeType) where {PlanType <: Routine, CursorType<:Union{DirectRoutineCursor,PausableRoutineCursor}, LoopContextType <: LoopContext, WiringViewType <: PlanWiringView, NamespaceType <: Namespace, SessionType <: ProcessSession, LifetimeType <: Lifetime}
+@inline @generated function _step!(r::PlanType, cursor::CursorType, lc::LoopContextType, wiring::WiringViewType, namespace::NamespaceType, session::SessionType, lifetime::LifetimeType) where {PlanType <: Routine, CursorType<:Union{DirectRoutineCursor,PausableRoutineCursor}, LoopContextType <: LoopContext, WiringViewType <: PlanWiringView, NamespaceType <: Namespace, SessionType <: ProcessSession, LifetimeType <: Lifetime}
     return Expr(:block, _plan_step_exprs(PlanType, :r, :cursor, :wiring, :lc)..., :(return lc))
 end
 
