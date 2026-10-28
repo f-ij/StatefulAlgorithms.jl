@@ -56,19 +56,43 @@ end
 
 Compiles what a first run calls with `p`, at construction: `run(p)`, the run's start with the process's own lifetime
 (the run's session, `create_session`), and the task's body for a new run (`ProcessTaskBody`: the loop's contexts,
-the run's end). `pause`, `close` and a resumed run compile when first used (16 ms together, measured). These are typed on the
+the run's end), each on a task of its own (`precompile_in_parallel`; 49-56 -> 30-33 ms per build on 15 threads).
+`pause`, `close` and a resumed run compile when first used (16 ms together, measured). These are typed on the
 process, whose type has the plan's `UniqueKeyMap`, so they are compiled for every set of `Unique` handles; the loop
 itself is not (its arguments have no map) and is compiled once per plan.
 """
 function _precompile_process!(p::P) where {P<:Process}
-    precompile(run, (P,))
     session = getsession(p); lt = lifetime(p)
     S = InteractiveSession{typeof(session).parameters[1], typeof(lt)}
     Ctx = typeof(_context(p))
     # `run(p)` reads the lifetime from a field of abstract type, so its call into `_makeloop!` is dynamic: compiled here
     # with the process's own lifetime (keywords as `makeloop!` passes them).
-    precompile(Core.kwcall, (NamedTuple{(:threaded, :loopfunc), Tuple{Bool, typeof(loop)}}, typeof(_makeloop!), P, NamedTuple{(), Tuple{}}, typeof(lt), Ctx))
-    precompile(Tuple{ProcessTaskBody{P, typeof(loop), S, typeof(getalgo(p)), Ctx, typeof(lt), NamedTuple{(), Tuple{}}, Resuming{false}}})
+    precompile_in_parallel(
+        Tuple{typeof(run), P},
+        Tuple{typeof(Core.kwcall), NamedTuple{(:threaded, :loopfunc), Tuple{Bool, typeof(loop)}}, typeof(_makeloop!), P, NamedTuple{(), Tuple{}}, typeof(lt), Ctx},
+        Tuple{ProcessTaskBody{P, typeof(loop), S, typeof(getalgo(p)), Ctx, typeof(lt), NamedTuple{(), Tuple{}}, Resuming{false}}})
+    return nothing
+end
+
+"""
+    precompile_in_parallel(signatures::Type...)
+
+Compiles each signature (`Tuple{typeof(f), argtypes...}`) on a task of its own and waits for all before returning.
+Untyped, so the tasks' code is the same for every signature and compiles once (spawned from a method typed on the
+process, it compiled again for every set of `Unique` handles, 4-17 ms). One after another while the package image is
+written (`_is_generating_package_output`). Not used by `InlineProcess`: of its two precompiles only `run(ip)` compiles
+anything (2.9-3.4 ms), so tasks only add their own cost.
+"""
+Base.@nospecializeinfer function precompile_in_parallel(@nospecialize(signatures::Type...))
+    if _is_generating_package_output()
+        foreach(sig -> precompile(sig::Type), signatures)
+        return nothing
+    end
+    tasks = Task[]
+    for sig in signatures
+        push!(tasks, Threads.@spawn precompile(sig::Type))
+    end
+    foreach(wait, tasks)
     return nothing
 end
 
