@@ -176,3 +176,12 @@ end
     @test isconcretetype(Base.return_types(RB.build_registry_and_key_plan, (typeof(deep_la),))[1])
     @test rb_same_setup(RB.build_registry_and_key_plan(deep_la), RB.build_registry_from_values(deep_la))
 end
+
+@testset "Registry: a Unique handle is found in every form, with or without the plan's map" begin
+    a, b = Unique(RBSrc), Unique(RBSrc)
+    reg = RB.getregistry(resolve(CompositeAlgorithm(a, b, (1, 1))))
+    # Without the map a held handle cannot be numbered from types; it and a stripped one are found by their uuid.
+    for r in (reg, RB.strip_keymap(reg)), (h, key) in ((a, :RBSrc_1), (RB.strip_unique(a), :RBSrc_1), (b, :RBSrc_2))
+        @test getkey(r[h]) == key
+    end
+end

@@ -22,5 +22,9 @@ function reconstruct_matcher(::Type{UniquePlanId{N}}) where {N}
     error("Cannot reconstruct `UniquePlanId{$N}` from its type: its uuid is only in the value (a stripped or numbered id).")
 end
 
+# Found from its type only when numbered: the registry stores numbered ids. A held id (when the registry has no map to
+# number it, `number_held_handle`) and a stripped one are found by their uuid in the runtime lookup table (`LookupKey`).
+@inline isstaticallyfindable(id::UniquePlanId) = plan_number(id) isa Int
+
 # Named after its uuid only, so every form of it (held, stripped, numbered) gets the same name.
 lower_to_lookupkey(id::UniquePlanId) = Symbol(lower_type(UniquePlanId), "_", origin(id))
