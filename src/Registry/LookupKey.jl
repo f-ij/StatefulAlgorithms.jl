@@ -1,33 +1,51 @@
 #=
 Keys of a registry entry's runtime lookup table (`RegistryTypeEntry.dynamic_lookup`), which finds the algorithms that
-are not found by their type (`isstaticallyfindable` is false). A key is the `Symbol` a lowering rule (`lower_matcher`)
-gives the algorithm's matcher, wrapped in `LookupKey` to mark where it came from.
+are not found by their type (`isstaticallyfindable` is false). `LookupKey(algo)` is the key of an algorithm: its matcher
+named by `lower_to_lookupkey`.
 =#
 
 """
+    LookupKey(algo)
     LookupKey(name::Symbol)
 
-A key of a registry entry's runtime lookup table (`RegistryTypeEntry.dynamic_lookup`): the name `lower_matcher` gives an
-algorithm's matcher. Equal and hashed by `name`. One concrete type, so the table's methods (`setindex!`, `get`,
-`delete!`) are compiled once, not once per key type. Prints as `name`.
+The key of the algorithm `algo` in a registry entry's runtime lookup table (`RegistryTypeEntry.dynamic_lookup`): its
+matcher (`match_by`) named by `lower_to_lookupkey`. The same key when `algo` is stored and when it is looked up, in a
+registry built from values and in one built by generated code (which writes `LookupKey(algo)` for an algorithm whose
+value it does not know, GeneratedCode/Registry/Expressions.jl). Equal and hashed by `name`. One concrete type, so the
+table's methods (`setindex!`, `get`, `delete!`) are compiled once, not once per key type. Prints as `name`.
 """
 struct LookupKey
     name::Symbol
+    LookupKey(name::Symbol) = new(name)   # inner, so Julia adds no converting `LookupKey(x)`: that is `LookupKey(algo)`
+end
+Base.@nospecializeinfer LookupKey(@nospecialize(algo)) = LookupKey(lower_to_lookupkey(match_by(algo)))
+
+"""
+    known_lookupkey(T) -> LookupKey or nothing
+
+The `LookupKey` of every algorithm of type `T`, when the type decides it: its matcher worked out from the type
+(`entry_matcher`) named by `lower_to_lookupkey`. `nothing` for a handle that keeps its matcher as data (a `Unique`
+handle's uuid, a merged state's ids: `keeps_matcher_data`), whose key needs the value. The generated registry code holds
+a known key as a constant and writes `LookupKey(<the algorithm>)` for the others.
+"""
+Base.@nospecializeinfer function known_lookupkey(@nospecialize(T::Type))
+    keeps_matcher_data(T) && return nothing
+    return LookupKey(lower_to_lookupkey(entry_matcher(T)))
 end
 Base.print(io::IO, k::LookupKey) = print(io, k.name)
 Base.show(io::IO, k::LookupKey) = show(io, k.name)
 
 """
-    lower_matcher(matcher) -> Symbol
+    lower_to_lookupkey(matcher) -> Symbol
 
-The name of `matcher` in a runtime lookup table. A matcher whose data is all in its type (a type, or a singleton such as
+The name of `matcher` in a `LookupKey`. A matcher whose data is all in its type (a type, or a singleton such as
 `SimpleId{uuid}()`, `ObjectIDMatcher{id}()`, `ValMatcher{v}()`) is named after that type (`lower_type`), so a type and
 its instance get the same name. A value with fields of its own (an `isbits` algorithm that matches by value, such as a
 `ContextWrite`) is named after the value as printed (`lower_value`). Add a method for a matcher that needs another name.
 Extended by: `UniquePlanId` (after its uuid only), Identifiable/UniquePlanId/HookExtensions.jl.
 """
-Base.@nospecializeinfer lower_matcher(@nospecialize(T::Type)) = lower_type(T)
-Base.@nospecializeinfer function lower_matcher(@nospecialize(matcher))
+Base.@nospecializeinfer lower_to_lookupkey(@nospecialize(T::Type)) = lower_type(T)
+Base.@nospecializeinfer function lower_to_lookupkey(@nospecialize(matcher))
     Base.issingletontype(typeof(matcher)) && return lower_type(typeof(matcher))
     return lower_value(matcher)
 end
@@ -59,10 +77,3 @@ The value `x` printed as a `Symbol`, names qualified as in `lower_type`.
 """
 Base.@nospecializeinfer lower_value(@nospecialize(x)) = Symbol(sprint(show, x; context = :module => Core))
 
-"""
-    dynamic_lookup_key(obj) -> LookupKey
-
-The key under which `obj` is stored in a registry's runtime lookup table (`RegistryTypeEntry.dynamic_lookup`): its
-matcher (`match_by`) lowered to a name (`lower_matcher`).
-"""
-dynamic_lookup_key(obj) = LookupKey(lower_matcher(match_by(obj)))

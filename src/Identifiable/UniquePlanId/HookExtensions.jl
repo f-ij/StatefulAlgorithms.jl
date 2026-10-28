@@ -26,4 +26,4 @@ function reconstruct_matcher(::Type{UniquePlanId{N}}) where {N}
 end
 
 # Named after its uuid only, so every form of it (held, stripped, numbered) gets the same name.
-Base.@nospecializeinfer lower_matcher(id::UniquePlanId) = Symbol(lower_type(UniquePlanId), "_", origin(id))
+lower_to_lookupkey(id::UniquePlanId) = Symbol(lower_type(UniquePlanId), "_", origin(id))

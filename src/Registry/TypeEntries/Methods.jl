@@ -31,8 +31,8 @@ The position of `val` in the entry, found by its matcher (`match_by`), or `nothi
 @inline static_findfirst_match(rte::RegistryTypeEntry, val) = @inline static_findfirst_match(rte, Val(static_id(@inline match_by(val))))
 # `static_findfirst_match(rte, Val(matcher))` is generated: GeneratedCode/Registry/Lookups.jl.
 
-"""The position of `val` in the entry, found through the runtime lookup table (`dynamic_lookup_key`), or `nothing`."""
-dynamic_lookup(rte::RegistryTypeEntry{T}, val) where {T} = get(getdynamiclookup(rte), dynamic_lookup_key(val), nothing)
+"""The position of `val` in the entry, found through the runtime lookup table (`LookupKey`), or `nothing`."""
+dynamic_lookup(rte::RegistryTypeEntry{T}, val) where {T} = get(getdynamiclookup(rte), LookupKey(val), nothing)
 
 """The position of `val` in the entry, or `nothing`: by its matcher when `isstaticallyfindable`, else by lookup."""
 @inline findfirst_match(rte::RegistryTypeEntry, val) = isstaticallyfindable(val) ? static_findfirst_match(rte, val) : dynamic_lookup(rte, val)
