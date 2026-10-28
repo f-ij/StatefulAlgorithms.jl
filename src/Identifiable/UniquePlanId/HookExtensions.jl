@@ -25,8 +25,5 @@ function reconstruct_matcher(::Type{UniquePlanId{N}}) where {N}
     error("Cannot reconstruct `UniquePlanId{$N}` from its type: its uuid is only in the value (a stripped or numbered id).")
 end
 
-# The registry stores only numbered ids: a held one (`UniquePlanId{uuid}`) is found by its uuid in the runtime table.
-is_found_by_data(id::UniquePlanId) = is_held_unique_id(id)
-
 # Named after its uuid only, so every form of it (held, stripped, numbered) gets the same name.
 Base.@nospecializeinfer lower_matcher(id::UniquePlanId) = Symbol(lower_type(UniquePlanId), "_", origin(id))

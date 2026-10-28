@@ -66,8 +66,7 @@ end
 The loop's exit: records the end time (a session that keeps times) and returns the persistent context and the run's
 result (on a pause, the paused context as both). Returned as the loop has them, without the plan's `UniqueKeyMap`; the
 process that started the run commits them (`Process`: `_finish_run!`, which also puts the map back into what `fetch(p)` returns; `InlineProcess`:
-`run_session_loop!`, which keeps the context on the session, and whose `run(ip)` returns the result without the map,
-while `context(ip)` has it).
+`run_session_loop!`, which keeps the context on the session; `run(ip)` puts the map back into the result).
 """
 @inline function after_while(session::S, persistent_context::C, returnvalue::R) where {S<:ProcessSession, C<:ProcessContext, R}
     @inline set_endtime!(session)

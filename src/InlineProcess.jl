@@ -5,7 +5,7 @@ Mainly used to compose algorithms in tight loops, plugging into the ProcessLoopA
 
 This doesn't provide the multitasking features of Process, but is faster to restart
 """
-mutable struct InlineProcess{TD,ContextType, Lt,Mode,K} <: AbstractProcess
+mutable struct InlineProcess{TD,ContextType, Lt,Mode,K,UR} <: AbstractProcess
     const id::UUID
     algo::TD            # the plan, without the map (the loop's type)
     consumed::Bool
@@ -16,6 +16,10 @@ mutable struct InlineProcess{TD,ContextType, Lt,Mode,K} <: AbstractProcess
     # The run's counter and the process's context, without the map (the loop's type), one session for every run
     # (Sessions/InlineSession.jl): what the loop gets instead of the process.
     const session::InlineSession{ContextType}
+    # The registry of the process's context with the map, in its `Ref` (`attach_keymap`): what the contexts the user
+    # gets (`context(ip)`, `run(ip)`) hold, so handing one out builds no registry. Set whenever the process's context is
+    # set from outside (`set_session_context!`); a run keeps the registry.
+    user_registry::UR
 end
 #TODO Improve context semantics
 contexttype(::Union{InlineProcess{TD,ContextType}, Type{<:InlineProcess{TD,ContextType}}}) where {TD,ContextType} = ContextType
@@ -83,8 +87,10 @@ end
 end
 
 # The only step typed on the map: compiled once per set of `Unique` handles, and small.
-_construct_inline_process(algo::TD, context::C, lifetime::Lt, ::Val{mode}, keymap::K) where {TD, C, Lt, mode, K} =
-    InlineProcess{TD, C, Lt, mode, K}(uuid1(), algo, false, lifetime, keymap, InlineSession(context))
+function _construct_inline_process(algo::TD, context::C, lifetime::Lt, ::Val{mode}, keymap::K) where {TD, C, Lt, mode, K}
+    user_registry = getfield(attach_keymap(context, keymap), :reg)
+    return InlineProcess{TD, C, Lt, mode, K, typeof(user_registry)}(uuid1(), algo, false, lifetime, keymap, InlineSession(context), user_registry)
+end
 
 @inline isthreaded(ip::InlineProcess{TD,ContextType,Lt,Mode}) where {TD,ContextType,Lt,Mode} = Mode == :threaded
 @inline isasync(ip::InlineProcess{TD,ContextType,Lt,Mode}) where {TD,ContextType,Lt,Mode} = Mode == :async
@@ -96,12 +102,29 @@ getalgo(ip::InlineProcess) = ip.algo
 
 """Set the process's context to `c` (a context from `context(ip)` has the map: it is taken out)."""
 @inline function context(ip::InlineProcess, c)
-    getsession(ip).context = detach_keymap(c)
+    set_session_context!(ip, detach_keymap(c))
     return _context(ip)
 end
 @inline _context(ip::InlineProcess) = getsession(ip).context
-"""The process's context with the plan's `UniqueKeyMap` in its registry (`attach_keymap`), typed: `context(ip)[handle]`."""
-@inline context(ip::InlineProcess) = attach_keymap(_context(ip), getfield(ip, :keymap))
+"""The process's context with the plan's `UniqueKeyMap` in its registry (`attach_user_registry`), typed: `context(ip)[handle]`."""
+@inline context(ip::InlineProcess) = attach_user_registry(ip, _context(ip))
+
+"""Set the process's context (on its session) to `c`, a context without the map, and its registry with the map."""
+@inline function set_session_context!(ip::InlineProcess, c)
+    getsession(ip).context = c
+    ip.user_registry = getfield(attach_keymap(c, getfield(ip, :keymap)), :reg)
+    return nothing
+end
+
+"""
+    attach_user_registry(ip, x) -> x with the map
+
+A context of `ip` (`x`, without the map) with the process's registry that has the map (`user_registry`): typed, and no
+new registry. A value that is not a context as it is.
+"""
+@inline attach_user_registry(ip::InlineProcess, c::ProcessContext{D}) where {D} =
+    ProcessContext{D, typeof(getfield(ip, :user_registry))}(getfield(c, :subcontexts), getfield(ip, :user_registry))
+@inline attach_user_registry(ip::InlineProcess, x) = x
 
 @inline function reset!(p::InlineProcess, inputs_overrides...)
     reset_loopidx!(getsession(p))
@@ -129,7 +152,7 @@ end
 @inline function _set_inline_run_context!(p::InlineProcess, context)
     context = detach_keymap(context)   # a context from `context(ip)` has the map
     @assert context isa contexttype(p) "Wrong context shape for this process\n Context is of type $(typeof(context)), but expected $(contexttype(p))."
-    getsession(p).context = context
+    set_session_context!(p, context)
     return nothing
 end
 
@@ -174,14 +197,16 @@ end
 """
 One run of `p`: the loop on the process's session, which holds the process's context and keeps the context after the
 run (`run_session_loop!`, a call whose arguments have no map, so the loop is compiled once for every set of `Unique`
-handles; with `Val(true)`, the loop pasted in, `run_session_loop_body!`).
+handles; with `Val(true)`, the loop pasted in, `run_session_loop_body!`). Returns the run's result with the process's
+`UniqueKeyMap` (`attach_user_registry`), so `run(ip)[handle]` is found from types, as `context(ip)[handle]` is.
 """
 @inline function _run_inline!(p::InlineProcess, algo::A, run_lifetime::LT, runtime_inputs::I, ::Val{inlined}) where {A, LT, I, inlined}
-    if inlined
-        return @inline run_session_loop_body!(getsession(p), algo, run_lifetime, runtime_inputs)
+    result = if inlined
+        @inline run_session_loop_body!(getsession(p), algo, run_lifetime, runtime_inputs)
     else
-        return run_session_loop!(getsession(p), algo, run_lifetime, runtime_inputs)
+        run_session_loop!(getsession(p), algo, run_lifetime, runtime_inputs)
     end
+    return @inline attach_user_registry(p, result)
 end
 
 @inline function init_and_run(p::InlineProcess, inputs_overrides...)

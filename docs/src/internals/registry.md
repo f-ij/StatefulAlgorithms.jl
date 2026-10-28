@@ -74,7 +74,7 @@ steps below 4.7–4.8 ms). So the uuid (`origin`) is data and never changes; the
    process (`ProcessSession`, `src/Sessions/`), reached through `run_session_loop`, whose arguments have no map, so
    the loop is compiled once for every set of `Unique`s (`run_session_loop!` for an `InlineProcess`, on the context
    its session holds).
-6. What a process hands back has the map put back: `context(ip)` builds it typed (`attach_keymap`); a `Process`
+6. What a process hands back has the map put back: `context(ip)` and `run(ip)` build it typed (`attach_keymap`); a `Process`
    builds the user's context once each time its context changes (`set_user_context!`, after a run in `_finish_run!`)
    and `context(p)` reads it; `fetch(p)` and the plan `init` and `run(la)` return have it too (`with_keymap`). A
    context given back to SA has it stripped: `Process(...; context)` (`strip_keymap`),
@@ -84,7 +84,7 @@ steps below 4.7–4.8 ms). So the uuid (`origin`) is data and never changes; the
    lifetime)`, `run(p; lifetime)`, a manager's per-job lifetime), at run time at the untyped entry points
    (`number_by_keymap_dynamic`: `Process(...; lifetime)`, `InlineProcess(...; lifetime)`, `init`/`run(la)`).
 
-The matching and registry code ask a matcher only general questions (`matches_type`, `is_given_id`, `is_found_by_data`,
+The matching and registry code ask a matcher only general questions (`matches_type`, `is_given_id`,
 `lower_matcher`, `carries_data`); `UniquePlanId` answers them in `src/Identifiable/UniquePlanId/HookExtensions.jl`. A
 holder says which of its type parameters come from its fields with `list_field_derived_params`
 (`src/Identifiable/UniquePlanId/Hooks.jl`). A plan's schedule is changed only through `setschedule`
