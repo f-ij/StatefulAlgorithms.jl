@@ -50,7 +50,15 @@ Resolves `func` first (untyped) and prepares the plan, its context and the lifet
 (`strip_keymap`, `number_by_keymap_dynamic`), so a new set of `Unique` handles compiles none of that again. Only the
 process itself has the map in its type (`keymap`).
 """
-Base.@nospecializeinfer function InlineProcess(@nospecialize(func), @nospecialize(inputs_overrides...); context = nothing, @nospecialize(lifetime = nothing), kwargs...)
+Base.@nospecializeinfer InlineProcess(@nospecialize(func), @nospecialize(inputs_overrides...)) =
+    _build_inline_process(func, inputs_overrides, nothing, nothing, (;))
+# The keyword call, by hand: Julia's own specializes on the keywords' `NamedTuple`, whose type has the handles' uuids
+# (a lifetime's `Var`), so it compiled once for every new set of handles (2.5 ms each).
+Base.@nospecializeinfer function Core.kwcall(@nospecialize(kw::NamedTuple), ::Type{InlineProcess}, @nospecialize(func), @nospecialize(inputs_overrides...))
+    rest = Base.structdiff(kw, NamedTuple{(:context, :lifetime)})
+    return _build_inline_process(func, inputs_overrides, get(kw, :context, nothing), get(kw, :lifetime, nothing), rest)
+end
+Base.@nospecializeinfer function _build_inline_process(@nospecialize(func), @nospecialize(inputs_overrides::Tuple), @nospecialize(context), @nospecialize(lifetime), @nospecialize(kwargs::NamedTuple))
     algo = func isa LoopSpec ? func : normalize_process_algo(func)
     algo isa LoopSpec && (algo = resolve(algo))
     keymap = getkeymap(algo)
@@ -58,9 +66,10 @@ Base.@nospecializeinfer function InlineProcess(@nospecialize(func), @nospecializ
     algo, prepared_context, lifetime, mode = _prepare_inline_process(strip_keymap(algo), inputs_overrides...;
         context = strip_keymap(context), lifetime = number_by_keymap_dynamic(lifetime, keymap), kwargs...)
     ip = _construct_inline_process(algo, prepared_context, lifetime, Val(mode), keymap)
-    # `run(ip)` is compiled for every set of `Unique` handles (it is typed on the map): compiled here, so the first run
-    # does not wait for it. It is small: the loop is a call of its own (`run_session_loop!`).
+    # `run(ip)` and `context(ip)` are typed on the map, so compiled for every set of `Unique` handles: compiled here, so
+    # the first run does not wait for them. They are small: the loop is a call of its own (`run_session_loop!`).
     precompile(run, (typeof(ip),))
+    precompile(context, (typeof(ip),))
     return ip
 end
 

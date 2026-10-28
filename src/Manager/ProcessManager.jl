@@ -315,7 +315,7 @@ function runprocessinline!(worker::P; lifetime = nothing, repeats = nothing, rep
     inputs = _validate_runtime_inputs(algo, (; kwargs...))
     base_context = _has_typed_runtime_context(worker) ? _typed_runtime_context(worker) : _context(worker)
     lt = StatefulAlgorithms.lifetime(worker)
-    session = _session_for_run!(worker, lt)
+    session = worker.session = create_session(worker, lt)
     @atomic session.paused = false
     @atomic session.shouldrun = true
     persistent_context, returnvalue = run_session_loop(session, algo, base_context, lt, inputs, Resuming{false}())

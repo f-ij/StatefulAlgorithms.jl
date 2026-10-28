@@ -51,7 +51,7 @@ the targeted subcontexts.
 
 - validates runtime keyword arguments against the loop algorithm's `@input` metadata,
 - selects the current persistent or paused context,
-- picks the run's session (`_session_for_run!`),
+- picks the run's session (`create_session`),
 - spawns the loop task, which passes the session, the plan, that context and the runtime-input `NamedTuple` to the
   loop (`run_session_loop`) and then ends the run on the process (`_finish_run!`: commits the context, or keeps it
   and the cursor on a pause).

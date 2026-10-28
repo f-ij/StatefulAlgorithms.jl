@@ -148,7 +148,15 @@ A process running `func`. Resolves it first (untyped) and prepares the plan, its
 plan's `UniqueKeyMap` (`strip_keymap`, `number_by_keymap_dynamic`), so a new set of `Unique` handles compiles none of that
 again. Only the process itself has the map in its type (`keymap`).
 """
-Base.@nospecializeinfer function Process(@nospecialize(func), @nospecialize(inputs_overrides...); context = nothing, @nospecialize(lifetime = nothing), kwargs...)
+Base.@nospecializeinfer Process(@nospecialize(func), @nospecialize(inputs_overrides...)) =
+    _build_process(func, inputs_overrides, nothing, nothing, (;))
+# The keyword call, by hand: Julia's own specializes on the keywords' `NamedTuple`, whose type has the handles' uuids
+# (a lifetime's `Var`), so it compiled once for every new set of handles (2.5 ms each).
+Base.@nospecializeinfer function Core.kwcall(@nospecialize(kw::NamedTuple), ::Type{Process}, @nospecialize(func), @nospecialize(inputs_overrides...))
+    rest = Base.structdiff(kw, NamedTuple{(:context, :lifetime)})
+    return _build_process(func, inputs_overrides, get(kw, :context, nothing), get(kw, :lifetime, nothing), rest)
+end
+Base.@nospecializeinfer function _build_process(@nospecialize(func), @nospecialize(inputs_overrides::Tuple), @nospecialize(context), @nospecialize(lifetime), @nospecialize(kwargs::NamedTuple))
     algo = func isa LoopSpec ? func : normalize_process_algo(func)
     algo isa LoopSpec && (algo = resolve(algo))
     keymap = getkeymap(algo)
@@ -177,6 +185,9 @@ function _construct_process(algo::F, lifetime::LT, timeout, keymap::K) where {F<
 
     register_process!(p)
     schedule_loop_precompile!(p, lifetime)
+    # What a first run calls with `p` is typed on the map, so compiled for every set of `Unique` handles: compiled here,
+    # so the first `run` does not wait for it.
+    _precompile_process!(p)
     @DebugMode "Created process with id $(p.id), now preparing data"
 
     finalizer(remove_process!, p)
@@ -388,7 +399,7 @@ end
     _makeloop!(p, inputs, lt, _context(p); threaded, loopfunc)
 
 function _makeloop!(p::Process, inputs::NamedTuple, lt, base_context; threaded = true, loopfunc::LF = loop) where {LF}
-    session = _session_for_run!(p, lt)
+    session = p.session = create_session(p, lt)
     @atomic session.paused = false
     @atomic session.shouldrun = true
     p.lastresult = nothing
@@ -399,30 +410,50 @@ function _makeloop!(p::Process, inputs::NamedTuple, lt, base_context; threaded =
 end
 
 """
-    _session_for_run!(p, lifetime) -> InteractiveSession
+    create_session(p, lifetime) -> InteractiveSession
 
 The session a run of `p` with `lifetime` runs in: the process's session when it has that lifetime's type, else a new
-one with the same counters, times and thread (as one `Process` kept them before sessions), set as the process's
-session. Never while a run is going on, so the loop and the process always share the one session.
+one with the same counters, times and thread (as one `Process` kept them before sessions). The caller sets it as the
+process's session, never while a run is going on, so the loop and the process always share the one session.
 """
-function _session_for_run!(p::Process{F, C}, lt::LT) where {F, C, LT}
+function create_session(p::Process{F, C}, lt::LT) where {F, C, LT}
     session = getsession(p)
     session isa InteractiveSession{C, LT} && return session
-    new = InteractiveSession{C, LT}(@atomic(session.shouldrun), @atomic(session.paused), session.loopidx, session.tickidx,
+    return InteractiveSession{C, LT}(@atomic(session.shouldrun), @atomic(session.paused), session.loopidx, session.tickidx,
         session.starttime, session.endtime, session.loop_cursor, session.threadid)
-    p.session = new
-    return new
 end
 
 function _makeloop_prepared!(p::P, session::S, func::F, runtime_context::C, lt::LT, inputs::I; threaded::Bool = true, loopfunc::LF = loop, resume::R = Resuming{false}()) where {P<:Process, S<:InteractiveSession, F, C, LT, I<:NamedTuple, LF, R<:Resuming}
     wait_loop_precompile!(p, func, runtime_context, lt, inputs, resume; loopfunc)
+    # The task runs `body` itself (as `Threads.@spawn` and `@async` do with a closure around it): its type is known
+    # when the process is built, so it is compiled then.
+    body = ProcessTaskBody(p, loopfunc, session, func, runtime_context, lt, inputs, resume)
+    task = Task(body)
     if threaded
-        p.task = Threads.@spawn _run_process_task(p, loopfunc, session, func, runtime_context, lt, inputs, resume)
-    else
-        p.task = @async _run_process_task(p, loopfunc, session, func, runtime_context, lt, inputs, resume)
+        task.sticky = false
+        Threads._spawn_set_thrpool(task, :default)
     end
+    p.task = schedule(task)
     return p
 end
+
+"""
+    ProcessTaskBody(p, loopfunc, session, func, runtime_context, lifetime, inputs, resume)
+
+What a `Process` task runs, as a value: calling it runs `_run_process_task` with its fields. A struct, not a closure,
+so its type is known before the task exists and it is compiled when the process is built (`_precompile_process!`).
+"""
+struct ProcessTaskBody{P, LF, S, F, C, LT, I, R}
+    p::P
+    loopfunc::LF
+    session::S
+    func::F
+    runtime_context::C
+    lifetime::LT
+    inputs::I
+    resume::R
+end
+(body::ProcessTaskBody)() = _run_process_task(body.p, body.loopfunc, body.session, body.func, body.runtime_context, body.lifetime, body.inputs, body.resume)
 
 """
 What a `Process` task runs: the loop on the session (`run_session_loop`, a call whose arguments have no map in their
