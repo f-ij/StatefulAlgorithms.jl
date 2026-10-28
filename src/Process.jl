@@ -186,8 +186,8 @@ function _construct_process(algo::F, lifetime::LT, timeout, keymap::K) where {F<
     register_process!(p)
     schedule_loop_precompile!(p, lifetime)
     # What a first run calls with `p` is typed on the map, so compiled for every set of `Unique` handles: compiled here,
-    # so the first `run` does not wait for it.
-    _precompile_process!(p)
+    # so the first `run` does not wait for it (src/PrecompileFirstRun.jl).
+    precompile_first_run!(p)
     @DebugMode "Created process with id $(p.id), now preparing data"
 
     finalizer(remove_process!, p)
@@ -441,7 +441,7 @@ end
     ProcessTaskBody(p, loopfunc, session, func, runtime_context, lifetime, inputs, resume)
 
 What a `Process` task runs, as a value: calling it runs `_run_process_task` with its fields. A struct, not a closure,
-so its type is known before the task exists and it is compiled when the process is built (`_precompile_process!`).
+so its type is known before the task exists and it is compiled when the process is built (`precompile_first_run!`).
 """
 struct ProcessTaskBody{P, LF, S, F, C, LT, I, R}
     p::P

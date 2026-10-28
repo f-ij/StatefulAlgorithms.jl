@@ -545,72 +545,12 @@ function ProcessManager(
     )
 end
 
-const _PROCESSMANAGER_PRECOMPILE_LOCK = ReentrantLock()
-const _PROCESSMANAGER_PRECOMPILE_TYPES = Set{Any}()
-
 """
     _slot_job_type(slot_type_or_slot)
 
 Return the declared job type stored in a `WorkerSlot`.
 """
 _slot_job_type(::WorkerSlot{W, Job}) where {W, Job} = Job
-
-"""
-    _first_slot_type(slots)
-
-Return the concrete type of the first slot in a non-empty slot tuple.
-"""
-function _first_slot_type(slots::Tuple)
-    return typeof(first(slots))
-end
-
-"""
-    _precompile_processmanager!(ManagerType, SlotType, JobType)
-
-Best-effort precompile of the manager methods that are normally hit when a
-manager starts processing jobs.
-"""
-function _precompile_processmanager!(::Type{M}, ::Type{Slot}, ::Type{Job}) where {M<:ProcessManager, Slot<:WorkerSlot, Job}
-    _try_precompile(dispatch!, (M, Job))
-    _try_precompile(poll!, (M,))
-    _try_precompile(wait, (M,))
-    _try_precompile(drain!, (M,))
-    _try_precompile(run!, (M, Vector{Job}))
-    _try_precompile(_wait_active_slots!, (M,))
-    _try_precompile(_wait_for_free_slot!, (M,))
-    _try_precompile(_finish_done_slots!, (M,))
-    _try_precompile(_finish_slot!, (M, Slot))
-    _try_precompile(_start_slot!, (M, Slot, Job))
-    _try_precompile(_run_kwargs, (M, Slot, Job))
-    _try_precompile(_slot_isdone, (M, Slot))
-    return nothing
-end
-
-"""
-    schedule_processmanager_precompile!(manager)
-
-Schedule best-effort manager precompilation for this concrete manager/slot/job
-shape. This runs in the background outside package image generation.
-"""
-function schedule_processmanager_precompile!(manager::ProcessManager)
-    _is_generating_package_output() && return nothing
-    isempty(slots(manager)) && return nothing
-
-    manager_type = typeof(manager)
-    slot_type = _first_slot_type(slots(manager))
-    job_type = _slot_job_type(first(slots(manager)))
-    signature = (manager_type, slot_type, job_type)
-
-    should_schedule = lock(_PROCESSMANAGER_PRECOMPILE_LOCK) do
-        if !(signature in _PROCESSMANAGER_PRECOMPILE_TYPES)
-            push!(_PROCESSMANAGER_PRECOMPILE_TYPES, signature)
-            return true
-        end
-        return false
-    end
-    should_schedule && Threads.@spawn _precompile_processmanager!(manager_type, slot_type, job_type)
-    return nothing
-end
 
 """
     _slot_container(workers, worker_names, Job, Scratch, Result, Err,
@@ -920,7 +860,7 @@ function ProcessManager(recipe; nworkers::Integer = Threads.nthreads(), workers 
     slot_name_type = _manager_slot_name_type(name_type, normalized_lifecycle)
     slot_values = _slot_container(worker_values, worker_names, job_type, scratch_type, result_type, error_type, slot_worker_type, slot_name_type)
     manager = ProcessManager(recipe, slot_values, config, prepared_state, normalized_policy, normalized_lifecycle, normalized_execution, throw, Float64(poll_interval), 0, 0, 0, 0, 1, Any[], false, isnothing(workers))
-    schedule_processmanager_precompile!(manager)
+    precompile_first_run!(manager)   # src/PrecompileFirstRun.jl
     return manager
 end
 

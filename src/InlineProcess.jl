@@ -66,10 +66,9 @@ Base.@nospecializeinfer function _build_inline_process(@nospecialize(func), @nos
     algo, prepared_context, lifetime, mode = _prepare_inline_process(strip_keymap(algo), inputs_overrides...;
         context = strip_keymap(context), lifetime = number_by_keymap_dynamic(lifetime, keymap), kwargs...)
     ip = _construct_inline_process(algo, prepared_context, lifetime, Val(mode), keymap)
-    # `run(ip)` and `context(ip)` are typed on the map, so compiled for every set of `Unique` handles: compiled here, so
-    # the first run does not wait for them. They are small: the loop is a call of its own (`run_session_loop!`).
-    precompile(run, (typeof(ip),))
-    precompile(context, (typeof(ip),))
+    # `run(ip)` is typed on the map, so compiled for every set of `Unique` handles: compiled here, so the first run does
+    # not wait for it (src/PrecompileFirstRun.jl).
+    precompile_first_run!(ip)
     return ip
 end
 
