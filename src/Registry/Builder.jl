@@ -128,15 +128,13 @@ end
 """
     find_same(entry, algo) -> index or nothing
 
-The index of the algorithm in `entry` that `algo` is the same algorithm as, or `nothing`: compared by matchers
-(`added_matcher`, `entry_matcher`, `same_algorithm`), or, for a value that is not `isbits` (found by its identity), by
-its runtime lookup key.
+The index of the algorithm in `entry` that `algo` is the same algorithm as, or `nothing`. In the walk on values, by
+`match`: the matchers of the two values compared with `==` (an id that carries data, `UniquePlanId`, by its uuid). In
+the walk on types, by the matchers the types give (`added_matcher`, `entry_matcher`, `same_algorithm`).
 """
 Base.@nospecializeinfer function find_same(entry::TypeEntryBuilder, @nospecialize(algo))
-    if !(algo isa GeneratedValue)
-        isstaticallyfindable(algo) || return get(entry.lookup, LookupKey(algo), nothing)
-    end
-    added = added_matcher(algo isa GeneratedValue ? algo.valuetype : algo)
+    algo isa GeneratedValue || return findfirst(other -> match(algo, other), entry.algos)
+    added = added_matcher(algo.valuetype)
     for i in eachindex(entry.algos)
         entry.matchers[i] isa MatcherNotComputed && (entry.matchers[i] = entry_matcher(read_type(entry.algos[i])))
         same_algorithm(added, entry.matchers[i]) && return i
