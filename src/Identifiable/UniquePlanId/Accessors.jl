@@ -1,7 +1,7 @@
 #=
 Getters and setters of the plan's `UniqueKeyMap` in a registry, a context or a plan: `getkeymap` reads it;
 `with_keymap` and `strip_keymap` put it in and take it out untyped (made at run time, compiling nothing per uuid);
-`attach_keymap` and `detach_keymap` do the same typed, for a handle whose type has the map (`Process`,
+`with_keymap_typed` and `strip_keymap_typed` do the same typed, for a handle whose type has the map (`Process`,
 `InlineProcess`). After Context/, as the typed ones take a `ProcessContext`.
 =#
 
@@ -74,31 +74,33 @@ set of `Unique` handles compiles nothing again.
 Base.@nospecializeinfer strip_keymap(@nospecialize(x)) = with_keymap(x, nothing)
 
 """
-    attach_keymap(context, keymap) -> context with `keymap` as its registry's map
+    with_keymap_typed(context, keymap) -> context with `keymap` as its registry's map
 
-`with_keymap` for a typed handle: the context's type and the map's type say the result's type, so it is inferred
-(`context(ip)` stays inferred). Same subcontexts and entries, a new registry and `Ref`. A value that is not a context
-with a registry, or no map (`nothing`), as it is.
+`with_keymap` for code typed on the map (a method of `InlineProcess`, whose type has it): the result's type is known
+where it is called, so that code stays inferred (`context(ip)`, `run(ip)`; `with_keymap` there costs about 600 ns and
+1.6 kB per call, as it builds the type at run time). Compiled once per context type, so not for the untyped entry
+points (`Process(...)`, `init`), which use `with_keymap`. Same subcontexts and entries, a new registry and `Ref`. A
+value that is not a context with a registry, or no map (`nothing`), as it is.
 """
-@inline function attach_keymap(c::ProcessContext{D, Base.RefValue{NameSpaceRegistry{E, M}}}, keymap::K) where {D, E, M, K<:UniqueKeyMap}
+@inline function with_keymap_typed(c::ProcessContext{D, Base.RefValue{NameSpaceRegistry{E, M}}}, keymap::K) where {D, E, M, K<:UniqueKeyMap}
     reg = getfield(c, :reg)[]
     newreg = NameSpaceRegistry{E, K}(getfield(reg, :entries), keymap)
     return ProcessContext{D, Base.RefValue{NameSpaceRegistry{E, K}}}(getfield(c, :subcontexts), Ref(newreg))
 end
-@inline attach_keymap(x, ::Nothing) = x
-@inline attach_keymap(x, keymap::UniqueKeyMap) = with_keymap(x, keymap)
+@inline with_keymap_typed(x, ::Nothing) = x
+@inline with_keymap_typed(x, keymap::UniqueKeyMap) = with_keymap(x, keymap)
 
 """
-    detach_keymap(context) -> context without its registry's map
+    strip_keymap_typed(context) -> context without its registry's map
 
-`strip_keymap` for a typed handle: inferred from the context's type (a context the user got back from `context(ip)` and
-gives to `run(ip; context)`). A value that is not a context with a registry as it is.
+`strip_keymap` for code typed on the map, as `with_keymap_typed`: a context the user got back from `context(ip)` and
+gives to `run(ip; context)` or `context(ip, c)`. A value that is not a context with a registry as it is.
 """
-@inline function detach_keymap(c::ProcessContext{D, Base.RefValue{NameSpaceRegistry{E, M}}}) where {D, E, M}
+@inline function strip_keymap_typed(c::ProcessContext{D, Base.RefValue{NameSpaceRegistry{E, M}}}) where {D, E, M}
     M === Nothing && return c
     reg = getfield(c, :reg)[]
     newreg = NameSpaceRegistry{E, Nothing}(getfield(reg, :entries), nothing)
     return ProcessContext{D, Base.RefValue{NameSpaceRegistry{E, Nothing}}}(getfield(c, :subcontexts), Ref(newreg))
 end
-@inline detach_keymap(x) = x
+@inline strip_keymap_typed(x) = x
 

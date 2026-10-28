@@ -74,11 +74,11 @@ steps below 4.7–4.8 ms). So the uuid (`origin`) is data and never changes; the
    process (`ProcessSession`, `src/Sessions/`), reached through `run_session_loop`, whose arguments have no map, so
    the loop is compiled once for every set of `Unique`s (`run_session_loop!` for an `InlineProcess`, on the context
    its session holds).
-6. What a process hands back has the map put back: `context(ip)` and `run(ip)` build it typed (`attach_keymap`); a `Process`
+6. What a process hands back has the map put back: `context(ip)` and `run(ip)` build it typed (`with_keymap_typed`); a `Process`
    builds the user's context once each time its context changes (`set_user_context!`, after a run in `_finish_run!`)
    and `context(p)` reads it; `fetch(p)` and the plan `init` and `run(la)` return have it too (`with_keymap`). A
    context given back to SA has it stripped: `Process(...; context)` (`strip_keymap`),
-   `context(ip, c)`, `run(ip; context)` (`detach_keymap`, typed).
+   `context(ip, c)`, `run(ip; context)` (`strip_keymap_typed`, typed).
 7. A lifetime given to a process or a run is not part of the plan: its `Var`s get the plan's numbers when it is given,
    so the loop finds them while compiling: while compiling for a typed handle (`number_by_keymap`: `run(ip;
    lifetime)`, `run(p; lifetime)`, a manager's per-job lifetime), at run time at the untyped entry points
