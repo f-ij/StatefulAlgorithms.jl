@@ -22,7 +22,7 @@ which three functions set as the handle moves:
 | `N` | Set by | When | The type then |
 |---|---|---|---|
 | the uuid (`origin`) | `Unique(f)` | the user makes the handle | is a key known from its type, as `SimpleId{uuid}` |
-| `ValueId` | `strip_unique` | a constructor or DSL block takes the handle | is the same for every handle |
+| `ValueId` | `strip_unique`; `DynamicUnique(f)` | a constructor or DSL block takes the handle; a DSL block makes its own `@state` | is the same for every handle |
 | `k` = 1, 2, ... | `number_unique_ids` | a plan is built: each new `origin` gets the next number | is the same in every rebuild of the same code |
 
 The registry, the context, `init` and the loop only see form 3. From `resolve` until the plan is run, the registry also

@@ -53,7 +53,7 @@ steps below 4.7–4.8 ms). So the uuid (`origin`) is data and never changes; the
 | # | `N` | Set by | When |
 |---|---|---|---|
 | 1 | the uuid | `Unique(f)` | the user makes the handle: a key known from its type |
-| 2 | `ValueId` | `strip_unique` | a constructor or DSL block takes the handle: the same type for every handle |
+| 2 | `ValueId` | `strip_unique`; `DynamicUnique(f)` | a constructor or DSL block takes the handle; a DSL block makes its own `@state`: the same type for every handle |
 | 3 | `k` = 1, 2, ... | `number_unique_ids` | a plan is built: each new uuid gets the next number; a nested plan is renumbered by uuid |
 
 1. Every holder of an id keeps it as a value next to its type, so both rewrites (strip and number) reach it: a handle in

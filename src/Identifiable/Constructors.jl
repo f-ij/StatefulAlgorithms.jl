@@ -78,10 +78,22 @@ is `UniquePlanId{uuid}(uuid)` with a fresh uuid, so the handle is a key known fr
 constructor strips the uuid from the type (`strip_unique`) and the plan numbers its handles (`number_unique_ids`), so
 plans built from new `Unique`s have the same types.
 """
-function Unique(f; customname = Symbol(), aliases...)
+Unique(f::F; customname = Symbol(), aliases...) where {F} = unique_with_id(f, UniquePlanId(uuid4()), customname; aliases...)
+
+"""
+    DynamicUnique(f; customname, aliases...)
+
+`Unique(f)` with the uuid in its value only (`UniquePlanId{ValueId}`), as a constructor takes a `Unique` handle
+(`strip_unique`), made so directly: the same type for every handle, so making one compiles nothing. For a handle the
+package makes and the user never holds (a DSL block's own `@state`).
+"""
+DynamicUnique(f::F; customname = Symbol(), aliases...) where {F} = unique_with_id(f, UniquePlanId{ValueId}(uuid4()), customname; aliases...)
+
+# The handle of `Unique` and `DynamicUnique`, with the matcher `id`.
+function unique_with_id(f::F, id::I, customname::Symbol; aliases...) where {F, I<:UniquePlanId}
     f = instantiate(f)
     if !isbits(f)
         f = deepcopy(f) # Mutable types match by identity
     end
-    identifiable_with_id(f, UniquePlanId(uuid4()), VarAliases(;aliases...), customname, Symbol())
+    identifiable_with_id(f, id, VarAliases(;aliases...), customname, Symbol())
 end
