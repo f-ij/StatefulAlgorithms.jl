@@ -305,7 +305,7 @@ end
         @test intervals(resolved) == ntuple(_ -> StatefulAlgorithms.Interval(1), 7)
         @test StatefulAlgorithms.plan_child_namespace(resolved, 1) == :source
         @test length(StatefulAlgorithms.getstates(resolved)) == 1
-        @test StatefulAlgorithms._composite_dsl_is_block_state(first(StatefulAlgorithms.getstates(resolved)))
+        @test StatefulAlgorithms._composite_dsl_is_general_state(StatefulAlgorithms._composite_dsl_block_state(resolved))
 
         sharedcontexts, sharedvars = StatefulAlgorithms._resolved_wiring_by_target(resolved)
         @test !isempty(sharedvars)
