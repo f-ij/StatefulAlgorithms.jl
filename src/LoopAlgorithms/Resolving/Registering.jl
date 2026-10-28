@@ -139,10 +139,15 @@ Base.@nospecializeinfer function register_child!(b::RegistryBuilder, @nospeciali
 end
 
 """
-    unwrap_named_plan(child) -> plan or child
+    unwrap_named_plan(child)
 
-Returns the plan inside a named nested plan (an `AbstractIdentifiableAlgo` of a plan); any other child unchanged. On
-types only an `IdentifiableAlgo` is read (its `func` field); another handle type throws `NeedsValues`.
+Drops the name from a named plan: `IdentifiableAlgo(plan, :name)` gives `plan`. Any other child is returned as it is.
+
+The registry adds a named plan as an unnamed one for now (TODO in `register_child!`); this is where the name goes.
+
+When the registry is built from the plan's type, `child` is a `GeneratedValue` and the plan is read from the `func`
+field. Only `IdentifiableAlgo` is known to keep it there, so any other named-algorithm type throws `NeedsValues`, and
+the registry is then built from the values instead.
 """
 Base.@nospecializeinfer function unwrap_named_plan(@nospecialize(child))
     T = read_type(child)
