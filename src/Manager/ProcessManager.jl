@@ -860,7 +860,7 @@ function ProcessManager(recipe; nworkers::Integer = Threads.nthreads(), workers 
     slot_name_type = _manager_slot_name_type(name_type, normalized_lifecycle)
     slot_values = _slot_container(worker_values, worker_names, job_type, scratch_type, result_type, error_type, slot_worker_type, slot_name_type)
     manager = ProcessManager(recipe, slot_values, config, prepared_state, normalized_policy, normalized_lifecycle, normalized_execution, throw, Float64(poll_interval), 0, 0, 0, 0, 1, Any[], false, isnothing(workers))
-    precompile_first_run!(manager)   # src/PrecompileFirstRun.jl
+    precompile_interface(manager)   # src/PrecompileInterface.jl
     return manager
 end
 

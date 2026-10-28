@@ -102,7 +102,7 @@ module StatefulAlgorithms
     include("Saving.jl")
 
     include("GeneratedCode/GeneratedCode.jl")
-    include("PrecompileFirstRun.jl")   # after every process type and the manager: it extends the hook for each
+    include("PrecompileInterface.jl")   # after every process type and the manager: it extends the hook for each
     include("Precompile.jl")
 
 end
