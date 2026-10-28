@@ -3,8 +3,8 @@ Reading a registry: finding an algorithm, its key, its multiplier, and listing w
 
 A `NameSpaceRegistry` holds one `RegistryTypeEntry` per entry type (`Lin`, a state type, ...), each with its keyed
 algorithms in order (`Lin_1`, `Lin_2`, ...). An algorithm is found in two steps: its entry type (`assign_entrytype`,
-`find_typeidx`), then its place within that entry: by its matcher for values found by their type or id
-(`isstaticallyfindable`: `isbits` values, types, handles), else through the entry's runtime lookup table.
+`find_typeidx`), then its place within that entry, with `match` (`static_findfirst_match`): decided while compiling
+when the types decide it, else at run time. The entries' runtime lookup tables are kept but not used (`dynamic_get`).
 Building a registry is in Builder.jl.
 =#
 
@@ -80,35 +80,21 @@ end
 """
     reg[algo] -> keyed algo
 
-The algorithm `algo` as `reg` stores it (keyed, `Lin_1`); errors when it is not in `reg`. Found by its matcher, or
-through the runtime lookup table for values that are not `isstaticallyfindable`.
+The algorithm `algo` as `reg` stores it (keyed, `Lin_1`); errors when it is not in `reg`. Found with `match`
+(`static_findfirst_match`).
 """
 @inline function Base.getindex(reg::NameSpaceRegistry{T}, obj) where {T}
     obj = @inline number_held_handle(reg, obj)
-    if isstaticallyfindable(obj)
-        return static_get(reg, obj)
-    else
-        entry = dynamic_get(reg, obj)
-        isnothing(entry) && error("No matching entry found for value: $obj in registry: $reg")
-        return entry
-    end
+    return static_get(reg, obj)
 end
 
 """`reg[algo]`, or `default` when `algo` is not in `reg`."""
 @inline function Base.get(reg::NameSpaceRegistry, obj, default = nothing)
     obj = @inline number_held_handle(reg, obj)
-    if isstaticallyfindable(obj)
-        try
-            return static_get(reg, obj)
-        catch e
-            return default
-        end
-    else
-        try
-            return dynamic_get(reg, obj)
-        catch e
-            return default
-        end
+    try
+        return static_get(reg, obj)
+    catch e
+        return default
     end
 end
 
@@ -159,6 +145,7 @@ function Base.getindex(reg::NameSpaceRegistry, t::RegistryLocation{T, idx}) wher
     return entry[idx]
 end
 
+# Kept for now, although no lookup uses them (see `dynamic_lookup` of an entry).
 """The position of `val` within its entry, found through the entry's runtime lookup table (values that are not `isbits`)."""
 function dynamic_lookup(reg::NameSpaceRegistry, val)
     entry = get_type_entries(reg, val)
@@ -174,7 +161,7 @@ end
 """
     get_by_matcher(registry, matcher) -> keyed algo
 
-The first algorithm in `registry` whose `match_by` equals `matcher`; errors when there is none.
+The first algorithm in `registry` that `matcher` matches (`match`); errors when there is none.
 """
 @inline function get_by_matcher(reg::NameSpaceRegistry, matcher)
     return _get_by_matcher(matcher, all_algos(reg))
@@ -184,7 +171,7 @@ end
         error("Matcher $matcher not found in the algorithms of the registry: $algos")
     end
     head = gethead(algos)
-    if match_by(head) == matcher
+    if match(matcher, head)
         return head
     end
     return _get_by_matcher(matcher, gettail(algos))
@@ -267,11 +254,7 @@ end
 function getmultiplier(reg::NameSpaceRegistry, val)
     val = @inline number_held_handle(reg, val)
     entry = get_type_entries(reg, val)
-    entry_idx = if isstaticallyfindable(val)
-        static_findfirst_match(entry, val)
-    else
-        dynamic_lookup(entry, val)
-    end
+    entry_idx = static_findfirst_match(entry, val)
     if isnothing(entry_idx)
         return 0
     end

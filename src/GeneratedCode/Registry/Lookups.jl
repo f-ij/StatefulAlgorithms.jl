@@ -15,15 +15,3 @@
     end
 end
 
-@inline @generated function static_findfirst_match(rte::RegistryTypeEntry{T,S}, v::Val{value}) where {T,S,value}
-    # A loop, not `findfirst` with a closure: the closure captures `value` and compiles for every value.
-    idx = nothing
-    algotypes = getalgotypes(rte)
-    for i in 1:length(algotypes)
-        if match(value, algotypes[i])
-            idx = i
-            break
-        end
-    end
-    return :($idx)
-end

@@ -1,9 +1,9 @@
 """
     isstaticallyfindable(x) -> Bool
 
-Whether `x` is found in a registry by its matcher, worked out while compiling (`static_findfirst_match`): true for
-`isbits` values and types; a handle (`IdentifiableAlgo`) when its matcher is (`match_by`). Other values are found
-through a registry entry's runtime lookup table (`dynamic_lookup`, `LookupKey`). Decided from the type of `x`.
+Whether `x`'s match is decided by its type, while compiling: true for `isbits` values and types; a handle
+(`IdentifiableAlgo`) when its matcher is (`match_by`). `match` then compares the type-level parts (`static_id`), else the
+values (`==`). Decided from the type of `x`.
 Extended by: `UniquePlanId` (only a numbered id), Identifiable/UniquePlanId/HookExtensions.jl.
 """
 @inline isstaticallyfindable(obj) = isbits(obj)
