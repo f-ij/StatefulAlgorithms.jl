@@ -90,11 +90,21 @@ Base.@nospecializeinfer function precompile_in_parallel(@nospecialize(signatures
     end
     tasks = Task[]
     for sig in signatures
-        push!(tasks, Threads.@spawn precompile(sig::Type))
+        task = Task(PrecompileJob(sig))
+        task.sticky = false
+        Threads._spawn_set_thrpool(task, :default)
+        push!(tasks, schedule(task))
     end
     foreach(wait, tasks)
     return nothing
 end
+
+# A task's body for `precompile_in_parallel`: the signature in a field of abstract type, so the body is one method for
+# every signature (a closure over it was compiled for each signature's type, 1.1-1.2 ms).
+struct PrecompileJob
+    signature::Type
+end
+(job::PrecompileJob)() = precompile(job.signature)
 
 function wait_loop_precompile!(p::Process, func, context, lt, inputs::NamedTuple, resume::Resuming; loopfunc = loop)
     return nothing
