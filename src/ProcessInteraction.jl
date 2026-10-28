@@ -139,7 +139,7 @@ Close and remove a process from the process list
 """
 function quit(p::Process)
     close(p)
-    delete!(processlist, p.id)
+    delete!(processlist, p.list_ref)
     return true
 end
 

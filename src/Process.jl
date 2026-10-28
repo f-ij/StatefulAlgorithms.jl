@@ -2,7 +2,7 @@ export Process, getallocator, getnewallocator, getcontext, getticks
 
 
 mutable struct Process{F,C,K} <: AbstractProcess
-    id::UUID
+    list_ref::UUID   # its key in `processlist`
     algo::F           # the plan, without the map (the loop's type)
     lifetime::Lifetime # its `Var`s numbered as the plan numbers its handles
     runtime_context::Union{Nothing, ProcessContext}
@@ -187,7 +187,7 @@ function _construct_process(algo::F, lifetime::LT, timeout, keymap::K) where {F<
     # What a first run calls with `p` is typed on the map, so compiled for every set of `Unique` handles: compiled here,
     # so the first `run` does not wait for it (src/PrecompileInterface.jl).
     precompile_interface(p)
-    @DebugMode "Created process with id $(p.id), now preparing data"
+    @DebugMode "Created process $(p.list_ref), now preparing data"
 
     finalizer(remove_process!, p)
     return p
@@ -213,7 +213,7 @@ function Process(func, repeats::Int; overrides = tuple(), timeout = 1.0, context
     return Process(func, overrides_tuple...; repeats = repeats, timeout, context)
 end
 
-Base.:(==)(p1::Process, p2::Process) = p1.id == p2.id
+Base.:(==)(p1::Process, p2::Process) = p1.list_ref == p2.list_ref
 
 getalgo(p::P) where {P<:Process} = p.algo
 """
@@ -323,7 +323,7 @@ end
 
 # function Base.finalizer(p::Process)
 #     quit(p)
-#     delete!(processlist, p.id)
+#     delete!(processlist, p.list_ref)
 # end
 
 function runtime(p::Process)
