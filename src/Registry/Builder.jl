@@ -16,21 +16,18 @@ builds the registry, its lookup tables written from the algorithms (`write_looku
     TypeEntryBuilder{M}(type)
 
 One entry type of a `RegistryBuilder{M}`: the entry type `type` (`Lin`), its keyed algorithms in order, their
-multipliers (`M`), the runtime lookup table (`LookupKey` => index), and each algorithm's matcher once it has been
-computed (`entry_matcher`). In the walk on values `M` is `Float64`, as in the registry entry it becomes; in the walk on
-types `M` is `Any` (multipliers are expressions, `multiply_multipliers`) and the lookup table stays empty: the generated
-code makes it from the algorithms (`write_lookup_table_expr`).
+multipliers (`M`) and the runtime lookup table (`LookupKey` => index). In the walk on values `M` is `Float64`, as in the
+registry entry it becomes; in the walk on types `M` is `Any` (multipliers are expressions, `multiply_multipliers`) and
+the lookup table stays empty: the generated code makes it from the algorithms (`write_lookup_table_expr`).
 """
 struct TypeEntryBuilder{M}
     type::Any
     algos::Vector{Any}
     multipliers::Vector{M}
     lookup::Dict{LookupKey,Int}
-    matchers::Vector{Any}
 end
-TypeEntryBuilder{M}(@nospecialize(type)) where {M} = TypeEntryBuilder{M}(type, Any[], M[], Dict{LookupKey,Int}(), Any[])
+TypeEntryBuilder{M}(@nospecialize(type)) where {M} = TypeEntryBuilder{M}(type, Any[], M[], Dict{LookupKey,Int}())
 
-struct MatcherNotComputed end   # an entry whose matcher is not computed yet
 
 """
     RegistryBuilder()
@@ -51,8 +48,7 @@ function RegistryBuilder(reg::NameSpaceRegistry)
     b = RegistryBuilder()
     for rte in getentries(reg)
         algos = Any[getalgos(rte)...]
-        push!(b.entries, TypeEntryBuilder{Float64}(getentrytype(rte), algos, copy(getmultipliers(rte)), copy(getdynamiclookup(rte)),
-            Any[MatcherNotComputed() for _ in algos]))
+        push!(b.entries, TypeEntryBuilder{Float64}(getentrytype(rte), algos, copy(getmultipliers(rte)), copy(getdynamiclookup(rte))))
     end
     return b
 end
@@ -65,7 +61,7 @@ end
     add!(builder, algo, multiplier) -> keyed algo
 
 Adds `algo` with `multiplier` (how often it runs per root step) to `builder` and returns it as the registry stores it:
-keyed (`Lin_1`), or, when it is the same algorithm as one already there (`added_matcher`, `same_algorithm`), that one,
+keyed (`Lin_1`), or, when it is the same algorithm as one already there (`match`, `find_same`), that one,
 whose multiplier then grows by `multiplier`. Where it goes and under which key is decided by the rules in
 Interfaces.jl.
 
@@ -83,7 +79,6 @@ Base.@nospecializeinfer function add!(b::RegistryBuilder, @nospecialize(algo), @
         keyed = with_autokey(algo, length(entry.algos) + 1)
         push!(entry.algos, keyed)
         push!(entry.multipliers, multiplier)
-        push!(entry.matchers, MatcherNotComputed())
         set_lookup_key!(entry, keyed, length(entry.algos))
         return keyed
     end
@@ -128,18 +123,13 @@ end
 """
     find_same(entry, algo) -> index or nothing
 
-The index of the algorithm in `entry` that `algo` is the same algorithm as, or `nothing`. In the walk on values, by
-`match`: the matchers of the two values compared with `==` (an id that carries data, `UniquePlanId`, by its uuid). In
-the walk on types, by the matchers the types give (`added_matcher`, `entry_matcher`, `same_algorithm`).
+The index of the algorithm in `entry` that `algo` is the same algorithm as, or `nothing`: by `match`, the two matchers
+compared with `==` (an id that carries data, `UniquePlanId`, by its uuid). In the walk on values on the values, in the
+walk on types on the types (`GeneratedValue`s).
 """
 Base.@nospecializeinfer function find_same(entry::TypeEntryBuilder, @nospecialize(algo))
     algo isa GeneratedValue || return findfirst(other -> match(algo, other), entry.algos)
-    added = added_matcher(algo.valuetype)
-    for i in eachindex(entry.algos)
-        entry.matchers[i] isa MatcherNotComputed && (entry.matchers[i] = entry_matcher(read_type(entry.algos[i])))
-        same_algorithm(added, entry.matchers[i]) && return i
-    end
-    return nothing
+    return findfirst(other -> match(algo.valuetype, read_type(other)), entry.algos)
 end
 
 """
@@ -163,12 +153,11 @@ Base.@nospecializeinfer function add_again!(entry::TypeEntryBuilder, idx::Int, @
     return nothing
 end
 
-"""Puts `new` at `idx` in `entry`, moving the lookup key from the old algorithm to `new` and forgetting its matcher."""
+"""Puts `new` at `idx` in `entry`, moving the lookup key from the old algorithm to `new`."""
 Base.@nospecializeinfer function replace_algo!(entry::TypeEntryBuilder, idx::Int, @nospecialize(new))
     delete_lookup_key!(entry, entry.algos[idx])
     set_lookup_key!(entry, new, idx)
     entry.algos[idx] = new
-    entry.matchers[idx] = MatcherNotComputed()
     return nothing
 end
 

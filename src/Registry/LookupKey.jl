@@ -24,13 +24,13 @@ Base.@nospecializeinfer LookupKey(@nospecialize(algo)) = LookupKey(lower_to_look
     known_lookupkey(T) -> LookupKey or nothing
 
 The `LookupKey` of every algorithm of type `T`, when the type decides it: its matcher worked out from the type
-(`entry_matcher`) named by `lower_to_lookupkey`. `nothing` for a handle that keeps its matcher as data (a `Unique`
+(`match_by`) named by `lower_to_lookupkey`. `nothing` for a handle that keeps its matcher as data (a `Unique`
 handle's uuid, a merged state's ids: `keeps_matcher_data`), whose key needs the value. The generated registry code holds
 a known key as a constant and writes `LookupKey(<the algorithm>)` for the others.
 """
 Base.@nospecializeinfer function known_lookupkey(@nospecialize(T::Type))
     keeps_matcher_data(T) && return nothing
-    return LookupKey(lower_to_lookupkey(entry_matcher(T)))
+    return LookupKey(lower_to_lookupkey(match_by(T)))
 end
 Base.print(io::IO, k::LookupKey) = print(io, k.name)
 Base.show(io::IO, k::LookupKey) = show(io, k.name)

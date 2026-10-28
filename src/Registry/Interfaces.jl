@@ -53,46 +53,6 @@ them): true for states (`AlgoState`), so a registry lists its states first.
 entrytype_goes_first(@nospecialize(E)) = E <: AlgoState
 
 ###############################################################################
-# The same algorithm: when an added algorithm is one already in the registry
-###############################################################################
-
-"""
-    added_matcher(x) -> matcher
-
-What an algorithm `x` being added is compared by (with `same_algorithm`) to find it among the algorithms of its entry
-type: its `match_by`, and when that is not a matcher itself (`AbstractMatcher`), the `match_by` of that. `x` is the
-algorithm, or its type for one known only by its type (for a handle both give its id).
-Extended by: `match_by` (Matching.jl), for algorithm types and values.
-"""
-function added_matcher(@nospecialize(x))
-    m = match_by(x)
-    return m isa AbstractMatcher ? m : match_by(m)
-end
-
-"""
-    entry_matcher(T) -> matcher
-
-What an algorithm of type `T` that is already in the registry is compared by: `match_by(T)`.
-"""
-entry_matcher(@nospecialize(T)) = match_by(T)
-
-"""
-    same_algorithm(added, entry) -> Bool
-
-Whether the matcher of an added algorithm (`added_matcher`) and that of an entry (`entry_matcher`) say they are the
-same algorithm: `added == entry`, with concrete types (algorithms often match by their type, `Lin{1}`) equal only if
-identical. Matcher types (the type-level id of a handle whose matcher carries data, `UniquePlanId{1}`) compare with
-`==`: a merged state's `MatchAnyOf` type matches each of its parts.
-"""
-function same_algorithm(@nospecialize(added), @nospecialize(entry))
-    if added isa DataType && isconcretetype(added) && entry isa DataType && isconcretetype(entry) &&
-       !(added <: AbstractMatcher && entry <: AbstractMatcher)
-        return added === entry
-    end
-    return added == entry
-end
-
-###############################################################################
 # Automatic keys: `Lin_1`, `Lin_2`, ...
 ###############################################################################
 
