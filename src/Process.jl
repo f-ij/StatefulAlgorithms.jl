@@ -5,7 +5,12 @@ mutable struct Process{F,C,K} <: AbstractProcess
     list_ref::UUID   # its key in `processlist`
     algo::F           # the plan, without the map (the loop's type)
     lifetime::Lifetime # its `Var`s numbered as the plan numbers its handles
-    runtime_context::Union{Nothing, ProcessContext}
+    # A paused run's context, kept by the run's end (`_finish_run!`) and read only by a resumed run and by `close`
+    # (which ends the run: cleanup, commit, cleared). `nothing` when no run is paused.
+    paused_context::Union{Nothing, ProcessContext}
+    # A committed context whose type is not the plan's stored one (`commit_context!`): it cannot go into `algo`, whose
+    # type is in the process's. `nothing` when the plan holds the context. A run from it is dispatched at run time.
+    reshaped_context::Union{Nothing, ProcessContext}
     timeout::Float64
     task::Union{Nothing, Task}
     # To make sure other processes don't interfere
@@ -19,11 +24,11 @@ mutable struct Process{F,C,K} <: AbstractProcess
     # (`run(p; lifetime)` numbers while compiling). Never passed to the loop.
     const keymap::K
     # The context handed to the user (`context(p)`): the process's context with `keymap` put back, built once each time
-    # the process's context changes (at loop exit, `commit_context!`, `context(p, c)`; `set_user_context!`).
+    # the process's context changes (at loop exit, a pause, `commit_context!`; `set_user_context!`).
     user_context::Any
 end
 
-@setterGetter Process lock runtime_context session keymap user_context
+@setterGetter Process lock paused_context reshaped_context session keymap user_context
 """
     getloopcursor(p::Process)
 
@@ -181,7 +186,7 @@ end
 function _construct_process(algo::F, lifetime::LT, timeout, keymap::K) where {F<:AbstractLoopAlgorithm, LT, K}
     C = typeof(loop_cursor(getplan(algo), Val(true)))
     session = InteractiveSession{C, LT}()
-    p = Process{F, C, K}(uuid1(), algo, lifetime, nothing, timeout, nothing, Threads.ReentrantLock(), nothing, RuntimeListeners(), session, keymap, nothing)
+    p = Process{F, C, K}(uuid1(), algo, lifetime, nothing, nothing, timeout, nothing, Threads.ReentrantLock(), nothing, RuntimeListeners(), session, keymap, nothing)
 
     register_process!(p)
     # What a first run calls with `p` is typed on the map, so compiled for every set of `Unique` handles: compiled here,
@@ -224,10 +229,12 @@ The process's plan with the plan's `UniqueKeyMap` back in its registry (`with_ke
 without it, as the loop runs it. Untyped.
 """
 Base.@nospecializeinfer getalgo_with_keymap(@nospecialize(p::AbstractProcess)) = with_keymap(getalgo(p), getfield(p, :keymap))
-"""The process's context as SA works with it: its registry stores `Unique` handles numbered (see `context`)."""
+"""The process's context as SA works with it: a paused run's, else a reshaped one, else the plan's (its registry stores
+`Unique` handles numbered, see `context`)."""
 function _context(p::P) where {P<:Process}
-    runtime_context = p.runtime_context
-    return isnothing(runtime_context) ? getpersistentcontext(getalgo(p)) : runtime_context
+    isnothing(p.paused_context) || return p.paused_context
+    isnothing(p.reshaped_context) || return p.reshaped_context
+    return getpersistentcontext(getalgo(p))
 end
 
 """
@@ -244,7 +251,7 @@ Base.@nospecializeinfer context(@nospecialize(p::Process)) = getfield(p, :user_c
 
 Builds the context `process` hands to the user from its context `c`: `c` with the plan's `UniqueKeyMap` put back
 (`with_keymap`), stored in the process's `user_context` field. Called each time the process's context changes (after a
-run, `_finish_run!`; `commit_context!`; `context(p, c)`). Untyped: the context's type can change between runs.
+run or a pause, `_finish_run!`; `commit_context!`). Untyped: the context's type can change between runs.
 """
 Base.@nospecializeinfer function set_user_context!(@nospecialize(process::AbstractProcess), @nospecialize(c))
     setfield!(process, :user_context, with_keymap(c, getfield(process, :keymap)))
@@ -256,24 +263,12 @@ Base.@nospecializeinfer with_process_keymap(@nospecialize(process::AbstractProce
     with_keymap(x, getfield(process, :keymap))
 
 """
-Store one live process context in the dynamic runtime slot.
-
-Use this while a `Process` is still resumable, for example after a pause or
-before a run with per-call lifetime changes. The stored value may intentionally
-deviate from the lifecycle context carried in `p.algo`.
-"""
-@inline function _store_runtime_context!(p::P, c::C) where {P<:Process, C}
-    context(p, c)
-    return c
-end
-
-"""
 Commit one finished or reinitialized process context back onto the process.
 
 When the context strips back to the same concrete type as the stored lifecycle
 context, the lifecycle wrapper in `p.algo` is rebuilt so later runs keep using
-the typed fast path. Only genuine shape changes fall back to the dynamic
-`runtime_context` slot.
+the typed fast path. Only genuine shape changes go to `reshaped_context`. Ends a paused run's state:
+`paused_context` is cleared.
 """
 @inline function commit_context!(p::P, c::C) where {P<:Process, C}
     algo = getalgo(p)
@@ -283,22 +278,14 @@ the typed fast path. Only genuine shape changes fall back to the dynamic
     # stored concrete context shape.
     if !isnothing(persistent_context) && typeof(c) === typeof(persistent_context)
         p.algo = _with_lifecycle(algo, c, getstoredinits(algo), getstoredoverrides(algo))
-        p.runtime_context = nothing
+        p.reshaped_context = nothing
     else
-        p.runtime_context = c
+        p.reshaped_context = c
     end
+    p.paused_context = nothing
     set_user_context!(p, c)
     return c
 end
-
-function context(p::P, c::C) where {P<:Process, C}
-    p.runtime_context = strip_keymap(c)   # a context the user got from `context(p)` carries the map
-    set_user_context!(p, p.runtime_context)
-    return c
-end
-
-@inline _has_typed_runtime_context(p::P) where {P<:Process} = isnothing(p.runtime_context)
-@inline _typed_runtime_context(p::P) where {P<:Process} = getpersistentcontext(getalgo(p))
 
 function getcontext(p::Process)
     return context(p)
@@ -374,27 +361,12 @@ end
 """
 Runs the prepared task of a process on a thread
 """
-function makeloop!(p::Process, inputs::NamedTuple = (;); threaded = true, loopfunc::LF = loop) where {LF}
-    if _has_typed_runtime_context(p)
-        runtime_context = _typed_runtime_context(p)
-        return _makeloop!(p, inputs, lifetime(p), runtime_context; threaded, loopfunc)
-    else
-        return _makeloop_dynamic!(p, inputs; threaded, loopfunc)
-    end
-end
-
-function makeloop!(p::Process, inputs::NamedTuple, lt; threaded = true, loopfunc::LF = loop) where {LF}
-    if _has_typed_runtime_context(p)
-        return _makeloop!(p, inputs, lt, _typed_runtime_context(p); threaded, loopfunc)
-    else
-        return _makeloop_dynamic!(p, inputs, lt; threaded, loopfunc)
-    end
-end
-
-@noinline _makeloop_dynamic!(p::Process, inputs::NamedTuple; threaded = true, loopfunc::LF = loop) where {LF} =
+# The lifetime and the context are read from fields of abstract type, so the call into `_makeloop!` is dispatched on
+# their types at run time; from there on everything is typed.
+makeloop!(p::Process, inputs::NamedTuple = (;); threaded = true, loopfunc::LF = loop) where {LF} =
     _makeloop!(p, inputs, lifetime(p), _context(p); threaded, loopfunc)
 
-@noinline _makeloop_dynamic!(p::Process, inputs::NamedTuple, lt; threaded = true, loopfunc::LF = loop) where {LF} =
+makeloop!(p::Process, inputs::NamedTuple, lt; threaded = true, loopfunc::LF = loop) where {LF} =
     _makeloop!(p, inputs, lt, _context(p); threaded, loopfunc)
 
 function _makeloop!(p::Process, inputs::NamedTuple, lt, base_context; threaded = true, loopfunc::LF = loop) where {LF}
@@ -472,7 +444,8 @@ the run resumes from it; otherwise the context is committed and the cursor dropp
 """
 function _finish_run!(p::Process, session::InteractiveSession, persistent_context, returnvalue)
     if _loop_ispaused(session)
-        _store_runtime_context!(p, persistent_context)
+        p.paused_context = persistent_context
+        set_user_context!(p, persistent_context)
         return getfield(p, :user_context)
     end
     commit_context!(p, persistent_context)
@@ -487,9 +460,8 @@ function _resume_paused_loop!(p::Process; threaded = true)
     p.lastresult = nothing
 
     func = getalgo(p)
-    runtime_context = _context(p)
     lt = lifetime(p)
-    return _makeloop_prepared!(p, session, func, runtime_context, lt, (;); threaded, resume = Resuming{true}())
+    return _makeloop_prepared!(p, session, func, p.paused_context, lt, (;); threaded, resume = Resuming{true}())
 end
 
 makeloop!(p::Process, lt::Lifetime; threaded = true, loopfunc::LF = loop) where {LF} =
@@ -507,7 +479,7 @@ This performs these exact mutations:
   interval counter and resume point starts over.
 
 It does not reset counters an algorithm keeps in its own value: a `Package`'s interval counter goes on from where it
-was (TODO.md, "Packaging and threaded composites"). It does not change `process.runtime_context`, `process.task`, or
+was (TODO.md, "Packaging and threaded composites"). It does not change `process.paused_context`, `process.task`, or
 `process.lastresult`. It does not clear or replace values stored in
 `context(process)`.
 """

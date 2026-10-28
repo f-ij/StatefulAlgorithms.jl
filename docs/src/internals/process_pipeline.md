@@ -12,13 +12,15 @@ execution.
 3. Resolve the plan into a `LoopAlgorithm` wrapper when needed.
 4. Run lifecycle `init(algo, specs...; lifetime)` unless an initialized context is already provided.
 5. Store the initialized algorithm wrapper on the process. Its typed lifecycle
-   context is the normal persistent state; `Process.runtime_context` is reserved
-   for a live/paused or shape-divergent context.
+   context is the normal persistent state; `Process.paused_context` holds a paused run's context (kept by the run's
+   end, read by a resumed run and by `close`), `Process.reshaped_context` a committed context of another type than the
+   plan's.
 
 There is no `TaskData` layer. The initialized `LoopAlgorithm` carries the
 persistent context plus stored init/override specs. A `Process` normally reads
-its current persistent context from that wrapper. Its separate
-`runtime_context` slot is used only for paused or shape-divergent state. The run itself (counters, times, the
+its current persistent context from that wrapper; `paused_context` and `reshaped_context` are used only for paused or
+shape-divergent state. `makeloop!` reads the lifetime and the context from fields of abstract type and calls
+`_makeloop!`, dispatched on their types at run time. The run itself (counters, times, the
 pause and stop flags, the loop cursor that preserves scheduler position across pause/resume) is the process's
 session (`getsession(p)`, an `InteractiveSession`; `src/Sessions/`), which the loop gets instead of the process.
 

@@ -59,7 +59,7 @@ end
 """Build a fresh context for a process by replaying lifecycle init on its LA."""
 function makecontext!(p::AbstractProcess, inputs_overrides...; lifetime=nothing)
     c = makecontext(p, inputs_overrides...; lifetime)
-    context(p,c)
+    p isa Process ? commit_context!(p, c) : context(p, c)
 end
 
 function cleanup(p::AbstractProcess)

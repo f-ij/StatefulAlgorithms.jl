@@ -196,7 +196,7 @@ For a `Process`, this performs these exact mutations:
 - in the worker's session (`getsession(slot.worker)`): `loopidx = 1`, `tickidx = 1`, `paused = false`,
   `shouldrun = true`, `starttime = nothing`, `endtime = nothing`, `loop_cursor = nothing`
 
-It does not change `slot.worker.runtime_context`, `slot.worker.task`, or
+It does not change `slot.worker.paused_context`, `slot.worker.task`, or
 `slot.worker.lastresult`. It also does not rebuild or clear values stored in the
 process context. Context fields, arrays, buffers, and refs stay exactly as they
 were.
@@ -313,7 +313,7 @@ function runprocessinline!(worker::P; lifetime = nothing, repeats = nothing, rep
     # as a `Process` task does), so no scheduler task is created for short manager jobs.
     algo = getalgo(worker)
     inputs = _validate_runtime_inputs(algo, (; kwargs...))
-    base_context = _has_typed_runtime_context(worker) ? _typed_runtime_context(worker) : _context(worker)
+    base_context = _context(worker)
     lt = StatefulAlgorithms.lifetime(worker)
     session = worker.session = create_session(worker, lt)
     @atomic session.paused = false

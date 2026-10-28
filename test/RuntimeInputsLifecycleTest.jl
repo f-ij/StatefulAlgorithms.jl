@@ -108,8 +108,8 @@ runtime_input_bucket(ctx) = getproperty(StatefulAlgorithms.get_subcontexts(ctx),
         process = Process(entry; repeats = 1)
         run(process; temp = 2.0, scale = 3)
         wait(process)
-        @test StatefulAlgorithms._has_typed_runtime_context(process)
-        @test isnothing(process.runtime_context)
+        @test isnothing(process.reshaped_context)
+        @test isnothing(process.paused_context)
         fetched_context = fetch(process)
         @test !haskey(StatefulAlgorithms.get_captured_returns(fetched_context), :value)
         @test !haskey(StatefulAlgorithms.get_subcontexts(StatefulAlgorithms.context(process)), :Callable_1)   # function calls have no persistent state
@@ -122,8 +122,8 @@ runtime_input_bucket(ctx) = getproperty(StatefulAlgorithms.get_subcontexts(ctx),
 
     inline_worker = Process(runtime_algo; repeats = 1)
     StatefulAlgorithms.runprocessinline!(inline_worker; temp = 2.0, scale = 3)
-    @test StatefulAlgorithms._has_typed_runtime_context(inline_worker)
-    @test isnothing(inline_worker.runtime_context)
+    @test isnothing(inline_worker.reshaped_context)
+    @test isnothing(inline_worker.paused_context)
     @test !haskey(StatefulAlgorithms.get_captured_returns(fetch(inline_worker)), :value)
     @test !haskey(StatefulAlgorithms.get_subcontexts(StatefulAlgorithms.context(inline_worker)), :Callable_1)   # function calls have no persistent state
     @test !haskey(StatefulAlgorithms.get_captured_returns(StatefulAlgorithms.context(inline_worker)), :value)
@@ -199,8 +199,8 @@ runtime_input_bucket(ctx) = getproperty(StatefulAlgorithms.get_subcontexts(ctx),
 
     @test context(process)[PauseRuntimeInputConsumer].total > paused_total
     close(process)
-    @test StatefulAlgorithms._has_typed_runtime_context(process)
-    @test isnothing(process.runtime_context)
+    @test isnothing(process.reshaped_context)
+    @test isnothing(process.paused_context)
     @test isempty(StatefulAlgorithms.get_inputs(context(process)))
     @test isempty(runtime_input_bucket(context(process)))
 end
