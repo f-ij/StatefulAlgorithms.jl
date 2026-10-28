@@ -16,23 +16,15 @@ Construction diagnostics:
 
 Only `Fields`, `Required`, and `default_values_builder` determine initialized
 values. The diagnostic parameters do not participate in `init`; they exist
-because registry construction merges `GeneralState` values and needs enough
-context to warn about accidental DSL state sharing before the final init scheme
-is used.
+because `@merge` merges `GeneralState` values and needs enough context to warn
+about overlapping fields.
 """
 struct GeneralState{Fields, Required, DefaultValuesBuilder, ExplicitlySharedFields, DiagnosticFieldPaths} <: AlgoState
     default_values_builder::DefaultValuesBuilder
 end
 
-
-"""
-What a general state matches by: its id when it has one (a block's `@state`, one per construction), else its key
-(a named state, `@state name begin … end`, which every state with that key shares).
-"""
-match_by(ia::Union{IdentifiableAlgo{<:GeneralState}, Type{<:IdentifiableAlgo{<:GeneralState}}}) = _general_state_match(id(ia), getkey(ia))
-@inline _general_state_match(id, key) = is_given_id(id) || _is_merged_id(id) ? id : ValMatcher(key)
-# A merged state (`@merge`) matches by the ids of the states it merged.
-@inline _is_merged_id(id) = id isa Union{MatchAnyOf, Type{<:MatchAnyOf}}
+# A state's handle matches by its id, as any handle (`match_by`): a block's `@state` and a `Unique` state by their
+# `UniquePlanId`, a merged state (`@merge`) by the ids it merged (`MatchAnyOf`). A named state's name is only its key.
 
 """A block's `@state` is named `_state_1`, `_state_2`, … in the context."""
 autokey_basename(::Union{GeneralState, Type{<:GeneralState}}) = :_state
@@ -51,8 +43,6 @@ end
 @inline function GeneralState(default_values_builder::DefaultValuesBuilder, ::Val{Fields}, ::Val{Required}, ::Val{ExplicitlySharedFields}, ::Val{DiagnosticFieldPaths}) where {DefaultValuesBuilder, Fields, Required, ExplicitlySharedFields, DiagnosticFieldPaths}
     GeneralState{Fields, Required, DefaultValuesBuilder, ExplicitlySharedFields, DiagnosticFieldPaths}(default_values_builder)
 end
-
-StatefulAlgorithms.registry_allowmerge(::Union{GeneralState, Type{<:GeneralState}}) = true
 
 @inline general_state_fields(::GeneralState{Fields}) where {Fields} = Fields
 @inline general_state_required_fields(::GeneralState{Fields, Required}) where {Fields, Required} = Required

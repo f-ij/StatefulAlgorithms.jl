@@ -142,32 +142,24 @@ end
     @test_throws AssertionError CompositeAlgorithm(IfWrapped(Fib, false), (1,))
 end
 
-@testset "Identifiable merge forwarding preserves keyed GeneralState" begin
+@testset "Merging two GeneralStates (as `@merge` does) combines their fields; the registry merges no states" begin
     left_state = @state begin
         seed = 4
     end
     right_state = @state begin
         scale
     end
-    other_state = @state begin
-        offset = 2
-    end
 
     left = IdentifiableAlgo(left_state, :_state)
     right = IdentifiableAlgo(right_state, :_state)
-    other_key = IdentifiableAlgo(other_state, :other_state)
 
-    @test registry_allowmerge(getalgo(left))
-    @test registry_allowmerge(getalgo(right))
-    @test StatefulAlgorithms.handles_merge(typeof(left), typeof(right))
-    @test !StatefulAlgorithms.handles_merge(typeof(left), typeof(other_key))
+    @test !registry_allowmerge(left_state)
+    @test !StatefulAlgorithms.handles_merge(typeof(left), typeof(right))
 
-    merged = merge(left, right)
-    @test getkey(merged) == :_state
-    @test StatefulAlgorithms.general_state_fields(getalgo(merged)) == (:seed, :scale)
-    @test StatefulAlgorithms.general_state_required_fields(getalgo(merged)) == (:scale,)
-    @test StatefulAlgorithms.init(getalgo(merged), (; scale = 3.0)) == (; seed = 4, scale = 3.0)
-    @test sprint(show, merged) == "GeneralState(seed = <default>, scale)@_state: GeneralState(seed = <default>, scale)"
+    merged = merge(left_state, right_state)
+    @test StatefulAlgorithms.general_state_fields(merged) == (:seed, :scale)
+    @test StatefulAlgorithms.general_state_required_fields(merged) == (:scale,)
+    @test StatefulAlgorithms.init(merged, (; scale = 3.0)) == (; seed = 4, scale = 3.0)
 end
 
 @testset "separate_nested_namedtuples preserves outer order" begin

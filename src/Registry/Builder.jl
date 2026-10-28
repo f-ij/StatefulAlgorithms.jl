@@ -79,6 +79,7 @@ Base.@nospecializeinfer function add!(b::RegistryBuilder, @nospecialize(algo), @
     entry = find_or_add_entry!(b, assign_entrytype(algo isa GeneratedValue ? T : algo))
     idx = find_same(entry, algo)
     if isnothing(idx)
+        check_key_unused(b, algo)
         keyed = with_autokey(algo, length(entry.algos) + 1)
         push!(entry.algos, keyed)
         push!(entry.multipliers, multiplier)
@@ -89,6 +90,24 @@ Base.@nospecializeinfer function add!(b::RegistryBuilder, @nospecialize(algo), @
     add_again!(entry, idx, algo)
     entry.multipliers[idx] = add_multipliers(entry.multipliers[idx], multiplier)
     return entry.algos[idx]
+end
+
+"""
+    check_key_unused(builder, algo)
+
+Errors when `algo`, a new algorithm of the plan, has a given key (a name) that another algorithm in `builder` already
+has: in the context both would be named so. Two different states may have one name only in different plans; to
+compose those, one is renamed first (`rename`).
+"""
+Base.@nospecializeinfer function check_key_unused(b::RegistryBuilder, @nospecialize(algo))
+    has_given_key(algo) || return nothing
+    key = key_of(algo)
+    for entry in b.entries, other in entry.algos
+        key_of(other) == key || continue
+        error("Two different algorithms of this plan are both named `$key`. To compose the plans they come from, " *
+              "rename one of them first: `rename(plan, :$key => :new_name)`.")
+    end
+    return nothing
 end
 
 """

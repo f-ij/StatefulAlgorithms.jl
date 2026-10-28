@@ -16,9 +16,6 @@ Base.:(==)(T::Type{<:UniquePlanId}, b::UniquePlanId) = matches_type(b, T)
 Base.:(==)(m::Type{<:MatchAnyOf}, x::Union{UniquePlanId, Type{<:UniquePlanId}}) = _any_matches(m, x)
 Base.:(==)(x::Union{UniquePlanId, Type{<:UniquePlanId}}, m::Type{<:MatchAnyOf}) = _any_matches(m, x)
 
-# Given to the handle by `Unique(f)` or a block's `@state`.
-is_given_id(::Union{UniquePlanId, Type{<:UniquePlanId}}) = true
-
 # A held id (`UniquePlanId{uuid}`) has its uuid in the type. A stripped or numbered one has it only in the value.
 function reconstruct_matcher(::Type{UniquePlanId{N}}) where {N}
     N isa UUID && return UniquePlanId{N}(N)

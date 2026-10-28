@@ -94,7 +94,7 @@ const RB_TYPED_PLANS = Pair{String,Any}[
     "finalized" => finalstep(Routine(RBCount, RBScale, (2, 3)), x -> x),
 ]
 
-# Two named states with the same key in different blocks are merged into one: the merge needs the values.
+# Two different named states with one name, in different blocks: composing them is an error until one is renamed.
 merge1 = @Routine begin
     @state rbshared begin
         a = 1
@@ -107,7 +107,8 @@ merge2 = @Routine begin
     end
     RBSink(value = b)
 end
-const RB_MERGE_PLAN = CompositeAlgorithm(merge1, merge2, (1, 2))
+const RB_CLASH_PLAN = CompositeAlgorithm(merge1, merge2, (1, 2))
+const RB_RENAMED_PLAN = CompositeAlgorithm(merge1, rename(merge2, :rbshared => :rbshared2), (1, 2))
 
 @testset "Registry build: the typed path is taken for the usual plan shapes" begin
     for (name, plan) in RB_TYPED_PLANS
@@ -115,11 +116,10 @@ const RB_MERGE_PLAN = CompositeAlgorithm(merge1, merge2, (1, 2))
             @test !rb_uses_runtime_path(rb_loopalgorithm(plan))
         end
     end
-    @test rb_uses_runtime_path(rb_loopalgorithm(RB_MERGE_PLAN))
 end
 
 @testset "Registry build: the typed path gives the run-time path's registry" begin
-    for (name, plan) in [RB_TYPED_PLANS; "merged named states" => RB_MERGE_PLAN]
+    for (name, plan) in [RB_TYPED_PLANS; "renamed named states" => RB_RENAMED_PLAN]
         @testset "$name" begin
             la = rb_loopalgorithm(plan)
             @test rb_same_setup(RB.build_registry_and_key_plan(la), RB.build_registry_from_values(la))
@@ -132,8 +132,9 @@ end
     reg = RB.getregistry(resolve(CompositeAlgorithm(RBCount, Routine(RBCount, RBScale, (2, 1)), (1, 3))))
     # Once per step, plus twice per run of the Routine, which runs every third step.
     @test RB.getmultipliers(RB.getentries(reg)[1]) ≈ [1.0 + 2.0 / 3.0]
-    merged = RB.initcontext(resolve(RB_MERGE_PLAN))
-    @test merged[:rbshared].a == 1 && merged[:rbshared].b == 2
+    @test_throws "rename one of them first" resolve(RB_CLASH_PLAN)
+    renamed = RB.initcontext(resolve(RB_RENAMED_PLAN))
+    @test renamed[:rbshared].a == 1 && renamed[:rbshared2].b == 2
 end
 
 rb_plus_one(x) = x + 1.0

@@ -84,7 +84,7 @@ steps below 4.7–4.8 ms). So the uuid (`origin`) is data and never changes; the
    lifetime)`, `run(p; lifetime)`, a manager's per-job lifetime), at run time at the untyped entry points
    (`number_by_keymap_dynamic`: `Process(...; lifetime)`, `InlineProcess(...; lifetime)`, `init`/`run(la)`).
 
-The matching and registry code ask a matcher only general questions (`matches_type`, `is_given_id`,
+The matching and registry code ask a matcher only general questions (`matches_type`,
 `lower_to_lookupkey`, `carries_data`); `UniquePlanId` answers them in `src/Identifiable/UniquePlanId/HookExtensions.jl`. A
 holder says which of its type parameters come from its fields with `list_field_derived_params`
 (`src/Identifiable/UniquePlanId/Hooks.jl`). A plan's schedule is changed only through `setschedule`

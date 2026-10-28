@@ -140,17 +140,6 @@ matches_type(value, ::Type{<:ValMatcher{V}}) where {V} = value == V || value isa
 # A merged state's matcher matches if any of its parts does.
 matches_type(value::Union{MatchAnyOf, Type{<:MatchAnyOf}}, M) = any(m -> matches_type(m, M), matcher_parts(value))
 
-"""
-    is_given_id(id) -> Bool
-
-Whether `id` (value or type) was given to one handle (`Unique`, a block's `@state`), as opposed to one it matches by
-(its type, its key): two handles with the same given id are one algorithm, and a DSL block's own state is the state
-with a given id. Default `false`; a merged state's `MatchAnyOf` is not one (it names several).
-Extended by: `SimpleId` (below), `UniquePlanId` (Identifiable/UniquePlanId/HookExtensions.jl).
-"""
-is_given_id(@nospecialize(id)) = false
-is_given_id(::Union{SimpleId, Type{<:SimpleId}}) = true
-
 ################################################
 #############   NOT USED (KEPT)   ##############
 ################################################
