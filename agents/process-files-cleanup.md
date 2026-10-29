@@ -25,8 +25,9 @@ Keep today's include order in `src/StatefulAlgorithms.jl`: `AbstractProcesses/` 
 process files after `Listeners.jl` (lines 73-87). Include the new paths at those same points rather than one
 `Processes.jl`, which would hide the order.
 
+`src/Manager/` stays where it is (owner, 2026-10-29; `ProcessManager` is not `<: AbstractProcess`).
+
 Open for the owner:
-- `src/Manager/` (`ProcessManager`) is not `<: AbstractProcess`; suggestion: leave it where it is.
 - `src/TimedProcess.jl` is not included anywhere, so it is never built: delete, or move to `Processes/TimedProcess/` with
   a TODO?
 
