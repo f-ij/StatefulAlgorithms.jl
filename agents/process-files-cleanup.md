@@ -27,9 +27,8 @@ process files after `Listeners.jl` (lines 73-87). Include the new paths at those
 
 `src/Manager/` stays where it is (owner, 2026-10-29; `ProcessManager` is not `<: AbstractProcess`).
 
-Open for the owner:
-- `src/TimedProcess.jl` is not included anywhere, so it is never built: delete, or move to `Processes/TimedProcess/` with
-  a TODO?
+`src/TimedProcess.jl` is kept (owner, 2026-10-29): moved to `Processes/TimedProcess/` and its API brought up to that of
+`Process` and `InlineProcess` (point 11).
 
 ## Fix
 
@@ -69,3 +68,30 @@ Open for the owner:
 ## Small
 
 10. `InlineProcess.jl` ends in a whitespace-only line, and exports `run` and `reset!` (`run` is `Base.run`).
+
+## TimedProcess: move and bring the API up to the others
+
+11. `src/TimedProcess.jl` (62 lines, last touched in ca4792d) is not included in `src/StatefulAlgorithms.jl` and has no
+    tests or docs (only a mention in `docs/src/internals/registry.md:71`). Read only, nothing run. Move it to
+    `Processes/TimedProcess/` and:
+    1. Bugs as written: `run` builds the timer from `tp.timer.interval` while `tp.timer === nothing`; the `interval`
+       and `lifetime` keywords are accepted and dropped (not stored); `pause`/`close` index `tp.timer[]`, but `timer` is
+       a field of type `Union{Timer, Nothing}`, not a `Ref`.
+    2. `function run(tp::TimedProcess)` defines `StatefulAlgorithms.run`, not a method of `Base.run`, which the module
+       already extends (probably why the file is not included: not checked). Make it `Base.run`.
+    3. No session: `AbstractProcess`'s interface reads `getfield(p, :session)` (`loopidx`, `loopint`, `reset_loopidx!`),
+       so all of these fail. Give it a session (which kind, `InlineSession` or `InteractiveSession`, to decide) and run
+       the loop through it, not `step!(algo, context)` on the whole plan per tick.
+    4. No `UniqueKeyMap`: build it like the others (`resolve_for_process`, point 3; `keymap` in the type; `context(tp)`
+       puts the map back), so `context(tp)[handle]` works.
+    5. Constructor: no `Init`/`Override` positional specs, no `repeats`, no hand-written `Core.kwcall` with
+       `@nospecialize` (the others compile once for every set of handles without it); use the shared constructor
+       steps.
+    6. The lifetime is never checked, so the timer never stops; stop it when the lifetime ends, as the others' loops do.
+    7. The callback closes over the context it was built with: after `init!` or a step that changes the context's
+       type, it runs on the old one. Read the context from the process (or its session) instead. `callback::Function`
+       is an abstract field.
+    8. Missing next to the others: `context(tp)`, `context(tp, c)`, `getalgo`, `lifetime`, `reset!`, `status` /
+       `isrunning` / `ispaused` / `isdone`, `show`/`summary` (with `Common/Showing.jl`), `precompile_interface`
+       (`src/PrecompileInterface.jl`), `register_process!` in the process list, an export.
+    9. Tests: construction, run with an interval, pause/resume, close, the lifetime ending, `context(tp)[handle]`.
