@@ -62,11 +62,6 @@ Base.@nospecializeinfer function _normalize_loopalgorithm_entity_input(@nospecia
     end
 end
 
-function _filter_loopalgorithm_specification(specification, kept_algos::Tuple)
-    length(specification) == length(kept_algos) || construction_error("If passing intervals/repeats as a tuple, there must be one entry per algorithm input before parser options are filtered, but got ", specification, " for ", length(kept_algos), " algorithm inputs.")
-    return tuple((specification[i] for i in eachindex(kept_algos) if kept_algos[i])...)
-end
-
 """Return `true` when an argument belongs in the AlgoState section."""
 @inline isa_algostate_input(arg) = _is_identified_state(arg) || (arg isa AlgoState) || (arg isa Type{<:AlgoState}) || (arg isa Pair && arg.first isa Symbol && (arg.second isa AlgoState || arg.second isa Type{<:AlgoState}))
 
@@ -84,96 +79,80 @@ routing metadata. DSL expansion can pass `LocalPlanOption` values when a
 route/share belongs to a specific child plan node. Non-routing options stay on
 the `LoopAlgorithm` runtime wrapper.
 """
-function parse_la_input(laType::Type{LA}, args...) where {LA<:AbstractPlan}
-    collected_options = tuple()
+# Untyped (`@nospecialize`), the arguments in one `Vector{Any}`: taking them off a tuple one by one made a new tuple type
+# per argument, and each was compiled for (≈ 330 ms for 16 children the first time a plan of that shape was built).
+Base.@nospecializeinfer function parse_la_input(laType::Type{<:AbstractPlan}, @nospecialize(args...))
+    rest = Any[args...]
 
     ######### ALGORITHMS #########
-    if args[1] isa Tuple
-        @warn "Passing algorithms as a tuple will be deprecated, please pass intervals as a separate argument after all ProcessAlgorithms, e.g. LoopAlgorithm(func1, func2, (10, 20), option1, option2). Got: $(args[1])"
-        args = (args[1]..., args[2:end]...)
+    if first(rest) isa Tuple
+        @warn "Passing algorithms as a tuple will be deprecated, please pass intervals as a separate argument after all ProcessAlgorithms, e.g. LoopAlgorithm(func1, func2, (10, 20), option1, option2). Got: $(first(rest))"
+        rest = Any[first(rest)..., rest[2:end]...]
     end
 
-    processalgos = tuple()
-    kept_algos = tuple()
+    processalgos = Any[]
+    kept_algos = Bool[]
     while true
-        el, args = parse_by_func(isa_processentity_input, args...; error = false)
-        if isnothing(el)
-            break
-        else
-            parsed_el = _parse_loopalgorithm_entity_input(el)
-            keep = !isnothing(parsed_el)
-            kept_algos = tuple(kept_algos..., keep)
-            if keep
-                parsed_el = _strip_nested_finalized_algorithm(parsed_el)
-                processalgos = tuple(processalgos..., _normalize_loopalgorithm_entity_input(parsed_el))
-            end
-        end
+        i = findfirst(isa_processentity_input, rest)
+        isnothing(i) && break
+        parsed_el = _parse_loopalgorithm_entity_input(popat!(rest, i))
+        keep = !isnothing(parsed_el)
+        push!(kept_algos, keep)
+        keep && push!(processalgos, _normalize_loopalgorithm_entity_input(_strip_nested_finalized_algorithm(parsed_el)))
     end
-    !isempty(processalgos) || construction_assert_error("At least one ProcessAlgorithm must be provided, but got: ", args)
+    !isempty(processalgos) || construction_assert_error("At least one ProcessAlgorithm must be provided, but got: ", Tuple(rest))
 
     # Nested plans keep their local route/share metadata. Resolved wrappers may
     # still carry already-materialized options, so preserve those when composed.
+    collected_options = Any[]
     for algo in processalgos
         if algo isa LoopAlgorithm && isresolved(algo)
-            collected_options = (unique(collected_options)..., update_option_keys(algo)...)
+            collected_options = Any[unique(collected_options)..., update_option_keys(algo)...]
         end
     end
     ######### INTERVALS #########
     # Now we should have intervals/repeats if theres more than one function
     intervals_or_repeats = nothing
-    if !isempty(args)
-        firstargs = args[1]
-
-        if firstargs isa Tuple
-            intervals_or_repeats = _filter_loopalgorithm_specification(firstargs, kept_algos)
-            if iscomposite(laType)
-                intervals_or_repeats = map(x -> x isa Union{Interval, RunIf} ? x : Interval(x), intervals_or_repeats)
-            else
-                intervals_or_repeats = map(x -> x isa Lifetime ? x : Repeat(x), intervals_or_repeats)
-            end
-            args = args[2:end] # Remove the intervals from the arguments list for further processing
-        elseif iscomposite(laType)
-            intervals_or_repeats = ntuple(_ -> Interval(1), length(processalgos))
+    if !isempty(rest) && first(rest) isa Tuple
+        specification = popfirst!(rest)
+        length(specification) == length(kept_algos) || construction_error("If passing intervals/repeats as a tuple, there must be one entry per algorithm input before parser options are filtered, but got ", specification, " for ", length(kept_algos), " algorithm inputs.")
+        intervals_or_repeats = Any[specification[i] for i in eachindex(kept_algos) if kept_algos[i]]
+        if iscomposite(laType)
+            map!(x -> x isa Union{Interval, RunIf} ? x : Interval(x), intervals_or_repeats, intervals_or_repeats)
+        else
+            map!(x -> x isa Lifetime ? x : Repeat(x), intervals_or_repeats, intervals_or_repeats)
         end
     elseif iscomposite(laType)
-        intervals_or_repeats = ntuple(_ -> Interval(1), length(processalgos))
+        intervals_or_repeats = Any[Interval(1) for _ in processalgos]
     end
     if isnothing(intervals_or_repeats)
-        got = isempty(args) ? "no repeats" : repr(first(args))
+        got = isempty(rest) ? "no repeats" : repr(first(rest))
         construction_error("For routines, please pass the number of repeats after all ProcessAlgorithms as a tuple, even if it's just one repeat, e.g. (10,). Got: ", got)
     end
+    funcs, schedule = Tuple(processalgos), Tuple(intervals_or_repeats)
 
     ### FLATTEN ###
     if iscomposite(laType)
-
-        processalgos, intervals_or_repeats = flatten_comp_funcs(processalgos, tuple(intervals_or_repeats...))
+        funcs, schedule = flatten_comp_funcs(funcs, schedule)
     end
 
     ######### STATES #########
-    pstates = tuple()
+    pstates = Any[]
     while true
-        el, args = parse_by_func(isa_algostate_input, args...; error = false)
-        if isnothing(el)
-            break
+        i = findfirst(isa_algostate_input, rest)
+        isnothing(i) && break
+        el = popat!(rest, i)
+        if el isa Pair
+            push!(pstates, IdentifiableAlgo(el.second, el.first))
+        elseif el isa Union{AlgoState, Type{<:AlgoState}}
+            push!(pstates, IdentifiableAlgo(el))
         else
-            if el isa Pair
-                state = IdentifiableAlgo(el.second, el.first)
-            elseif el isa Union{AlgoState, Type{<:AlgoState}}
-                state = IdentifiableAlgo(el)
-            else
-                state = el
-            end
-            pstates = tuple(pstates..., state)
+            push!(pstates, el)
         end
     end
 
-    options = tuple()
-    if !isempty(args)
-        options = tuple(args[1:end]...)
-        all(x -> x isa Union{AbstractOption, AbstractWiring} || x isa Type{<:Union{AbstractOption, AbstractWiring}}, options) || construction_assert_error("All arguments after the AlgoStates must be options or wiring, but got: ", options)
-    end
-    options = tuple(collected_options..., options...)
-    return LoopAlgorithm(laType, processalgos, pstates, options, intervals_or_repeats)
+    all(x -> x isa Union{AbstractOption, AbstractWiring} || x isa Type{<:Union{AbstractOption, AbstractWiring}}, rest) || construction_assert_error("All arguments after the AlgoStates must be options or wiring, but got: ", Tuple(rest))
+    return LoopAlgorithm(laType, funcs, Tuple(pstates), Tuple(Any[collected_options..., rest...]), schedule)
 end
 
 """
