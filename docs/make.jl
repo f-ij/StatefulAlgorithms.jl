@@ -1,6 +1,7 @@
 push!(LOAD_PATH, joinpath(@__DIR__, "..", "src"))
 
 using Documenter
+using DocumenterMermaid
 using StatefulAlgorithms
 
 makedocs(
@@ -33,6 +34,7 @@ makedocs(
             "Contexts" => "internals/contexts.md",
             "Routes, Shares, and Redirects" => "internals/routes_shares.md",
             "Process Pipeline" => "internals/process_pipeline.md",
+            "Why Processes Run Through Sessions" => "internals/process_sessions_why.md",
             "DSL Semantics" => "internals/dsl_semantics.md",
         ],
     ],
