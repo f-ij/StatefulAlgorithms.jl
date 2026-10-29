@@ -81,15 +81,14 @@ process files after `Listeners.jl` (lines 73-87). Include the new paths at those
        already extends (probably why the file is not included: not checked). Make it `Base.run`.
     3. Rewrite it on a session (owner, 2026-10-29). Today it has none: `AbstractProcess`'s interface reads
        `getfield(p, :session)` (`loopidx`, `loopint`, `reset_loopidx!`), so all of these fail. The loop runs through
-       the session, not `step!(algo, context)` on the whole plan per tick. Which kind is still to decide: it can be
-       paused and closed, which points to `InteractiveSession`.
-    4. The `UniqueKeyMap`: `resolve` puts it in the registry's type, but `init` and the loop strip it, so they compile
-       nothing per uuid (`src/Identifiable/UniquePlanId/UniqueKeyMap.jl:5-8`). `TimedProcess` strips it too
-       (`TimedProcess.jl:12, 16`), so `context(tp)[handle]` fails today. Two options:
-       1. Keep the map in the context it runs on: no extra code, but the loop compiles again for every set of `Unique`
-          handles, which the others avoid.
-       2. Do as the others: `keymap` in the type, `context(tp)` puts it back, using the shared constructor steps
-          (`resolve_for_process`, point 3).
+       the session, not `step!(algo, context)` on the whole plan per tick. It works the same way as `Process` (owner,
+       2026-10-29): an `InteractiveSession`, and the same pause, resume, close and context commit (`commit_context!`,
+       `_finish_run!`).
+    4. The `UniqueKeyMap` as `Process` handles it (owner, 2026-10-29): `keymap` in the type, `user_context` set by
+       `set_user_context!`, `context(tp)` returns it, and the shared constructor steps (`resolve_for_process`, point 3).
+       Today `TimedProcess` strips the map (`TimedProcess.jl:12, 16`) and never puts it back, so
+       `context(tp)[handle]` fails; `init` and the loop strip it, so they compile nothing per uuid
+       (`src/Identifiable/UniquePlanId/UniqueKeyMap.jl:5-8`).
     5. Constructor: no `Init`/`Override` positional specs, no `repeats`, no hand-written `Core.kwcall` with
        `@nospecialize` (the others compile once for every set of handles without it); use the shared constructor
        steps.
