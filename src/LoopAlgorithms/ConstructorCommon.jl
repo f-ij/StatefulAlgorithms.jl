@@ -193,7 +193,6 @@ Base.@nospecializeinfer LoopAlgorithm(PlanType::Type{<:AbstractPlan}, @nospecial
 # are only known at run time. A typed body compiled again for every plan type, which includes every new `Unique`
 # handle. Only the final struct creation is compiled per type.
 Base.@nospecializeinfer function _build_plan(PlanType::Type, @nospecialize(funcs::Tuple), @nospecialize(states::Tuple), @nospecialize(options::Tuple), @nospecialize(schedule), id)
-    funcs, states, options, schedule = number_unique_ids((funcs, states, options, schedule))
     namespaces = Tuple(Any[Namespace{nothing}() for _ in 1:length(funcs)])
     funcs, child_wiring = _split_children_and_wiring(funcs, options)
     wiring = PlanWiring(_build_plan_wiring_untyped(options), child_wiring, collect_plan_locals(options))

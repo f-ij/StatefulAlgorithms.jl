@@ -35,13 +35,13 @@ resolved. An already resolved `la` is returned as it is.
 `resolve` itself is compiled once (its result is not inferred; a caller gets `Any`). The steps are run by
 `_resolve_plan`, compiled once per plan type, on a registry without a `UniqueKeyMap`; `resolve` puts the plan's map
 into the registry at the end (`unique_key_map`, `with_keymap`), so a `Unique` handle the user holds is found from types
-(`getregistry(la)[handle]`, `context(la)[handle]`); a plan's `Unique` handles are numbered when it is built
-(`number_unique_ids`), so the same layout with new handles is the same plan type, and so are its registry and context:
-nothing compiles again. The inferred version, for a caller that knows the plan type, is `_resolve_plan_typed` (Typed.jl).
+(`getregistry(la)[handle]`, `context(la)[handle]`). A plan's `Unique` handles are dynamic until here and numbered first
+(`number_unique_ids`, untyped), so the same layout with new handles is the same plan type, and so are its registry and
+context: nothing compiles again. The inferred version, for a caller that knows the plan type, is `_resolve_plan_typed` (Typed.jl).
 """
 Base.@nospecializeinfer function resolve(@nospecialize(la::LoopSpec))
     _registry_field(la) isa NameSpaceRegistry && return la   # resolved; read untyped, as its type carries the map
-    resolved = _resolve_plan(la)
+    resolved = _resolve_plan(number_unique_ids(la))
     return with_keymap(resolved, unique_key_map(getregistry(resolved)))
 end
 
@@ -84,7 +84,7 @@ Meant for multi-stage runs: prepare several algorithms at once, then run each se
 Nothing in the package calls it yet; it is kept for making separate plans runnable separately (see the TODO below).
 """
 function resolve(la1::LA1, la2::LA2, las::Vararg{LoopSpec}) where {LA1<:LoopSpec, LA2<:LoopSpec}
-    # Each plan numbered its `Unique` handles on its own; one registry needs one numbering over all of them.
+    # One registry needs one numbering of the `Unique` handles over all the plans.
     loopalgorithms = number_unique_ids((la1, la2, las...))
     registry, keyed_loopalgorithms = _build_shared_registry_and_key_plans(loopalgorithms)
     keymap = unique_key_map(registry)

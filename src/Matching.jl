@@ -14,15 +14,11 @@ match_by(t::Type{T}) where T = error("No match_by method defined for type $T")
 """
     match(a, b) -> Bool
 
-Whether `a` and `b` (algorithms, their types, or matchers) match: their matchers (`match_by`) compared. A matcher found
-from its type (`isstaticallyfindable`) is compared by its type-level part (`static_id`), so the result is decided while
-compiling; one whose type does not decide it (a stripped `UniquePlanId`, a held one) by its value, `==`.
+Whether `a` and `b` (algorithms, their types, or matchers) match: their matchers (`match_by`) compared with `==`. Each
+matcher's `==` decides from the types where they say enough, so the result is folded while compiling (a matcher
+without fields, a numbered `UniquePlanId`), and compares values otherwise (a dynamic `UniquePlanId`).
 """
-@inline function match(obj1::O1, obj2::O2) where {O1,O2}
-    id1 = obj1 isa AbstractMatcher ? obj1 : match_by(obj1)
-    id2 = obj2 isa AbstractMatcher ? obj2 : match_by(obj2)
-    return isstaticallyfindable(id1) ? static_id(id1) == static_id(id2) : id1 == id2
-end
+@inline match(obj1::O1, obj2::O2) where {O1,O2} = match_by(obj1) == match_by(obj2)
 
 
 ### MATCHERS

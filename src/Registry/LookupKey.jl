@@ -1,6 +1,6 @@
 #=
 Keys of a registry entry's runtime lookup table (`RegistryTypeEntry.dynamic_lookup`), which finds the algorithms that
-are not found by their type (`isstaticallyfindable` is false). `LookupKey(algo)` is the key of an algorithm: its matcher
+are not found by their type (a dynamic `UniquePlanId`). `LookupKey(algo)` is the key of an algorithm: its matcher
 named by `lower_to_lookupkey`.
 =#
 

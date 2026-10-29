@@ -26,8 +26,8 @@ getentrytype(rte::RegistryTypeEntry) = getentrytype(typeof(rte))
 
 """
 The position of `val` in the entry, found with `match` against each of its algorithms, or `nothing`. Decided while
-compiling when the types decide it (a numbered `UniquePlanId`, a type, an `isbits` value); else at run time, by `==` on
-the matchers (a stripped `UniquePlanId`, or a held one when the registry has no map, by its uuid).
+compiling when the types decide it (a numbered `UniquePlanId`, a matcher without fields, a type); else at run time
+(a dynamic `UniquePlanId`, or a held one when the registry has no map, by its uuid): see `match`.
 """
 @inline static_findfirst_match(rte::RegistryTypeEntry, val) = @inline find_matching_index(@inline(match_by(val)), getalgos(rte), 1)
 

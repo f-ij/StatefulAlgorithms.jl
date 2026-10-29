@@ -21,8 +21,8 @@ So the uuid is data (`origin`), and the type parameter `N` changes as the handle
 | `N` | Set by | When | The type then |
 |:--|:--|:--|:--|
 | the uuid | `Unique(f)` | the user makes the handle | is a key known from its type |
-| `ValueId` | `strip_unique` | a plan constructor or DSL block takes the handle | is the same for every handle |
-| `k` = 1, 2, ... | `number_unique_ids` | a plan is built: each new `origin` gets the next number | is the same in every rebuild of the same code |
+| `:dynamic` | `strip_unique` | a plan constructor or DSL block takes the handle | is the same for every handle |
+| `k` = 1, 2, ... | `number_unique_ids` | a plan is resolved: each new `origin` gets the next number | is the same in every rebuild of the same code |
 
 The registry, the context, `init` and the loop only see the numbered form. Two rebuilds of the same code with new
 handles give the same plan type, registry type and context type.

@@ -75,19 +75,19 @@ end
 
 A handle of `f` with an identity of its own: two `Unique(f)` are two algorithms, each with its own state. Its matcher
 is `UniquePlanId{uuid}(uuid)` with a fresh uuid, so the handle is a key known from its type (`context[handle]`). A
-constructor strips the uuid from the type (`strip_unique`) and the plan numbers its handles (`number_unique_ids`), so
-plans built from new `Unique`s have the same types.
+constructor strips the uuid from the type (`strip_unique`) and `resolve` numbers the plan's handles
+(`number_unique_ids`), so plans built from new `Unique`s have the same types.
 """
 Unique(f::F; customname = Symbol(), aliases...) where {F} = unique_with_id(f, UniquePlanId(uuid4()), customname; aliases...)
 
 """
     DynamicUnique(f; customname, aliases...)
 
-`Unique(f)` with the uuid in its value only (`UniquePlanId{ValueId}`), as a constructor takes a `Unique` handle
+`Unique(f)` with the uuid in its value only (`DynamicPlanId`, `UniquePlanId{:dynamic}`), as a constructor takes a `Unique` handle
 (`strip_unique`), made so directly: the same type for every handle, so making one compiles nothing. For a handle the
 package makes and the user never holds (a DSL block's own `@state`).
 """
-DynamicUnique(f::F; customname = Symbol(), aliases...) where {F} = unique_with_id(f, UniquePlanId{ValueId}(uuid4()), customname; aliases...)
+DynamicUnique(f::F; customname = Symbol(), aliases...) where {F} = unique_with_id(f, DynamicPlanId(uuid4()), customname; aliases...)
 
 # The handle of `Unique` and `DynamicUnique`, with the matcher `id`.
 function unique_with_id(f::F, id::I, customname::Symbol; aliases...) where {F, I<:UniquePlanId}

@@ -60,7 +60,8 @@ end
 
 @testset "The untyped and the typed resolve give the same type" begin
     for plan in (rl_values(0), rl_nested(0))
-        @test typeof(StatefulAlgorithms.strip_keymap(resolve(plan))) === typeof(StatefulAlgorithms._resolve_plan_typed(plan))
+        # The typed resolve takes the plan numbered, as `resolve` gives it to its steps.
+        @test typeof(StatefulAlgorithms.strip_keymap(resolve(plan))) === typeof(StatefulAlgorithms._resolve_plan_typed(StatefulAlgorithms.number_unique_ids(plan)))
     end
 end
 
@@ -121,4 +122,26 @@ end
     @test StatefulAlgorithms.intervals(StatefulAlgorithms.number_unique_ids(ca)) == (1, 7)
     r = setrepeats(StatefulAlgorithms.Routine(RLCounter, RLReader, (2, 3)), (Repeat(4), Repeat(5)))
     @test StatefulAlgorithms.repeats(r) == (4, 5)
+end
+
+@testset "UniquePlanId: numbered ids match by type, a dynamic one by uuid" begin
+    SA = StatefulAlgorithms
+    u1, u2 = SA.uuid4(), SA.uuid4()
+    held = SA.UniquePlanId(u1)
+    dyn = SA.make_dynamic(held)
+    one, other_one, two = SA.make_numbered(held, 1), SA.make_numbered(SA.UniquePlanId(u2), 1), SA.make_numbered(held, 2)
+    @test dyn isa SA.DynamicPlanId && SA.is_dynamic_unique_id(dyn) && SA.origin(dyn) == u1
+    @test SA.is_numbered_unique_id(one) && SA.is_held_unique_id(SA.make_held(one)) && SA.make_held(one) === held
+    # Two numbered ids: by number only, decided while compiling.
+    @test one == other_one && one != two
+    @test Base.return_types(==, (typeof(one), typeof(two))) == [Bool]
+    @test only(Base.code_typed(==, (typeof(one), typeof(two)))).first.code[end].val === false
+    # A dynamic id against any form, or a held against a numbered one: by uuid.
+    @test dyn == one && one == dyn && dyn == held && held == one && one == held
+    @test dyn != SA.DynamicPlanId(u2) && SA.DynamicPlanId(u2) != one
+    # `match` gives the same answer both ways round.
+    @test SA.match(one, dyn) && SA.match(dyn, one) && !SA.match(two, SA.DynamicPlanId(u2))
+    # A dynamic id as a type names no handle; a held one is made again from its type.
+    @test !SA.matches_type(dyn, SA.DynamicPlanId) && SA.reconstruct_matcher(typeof(held)) === held
+    @test_throws ErrorException SA.reconstruct_matcher(SA.DynamicPlanId)
 end

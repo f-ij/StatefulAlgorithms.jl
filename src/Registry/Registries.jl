@@ -104,7 +104,7 @@ end
     return !isnothing(found_scoped_value)
 end
 
-"""The algorithm `v` as `reg` stores it, found by its matcher (`findfirst_match`); for `isstaticallyfindable` values."""
+"""The algorithm `v` as `reg` stores it, found by its matcher (`findfirst_match`)."""
 function static_get(reg::NameSpaceRegistry, v::V) where {V}
     entry = get_type_entries(reg, v)
     idx = findfirst_match(entry, v)
