@@ -47,7 +47,7 @@ Numbers the `Unique` handles in `x` (a plan's inputs, or several plans that shar
 own; its ids are numbered again into the new plan's, by uuid. The same code with new handles gives the same numbers,
 so the same plan type. Untyped; compiles nothing per uuid.
 """
-Base.@nospecializeinfer number_unique_ids(@nospecialize(x)) = rewrite_unique_ids(x, _NumberIds(Dict{UUID, Int}()))
+Base.@nospecializeinfer number_unique_ids(@nospecialize(x)) = rewrite_unique_ids(x, _NumberIds(sizehint!(Dict{UUID, Int}(), 16)))
 
 """Number mode: the numbers given so far, each uuid to its number, in order of first appearance. One per call, so
 one plan's numbers start at 1."""
