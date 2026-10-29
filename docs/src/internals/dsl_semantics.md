@@ -42,7 +42,7 @@ states of the resolved tree by name.
 |---|---|---|
 | an algorithm value | its value (`===` for mutable values, equality for values without data) | `Type_1`, `Type_2`, ... or its `@alias` |
 | a block's `@state` | an id given when the block is built: one per construction | `_state_1`, `_state_2`, ... |
-| a named state (`@state name begin ... end`) | its name: every state with that name is one | `name` |
+| a named state (`@state name begin ... end`) | its value, as any state; its name is only its key: two different states with one name in one plan are an error (`rename` one first) | `name` |
 | a merged state (`@merge`) | the id of each state it was merged from | `_state_k` |
 
 The same block value used in two places shares its state; two constructions, also from the same code, do not.
@@ -166,7 +166,7 @@ Nothing runs; these decide where values go.
 | `@route a.x => b.y` (`transform = f`, `reverse_transform = g`) | `b` sees `a`'s `x` as `y`; an update of `y` (`@update y = …`) writes back through `g`. |
 | `@redirect a.x => b.y` | `b`'s field `y` is `a`'s field `x` after init. |
 | `@bind x => c.x` | This block's state field `x` and the nested block's `x` are the same field. |
-| `@merge c1.x, c2.x` | Two nested blocks' fields `x` are the same field. |
+| `@merge c1, c2` | The two nested blocks' `@state`s are one state (whole states only). |
 | `Algo(@all(a))` | `Algo` sees every field of `a` (a `Share`). |
 
 ### When the block is built
