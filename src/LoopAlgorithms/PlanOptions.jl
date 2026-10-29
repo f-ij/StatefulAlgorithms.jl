@@ -191,7 +191,9 @@ Base.@nospecializeinfer function _build_child_wiring(@nospecialize(funcs::Tuple)
 
     child_wiring = Vector{Any}(undef, length(funcs))
     for i in eachindex(child_wiring)
-        child_wiring[i] = _select_child_wiring(funcs[i], Wiring(Tuple(route_buckets[i]), Tuple(share_buckets[i])))
+        # `new_instance` and an `isa` test, not the `Wiring` constructor and a call per child: both compile per type.
+        bucket = _new_wiring(Tuple(route_buckets[i]), Tuple(share_buckets[i]))
+        child_wiring[i] = funcs[i] isa LoopSpec ? _select_child_wiring(funcs[i], bucket) : bucket
     end
     return Tuple(child_wiring)
 end
@@ -204,7 +206,29 @@ Base.@nospecializeinfer function _build_plan_wiring_untyped(@nospecialize(option
         option isa Route && push!(routes, option)
         option isa Share && push!(shares, option)
     end
-    return Wiring(Tuple(routes), Tuple(shares))
+    return _new_wiring(Tuple(routes), Tuple(shares))
+end
+
+# A `Wiring` of `routes` and `shares` made with `new_instance`: its constructor would compile for each new type.
+Base.@nospecializeinfer _new_wiring(@nospecialize(routes::Tuple), @nospecialize(shares::Tuple)) =
+    new_instance(Core.apply_type(Wiring, typeof(routes), typeof(shares)), routes, shares)
+
+"""`_split_children_and_wiring` for construction: the same children and child wiring, from untyped values."""
+Base.@nospecializeinfer function _split_children_and_wiring_untyped(@nospecialize(funcs::Tuple), @nospecialize(options::Tuple))
+    n = nfields(funcs)
+    raw = Vector{Any}(undef, n)
+    for i in 1:n
+        f = getfield(funcs, i)
+        raw[i] = f isa WithWiring ? _unwrap_with_wiring(f) : f
+    end
+    raw = Tuple(raw)
+    buckets = _build_child_wiring(raw, options)
+    child_wiring = Vector{Any}(undef, n)
+    for i in 1:n
+        f = getfield(funcs, i)
+        child_wiring[i] = f isa WithWiring ? _append_withwiring_wires(f, getfield(buckets, i)) : getfield(buckets, i)
+    end
+    return raw, Tuple(child_wiring)
 end
 
 """`_drop_wiring_options` for construction: the options that are not routes, shares or declared locals, from untyped values."""

@@ -1,5 +1,7 @@
-function setcontextkey(sa::IdentifiableAlgo{F, Id, VA, AlgoName, Key, M}, newname::Symbol) where {F, Id, VA, AlgoName, Key, M}
-    IdentifiableAlgo{F, Id, VA, AlgoName, newname, M}(sa.func, getfield(sa, :matcher))
+# Untyped: made with `new_instance`, so a handle of a new type (every `Unique`) compiles nothing here.
+Base.@nospecializeinfer function setcontextkey(@nospecialize(sa::IdentifiableAlgo), newname::Symbol)
+    p = typeof(sa).parameters
+    return new_instance(Core.apply_type(IdentifiableAlgo, p[1], p[2], p[3], p[4], newname, p[6]), getfield(sa, :func), getfield(sa, :matcher))
 end
 
 ########################################

@@ -2,7 +2,9 @@
 """
 Set an explicit name for an algorithm
 """
-@inline function IdentifiableAlgo(f::F, contextkey::Symbol, id = nothing; customname = Symbol(), aliases...) where F
+# Untyped: an algorithm wrapped while a plan is built (a bare type such as `Sensor`, a `Unique` handle) compiles nothing
+# here per type. The handle is made with `identifiable_with_id`, which keeps a data-carrying id in its `matcher` field.
+Base.@nospecializeinfer function IdentifiableAlgo(@nospecialize(f), contextkey::Symbol, @nospecialize(id = nothing); customname = Symbol(), aliases...)
     if f isa AbstractIdentifiableAlgo # Don't wrap a IdentifiableAlgo again, just setid
         # return IdentifiableAlgo(getalgo(f), contextkey, id(f); aliases...)
         if !isnothing(id) && !isnothing(StatefulAlgorithms.id(f))
@@ -20,12 +22,10 @@ Set an explicit name for an algorithm
     f = instantiate(f) # Don't wrap a type
     aliases = VarAliases(;aliases...)
 
-    # An id that is all type-level (the usual case) keeps the typed construction; one carrying data goes untyped.
-    static_id(id) === id || return identifiable_with_id(f, id, aliases, customname, contextkey)
-    IdentifiableAlgo{typeof(f), id, aliases, customname, contextkey}(f)::IdentifiableAlgo{typeof(f), id, aliases, customname, contextkey}
+    return identifiable_with_id(f, id, aliases, customname, contextkey)
 end
 
-IdentifiableAlgo(f::F; key = Symbol(), id = nothing, customname = Symbol(), aliases...) where F = @inline IdentifiableAlgo(f, key, id; customname, aliases...)
+Base.@nospecializeinfer IdentifiableAlgo(@nospecialize(f); key = Symbol(), id = nothing, customname = Symbol(), aliases...) = IdentifiableAlgo(f, key, id; customname, aliases...)
 
 # The same as the method above for an already identifiable value with no keywords (it only resets the key), without
 # compiling the keyword path for every handle type, e.g. every `Unique` handle passed to a constructor.
@@ -78,7 +78,7 @@ is `UniquePlanId{uuid}(uuid)` with a fresh uuid, so the handle is a key known fr
 constructor strips the uuid from the type (`strip_unique`) and `resolve` numbers the plan's handles
 (`number_unique_ids`), so plans built from new `Unique`s have the same types.
 """
-Unique(f::F; customname = Symbol(), aliases...) where {F} = unique_with_id(f, UniquePlanId(uuid4()), customname; aliases...)
+Base.@nospecializeinfer Unique(@nospecialize(f); customname = Symbol(), aliases...) = unique_with_id(f, UniquePlanId(uuid4()), customname; aliases...)
 
 """
     DynamicUnique(f; customname, aliases...)
@@ -87,10 +87,10 @@ Unique(f::F; customname = Symbol(), aliases...) where {F} = unique_with_id(f, Un
 (`strip_unique`), made so directly: the same type for every handle, so making one compiles nothing. For a handle the
 package makes and the user never holds (a DSL block's own `@state`).
 """
-DynamicUnique(f::F; customname = Symbol(), aliases...) where {F} = unique_with_id(f, DynamicPlanId(uuid4()), customname; aliases...)
+Base.@nospecializeinfer DynamicUnique(@nospecialize(f); customname = Symbol(), aliases...) = unique_with_id(f, DynamicPlanId(uuid4()), customname; aliases...)
 
-# The handle of `Unique` and `DynamicUnique`, with the matcher `id`.
-function unique_with_id(f::F, id::I, customname::Symbol; aliases...) where {F, I<:UniquePlanId}
+# The handle of `Unique` and `DynamicUnique`, with the matcher `id`. Untyped: compiled once, not per algorithm type.
+Base.@nospecializeinfer function unique_with_id(@nospecialize(f), @nospecialize(id::UniquePlanId), customname::Symbol; aliases...)
     f = instantiate(f)
     if !isbits(f)
         f = deepcopy(f) # Mutable types match by identity
