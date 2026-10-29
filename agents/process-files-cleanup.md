@@ -79,11 +79,17 @@ process files after `Listeners.jl` (lines 73-87). Include the new paths at those
        a field of type `Union{Timer, Nothing}`, not a `Ref`.
     2. `function run(tp::TimedProcess)` defines `StatefulAlgorithms.run`, not a method of `Base.run`, which the module
        already extends (probably why the file is not included: not checked). Make it `Base.run`.
-    3. No session: `AbstractProcess`'s interface reads `getfield(p, :session)` (`loopidx`, `loopint`, `reset_loopidx!`),
-       so all of these fail. Give it a session (which kind, `InlineSession` or `InteractiveSession`, to decide) and run
-       the loop through it, not `step!(algo, context)` on the whole plan per tick.
-    4. No `UniqueKeyMap`: build it like the others (`resolve_for_process`, point 3; `keymap` in the type; `context(tp)`
-       puts the map back), so `context(tp)[handle]` works.
+    3. Rewrite it on a session (owner, 2026-10-29). Today it has none: `AbstractProcess`'s interface reads
+       `getfield(p, :session)` (`loopidx`, `loopint`, `reset_loopidx!`), so all of these fail. The loop runs through
+       the session, not `step!(algo, context)` on the whole plan per tick. Which kind is still to decide: it can be
+       paused and closed, which points to `InteractiveSession`.
+    4. The `UniqueKeyMap`: `resolve` puts it in the registry's type, but `init` and the loop strip it, so they compile
+       nothing per uuid (`src/Identifiable/UniquePlanId/UniqueKeyMap.jl:5-8`). `TimedProcess` strips it too
+       (`TimedProcess.jl:12, 16`), so `context(tp)[handle]` fails today. Two options:
+       1. Keep the map in the context it runs on: no extra code, but the loop compiles again for every set of `Unique`
+          handles, which the others avoid.
+       2. Do as the others: `keymap` in the type, `context(tp)` puts it back, using the shared constructor steps
+          (`resolve_for_process`, point 3).
     5. Constructor: no `Init`/`Override` positional specs, no `repeats`, no hand-written `Core.kwcall` with
        `@nospecialize` (the others compile once for every set of handles without it); use the shared constructor
        steps.
