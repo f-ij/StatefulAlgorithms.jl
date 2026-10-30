@@ -100,6 +100,22 @@ function resolve_wiring(reg::NameSpaceRegistry, r::R) where {R<:Route}
     return target_ns => resolved
 end
 
+"""
+    dynamic_resolve_wiring(reg, r::Route) -> (target_ns, resolved route)
+
+`resolve_wiring(reg, r)` on values, for `resolve`'s untyped step 3: the endpoints found with `dynamic_resolve_scref`,
+the resolved route made with `new_instance`, and the two returned as a tuple (a `Pair` compiles for each route type).
+Compiled once.
+"""
+Base.@nospecializeinfer function dynamic_resolve_wiring(@nospecialize(reg::NameSpaceRegistry), @nospecialize(r::Route))
+    source_ns = dynamic_resolve_scref(reg, source_match_by(r), get_source_ref(r), "source namespace")
+    target_ns = dynamic_resolve_scref(reg, target_match_by(r), get_target_ref(r), "target namespace")
+    _assert_resolved_endpoint(source_ns, "Route source namespace")
+    _assert_resolved_endpoint(target_ns, "Route target namespace")
+    R = Core.apply_type(Route, source_ns, target_ns, gettransform(r), getreverse_transform(r), source_fieldnames(r), getaliases(r), Nothing, Nothing)
+    return (target_ns, new_instance(R, nothing, nothing))
+end
+
 """Update unresolved endpoint references against a parent registry."""
 function update_keys(r::R, reg::NameSpaceRegistry) where {R<:Route}
     isresolved(r) && return r

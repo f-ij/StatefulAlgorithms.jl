@@ -236,6 +236,81 @@ function all_keys(reg::Union{NameSpaceRegistry, Type{<:NameSpaceRegistry}})
 end
 
 ###############################################################################
+# Finding on values
+###############################################################################
+#=
+The lookups above are decided while compiling: in a plan's loop, or a function of the user's, `reg[algo]` folds to the
+algorithm's place in the registry. `resolve` looks up each route's and share's endpoints once, so it uses the versions
+below instead: they walk the registry as a value (`getfield`, plain loops) and compare with `dynamic_match`, so they are
+compiled once, not once per registry type. They do not number a held `Unique` handle (`number_held_handle`): `resolve`
+looks up in its plan's registry before it has a `UniqueKeyMap`, with handles the plan numbered already.
+=#
+
+"""
+    dynamic_findkey(reg, obj) -> key or nothing
+
+`getkey(reg, obj)` on values: the first entry whose entry type `obj` belongs to (`assign_entrytype`, as `find_typeidx`),
+and in it the first algorithm `obj` matches (`dynamic_match`). `nothing` when there is none, or when `obj` cannot be
+compared (`getkey` catches the same errors).
+"""
+Base.@nospecializeinfer function dynamic_findkey(@nospecialize(reg::NameSpaceRegistry), @nospecialize(obj))
+    T = assign_entrytype(obj)
+    entries = getfield(reg, :entries)
+    for i in 1:nfields(entries)
+        entry = getfield(entries, i)
+        T <: getentrytype(entry) || continue
+        algos = getfield(entry, :algos)
+        for j in 1:nfields(algos)
+            algo = getfield(algos, j)
+            found = try
+                dynamic_match(obj, algo)
+            catch
+                return nothing
+            end
+            found && return getkey(algo)
+        end
+        return nothing
+    end
+    return nothing
+end
+
+"""
+    dynamic_findfirst_algotype(T, reg) -> keyed algo or nothing
+
+`first(findall(T, reg))` on values: the first algorithm in `reg` (entries in order) whose algorithm type is a subtype
+of `T` (`_matches_algotype`), or `nothing`.
+"""
+Base.@nospecializeinfer function dynamic_findfirst_algotype(@nospecialize(T::Type), @nospecialize(reg::NameSpaceRegistry))
+    entries = getfield(reg, :entries)
+    for i in 1:nfields(entries)
+        algos = getfield(getfield(entries, i), :algos)
+        for j in 1:nfields(algos)
+            algo = getfield(algos, j)
+            _matches_algotype(typeof(algo), T) && return algo
+        end
+    end
+    return nothing
+end
+
+"""
+    dynamic_findfirst_matcher_type(M, reg) -> keyed algo or nothing
+
+The first algorithm in `reg` (as `all_algos` lists them) whose matcher is of the matcher type `M` (`matches_type`), on
+values, or `nothing`.
+"""
+Base.@nospecializeinfer function dynamic_findfirst_matcher_type(@nospecialize(M::Type), @nospecialize(reg::NameSpaceRegistry))
+    entries = getfield(reg, :entries)
+    for i in 1:nfields(entries)
+        algos = getfield(getfield(entries, i), :algos)
+        for j in 1:nfields(algos)
+            algo = getfield(algos, j)
+            matches_type(match_by(algo), M) && return algo
+        end
+    end
+    return nothing
+end
+
+###############################################################################
 # Multipliers
 ###############################################################################
 

@@ -158,7 +158,7 @@ Base.@nospecializeinfer function _point_route_at_storage(@nospecialize(r::Route)
     else
         return r
     end
-    return Core.apply_type(Route, p[1], p[2], p[3], p[4], names, p[6], Nothing, Nothing)()
+    return new_instance(Core.apply_type(Route, p[1], p[2], p[3], p[4], names, p[6], Nothing, Nothing), nothing, nothing)   # its constructor compiles per type
 end
 
 """
