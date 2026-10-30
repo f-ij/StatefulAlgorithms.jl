@@ -116,7 +116,10 @@ Base.@nospecializeinfer function parse_la_input(laType::Type{<:AbstractPlan}, @n
     if !isempty(rest) && first(rest) isa Tuple
         specification = popfirst!(rest)
         length(specification) == length(kept_algos) || construction_error("If passing intervals/repeats as a tuple, there must be one entry per algorithm input before parser options are filtered, but got ", specification, " for ", length(kept_algos), " algorithm inputs.")
-        intervals_or_repeats = Any[specification[i] for i in eachindex(kept_algos) if kept_algos[i]]
+        intervals_or_repeats = Any[]
+        for i in eachindex(kept_algos)
+            kept_algos[i] && push!(intervals_or_repeats, specification[i])
+        end
         if iscomposite(laType)
             map!(x -> x isa Union{Interval, RunIf} ? x : Interval(x), intervals_or_repeats, intervals_or_repeats)
         else
