@@ -25,10 +25,16 @@ Made by `resolve`, once per plan. Untyped.
 """
 Base.@nospecializeinfer function unique_key_map(@nospecialize(reg))
     pairs = Pair{Int, UUID}[]
-    for algo in all_algos(reg)
-        algo isa IdentifiableAlgo || continue
-        m = getfield(algo, :matcher)
-        is_numbered_unique_id(m) && push!(pairs, plan_number(m) => origin(m))
+    # `all_algos(reg)`, read with `getfield`: a call of `all_algos` would compile for each registry type.
+    entries = getfield(reg, :entries)
+    for i in 1:nfields(entries)
+        algos = getfield(getfield(entries, i), :algos)
+        for j in 1:nfields(algos)
+            algo = getfield(algos, j)
+            algo isa IdentifiableAlgo || continue
+            m = getfield(algo, :matcher)
+            is_numbered_unique_id(m) && push!(pairs, plan_number(m) => origin(m))
+        end
     end
     isempty(pairs) && return nothing
     sort!(pairs; by = first)

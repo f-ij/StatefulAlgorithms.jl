@@ -31,7 +31,9 @@ struct DeclaredLocals <: RuntimePartition end
 struct Inputs <: RuntimePartition end
 
 """Which partition of a run's context the subcontext name `name` refers to: a namespace's state, unless `name` is one of the runtime context's partitions."""
-context_partition(::Val) = NamespacePartition()
+# Not specialized: a call on a run-time name (resolve) compiles once, not once per name; a caller with the name known
+# while compiling still gets the constant.
+context_partition(@nospecialize(::Val)) = NamespacePartition()
 context_partition(::Val{:_captured_returns}) = CapturedReturns()
 context_partition(::Val{:_subcontext_returns}) = SubcontextReturns()
 context_partition(::Val{:_declared_locals}) = DeclaredLocals()

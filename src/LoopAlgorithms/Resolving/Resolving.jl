@@ -42,34 +42,41 @@ context: nothing compiles again. The inferred version, for a caller that knows t
 Base.@nospecializeinfer function resolve(@nospecialize(la::LoopSpec))
     _registry_field(la) isa NameSpaceRegistry && return la   # resolved; read untyped, as its type carries the map
     resolved = _resolve_plan(number_unique_ids(la))
-    return with_keymap(resolved, unique_key_map(getregistry(resolved)))
+    return with_keymap(resolved, unique_key_map(_registry_field(resolved)))
 end
 
 """
-Run the steps of resolving the unresolved `la` (see the top of this file) and return the resolved plan. Compiled for
-the plan's type, so the steps it calls are compiled together with it; the steps themselves walk the plan untyped.
+Run the steps of resolving the unresolved `la` (see the top of this file) and return the resolved plan. Compiled once:
+the steps walk the plan untyped, and the wrappers are made with `new_instance`, so a plan of a new type compiles only
+step 1 (`build_registry_and_key_plan`, generated from its type).
 """
-function _resolve_plan(la::LA) where {LA<:LoopSpec}
+Base.@nospecializeinfer function _resolve_plan(@nospecialize(la::LoopSpec))
     if la isa FinalizedAlgorithm
-        return finalstep(_resolve_plan(inneralgorithm(la)), finalfunction(la))
+        return finalstep(_resolve_plan(getfield(la, :inner)), getfield(la, :final))
     end
     if !(la isa LoopAlgorithm)
-        return _resolve_plan(LoopAlgorithm(la))
+        # `LoopAlgorithm(la)` with its defaults; its keyword constructor would compile for each plan type.
+        T = Core.apply_type(LoopAlgorithm, typeof(la), Tuple{}, Nothing, Nothing, Tuple{}, Tuple{}, getid(la))
+        return _resolve_plan(new_instance(T, la, (), nothing, nothing, (), ()))
     end
 
-    registry, keyed_la = build_registry_and_key_plan(la)   # 1. keys and namespaces
-    return _resolve_keyed_plan(keyed_la, registry)
+    # 1. keys and namespaces; read with `getfield`, as destructuring compiles for each tuple type.
+    registry_and_keyed = build_registry_and_key_plan(la)
+    return _resolve_keyed_plan(getfield(registry_and_keyed, 2), getfield(registry_and_keyed, 1))
 end
 
 """
 Run steps 2 to 4 on `keyed_la`, a root wrapper that step 1 gave keys to with `registry`, and return it resolved, with the
-`RootOption`s of its plan tree on it.
+`RootOption`s of its plan tree on it. Compiled once: the resolved wrapper is made with `new_instance`.
 """
-function _resolve_keyed_plan(keyed_la::LA, registry::R) where {LA<:LoopAlgorithm, R<:NameSpaceRegistry}
-    keyed_la = _attach_registry(keyed_la, registry)                      # 2. share the registry
-    plan = _resolve_wiring(getplan(keyed_la), registry, (;))   # 3. routes, shares
-    plan = _resolve_scopes(plan, NoScope, "")                            # 4. scopes
-    return setoptions(setfield(keyed_la, :plan, plan), _collect_root_options(keyed_la))
+Base.@nospecializeinfer function _resolve_keyed_plan(@nospecialize(keyed_la::LoopAlgorithm), @nospecialize(registry::NameSpaceRegistry))
+    keyed_plan = getfield(keyed_la, :plan)
+    options = _collect_root_options_untyped(keyed_plan)
+    plan = _resolve_scopes(_resolve_wiring(keyed_plan, registry, (;)), NoScope, "")   # 3. routes, shares; 4. scopes
+    # 2. share the registry, with the resolved plan and the root options: `_attach_registry`, `setfield` and `setoptions`.
+    p = typeof(keyed_la).parameters    # {Plan, O, R, C, Inits, Overrides, id}
+    T = Core.apply_type(LoopAlgorithm, typeof(plan), typeof(options), typeof(registry), p[4], p[5], p[6], p[7])
+    return new_instance(T, plan, options, registry, getfield(keyed_la, :context), getfield(keyed_la, :inits), getfield(keyed_la, :overrides))
 end
 
 """

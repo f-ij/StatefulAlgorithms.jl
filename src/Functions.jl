@@ -858,7 +858,7 @@ Return the index of the type parameter of `T` that field `i` is declared as (`st
 rebuild.
 """
 Base.@nospecializeinfer function _field_parameter_index(@nospecialize(T::DataType), i::Int)
-    j = _field_parameter_indices(T.name)[i]
+    j = _field_parameter_indices(T.name)[i]::Int   # the lock's `get!` is not inferred; known, `isnothing` on the result is not a run-time call
     return j == 0 ? nothing : j
 end
 

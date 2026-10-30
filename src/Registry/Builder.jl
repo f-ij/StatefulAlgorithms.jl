@@ -188,7 +188,7 @@ end
 """The key of the algorithm `x` (`getkey`)."""
 key_of(@nospecialize(x)) = x isa GeneratedValue ? getkey(x.valuetype) : getkey(x)
 """Whether the algorithm `x` has a key (`haskey`)."""
-has_key(@nospecialize(x)) = x isa GeneratedValue ? getkey(x.valuetype) != Symbol() : haskey(x)
+has_key(@nospecialize(x)) = x isa GeneratedValue ? getkey(x.valuetype) !== Symbol() : haskey(x)   # `!==`: `!=` on an untyped key is a run-time call
 """Whether the algorithm `x` has an automatic key (`hasautokey`, `is_autokey`)."""
 has_autokey(@nospecialize(x)) = x isa GeneratedValue ? is_autokey(algotype(x.valuetype), getkey(x.valuetype)) : hasautokey(x)
 """Whether the algorithm `x` has a key given to it, not an automatic one."""

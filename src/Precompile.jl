@@ -491,6 +491,21 @@ end
 #== end: scoping_reuse ==#
 
 #===================================================================================================================
+Section: `resolve` of a plan with `Unique` handles, a nested `Routine`, a route and a declared local, three times with
+new handles and other values. Its steps are untyped, so what is compiled here is the code every user's plan uses.
+===================================================================================================================#
+#== section: resolve_untyped ==#
+@compile_workload begin
+    for k in 1:3
+        counter = Unique(_ProcessPrecompileCounter())
+        stored = CompositeAlgorithm(counter, _ProcessPrecompileSink, Routine(Unique(_ProcessPrecompileCounter()), (2 + k,)),
+                                    (1, 1, 1), Route(counter => _ProcessPrecompileSink, :value), Declaration(n = 1.0 * k))
+        resolve(stored)
+    end
+end
+#== end: resolve_untyped ==#
+
+#===================================================================================================================
 Section: hand-written struct algorithms in DSL blocks, the InteractiveIsing manuscript shape: @alias, @every,
 @transform, @context, @repeat, `Init` by name and by instance, run, fetch, `context[algo].field`.
 Unique: −0.13 s (manuscript, ≈0.02 s in each of its phases: blocks, Process, run, manager), −0.05 s (user),
