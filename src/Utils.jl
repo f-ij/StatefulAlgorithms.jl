@@ -143,3 +143,17 @@ Base.@nospecializeinfer function new_instance(@nospecialize(T::DataType), @nospe
     end
     return ccall(:jl_new_structv, Any, (Any, Ptr{Any}, UInt32), T, v, n)
 end
+
+"""
+    findfirst_unspecialized(f, x, items) -> index or nothing
+
+`findfirst(item -> f(x, item), items)`, compiled once, for code that has `x` as an untyped value (the registry walk).
+The closure would be a new type for every type of `x`, and both `findfirst` and the closure's call would compile again
+for each; here `f` is called at run time with `x` and each item, so nothing is specialized on them.
+"""
+Base.@nospecializeinfer function findfirst_unspecialized(@nospecialize(f), @nospecialize(x), items::AbstractVector)
+    for i in eachindex(items)
+        f(x, items[i])::Bool && return i
+    end
+    return nothing
+end

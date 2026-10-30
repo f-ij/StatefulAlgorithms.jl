@@ -1,6 +1,6 @@
 #=
 Reading one entry of a registry (`RegistryTypeEntry`): its algorithms, multipliers and keys, and finding an algorithm
-in it with `match` (`static_findfirst_match`: decided while compiling when the types decide it, else by `==` at run time).
+in it with `match` (`static_findfirst_match`: decided while compiling when the types decide it, else by `matcher_equals` at run time).
 The runtime lookup table (`dynamic_lookup`) is kept but no lookup uses it.
 =#
 
