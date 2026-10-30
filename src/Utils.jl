@@ -145,15 +145,16 @@ Base.@nospecializeinfer function new_instance(@nospecialize(T::DataType), @nospe
 end
 
 """
-    findfirst_unspecialized(f, x, items) -> index or nothing
+    findfirst_unspecialized(f, items, args...) -> index or nothing
 
-`findfirst(item -> f(x, item), items)`, compiled once, for code that has `x` as an untyped value (the registry walk).
-The closure would be a new type for every type of `x`, and both `findfirst` and the closure's call would compile again
-for each; here `f` is called at run time with `x` and each item, so nothing is specialized on them.
+`findfirst(item -> f(item, args...), items)`, compiled once, for code that has `args` as untyped values (the registry
+walk). A closure over `args` would be a new type for every type of them, and both `findfirst` and the closure's call
+would compile again for each; here `f` is called at run time with each item and `args`, so nothing is specialized on
+them.
 """
-Base.@nospecializeinfer function findfirst_unspecialized(@nospecialize(f), @nospecialize(x), items::AbstractVector)
+Base.@nospecializeinfer function findfirst_unspecialized(@nospecialize(f), items::AbstractVector, @nospecialize(args...))
     for i in eachindex(items)
-        f(x, items[i])::Bool && return i
+        f(items[i], args...)::Bool && return i
     end
     return nothing
 end
