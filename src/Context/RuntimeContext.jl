@@ -1,5 +1,5 @@
 #=
-The runtime context of a loop: a `ProcessContext` whose subcontexts are runtime context partitions (ContextPartitions.jl),
+The runtime context of a loop: a `ProcessContext` whose subcontexts are runtime context partitions (`RuntimePartition`),
 each under its partition name: captured returns, subcontext returns, declared locals and inputs. A runtime context only
 has the partitions it uses.
 =#

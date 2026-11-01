@@ -1,5 +1,5 @@
 #=
-The extendable base of a run's context: which partition (ContextPartitions.jl) something refers to or is read from
+The extendable base of a run's context: which partition (`Partition`, StructDefs.jl) something refers to or is read from
 (`context_partition`).
 
 Extended in View/HookExtensions.jl (`VarLocation`: the partition it is stored in).

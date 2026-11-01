@@ -1,9 +1,8 @@
 export ProcessContext
 
 
-include("ContextPartitions.jl")   # Partition{kind, name}: the parts of a run's context
+include("StructDefs.jl")          # ProcessContext, Partition{kind, name}: the parts of a run's context
 include("Hooks.jl")               # extendable base: context_partition
-include("StructDefs.jl")
 include("SubContext.jl")
 include("ProcessContexts.jl")
 include("RuntimeContext.jl")

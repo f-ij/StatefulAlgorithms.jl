@@ -90,7 +90,7 @@ When creating `SubContextView` locations (`src/Context/View/Locations.jl`):
 Shared fields and routes from persistent entity subcontexts become
 `VarLocation{StatePartition{namespace}}` entries. Routes whose source is `:_inputs` or
 `:_captured_returns` become `VarLocation{RuntimePartition{name}}` entries and read from the separate
-loop-local runtime context (`context_partition(name)` says which, see `src/Context/ContextPartitions.jl`).
+loop-local runtime context (`context_partition(name)` says which, see `Partition` in `src/Context/StructDefs.jl`).
 Redirect-backed locals retain the partition of their stored backing location.
 
 Returning a routed or shared variable backed by persistent state can therefore

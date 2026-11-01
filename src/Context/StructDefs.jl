@@ -1,4 +1,43 @@
 #######################################
+############ PARTITIONS ###############
+#######################################
+#=
+A run's context has two halves, and each is split into partitions, one per subcontext name:
+- the persistent context: one `StatePartition{name}` per namespace (an algorithm or a `@state`), holding its state;
+- the runtime context: the four partitions `RuntimePartition{:_captured_returns}`, `RuntimePartition{:_subcontext_returns}`,
+  `RuntimePartition{:_declared_locals}` and `RuntimePartition{:_inputs}`.
+
+Code dispatches on the partition (`::StatePartition`, `::RuntimePartition`, `::RuntimePartition{:_inputs}`); it never
+compares names. A name becomes a partition only through the hook `context_partition` (Hooks.jl), the one place that
+knows the four runtime names. A view's locations (`VarLocation`) carry their partition.
+=#
+
+"""
+    Partition{kind, name}()
+
+The part of a run's context stored under the subcontext name `name`: a namespace's state (`kind = :state`), or one of
+the runtime context's partitions (`kind = :runtime`).
+"""
+struct Partition{kind, name} end
+
+"""A namespace's partition of the persistent context: the state of an algorithm or a `@state`."""
+const StatePartition{name} = Partition{:state, name} where {name}
+
+"""
+One of the runtime context's four partitions. Its values last one step or the run, never across runs:
+- `:_captured_returns`: what statements (`y = f(x)`) and calls return. One step of the plan node that captures it (see
+  `Scope`). Calls share it as their namespace.
+- `:_subcontext_returns`: per namespace, what its algorithm returns that is not its state. One step of the plan node
+  the algorithm is in.
+- `:_declared_locals`: declared locals (`local x`, `x = nothing`; backend `Local`). The run; kept on a pause.
+- `:_inputs`: the inputs a run starts with. The run; read-only; kept on a pause.
+"""
+const RuntimePartition{name} = Partition{:runtime, name} where {name}
+
+"""The subcontext name a partition is stored under, e.g. `:_inputs`."""
+partition_name(::Union{Partition{kind, name}, Type{Partition{kind, name}}}) where {kind, name} = name
+
+#######################################
 ############# CONTEXT #################
 #######################################
 """
