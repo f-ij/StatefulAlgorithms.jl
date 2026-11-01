@@ -16,13 +16,8 @@ Rebuilds every part of `v` whose type mentions a `UniquePlanId`; each id becomes
 a type holds `rewrite_type_id(rewrite, T)`. Mutable values are not rebuilt; one whose type mentions an id is an error.
 """
 Base.@nospecializeinfer function rewrite_unique_ids(@nospecialize(v), rewrite)
-    return @lock _UNIQUE_IDS_TYPE_CACHE_LOCK _rewrite_value(v, rewrite, _UNIQUE_IDS_TYPE_CACHE)
+    return _rewrite_value(v, rewrite, IdDict{Any, Bool}())
 end
-
-# What the walk works out from a type alone (`_mentions_unique_ids`, `_may_hold_unique_ids`), kept between calls: a plan
-# built again has the same types. Behind a lock, as plans may be built on several threads.
-const _UNIQUE_IDS_TYPE_CACHE = IdDict{Any, Bool}()
-const _UNIQUE_IDS_TYPE_CACHE_LOCK = ReentrantLock()
 
 function _rewrite_value(@nospecialize(v), rewrite, cache::IdDict{Any, Bool})
     v isa Type && return _rewrite_type(v, rewrite, cache)

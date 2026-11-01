@@ -853,28 +853,16 @@ end
 
 """
 Return the index of the type parameter of `T` that field `i` is declared as (`struct S{A}; x::A; end`: 1 for `x`), or
-`nothing` when the field's declared type is not a bare type parameter. Worked out once per type name and kept
-(`_FIELD_PARAMETER_INDICES`): the plan rewrites (`replace_fields`, `rewrite_unique_ids`) ask it for every field they
-rebuild.
+`nothing` when the field's declared type is not a bare type parameter.
 """
 Base.@nospecializeinfer function _field_parameter_index(@nospecialize(T::DataType), i::Int)
-    j = _field_parameter_indices(T.name)[i]::Int   # the lock's `get!` is not inferred; known, `isnothing` on the result is not a run-time call
-    return j == 0 ? nothing : j
-end
-
-# Per type name, the parameter index of each field (0: not a bare type parameter). Behind a lock: plans may be built
-# on several threads.
-const _FIELD_PARAMETER_INDICES = IdDict{Core.TypeName, Vector{Int}}()
-const _FIELD_PARAMETER_INDICES_LOCK = ReentrantLock()
-Base.@nospecializeinfer function _field_parameter_indices(name::Core.TypeName)
-    @lock _FIELD_PARAMETER_INDICES_LOCK get!(_FIELD_PARAMETER_INDICES, name) do
-        body = Base.unwrap_unionall(name.wrapper)
-        indices = zeros(Int, length(body.types))
-        for i in eachindex(indices), j in 1:length(body.parameters)
-            body.types[i] isa TypeVar && body.parameters[j] === body.types[i] && (indices[i] = j)
-        end
-        indices
+    body = Base.unwrap_unionall(T.name.wrapper)
+    declared = body.types[i]
+    declared isa TypeVar || return nothing
+    for j in eachindex(body.parameters)
+        body.parameters[j] === declared && return j
     end
+    return nothing
 end
 
 @inline setfield(s::S, name::Symbol, val::V) where {S,V} = @inline setfield(s, Val(name), val)
