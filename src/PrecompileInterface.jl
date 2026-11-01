@@ -38,7 +38,7 @@ Base.@nospecializeinfer function precompile_interface(@nospecialize(p::Process))
     return nothing
 end
 
-# `run(ip)` (2.8-3.4 ms; the loop is a call of its own, `run_session_loop!`), on this task: a task for one call only
+# `run(ip)` (2.8-3.4 ms; the loop is a call of its own, `run_session_loop`), on this task: a task for one call only
 # adds its own cost. Not `context(ip)`: `run(ip)` returns the context, and compiling it costs 2.9 ms per build.
 Base.@nospecializeinfer function precompile_interface(@nospecialize(ip::InlineProcess))
     precompile(run, (typeof(ip),))

@@ -66,8 +66,8 @@ end
 The loop's exit: records the end time (a session that keeps times) and returns the persistent context and the run's
 result (on a pause, the paused context as both). Returned as the loop has them, without the plan's `UniqueKeyMap`; the
 process that started the run commits them (`Process`: `_finish_run!`, which gives what it keeps and `fetch(p)` the plan's
-registry back; `InlineProcess`: `run_session_loop!`, which keeps the context on the session; `run(ip)` gives the result
-the plan's registry).
+registry back; `InlineProcess`: `run(ip)`, which stores the context on the process and gives the result the plan's
+registry).
 """
 @inline function after_while(session::S, persistent_context::C, returnvalue::R) where {S<:ProcessSession, C<:ProcessContext, R}
     @inline set_endtime!(session)
@@ -77,7 +77,7 @@ end
 """
     run_session_loop([loopfunc,] session, algo, context, lifetime, inputs, resume = Resuming{false}()) -> (persistent_context, result)
 
-The loop as a call of its own, where a `Process` or a plan run directly (`run(plan)`) hands a run to it. Its
+The loop as a call of its own, where a `Process`, an `InlineProcess` or a plan run directly (`run(plan)`) hands a run to it. Its
 arguments are the session and the plan, context and lifetime without the plan's `UniqueKeyMap`, so it is compiled once
 for every set of `Unique` handles while the process calling it has the map in its type (in its plan's registry). Also compiled as its own function,
 so LLVM keeps the session's counters (`tickidx`) in registers.
@@ -86,32 +86,6 @@ so LLVM keeps the session's counters (`tickidx`) in registers.
     loopfunc(session, algo, context, lifetime, inputs, resume)
 @inline run_session_loop(session::S, algo::A, context::C, lifetime::LT, inputs::I, resume::R = Resuming{false}()) where {S<:ProcessSession, A, C, LT, I<:NamedTuple, R<:Resuming} =
     run_session_loop(loop, session, algo, context, lifetime, inputs, resume)
-
-"""
-    run_session_loop!(session::InlineSession, algo, lifetime, inputs) -> result
-
-The loop of an `InlineProcess` run on the context the session holds: it reads the context from the session and writes
-the context after the run back to it. A call of its own, like `run_session_loop`: its arguments have no map in their
-types, so its machine code is made once for every set of `Unique` handles, and `run(ip)`, which is compiled per set,
-only calls it (1.1 ns per run). `run(ip; inlined = Val(true))` pastes the same body into `run(ip)` instead
-(`run_session_loop_body!`): no call, but LLVM makes the loop's machine code again for every set of handles (5 ms for 2
-children, 36 ms for 16). Its arguments are pointers and small values, so the call does not copy the context in or out.
-The lifetime's `Var`s have their keys before the call (`resolve_var_keys`, in `run(ip)` or when the process was built).
-"""
-@noinline run_session_loop!(session::S, algo::A, lifetime::LT, inputs::I) where {C, S<:InlineSession{C}, A, LT, I<:NamedTuple} =
-    @inline run_session_loop_body!(session, algo, lifetime, inputs)
-
-# The body of `run_session_loop!`, inlined into its caller: into `run_session_loop!`, or into `run(ip)` for
-# `inlined = Val(true)`.
-@inline function run_session_loop_body!(session::S, algo::A, lifetime::LT, inputs::I) where {C, S<:InlineSession{C}, A, LT, I<:NamedTuple}
-    # Here, not in the caller: LLVM then knows the counter starts at 1 and that its memory is written before the loop,
-    # so it keeps the counter in a register (written once, at the end) and vectorizes steps the stop check cannot end.
-    # In the caller it made the loop store the counter every step, 5x slower for light steps.
-    reset_loopidx!(session)
-    persistent_context, returnvalue = @inline loop(session, algo, session.context, lifetime, inputs, Resuming{false}())
-    session.context = persistent_context
-    return returnvalue
-end
 
 """
 Run a single function in a loop indefinitely.

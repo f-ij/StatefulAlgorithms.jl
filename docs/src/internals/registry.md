@@ -72,9 +72,9 @@ steps below 4.7–4.8 ms). So the uuid (`origin`) is data and never changes; the
    loop have no uuid in their types and compile once for every new set of `Unique`s. `Process` and `InlineProcess`
    hold the initialized plan with its registry with the map again: the map is in their type only through it, with no
    field of their own. A run drops it where the process is handed to its session and the context to the loop
-   (`strip_keymap` in `makeloop!`; an `InlineProcess`'s session holds the plan and context without it), reached through
-   `run_session_loop`, whose arguments have no map, so the loop is compiled once for every set of `Unique`s
-   (`run_session_loop!` for an `InlineProcess`, on the context its session holds).
+   (`strip_keymap` in `makeloop!`; an `InlineProcess` keeps the plan and context without it, `loop_algo`, `context`),
+   reached through `run_session_loop`, whose arguments have no map, so the loop is compiled once for every set of
+   `Unique`s.
 6. What the loop gives back gets the plan's registry (`with_plan_registry`): typed for `context(ip)` and `run(ip)` (the
    `Ref` of the plan's registry), untyped for what a `Process` keeps (`_finish_run!`, `commit_context!`), which
    `context(p)` and `fetch(p)` return; the plan `init` and `run(la)` return have it too (`with_keymap`). A context given

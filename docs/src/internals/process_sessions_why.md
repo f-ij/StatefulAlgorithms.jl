@@ -57,7 +57,7 @@ The session (`src/Sessions/`) holds exactly those fields and nothing typed on th
 | Session | Type parameters | None of them has `K` because |
 |:--|:--|:--|
 | `InteractiveSession{C, LT}` | `C` the plan's cursor type, `LT` the lifetime type | the cursor is built from the stripped plan; the lifetime's `Var`s are numbered (section 5) |
-| `InlineSession{C, A}` | `C` the context type, `A` the plan type | the context and the plan are stripped when the process hands them over (`set_session_context!`, the constructor) |
+| `InlineSession` | none | it holds only the counter |
 
 The process holds the session in a field and the loop gets the same object, so the process and the loop still share
 the run's record, while the loop's argument types are the same for every set of handles. The loop and the steps never
@@ -72,10 +72,13 @@ loop to be type stable, each of these must be concrete where the loop is entered
    type can change between runs, `commit_context!`), and `session::InteractiveSession{C}` without `LT`. `makeloop!`
    reads them and calls `_makeloop!`, which is dispatched on their types at run time: one dynamic dispatch per run,
    after which everything is typed (`src/Process.jl`).
-2. `run_session_loop` and `run_session_loop!` (`src/Loops.jl`) are `@noinline` calls of their own. Their arguments are
-   the session, the stripped plan, the stripped context, the numbered lifetime and the inputs: no `K`. So the loop's
-   machine code is made once for all sets of handles, while the caller (`run(ip)`, the `Process` task), which is typed
-   on `K`, only calls it. The docstring of `run_session_loop!` gives the cost of the call: 1.1 ns per `run(ip)`. The
+2. `run_session_loop` (`src/Loops.jl`) is a `@noinline` call of its own, the one entry for `Process` and
+   `InlineProcess`. Its arguments are the session, the stripped plan, the stripped context, the numbered lifetime and
+   the inputs: no `K`. So the loop's machine code is made once for all sets of handles, while the caller (`run(ip)`,
+   the `Process` task), which is typed on `K`, only calls it. No session holds the context: a context read from a
+   mutable field by the loop's own function makes it root the context's pointers inside the loop (22% slower per step
+   on the 3D Ising graph, 2026-11-01). Passing the context in and back out costs about 50 ns per `run(ip)` for a
+   616-byte context. The
    alternative, `run(ip; inlined = Val(true))`, pastes the loop into `run(ip)`, and its machine code is then made again
    for every set of handles at the first such run (5 ms for 2 children, 36 ms for 16, per the docstring of `run(ip)`).
 
@@ -109,4 +112,4 @@ What the loop gives back gets the plan's registry (`with_plan_registry`: for wha
 | `Process`, `InlineProcess` | yes | the user | typed lookups with held handles; holds what lives between runs |
 | `ProcessSession` (`InteractiveSession`, `InlineSession`) | no | the process and the loop | the run's mutable record (counters, times, flags, cursor) without `K`, so the loop compiles once for all sets of handles |
 | the stripped plan, context, lifetime | no | the loop | the loop's arguments, concrete and without `K` |
-| `run_session_loop`, `run_session_loop!` | no | — | the call boundary between code typed on `K` and the loop |
+| `run_session_loop` | no | — | the call boundary between code typed on `K` and the loop |
