@@ -39,8 +39,8 @@ compiled for it is compiled again. The map must therefore be in the types the us
 none of the types the loop (or `init`) is compiled for.
 
 That is the split: the map lives only in the registry, so the process has it in its type through its plan's registry
-(`Process{F, C}`, `InlineProcess{TD, ...}`; no field of its own), and where a run is handed over (the process to its
-session, the context to the loop's bundles) it is dropped (`strip_keymap`, `src/Identifiable/UniquePlanId/Accessors.jl`).
+(`Process{F, C}`, `InlineProcess{TD, ...}`; no field of its own), and where the plan and the context are handed to the
+loop as its arguments it is dropped (`strip_keymap`, `src/Identifiable/UniquePlanId/Accessors.jl`).
 
 ## 3. Why the Loop Cannot Take the Process
 
@@ -91,7 +91,7 @@ The same rule applies to everything else that reaches the loop or `init`:
 
 | What | Where it would get the map | What is done instead |
 |:--|:--|:--|
-| the plan and its context | the registry's type, after `resolve` | `strip_keymap` before `init` and before the process stores them |
+| the plan and its context | the registry's type, after `resolve` | `strip_keymap` before `init` and where a run hands them to the loop; a `Process` stores them with the map, an `InlineProcess` also keeps them without it (`loop_algo`, `context`) |
 | a lifetime | its `Var`s can name held handles | numbered with the plan's numbers: `number_by_keymap_dynamic` in the untyped constructors, `number_by_keymap` (typed on `K`, decided while compiling) in `run(p; lifetime)` and `run(ip; lifetime)` |
 | the constructors' keywords | Julia's keyword method specializes on the keywords' `NamedTuple`, whose type has a lifetime `Var`'s uuids | `Core.kwcall` written by hand, `@nospecializeinfer` (the comment records 2.5 ms per new set of handles before) |
 | the `Process` task | a closure capturing the process | `ProcessTaskBody`, a struct whose type is known when the process is built |

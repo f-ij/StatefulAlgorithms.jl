@@ -11,10 +11,10 @@ explained on its own page: [Why Processes Run Through Sessions](@ref process_ses
 ## 1. Overview
 
 What the user holds is typed on the plan's `UniqueKeyMap` (`K`, the numbers of its `Unique` handles). What the loop
-is compiled for never has `K` in its type. `K` lives in one place only: the registry's type (`NameSpaceRegistry{E, K}`),
-in the plan and in the contexts the user holds. The resolve barrier is where the user's plan becomes a resolved
-`LoopAlgorithm`; `K` is dropped where a run is handed to the loop: the process to its session, the context to the
-loop's bundles (`strip_keymap` in `makeloop!`; `set_loop_context!` for an `InlineProcess`).
+is compiled for never has `K` in its type. `K` lives in one place only: the registry's type (`NameSpaceRegistry{E, M}`,
+`M` = `K`), in the plan and in the contexts the user holds. The resolve barrier is where the user's plan becomes a
+resolved `LoopAlgorithm`; `K` is dropped where the plan and the context are handed to the loop as its arguments
+(`strip_keymap` in `makeloop!`; an `InlineProcess` keeps them so, `loop_algo`, `context`, `set_loop_context!`).
 
 ```mermaid
 flowchart TD
@@ -142,8 +142,9 @@ The public `init(la, specs...)` does the same around the barrier: resolve, strip
 
 ## 6. From the User's Handle to the Internal Structs
 
-A process is the user's handle; the loop never gets it. Everything the loop reads or writes while it runs is in the
-session, a mutable struct the process holds and passes to the loop (`src/Sessions/`). The process keeps what lives
+A process is the user's handle; the loop never gets it. The loop gets the plan and the context as arguments, and the
+run's record (counters, flags, times, cursor) in the session, a mutable struct the process holds and passes to the loop
+(`src/Sessions/`); no session holds a context. The process keeps what lives
 between runs (the plan with its context and its registry with `K`, the lifetime, a paused or reshaped context, the
 result). The session
 keeps the run's own record, shared with the process: the process's methods read and write the same object the loop
@@ -303,7 +304,7 @@ as carrying the whole context). In a loop the answer is a compile-time constant.
 2. Pause: the loop keeps the cursor in the session (`_keep_loop_cursor!`), skips cleanup, and returns the paused
    context (the persistent context with the inputs and declared locals added, so a resume can rebuild the runtime
    context) as both context and result.
-3. `_finish_run!` (`Process`): on a pause, stores `p.paused_context` and returns the user context; otherwise
+3. `_finish_run!` (`Process`): on a pause, stores `p.paused_context` (with the plan's registry) and returns it; otherwise
    `commit_context!` and clears the cursor. `commit_context!` puts a context of the plan's context type back into the
    plan (`p.algo`); a context of another type goes to `p.reshaped_context`. Both clear `paused_context`. What is kept
    gets the plan's registry back (`with_plan_registry`).

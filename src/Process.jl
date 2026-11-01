@@ -359,7 +359,7 @@ makeloop!(p::Process, inputs::NamedTuple, lt; threaded = true, loopfunc::LF = lo
 """
     _makeloop!(p, inputs, lifetime, loop_context, func; threaded, loopfunc)
 
-Starts a run of `p`: the process handed to its session and the loop. `loop_context` and `func` are the process's
+Starts a run of `p`: its session and its plan and context, the loop's arguments. `loop_context` and `func` are the process's
 context and plan without the plan's `UniqueKeyMap` (`strip_keymap` in `makeloop!`): the loop never reads the map, and
 without it the loop is compiled once for every set of `Unique` handles.
 """

@@ -281,7 +281,7 @@ function _run_plan(la::LA; repeats = 1, lifetime = nothing, kwargs...) where {LA
     persistent_context = getpersistentcontext(initialized)
     lt = isnothing(lifetime) ? normalize_process_lifetime(initialized, repeats) : normalize_process_lifetime(initialized, lifetime)
     inputs = _validate_runtime_inputs(initialized, (; kwargs...))
-    # One session per run, as the loop needs a counter and times; nothing can pause or close a direct run.
+    # One session per run, as the loop needs a counter; nothing can pause or close a direct run.
     persistent_context, _ = run_session_loop(InlineSession(), initialized, persistent_context, lt, inputs)
     return _with_lifecycle(initialized, persistent_context, getstoredinits(initialized), getstoredoverrides(initialized))
 end

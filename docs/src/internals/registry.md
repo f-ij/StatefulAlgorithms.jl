@@ -71,7 +71,7 @@ steps below 4.7–4.8 ms). So the uuid (`origin`) is data and never changes; the
    `TimedProcess` resolve the plan untyped and prepare the plan and its context without the map, so `init` and the
    loop have no uuid in their types and compile once for every new set of `Unique`s. `Process` and `InlineProcess`
    hold the initialized plan with its registry with the map again: the map is in their type only through it, with no
-   field of their own. A run drops it where the process is handed to its session and the context to the loop
+   field of their own. A run drops it where the plan and the context are handed to the loop as its arguments
    (`strip_keymap` in `makeloop!`; an `InlineProcess` keeps the plan and context without it, `loop_algo`, `context`),
    reached through `run_session_loop`, whose arguments have no map, so the loop is compiled once for every set of
    `Unique`s.

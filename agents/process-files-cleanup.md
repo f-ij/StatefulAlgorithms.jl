@@ -45,8 +45,8 @@ process files after `Listeners.jl` (lines 73-87). Include the new paths at those
 4. `run_nogen` (`InlineProcess.jl:189`) is `run` with `threaded = false`, `inlined = Val(false)`, checking inputs and
    lifetime in the other order. Callers: `src/Precompile.jl:667, 672`, `test/InlineBenchmarkTest.jl:45`,
    `test/RuntimeInputsLifecycleTest.jl:159`. Delete it; callers use `run(ip; threaded = false)`.
-5. Two ways to set the context: `context(ip, c)` (`InlineProcess.jl:104`) and `_set_inline_run_context!` (`:152`) both
-   `strip_keymap_typed` and `set_session_context!`; only the second asserts the type. Keep one, with the assert.
+5. Two ways to set the context: `context(ip, c)` and `_set_inline_run_context!` (`InlineProcess.jl`) both call
+   `set_loop_context!`; only the second asserts the type. Keep one, with the assert.
 6. The mode is a type parameter (`Mode`), but `_inline_process_mode_label` (`InlineProcessShowing.jl:1`) rebuilds it
    from `isthreaded`/`isasync`. One accessor `execution_mode(ip) = Mode`; `isthreaded`/`isasync` and the show methods
    use it.
@@ -84,10 +84,10 @@ process files after `Listeners.jl` (lines 73-87). Include the new paths at those
        the session, not `step!(algo, context)` on the whole plan per tick. It works the same way as `Process` (owner,
        2026-10-29): an `InteractiveSession`, and the same pause, resume, close and context commit (`commit_context!`,
        `_finish_run!`).
-    4. The `UniqueKeyMap` as `Process` handles it (owner, 2026-10-29): `keymap` in the type, `user_context` set by
-       `set_user_context!`, `context(tp)` returns it, and the shared constructor steps (`resolve_for_process`, point 3).
-       Today `TimedProcess` strips the map (`TimedProcess.jl:12, 16`) and never puts it back, so
-       `context(tp)[handle]` fails; `init` and the loop strip it, so they compile nothing per uuid
+    4. The `UniqueKeyMap` as `Process` handles it (2026-11-02): only in the plan's registry, dropped where a run is
+       handed to the loop (`strip_keymap`), put back on what comes out (`with_plan_registry`), and the shared
+       constructor steps (`resolve_for_process`, point 3). Since 2026-11-02 `TimedProcess` keeps its plan and context
+       with the map and strips it for init and each tick's step, so init and the step compile nothing per uuid
        (`src/Identifiable/UniquePlanId/UniqueKeyMap.jl:5-8`).
     5. Constructor: no `Init`/`Override` positional specs, no `repeats`, no hand-written `Core.kwcall` with
        `@nospecialize` (the others compile once for every set of handles without it); use the shared constructor

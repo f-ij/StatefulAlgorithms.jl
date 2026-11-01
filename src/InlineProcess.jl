@@ -49,8 +49,8 @@ end
     InlineProcess(func, Init(...), Override(...); threaded, repeats, lifetime, context)
 
 Resolves `func` first (untyped) and prepares the plan, its context and the lifetime without the plan's `UniqueKeyMap`
-(`strip_keymap`, `number_by_keymap_dynamic`), so a new set of `Unique` handles compiles none of that again. The session
-gets them so; the process holds the plan with its registry with the map (`algo`).
+(`strip_keymap`, `number_by_keymap_dynamic`), so a new set of `Unique` handles compiles none of that again. The process
+keeps the plan and context so for the loop (`loop_algo`, `context`), and the plan with its registry with the map (`algo`).
 """
 Base.@nospecializeinfer InlineProcess(@nospecialize(func), @nospecialize(inputs_overrides...)) =
     _build_inline_process(func, inputs_overrides, nothing, nothing, (;))
@@ -85,7 +85,7 @@ end
 end
 
 # The only step typed on the map (in `algo`'s registry): compiled once per set of `Unique` handles, and small.
-# `loop_algo` and `context` are the plan and its context without the map, for the session.
+# `loop_algo` and `context` are the plan and its context without the map, the loop's arguments.
 function _construct_inline_process(algo::TD, loop_algo::A, context::C, lifetime::Lt, ::Val{mode}) where {TD, A, C, Lt, mode}
     return InlineProcess{TD, C, Lt, mode, A}(uuid1(), algo, false, lifetime, loop_algo, context, InlineSession())
 end
@@ -132,7 +132,7 @@ end
 
 @inline function reset!(p::InlineProcess, inputs_overrides...)
     reset_loopidx!(getsession(p))
-    # On the plan without the map, as the loop has it (the session's).
+    # On the plan without the map, as the loop has it (`loop_algo`).
     initialized = _init_plan(getfield(p, :loop_algo), inputs_overrides...; lifetime = lifetime(p))
     context(p, getpersistentcontext(initialized))
     # TODO: Probably remove consumed flag
@@ -152,7 +152,7 @@ stays on `reset!`, where the process can rebuild its persistent context.
     return _validate_runtime_inputs(algo, kwargs)
 end
 
-# A context given to `run(ip)`: the run starts from it, so it becomes the process's context (on its session) first.
+# A context given to `run(ip)`: the run starts from it, so it becomes the process's context first.
 @inline _set_inline_run_context!(p::InlineProcess, ::Nothing) = nothing
 @inline function _set_inline_run_context!(p::InlineProcess, context)
     set_loop_context!(p, context)

@@ -1,8 +1,8 @@
 #=
 Getters and setters of the plan's `UniqueKeyMap` in a registry, a context or a plan: `getkeymap` reads it;
 `with_keymap` and `strip_keymap` put it in and take it out untyped (made at run time, compiling nothing per uuid);
-`with_keymap_typed` and `strip_keymap_typed` do the same typed, for a handle whose type has the map (`Process`,
-`InlineProcess`). After Context/, as the typed ones take a `ProcessContext`.
+`with_keymap_typed` and `strip_keymap_typed` do the same typed, for code typed on the map (an `InlineProcess`, whose
+plan's registry has it). After Context/, as the typed ones take a `ProcessContext`.
 =#
 
 """
