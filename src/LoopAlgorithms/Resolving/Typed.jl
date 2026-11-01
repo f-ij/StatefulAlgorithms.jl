@@ -75,12 +75,21 @@ Base.@nospecializeinfer function _compute_node_scope_typed(@nospecialize(LA::Typ
     NS = fieldtype(LA, :namespaces)
     locals = _add_scoped_names(scope_locals(Outer), fieldnames(fieldtype(fieldtype(LA, :wiring), :locals)), at)
     read = _find_returns_read_in_plan_typed(LA)
-    captured = Tuple(unique(Symbol[n for i in 1:fieldcount(F) for n in callable_return_names(fieldtype(F, i))
-                                   if n in read && !_haskey_untyped(locals, n) && !_haskey_untyped(scope_returns(Outer), n)]))
-    Sc = Scope{locals, _add_scoped_names(scope_returns(Outer), captured, at)}
-    owners = Tuple(unique(Symbol[namesymbol(fieldtype(NS, i)) for i in 1:fieldcount(F)
-                                 if !(fieldtype(F, i) <: LoopSpec) && context_partition(Val(namesymbol(fieldtype(NS, i)))) isa NamespacePartition]))
-    return Sc, (; returns = map(name -> make_storage_name(name, at), captured), owners)
+    # Plain loops: a comprehension's closure captures the plan's types and would compile again for every plan type.
+    outer_returns = scope_returns(Outer)
+    captured = Symbol[]
+    for i in 1:fieldcount(F), n in callable_return_names(fieldtype(F, i))
+        n::Symbol in read && !_haskey_untyped(locals, n) && !_haskey_untyped(outer_returns, n) && !(n in captured) && push!(captured, n)
+    end
+    owners = Symbol[]
+    for i in 1:fieldcount(F)
+        fieldtype(F, i) <: LoopSpec && continue
+        name = namesymbol(fieldtype(NS, i))::Symbol
+        context_partition(Val(name)) isa NamespacePartition && !(name in owners) && push!(owners, name)
+    end
+    Sc = Scope{locals, _add_scoped_names(outer_returns, Tuple(captured), at)}
+    returns = Symbol[make_storage_name(name, at) for name in captured]
+    return Sc, (; returns = Tuple(returns), owners = Tuple(owners))
 end
 
 """The inferred `_find_returns_read_in_plan` (Scopes.jl), from the plan's type `LA`."""
@@ -114,10 +123,14 @@ The inferred `_resolve_scopes` (Scopes.jl, which explains scopes); `path` is the
 @generated function _resolve_scopes_typed(la::LA, ::Type{Outer}, ::Val{Path}) where {LA<:AbstractPlan, Outer<:Scope, Path}
     Sc, resets = _compute_node_scope_typed(LA, Outer, Path)
     F = fieldtype(LA, :funcs)
-    children = [fieldtype(F, i) <: LoopSpec ? :(_resolve_scopes_typed(getalgo(la, $i), $Sc, $(Val((Path..., i))))) : :(getalgo(la, $i))
-                for i in 1:fieldcount(F)]
-    child_wirings = [fieldtype(F, i) <: LoopSpec ? :(getwiring(getfield(funcs, $i))) : :(_point_routes_at_storage_typed(getfield(child_wiring(wiring), $i), $Sc))
-                     for i in 1:fieldcount(F)]
+    # Plain loops: a comprehension's closure captures the plan's types and would compile again for every plan type.
+    children = Any[]
+    child_wirings = Any[]
+    for i in 1:fieldcount(F)
+        nested = fieldtype(F, i) <: LoopSpec
+        push!(children, nested ? :(_resolve_scopes_typed(getalgo(la, $i), $Sc, $(Val((Path..., i))))) : :(getalgo(la, $i)))
+        push!(child_wirings, nested ? :(getwiring(getfield(funcs, $i))) : :(_point_routes_at_storage_typed(getfield(child_wiring(wiring), $i), $Sc)))
+    end
     return quote
         wiring = getwiring(la)
         funcs = ($(children...),)
