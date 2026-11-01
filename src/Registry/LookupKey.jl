@@ -56,19 +56,9 @@ end
 `T` printed in full as a `Symbol`, e.g. `Symbol("StatefulAlgorithms.SimpleId{Base.UUID(\"9e27…\")}")`. Names are
 qualified as seen from `Core`, so the result is the same in every session whatever `Main` has loaded: a key worked out
 while precompiling equals the one worked out later (plain `string(T)` drops the module of exported names after `using`).
-Printing is slow (tens of µs), so each type's name is kept after the first time (`LOWERED_TYPES`).
+Printed on every call: nothing is kept between calls.
 """
-Base.@nospecializeinfer function lower_type(@nospecialize(T::Type))
-    @lock LOWERED_TYPES_LOCK begin
-        name = get(LOWERED_TYPES, T, nothing)
-        name isa Symbol && return name
-        name = Symbol(sprint(show, T; context = :module => Core))
-        LOWERED_TYPES[T] = name
-        return name
-    end
-end
-const LOWERED_TYPES = IdDict{Any,Symbol}()   # type => its name (`lower_type`)
-const LOWERED_TYPES_LOCK = ReentrantLock()
+Base.@nospecializeinfer lower_type(@nospecialize(T::Type)) = Symbol(sprint(show, T; context = :module => Core))
 
 """
     lower_value(x) -> Symbol

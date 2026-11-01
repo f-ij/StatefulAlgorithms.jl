@@ -1,12 +1,3 @@
-#=
-Commented out (2026-10-30): `IndentIO` is not used. Nothing constructs one (its three constructors were never called
-through the test suite and the precompile workload), and printing indents another way: a plan prints each child to a
-string and prefixes its lines (`_print_tree_lines`, LoopAlgorithms/Showing.jl). Its `Base.print`/`Base.println` methods
-take any arguments for an `IO` subtype, so loading the package invalidated Base's compiled printing code (1307 method
-instances; first `Test` summary 76 ms instead of 4 ms). If indented printing through an `IO` wrapper is wanted again,
-define `write(::IndentIO, ::UInt8)`/`unsafe_write` (indent after each newline), not `print`/`println`/`show`.
-`DataStructures` (`Queue`, `enqueue!`, `dequeue!`, imported in StatefulAlgorithms.jl) was only used here.
-
 
 ### SHOWING
 abstract type IndentType end
@@ -91,4 +82,3 @@ function Base.println(io::IndentIO, args...; extra = 0)
         end
     end
 end
-=#
