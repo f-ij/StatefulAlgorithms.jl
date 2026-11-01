@@ -5,21 +5,16 @@ Mainly used to compose algorithms in tight loops, plugging into the ProcessLoopA
 
 This doesn't provide the multitasking features of Process, but is faster to restart
 """
-mutable struct InlineProcess{TD,ContextType, Lt,Mode,K,UR} <: AbstractProcess
+mutable struct InlineProcess{TD,ContextType, Lt,Mode,A} <: AbstractProcess
     const id::UUID
-    algo::TD            # the plan, without the map (the loop's type)
+    # The plan, its registry with the plan's `UniqueKeyMap`: the only place the process has the map, so its type has it
+    # (`context(ip)[handle]`, `run(ip; lifetime)` numbering while compiling).
+    const algo::TD
     consumed::Bool
     lifetime::Lt        # its `Var`s numbered as the plan numbers its handles
-    # The plan's `UniqueKeyMap` (zero bytes) or `nothing`: in the type, so what the user does with the process is typed
-    # (`context(ip)[handle]`, `run(ip; lifetime)` numbering while compiling). Never passed to the loop.
-    const keymap::K
-    # The run's counter and the process's context, without the map (the loop's type), one session for every run
-    # (Sessions/InlineSession.jl): what the loop gets instead of the process.
-    const session::InlineSession{ContextType}
-    # The registry of the process's context with the map, in its `Ref` (`with_keymap_typed`): what the contexts the user
-    # gets (`context(ip)`, `run(ip)`) hold, so handing one out builds no registry. Set whenever the process's context is
-    # set from outside (`set_session_context!`); a run keeps the registry.
-    user_registry::UR
+    # The run's counter, and the process's context and plan without the map (the loop's types), one session for every
+    # run (Sessions/InlineSession.jl): what the loop gets instead of the process.
+    const session::InlineSession{ContextType, A}
 end
 #TODO Improve context semantics
 contexttype(::Union{InlineProcess{TD,ContextType}, Type{<:InlineProcess{TD,ContextType}}}) where {TD,ContextType} = ContextType
@@ -51,8 +46,8 @@ end
     InlineProcess(func, Init(...), Override(...); threaded, repeats, lifetime, context)
 
 Resolves `func` first (untyped) and prepares the plan, its context and the lifetime without the plan's `UniqueKeyMap`
-(`strip_keymap`, `number_by_keymap_dynamic`), so a new set of `Unique` handles compiles none of that again. Only the
-process itself has the map in its type (`keymap`).
+(`strip_keymap`, `number_by_keymap_dynamic`), so a new set of `Unique` handles compiles none of that again. The session
+gets them so; the process holds the plan with its registry with the map (`algo`).
 """
 Base.@nospecializeinfer InlineProcess(@nospecialize(func), @nospecialize(inputs_overrides...)) =
     _build_inline_process(func, inputs_overrides, nothing, nothing, (;))
@@ -69,7 +64,7 @@ Base.@nospecializeinfer function _build_inline_process(@nospecialize(func), @nos
     # The lifetime is not part of the plan: its `Var`s get the plan's numbers here, while the map is known.
     algo, prepared_context, lifetime, mode = _prepare_inline_process(strip_keymap(algo), inputs_overrides...;
         context = strip_keymap(context), lifetime = number_by_keymap_dynamic(lifetime, keymap), kwargs...)
-    ip = _construct_inline_process(algo, prepared_context, lifetime, Val(mode), keymap)
+    ip = _construct_inline_process(with_keymap(algo, keymap), algo, prepared_context, lifetime, Val(mode))
     # `run(ip)` is typed on the map, so compiled for every set of `Unique` handles: compiled here, so the first run does
     # not wait for it (src/PrecompileInterface.jl).
     precompile_interface(ip)
@@ -86,10 +81,10 @@ end
     return algo, prepared_context, lifetime, _inline_process_mode(threaded)
 end
 
-# The only step typed on the map: compiled once per set of `Unique` handles, and small.
-function _construct_inline_process(algo::TD, context::C, lifetime::Lt, ::Val{mode}, keymap::K) where {TD, C, Lt, mode, K}
-    user_registry = getfield(with_keymap_typed(context, keymap), :reg)
-    return InlineProcess{TD, C, Lt, mode, K, typeof(user_registry)}(uuid1(), algo, false, lifetime, keymap, InlineSession(context), user_registry)
+# The only step typed on the map (in `algo`'s registry): compiled once per set of `Unique` handles, and small.
+# `loop_algo` and `context` are the plan and its context without the map, for the session.
+function _construct_inline_process(algo::TD, loop_algo::A, context::C, lifetime::Lt, ::Val{mode}) where {TD, A, C, Lt, mode}
+    return InlineProcess{TD, C, Lt, mode, A}(uuid1(), algo, false, lifetime, InlineSession(context, loop_algo))
 end
 
 @inline isthreaded(ip::InlineProcess{TD,ContextType,Lt,Mode}) where {TD,ContextType,Lt,Mode} = Mode == :threaded
@@ -100,35 +95,42 @@ getcontext(ip::IP) where {IP<:InlineProcess} = context(ip)
 
 getalgo(ip::InlineProcess) = ip.algo
 
-"""Set the process's context to `c` (a context from `context(ip)` has the map: it is taken out)."""
+"""Set the process's context to `c` (a context from `context(ip)` has the map: it is taken out, `set_session_context!`)."""
 @inline function context(ip::InlineProcess, c)
-    set_session_context!(ip, strip_keymap_typed(c))
-    return _context(ip)
+    set_session_context!(ip, c)
+    return context(ip)
 end
+"""The process's context as the loop has it, on the session: without the map."""
 @inline _context(ip::InlineProcess) = getsession(ip).context
-"""The process's context with the plan's `UniqueKeyMap` in its registry (`with_user_registry`), typed: `context(ip)[handle]`."""
-@inline context(ip::InlineProcess) = with_user_registry(ip, _context(ip))
+"""The process's context with the plan's registry, which has the plan's `UniqueKeyMap` (`with_plan_registry`), typed: `context(ip)[handle]`."""
+@inline context(ip::InlineProcess) = with_plan_registry(ip, _context(ip))
 
-"""Set the process's context (on its session) to `c`, a context without the map, and its registry with the map."""
+"""
+Hands the context `c` to the session: the process's context from now on, without the plan's `UniqueKeyMap`, as the loop
+takes it (`strip_keymap_typed`; a context from `context(ip)` has the map).
+"""
 @inline function set_session_context!(ip::InlineProcess, c)
-    getsession(ip).context = c
-    ip.user_registry = getfield(with_keymap_typed(c, getfield(ip, :keymap)), :reg)
+    getsession(ip).context = strip_keymap_typed(c)
     return nothing
 end
 
 """
-    with_user_registry(ip, x) -> x with the map
+    with_plan_registry(ip, x) -> x with the map
 
-A context of `ip` (`x`, without the map) with the process's registry that has the map (`user_registry`): typed, and no
-new registry. A value that is not a context as it is.
+A context of `ip` from the loop (`x`, without the map) with the registry of `ip`'s plan, which has the plan's
+`UniqueKeyMap`: its `Ref` is the plan's context's, so this is typed and makes no registry. A value that is not a
+context as it is.
 """
-@inline with_user_registry(ip::InlineProcess, c::ProcessContext{D}) where {D} =
-    ProcessContext{D, typeof(getfield(ip, :user_registry))}(getfield(c, :subcontexts), getfield(ip, :user_registry))
-@inline with_user_registry(ip::InlineProcess, x) = x
+@inline function with_plan_registry(ip::InlineProcess, c::ProcessContext{D}) where {D}
+    ref = getfield(getpersistentcontext(getalgo(ip)), :reg)
+    return ProcessContext{D, typeof(ref)}(getfield(c, :subcontexts), ref)
+end
+@inline with_plan_registry(ip::InlineProcess, x) = x
 
 @inline function reset!(p::InlineProcess, inputs_overrides...)
     reset_loopidx!(getsession(p))
-    initialized = _init_plan(getalgo(p), inputs_overrides...; lifetime = lifetime(p))
+    # On the plan without the map, as the loop has it (the session's).
+    initialized = _init_plan(getfield(getsession(p), :algo), inputs_overrides...; lifetime = lifetime(p))
     context(p, getpersistentcontext(initialized))
     # TODO: Probably remove consumed flag
     p.consumed = false
@@ -150,9 +152,8 @@ end
 # A context given to `run(ip)`: the run starts from it, so it becomes the process's context (on its session) first.
 @inline _set_inline_run_context!(p::InlineProcess, ::Nothing) = nothing
 @inline function _set_inline_run_context!(p::InlineProcess, context)
-    context = strip_keymap_typed(context)   # a context from `context(ip)` has the map
-    @assert context isa contexttype(p) "Wrong context shape for this process\n Context is of type $(typeof(context)), but expected $(contexttype(p))."
     set_session_context!(p, context)
+    @assert _context(p) isa contexttype(p) "Wrong context shape for this process\n Context is of type $(typeof(_context(p))), but expected $(contexttype(p))."
     return nothing
 end
 
@@ -161,7 +162,7 @@ end
 # process's own lifetime got its keys when the process was built.
 @inline _inline_run_lifetime(p::InlineProcess, algo, repeats, ::Nothing) = _inline_process_lifetime(algo, repeats, lifetime(p))
 @inline _inline_run_lifetime(p::InlineProcess, algo, repeats, lt) =
-    resolve_var_keys(_inline_process_lifetime(algo, repeats, number_by_keymap(lt, getfield(p, :keymap))), _context(p))
+    resolve_var_keys(_inline_process_lifetime(algo, repeats, number_by_keymap(lt, getfield(getregistry(getalgo(p)), :keymap))), _context(p))
 
 """
     run(ip; context, repeats, lifetime, threaded, inlined = Val(false), inputs...)
@@ -172,7 +173,7 @@ first such run (5 ms for 2 children, 36 ms for 16), while the default call into 
 (`run_session_loop!`). The choice is in the `Val`'s type, so the branch is decided while compiling.
 """
 @inline function Base.run(p::InlineProcess, inputs_overrides...; context = nothing, repeats=nothing, lifetime=nothing, threaded=nothing, inlined::Val = Val(false), kwargs...)
-    algo = getalgo(p)
+    algo = getfield(getsession(p), :algo)   # the plan without the map, as the loop runs it
     _set_inline_run_context!(p, context)
     runtime_inputs = _inline_runtime_inputs(algo, inputs_overrides, (; kwargs...))
     run_lifetime = _inline_run_lifetime(p, algo, repeats, lifetime)
@@ -187,7 +188,7 @@ first such run (5 ms for 2 children, 36 ms for 16), while the default call into 
 end
 
 @inline function run_nogen(p::InlineProcess, inputs_overrides...; context = nothing, repeats=nothing, lifetime=nothing, threaded=nothing, kwargs...)
-    algo = getalgo(p)
+    algo = getfield(getsession(p), :algo)   # the plan without the map, as the loop runs it
     _set_inline_run_context!(p, context)
     run_lifetime = _inline_run_lifetime(p, algo, repeats, lifetime)
     runtime_inputs = _inline_runtime_inputs(algo, inputs_overrides, (; kwargs...))
@@ -198,7 +199,7 @@ end
 One run of `p`: the loop on the process's session, which holds the process's context and keeps the context after the
 run (`run_session_loop!`, a call whose arguments have no map, so the loop is compiled once for every set of `Unique`
 handles; with `Val(true)`, the loop pasted in, `run_session_loop_body!`). Returns the run's result with the process's
-`UniqueKeyMap` (`with_user_registry`), so `run(ip)[handle]` is found from types, as `context(ip)[handle]` is.
+`UniqueKeyMap` (`with_plan_registry`), so `run(ip)[handle]` is found from types, as `context(ip)[handle]` is.
 """
 @inline function _run_inline!(p::InlineProcess, algo::A, run_lifetime::LT, runtime_inputs::I, ::Val{inlined}) where {A, LT, I, inlined}
     result = if inlined
@@ -206,7 +207,7 @@ handles; with `Val(true)`, the loop pasted in, `run_session_loop_body!`). Return
     else
         run_session_loop!(getsession(p), algo, run_lifetime, runtime_inputs)
     end
-    return @inline with_user_registry(p, result)
+    return @inline with_plan_registry(p, result)
 end
 
 @inline function init_and_run(p::InlineProcess, inputs_overrides...)

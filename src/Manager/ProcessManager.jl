@@ -276,7 +276,7 @@ function _manager_launch_lifetime(worker::P, kwargs::K) where {P<:Process, K<:Na
     end
     isnothing(raw_lifetime) && return nothing
     # Numbered as the worker's plan numbers its `Unique` handles (`number_by_keymap`), as `run(p; lifetime)` does.
-    return number_by_keymap(normalize_process_lifetime(getalgo(worker), raw_lifetime), getfield(worker, :keymap))
+    return number_by_keymap(normalize_process_lifetime(getalgo(worker), raw_lifetime), getkeymap(getalgo(worker)))
 end
 
 """
@@ -710,7 +710,7 @@ Build a worker from a template and a slot-specific context. The default
 implementation supports `Process` templates.
 """
 function _process_with_context(template::Process, idx::Integer, prepared_context)
-    return Process(getalgo_with_keymap(template); context = prepared_context, lifetime = lifetime(template), timeout = template.timeout)
+    return Process(getalgo(template); context = prepared_context, lifetime = lifetime(template), timeout = template.timeout)
 end
 
 """
@@ -1009,7 +1009,7 @@ Default worker-copy rule. `Process` workers keep the same algorithm/lifetime and
 deep-copy context; other worker objects are deep-copied directly.
 """
 function _default_copyworker(template::Process, idx, manager)
-    return Process(getalgo_with_keymap(template); context = deepcopy(context(template)), lifetime = lifetime(template), timeout = template.timeout)
+    return Process(getalgo(template); context = deepcopy(context(template)), lifetime = lifetime(template), timeout = template.timeout)
 end
 _default_copyworker(template, idx, manager) = deepcopy(template)
 

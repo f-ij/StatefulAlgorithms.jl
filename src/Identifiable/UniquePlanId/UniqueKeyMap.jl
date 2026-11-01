@@ -4,8 +4,8 @@ the user holds `UniquePlanId{uuid}`. `resolve` puts the plan's `k => uuid` pairs
 (`UniqueKeyMap`, the registry's `keymap`), so `registry[held]` and `context[held]` number the handle while compiling
 (`numbered_handle`) and are lookups decided from types, as a registry key is. Running the plan (`init`, the loop) takes
 the map out first (`strip_keymap`, Accessors.jl), so nothing they compile has a uuid in its type. A process (`Process`,
-`InlineProcess`) holds the map in its own type (`keymap::K`) and puts it back into what it hands to the user; the loop
-gets a session and the plan without it (Sessions/Sessions.jl).
+`InlineProcess`) has the map only through its plan's registry; a run hands the plan and the context to the session and
+the loop without it, and what comes back gets the plan's registry again (`with_plan_registry`, Sessions/Sessions.jl).
 =#
 
 """

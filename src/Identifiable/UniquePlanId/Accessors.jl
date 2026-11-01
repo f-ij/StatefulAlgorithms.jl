@@ -76,7 +76,7 @@ Base.@nospecializeinfer strip_keymap(@nospecialize(x)) = with_keymap(x, nothing)
 """
     with_keymap_typed(context, keymap) -> context with `keymap` as its registry's map
 
-`with_keymap` for code typed on the map (a method of `InlineProcess`, whose type has it): the result's type is known
+`with_keymap` for code typed on the map (a method of `InlineProcess`, whose plan's registry has it): the result's type is known
 where it is called, so that code stays inferred (`context(ip)`, `run(ip)`; `with_keymap` there costs about 600 ns and
 1.6 kB per call, as it builds the type at run time). Compiled once per context type, so not for the untyped entry
 points (`Process(...)`, `init`), which use `with_keymap`. Same subcontexts and entries, a new registry and `Ref`. A

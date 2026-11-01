@@ -26,11 +26,13 @@ precompile_interface(x::X) where {X} = nothing
 # is dispatched at run time and is compiled here by itself. `pause`, `close` and a resumed run compile when first used
 # (16 ms together).
 Base.@nospecializeinfer function precompile_interface(@nospecialize(p::Process))
-    P = typeof(p); F = typeof(getfield(p, :algo)); C = P.parameters[2]; LT = typeof(getfield(p, :lifetime))
-    Ctx = typeof(getpersistentcontext(getfield(p, :algo)))
+    # The loop's plan and context have no map (`_makeloop!`): their types as a run hands them over.
+    loop_algo = strip_keymap(getfield(p, :algo))
+    P = typeof(p); F = typeof(loop_algo); C = P.parameters[2]; LT = typeof(getfield(p, :lifetime))
+    Ctx = typeof(getpersistentcontext(loop_algo))
     @sync begin
         Threads.@spawn precompile(run, (P,))
-        Threads.@spawn precompile(Core.kwcall, (NamedTuple{(:threaded, :loopfunc), Tuple{Bool, typeof(loop)}}, typeof(_makeloop!), P, NamedTuple{(), Tuple{}}, LT, Ctx))
+        Threads.@spawn precompile(Core.kwcall, (NamedTuple{(:threaded, :loopfunc), Tuple{Bool, typeof(loop)}}, typeof(_makeloop!), P, NamedTuple{(), Tuple{}}, LT, Ctx, F))
         Threads.@spawn precompile(Tuple{ProcessTaskBody{P, typeof(loop), InteractiveSession{C, LT}, F, Ctx, LT, NamedTuple{(), Tuple{}}, Resuming{false}}})
     end
     return nothing

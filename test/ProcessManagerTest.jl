@@ -1123,8 +1123,9 @@ end
     )
     manager = ProcessManager(recipe; nworkers = 2, sync_policy = NoSync(), job_type = Int, result_type = Nothing)
     for slot in manager.slots
-        # Every worker, the template and its copies, has the plan's map, so its lifetime is numbered for the plan.
-        @test getfield(slot.worker, :keymap) isa StatefulAlgorithms.UniqueKeyMap
+        # Every worker, the template and its copies, has the plan's map in its plan's registry, so its lifetime is
+        # numbered for the plan.
+        @test StatefulAlgorithms.getkeymap(StatefulAlgorithms.getalgo(slot.worker)) isa StatefulAlgorithms.UniqueKeyMap
     end
     run!(manager, [3, 5])
     @test counts[3] >= 3 && counts[5] >= 5
@@ -1135,7 +1136,7 @@ end
 
     p = Process(plan; repeats = 2)
     copy = copyprocess(p)
-    @test getfield(copy, :keymap) === getfield(p, :keymap)
+    @test StatefulAlgorithms.getkeymap(StatefulAlgorithms.getalgo(copy)) === StatefulAlgorithms.getkeymap(StatefulAlgorithms.getalgo(p))
     run(copy); wait(copy)
     @test context(copy)[a].count == 2
 end

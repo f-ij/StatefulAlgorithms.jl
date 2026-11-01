@@ -65,8 +65,9 @@ end
 
 The loop's exit: records the end time (a session that keeps times) and returns the persistent context and the run's
 result (on a pause, the paused context as both). Returned as the loop has them, without the plan's `UniqueKeyMap`; the
-process that started the run commits them (`Process`: `_finish_run!`, which also puts the map back into what `fetch(p)` returns; `InlineProcess`:
-`run_session_loop!`, which keeps the context on the session; `run(ip)` puts the map back into the result).
+process that started the run commits them (`Process`: `_finish_run!`, which gives what it keeps and `fetch(p)` the plan's
+registry back; `InlineProcess`: `run_session_loop!`, which keeps the context on the session; `run(ip)` gives the result
+the plan's registry).
 """
 @inline function after_while(session::S, persistent_context::C, returnvalue::R) where {S<:ProcessSession, C<:ProcessContext, R}
     @inline set_endtime!(session)
@@ -78,7 +79,7 @@ end
 
 The loop as a call of its own, where a `Process` or a plan run directly (`run(plan)`) hands a run to it. Its
 arguments are the session and the plan, context and lifetime without the plan's `UniqueKeyMap`, so it is compiled once
-for every set of `Unique` handles while the process calling it is typed on the map. Also compiled as its own function,
+for every set of `Unique` handles while the process calling it has the map in its type (in its plan's registry). Also compiled as its own function,
 so LLVM keeps the session's counters (`tickidx`) in registers.
 """
 @noinline run_session_loop(loopfunc::LF, session::S, algo::A, context::C, lifetime::LT, inputs::I, resume::R = Resuming{false}()) where {LF, S<:ProcessSession, A, C, LT, I<:NamedTuple, R<:Resuming} =

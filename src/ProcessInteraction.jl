@@ -37,8 +37,8 @@ function Base.run(p::Process, run_lifetime = nothing, inputs_and_overrides...; r
     isempty(inputs_and_overrides) || error("Process run accepts runtime inputs as keywords only. Reinitialize the Process context before running to apply init/override specs.")
 
     # A lifetime given here gets the plan's numbers for its `Unique` handles while compiling (`number_by_keymap`, from the
-    # map in the process's type), so the loop finds its `Var`s while compiling.
-    lt = number_by_keymap(_process_run_lifetime(getalgo(p), run_lifetime, repeats, lifetime), getfield(p, :keymap))
+    # map in the plan's registry, in the process's type), so the loop finds its `Var`s while compiling.
+    lt = number_by_keymap(_process_run_lifetime(getalgo(p), run_lifetime, repeats, lifetime), getfield(getregistry(getalgo(p)), :keymap))
     if !isnothing(lt)
         p.lifetime = lt
     end
@@ -60,16 +60,22 @@ Wait for a process to finish
 
 function _cleanup_paused_process!(p::Process)
     # A paused run kept its context when it ended (`_finish_run!`, `paused_context`). `close` ends that run, so its
-    # cleanup runs here, as the loop will not run again for it; the commit clears `paused_context`.
-    cleanup_context = p.paused_context
-    cleanup_runtime_context = @inline _initial_runtime_context(get_inputs(cleanup_context), get_declared_locals(cleanup_context))
-    cleanup_state_context = @inline _paused_state_context(cleanup_context)
-    cleaned = @inline cleanup(getalgo(p), LoopContext(cleanup_state_context, cleanup_runtime_context))
-    cleaned = @inline withpersistent(cleaned, _paused_state_context(getpersistent(cleaned)))
-    cleaned_context = @inline getpersistent(cleaned)
-    p.lastresult = with_process_keymap(p, @inline loop_final_result(getalgo(p), (@inline final_context(cleaned)), getruntime(cleaned)))
+    # cleanup runs here, as the loop will not run again for it; the commit clears `paused_context`. The cleanup is a step
+    # outside the loop: it gets the plan and the context without the map, as the loop does (`_makeloop!`).
+    cleaned_context, result = _cleanup_paused_context(strip_keymap(getalgo(p)), strip_keymap(p.paused_context))
+    p.lastresult = with_plan_registry(p, result)
     commit_context!(p, cleaned_context)
     return p.lastresult
+end
+
+# A paused run's cleanup (`cleanup`, then the run's result), on the plan and its paused context without the map:
+# returns the context after the cleanup and the result.
+function _cleanup_paused_context(algo::A, paused_context::C) where {A, C<:ProcessContext}
+    cleanup_runtime_context = @inline _initial_runtime_context(get_inputs(paused_context), get_declared_locals(paused_context))
+    cleanup_state_context = @inline _paused_state_context(paused_context)
+    cleaned = @inline cleanup(algo, LoopContext(cleanup_state_context, cleanup_runtime_context))
+    cleaned = @inline withpersistent(cleaned, _paused_state_context(getpersistent(cleaned)))
+    return (@inline getpersistent(cleaned)), (@inline loop_final_result(algo, (@inline final_context(cleaned)), getruntime(cleaned)))
 end
 
 

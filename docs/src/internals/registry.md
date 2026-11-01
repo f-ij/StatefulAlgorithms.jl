@@ -70,15 +70,16 @@ steps below 4.7–4.8 ms). So the uuid (`origin`) is data and never changes; the
 5. Running the plan takes the map out (`strip_keymap`): `init`, `run(la)`, `Process`, `InlineProcess` and
    `TimedProcess` resolve the plan untyped and prepare the plan and its context without the map, so `init` and the
    loop have no uuid in their types and compile once for every new set of `Unique`s. `Process` and `InlineProcess`
-   hold the map in their own type (`keymap::K`, zero bytes); the loop and the steps get a session instead of the
-   process (`ProcessSession`, `src/Sessions/`), reached through `run_session_loop`, whose arguments have no map, so
-   the loop is compiled once for every set of `Unique`s (`run_session_loop!` for an `InlineProcess`, on the context
-   its session holds).
-6. What a process hands back has the map put back: `context(ip)` and `run(ip)` build it typed (`with_keymap_typed`); a `Process`
-   builds the user's context once each time its context changes (`set_user_context!`, after a run in `_finish_run!`)
-   and `context(p)` reads it; `fetch(p)` and the plan `init` and `run(la)` return have it too (`with_keymap`). A
-   context given back to SA has it stripped: `Process(...; context)` (`strip_keymap`),
-   `context(ip, c)`, `run(ip; context)` (`strip_keymap_typed`, typed).
+   hold the initialized plan with its registry with the map again: the map is in their type only through it, with no
+   field of their own. A run drops it where the process is handed to its session and the context to the loop
+   (`strip_keymap` in `makeloop!`; an `InlineProcess`'s session holds the plan and context without it), reached through
+   `run_session_loop`, whose arguments have no map, so the loop is compiled once for every set of `Unique`s
+   (`run_session_loop!` for an `InlineProcess`, on the context its session holds).
+6. What the loop gives back gets the plan's registry (`with_plan_registry`): typed for `context(ip)` and `run(ip)` (the
+   `Ref` of the plan's registry), untyped for what a `Process` keeps (`_finish_run!`, `commit_context!`), which
+   `context(p)` and `fetch(p)` return; the plan `init` and `run(la)` return have it too (`with_keymap`). A context given
+   back to SA has it stripped: `Process(...; context)` (`strip_keymap`), `context(ip, c)`, `run(ip; context)`
+   (`strip_keymap_typed`, typed).
 7. A lifetime given to a process or a run is not part of the plan: its `Var`s get the plan's numbers when it is given,
    so the loop finds them while compiling: while compiling for a typed handle (`number_by_keymap`: `run(ip;
    lifetime)`, `run(p; lifetime)`, a manager's per-job lifetime), at run time at the untyped entry points

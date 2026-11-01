@@ -11,8 +11,10 @@ explained on its own page: [Why Processes Run Through Sessions](@ref process_ses
 ## 1. Overview
 
 What the user holds is typed on the plan's `UniqueKeyMap` (`K`, the numbers of its `Unique` handles). What the loop
-is compiled for never has `K` in its type. The resolve barrier is where the user's plan becomes a resolved
-`LoopAlgorithm`; the process is where `K` is split off.
+is compiled for never has `K` in its type. `K` lives in one place only: the registry's type (`NameSpaceRegistry{E, K}`),
+in the plan and in the contexts the user holds. The resolve barrier is where the user's plan becomes a resolved
+`LoopAlgorithm`; `K` is dropped where a run is handed to the loop: the process to its session, the context to the
+loop's bundles (`strip_keymap` in `makeloop!`, `set_session_context!`).
 
 ```mermaid
 flowchart TD
@@ -24,19 +26,19 @@ flowchart TD
   RES -->|"getkeymap"| K["UniqueKeyMap K"]
   RES -->|"strip_keymap"| LA["the same LoopAlgorithm, registry without K"]
   LA -->|"_init_plan: init on an InitContext"| LAI["the same LoopAlgorithm, now with<br/>persistent ProcessContext C + stored Init / Override specs"]
-  LAI --> P["Process{F, C, K}  /  InlineProcess{TD, Ctx, Lt, Mode, K, UR}"]
-  K -->|"type parameter + zero-byte field keymap"| P
+  LAI -->|"with_keymap: registry with K again"| P["Process{F, C}  /  InlineProcess{TD, Ctx, Lt, Mode, A}<br/>plan F / TD: registry with K"]
+  K --> P
 ```
 
 ```mermaid
 flowchart TD
-  subgraph USER["User holds (typed on K)"]
+  subgraph USER["User holds (K in the plan's registry)"]
     P["Process / InlineProcess"]
     OPS["run(p; inputs...) · pause(p) · close(p)<br/>loopidx(p) · getticks(p) · context(p) · fetch(p) · run(ip)"]
   end
-  P -->|"field session"| S["InteractiveSession{C, LT}: shouldrun, paused, loopidx, tickidx, starttime, endtime, loop_cursor, threadid<br/>InlineSession{Ctx}: loopidx, context"]
+  P -->|"field session"| S["InteractiveSession{C, LT}: shouldrun, paused, loopidx, tickidx, starttime, endtime, loop_cursor, threadid<br/>InlineSession{Ctx, A}: loopidx, context, plan (no K)"]
   OPS -.->|"pause / close set the atomic flags"| S
-  OPS -->|"Process: makeloop! → task → run_session_loop<br/>InlineProcess: run_session_loop!"| L
+  OPS -->|"K dropped (strip_keymap)<br/>Process: makeloop! → task → run_session_loop<br/>InlineProcess: run_session_loop!"| L
   subgraph LOOP["Loop sees (no K in any type)"]
     L["loop(session, plan, persistent context, lifetime, inputs, resume)"]
     L --> B["setup: cursor, runtime context (inputs, declared locals),<br/>carried = the persistent fields a step can write"]
@@ -46,7 +48,7 @@ flowchart TD
   end
   S <-->|"counters, flags, cursor"| ST
   E --> F["Process: _finish_run! (commit or keep paused)<br/>InlineProcess: session.context = ..."]
-  F -->|"K put back: set_user_context!, with_process_keymap, with_user_registry"| OUT["context(p) · fetch(p) · run(ip) result"]
+  F -->|"the plan's registry, with K: with_plan_registry"| OUT["context(p) · fetch(p) · run(ip) result"]
 ```
 
 ## 2. Plans and Composition
@@ -110,12 +112,14 @@ keyword calls are written out by hand (`Core.kwcall`), as Julia's own keyword me
    a `Routine` gets `Repeat(1)` and anything else `Indefinite()` (`normalize_process_lifetime`). `InlineProcess`
    defaults to one repeat.
 6. Init (section 5), unless the plan already has a context. A `context` passed to the constructor is used instead.
-7. Construct, the only step typed on `K` (`_construct_process`, `_construct_inline_process`):
-   - `Process{F, C, K}`: `F` the plan type, `C` the plan's cursor type (`loop_cursor(plan, Val(true))`), `K` the map.
-     It gets a new `InteractiveSession{C, LT}`, is registered in the process list, and its `user_context` is built.
-   - `InlineProcess{TD, ContextType, Lt, Mode, K, UR}`: its `InlineSession` holds the context; `user_registry` (`UR`)
-     is the context's registry with the map put back. Its lifetime's `Var`s get their context keys here
-     (`resolve_var_keys`), so the loop does not look them up.
+7. Construct, the only step typed on `K` (`_construct_process`, `_construct_inline_process`). The initialized plan
+   gets its registry with `K` back (`with_keymap`), and the process holds it so: `K` is in the process's type only
+   through the plan's registry; the process has no field of its own for it.
+   - `Process{F, C}`: `F` the plan type (registry with `K`), `C` the plan's cursor type
+     (`loop_cursor(plan, Val(true))`). It gets a new `InteractiveSession{C, LT}` and is registered in the process list.
+   - `InlineProcess{TD, ContextType, Lt, Mode, A}`: `TD` the plan type (registry with `K`); its `InlineSession{ContextType,
+     A}` holds the context and the plan without `K`, as the loop takes them. Its lifetime's `Var`s get their context
+     keys here (`resolve_var_keys`), so the loop does not look them up.
 8. `precompile_interface(p)` (`src/PrecompileInterface.jl`) compiles what a first run calls with `p` (typed on `K`, so
    compiled for every set of handles): for a `Process`, `run(p)`, its `_makeloop!` and the task body; for an
    `InlineProcess`, `run(ip)`.
@@ -139,26 +143,27 @@ The public `init(la, specs...)` does the same around the barrier: resolve, strip
 
 A process is the user's handle; the loop never gets it. Everything the loop reads or writes while it runs is in the
 session, a mutable struct the process holds and passes to the loop (`src/Sessions/`). The process keeps what lives
-between runs (the plan with its context, the lifetime, a paused or reshaped context, the result, `K`). The session
+between runs (the plan with its context and its registry with `K`, the lifetime, a paused or reshaped context, the
+result). The session
 keeps the run's own record, shared with the process: the process's methods read and write the same object the loop
 does.
 
 | What the user does or reads | Internal struct / field | Written by | Read by |
 |:--|:--|:--|:--|
-| `Process(...)` | `Process{F, C, K}`: `algo` (plan + context, no map), `lifetime`, `keymap::K`, `session` | constructor | `run`, `context(p)` |
+| `Process(...)` | `Process{F, C}`: `algo` (plan + context, registry with `K`), `lifetime`, `session` | constructor | `run`, `context(p)` |
 | `run(p; inputs...)` | `makeloop!` → `create_session` → a task running `run_session_loop` | `run` | — |
 | runtime inputs (`@input` keywords) | a `NamedTuple`, checked by `_validate_runtime_inputs`, then the `_inputs` partition of the runtime context | `run` | steps |
-| `repeats` / `lifetime` given to `run` | `p.lifetime`, numbered by `number_by_keymap` (typed on `K`) | `run` | loop, before every step (`lifetime_breakcondition`) |
+| `repeats` / `lifetime` given to `run` | `p.lifetime`, numbered by `number_by_keymap` (`K` from the plan's registry, typed) | `run` | loop, before every step (`lifetime_breakcondition`) |
 | `pause(p)` | `InteractiveSession`: `paused = true`, `shouldrun = false` (atomic) | user | loop, after every step and every routine repeat (`process_breakcondition`) |
 | `close(p)` | `paused = false`, `shouldrun = false`; then waits for the task | user | as above |
 | `loopidx(p)`, `getticks(p)` | `session.loopidx` (steps), `session.tickidx` (steps and routine repeats) | loop (`inc!`, `tick!`) | user |
 | `runtime(p)` and other times | `session.starttime`, `session.endtime`, `session.threadid` | loop (`before_while`, `after_while`) | user |
 | resuming with `run(p)` after `pause(p)` | `session.loop_cursor` and `p.paused_context` | loop exit, `_finish_run!` | the resumed run; `close` |
-| `context(p)` | `p.user_context`: the context with `K` put back | `set_user_context!` | user |
+| `context(p)` | `_context(p)`: a paused, reshaped or the plan's context, each with the plan's registry | `_finish_run!`, `commit_context!` (`with_plan_registry`) | user |
 | `fetch(p)` | the task's result | `_finish_run!` | user |
-| `InlineProcess(...)` | `InlineSession{Ctx}`: `loopidx`, `context` | constructor, every run | `run(ip)`, `context(ip)` |
+| `InlineProcess(...)` | `InlineSession{Ctx, A}`: `loopidx`, `context`, `algo` (both without `K`) | constructor, every run | `run(ip)`, `context(ip)` |
 | `run(ip; inputs...)` | `run_session_loop!(session, plan, lifetime, inputs)` | `run(ip)` | — |
-| `context(ip)`, the result of `run(ip)` | the session's context with `user_registry` | `with_user_registry` | user |
+| `context(ip)`, the result of `run(ip)` | the session's context with the plan's registry (its `Ref`) | `with_plan_registry` | user |
 | *(internal only)* | `LoopContext{P, R, Node}`, the carried fields | the loop, every step | `_step!` |
 
 There are two session types (`src/Sessions/`), one per process type:
@@ -182,10 +187,11 @@ What every session provides is in `src/Sessions/Interface.jl` (the counter `loop
 `run(p; kwargs...)` (`src/ProcessInteraction.jl`):
 
 1. If the process is paused, resume (`_resume_paused_loop!`); a new lifetime, specs or inputs are rejected then.
-2. Number a lifetime given to the run with `K` (`number_by_keymap`) and store it on the process.
+2. Number a lifetime given to the run with `K` from the plan's registry (`number_by_keymap`) and store it on the process.
 3. `makeloop!` reads the lifetime and the context from fields of abstract type, so its call into `_makeloop!` is
    dispatched on their types at run time; from there on everything is typed. The context is `_context(p)`: a paused
-   run's, else a reshaped one, else the plan's.
+   run's, else a reshaped one, else the plan's. Here `K` is dropped: the context and the plan go on without it
+   (`strip_keymap`).
 4. `_makeloop!` sets the session (`create_session`), sets `paused = false` and `shouldrun = true`, and checks the
    runtime inputs.
 5. The task runs a `ProcessTaskBody` (a struct, not a closure, so its type is known when the process is built):
@@ -296,21 +302,21 @@ as carrying the whole context). In a loop the answer is a compile-time constant.
    context) as both context and result.
 3. `_finish_run!` (`Process`): on a pause, stores `p.paused_context` and returns the user context; otherwise
    `commit_context!` and clears the cursor. `commit_context!` puts a context of the plan's context type back into the
-   plan (`p.algo`, typed); a context of another type goes to `p.reshaped_context`. Both clear `paused_context` and
-   rebuild `user_context`.
+   plan (`p.algo`); a context of another type goes to `p.reshaped_context`. Both clear `paused_context`. What is kept
+   gets the plan's registry back (`with_plan_registry`).
 4. `close(p)` on a paused process ends that run: it runs cleanup and the final result on the paused context
    (`_cleanup_paused_process!`) and commits it. `close` then resets the counter and clears the cursor.
 5. `InlineProcess`: `run_session_loop!` writes the context to `session.context`; it cannot pause.
 
 ## 11. Back to the User
 
-`K` is put back into what the user gets, nowhere else:
+What the loop gives back gets the plan's registry, which has `K` (`with_plan_registry`):
 
 | User gets | Built by | When |
 |:--|:--|:--|
-| `context(p)` | `set_user_context!`: `with_keymap(context, K)` into `p.user_context` | at construction and each time the process's context changes (`_finish_run!`, `commit_context!`) |
-| `fetch(p)` | `_finish_run!`: the user context, or `with_process_keymap(p, result)` | at the end of a run |
-| `context(ip)`, `run(ip)`'s result | `with_user_registry`: the context with `ip.user_registry` | each call; no new registry is built |
+| `context(p)` | `_context(p)`: kept with the plan's registry by `_finish_run!` / `commit_context!` | at the end of a run, a pause, a commit |
+| `fetch(p)` | `_finish_run!`: the committed context, or `with_plan_registry(p, result)` | at the end of a run |
+| `context(ip)`, `run(ip)`'s result | `with_plan_registry`: the session's context with the `Ref` of the plan's registry | each call; no new registry is built |
 
 So `context(p)[handle]` with a handle the user holds is found from types: the registry in the user's context has the
 map, and `numbered_handle` turns the held handle into its number while compiling.

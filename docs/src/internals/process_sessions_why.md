@@ -38,9 +38,9 @@ key is. That needs the plan's `k => uuid` pairs in a type: `UniqueKeyMap{P}`, wh
 compiled for it is compiled again. The map must therefore be in the types the user's calls are compiled for, and in
 none of the types the loop (or `init`) is compiled for.
 
-That is the split: the process is typed on the map (`Process{F, C, K}`, `InlineProcess{..., K, UR}`, with a zero-byte
-field `keymap::K`), and everything given to the loop has it stripped (`strip_keymap`,
-`src/Identifiable/UniquePlanId/Accessors.jl`).
+That is the split: the map lives only in the registry, so the process has it in its type through its plan's registry
+(`Process{F, C}`, `InlineProcess{TD, ...}`; no field of its own), and where a run is handed over (the process to its
+session, the context to the loop's bundles) it is dropped (`strip_keymap`, `src/Identifiable/UniquePlanId/Accessors.jl`).
 
 ## 3. Why the Loop Cannot Take the Process
 
@@ -57,7 +57,7 @@ The session (`src/Sessions/`) holds exactly those fields and nothing typed on th
 | Session | Type parameters | None of them has `K` because |
 |:--|:--|:--|
 | `InteractiveSession{C, LT}` | `C` the plan's cursor type, `LT` the lifetime type | the cursor is built from the stripped plan; the lifetime's `Var`s are numbered (section 5) |
-| `InlineSession{C}` | `C` the context type | the context is stripped |
+| `InlineSession{C, A}` | `C` the context type, `A` the plan type | the context and the plan are stripped when the process hands them over (`set_session_context!`, the constructor) |
 
 The process holds the session in a field and the loop gets the same object, so the process and the loop still share
 the run's record, while the loop's argument types are the same for every set of handles. The loop and the steps never
@@ -99,9 +99,8 @@ What is typed on `K` is small: the process's construction (`_construct_process`,
 and the calls that put the map back. These are compiled when the process is built, by `precompile_interface`
 (`src/PrecompileInterface.jl`), so the first `run` does not wait for them.
 
-The map is put back only into what the user gets (`set_user_context!` for `context(p)`, `with_process_keymap` for
-`fetch(p)`, `with_user_registry` for `context(ip)` and `run(ip)`), so lookups with held handles stay typed on the
-user's side.
+What the loop gives back gets the plan's registry (`with_plan_registry`: for what `Process` keeps and `fetch(p)`, and for
+`context(ip)` and `run(ip)`), so lookups with held handles stay typed on the user's side.
 
 ## 7. Summary
 
