@@ -7,6 +7,11 @@ from the line that writes it to the end of its plan node (`leave_scope` removes 
 with the runtime context it started with.
 =#
 
+"""The names `_strip_returns` removes from a runtime context partition: the captured returns in `returns`, the subcontext returns of the namespaces in `owners`."""
+_stripped_names(@nospecialize(::Partition), @nospecialize(resets::NamedTuple)) = ()
+_stripped_names(::RuntimePartition{:_captured_returns}, @nospecialize(resets::NamedTuple)) = resets.returns
+_stripped_names(::RuntimePartition{:_subcontext_returns}, @nospecialize(resets::NamedTuple)) = resets.owners
+
 """
     _strip_returns(runtime_context, Val(resets))
 
@@ -19,7 +24,7 @@ in `returns`, and every subcontext return of the namespaces in `owners`. What a 
     names, values = Symbol[], Any[]
     for (name, S) in zip(fieldnames(subcontexts), fieldtypes(subcontexts))
         source = :(getfield(get_subcontexts(runtime_context), $(QuoteNode(name))))
-        removed = name === :_captured_returns ? Resets.returns : name === :_subcontext_returns ? Resets.owners : ()
+        removed = _stripped_names(context_partition(name), Resets)
         data = getdatatype(S)
         kept = Tuple(n for n in fieldnames(data) if !(n in removed))
         if length(kept) == fieldcount(data)

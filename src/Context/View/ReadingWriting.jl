@@ -31,7 +31,7 @@ asked, and its answers are followed until one is a `DirectRead`.
 """
     stored_value_at(reader, location)
 
-Return the value stored at the state location `location` (a `VarLocation{:state}`), as it is stored: no hook is asked
+Return the value stored at the state location `location` (a `VarLocation{<:StatePartition}`), as it is stored: no hook is asked
 about it. What a `ReadFrom` and a `StoreInto` go on with. A view reads it with `partition_storedproperty`, a
 `ProcessContext` from its subcontext.
 """

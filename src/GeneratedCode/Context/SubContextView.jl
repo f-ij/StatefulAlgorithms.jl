@@ -3,8 +3,8 @@
 Whether a step in namespace `own` may write the runtime value under `target`: a declared local, a captured return (a
 value of the block an algorithm updates, see `@update`), or its own outputs. Inputs are read-only.
 """
-_writable_runtime(::Union{DeclaredLocals, CapturedReturns}, target::Symbol, own::Symbol) = true
-_writable_runtime(::ContextPartition, target::Symbol, own::Symbol) = target === own
+_writable_runtime(::Union{RuntimePartition{:_declared_locals}, RuntimePartition{:_captured_returns}}, own::Symbol) = true
+_writable_runtime(@nospecialize(partition::RuntimePartition), own::Symbol) = partition_name(partition) === own
 
 """A step that returns `nothing` changes nothing: the view's bundle as it was."""
 @inline Base.merge(scv::SubContextView, ::Nothing) = @inline getbundle(scv)
@@ -28,15 +28,15 @@ function _subcontext_view_merge_exprs(SCV::Type, Args::Type, demanded_runtime_na
     for (var_idx, algo_varname) in enumerate(algo_varnames)
         target_location, subcontext_varname = _compute_location(SCV, algo_varname)
         # First look if varname is in locations
-        if target_location isa VarLocation{:runtime}  # a runtime location: declared locals and this step's own outputs are writable
+        if target_location isa VarLocation{<:RuntimePartition}  # a runtime location: declared locals and this step's own outputs are writable
             target_subcontext = get_subcontextname(target_location)
             targetname = location_fieldname(target_location)
-            _writable_runtime(context_partition(Val(target_subcontext)), target_subcontext, SubKey) || error("An algorithm writes back `$(algo_varname)`, which it reads from `$(target_subcontext)`: that is read-only.")
+            _writable_runtime(context_partition(target_location), SubKey) || error("An algorithm writes back `$(algo_varname)`, which it reads from `$(target_subcontext)`: that is read-only.")
             exprs = get!(runtime_expressions_by_subcontext, target_subcontext, Expr[])
-            # Converted to the slot's type by `merge_runtime_return(…, Val(target_subcontext), …)`.
+            # Converted to the slot's type by `merge_runtime_return(…, context_partition(target_subcontext), …)`.
             push!(exprs, Expr(:(=), targetname, :(getproperty(args, $(QuoteNode(algo_varname))))))
         elseif !isnothing(target_location) # If the local variable exists
-            preambles, requests = _build_write_request_exprs(target_location, algo_varname)
+            preambles, requests = _build_write_request_exprs(target_location, SubKey, algo_varname)
             append!(write_preambles, preambles)
             append!(write_requests, requests)
 
@@ -77,19 +77,25 @@ interpreted in source-field order; named-tuple results are read by backing name.
 @inline _reverse_transform_component(value::T, ::Val{name}, ::Val{index}) where {T<:Tuple,name,index} =
     getfield(value, index)
 
+"""The state partition a write to `location` goes to: its own; a name injected into the view of `own` is written to `own`'s state."""
+_written_partition(location::VarLocation{P}, own::Symbol) where {P<:StatePartition} = P()
+_written_partition(::VarLocation{InjectedValues}, own::Symbol) = StatePartition{own}()
+
 """
-    _build_write_request_exprs(location, algo_varname)
+    _build_write_request_exprs(location, own, algo_varname)
 
 Return the preamble expressions and the `StoreInto` request expressions that write the returned `algo_varname` to the
-view location `location`: one request for its field, or after a reverse transform one per field it reads.
+view location `location` of the view of namespace `own`: one request for its field, or after a reverse transform one
+per field it reads.
 """
-function _build_write_request_exprs(@nospecialize(target_location::VarLocation), algo_varname::Symbol)
-    target_subcontext = get_subcontextname(target_location)
+function _build_write_request_exprs(@nospecialize(target_location::VarLocation), own::Symbol, algo_varname::Symbol)
+    partition = _written_partition(target_location, own)
+    target_subcontext = partition_name(partition)
     targetname = location_fieldname(target_location)
     forward_func = getfunc(target_location)
     reverse_func = getreversefunc(target_location)
     returned_expr = :(getproperty(args, $(QuoteNode(algo_varname))))
-    request_expr(field, value_expr) = :(StoreInto{$(typeof(VarLocation{:state}(target_subcontext, field)))}($value_expr))
+    request_expr(field, value_expr) = :(StoreInto{$(typeof(VarLocation(partition, field)))}($value_expr))
 
     if isnothing(reverse_func)
         if !isnothing(forward_func) || targetname isa Tuple

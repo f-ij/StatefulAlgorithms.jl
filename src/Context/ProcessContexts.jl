@@ -65,12 +65,13 @@ end
 @inline Base.propertynames(pc::ProcessContext, private::Bool = false) = propertynames(@inline get_subcontexts(pc))
 
 @inline Base.@constprop :aggressive function Base.getindex(pc::ProcessContext, name::Symbol)
-    return @inline _getindex_partition(context_partition(Val(name)), pc, name)
+    return @inline _getindex_partition(context_partition(name), pc, name)
 end
 
 # `pc[:_captured_returns]` and `pc[:_inputs]` give the values in that runtime context partition; any other name its subcontext.
-@inline _getindex_partition(::ContextPartition, pc::ProcessContext, name::Symbol) = @inline getproperty(pc, name)
-@inline _getindex_partition(partition::Union{CapturedReturns, Inputs}, pc::ProcessContext, name::Symbol) = @inline get_runtime_partition(pc, partition)
+@inline _getindex_partition(::P, pc::ProcessContext, name::Symbol) where {P<:Partition} = @inline getproperty(pc, name)
+@inline _getindex_partition(partition::P, pc::ProcessContext, name::Symbol) where {P<:Union{RuntimePartition{:_captured_returns}, RuntimePartition{:_inputs}}} =
+    @inline get_runtime_values(pc, partition)
 
 """
 Return the subcontext of the algorithm `obj`, looked up in the registry (`reg[obj]`: a `Unique` handle the user holds

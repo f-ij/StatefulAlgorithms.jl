@@ -1,12 +1,25 @@
 
 """
-A location of a variable in subcontext: subcontextname and which has the local name there: originalname
-the type parameter indicates whether its a local, shared or routed variable
-TODO: is type really neccesary anywhere?
+    InjectedValues()
+
+Where an injected value is stored: the values given to a view directly (`inject`), held by the view itself
+(`SubContextView.injected`), not by a run's context.
 """
-struct VarLocation{Type, subcontextname, originalname, func, reversefunc} end
-VarLocation{Type}(subcontextname::Symbol, originalname::Union{Tuple, Symbol}, func = nothing, reversefunc = nothing) where {Type} = VarLocation{Type, subcontextname, originalname, func, reversefunc}()
-VarLocation(type, subcontextname::Symbol, originalname::Union{Tuple, Symbol}, func = nothing, reversefunc = nothing) = VarLocation{type, subcontextname, originalname, func, reversefunc}()
+struct InjectedValues end
+
+"""
+    VarLocation(storage, field, func = nothing, reversefunc = nothing)
+
+Where a name a view sees is stored: `field` (or a tuple of fields, read through `func`) in `storage`, which is
+- `StatePartition{namespace}()`: a field of a namespace's state (the view's own, or another's through a route or share);
+- `RuntimePartition{name}()`: a runtime value (declared local, input, captured or subcontext return);
+- `InjectedValues()`: a value given to the view directly.
+`reversefunc` maps a written value back onto the fields.
+"""
+struct VarLocation{Storage, field, func, reversefunc} end
+# Not specialized, to save compile time: views are built for many namespaces, and each partition is its own type.
+VarLocation(@nospecialize(storage::Union{Partition, InjectedValues}), field::Union{Tuple, Symbol}, @nospecialize(func) = nothing, @nospecialize(reversefunc) = nothing) =
+    VarLocation{typeof(storage), field, func, reversefunc}()
 
 """
     RedirectedVar(varlocation)
@@ -18,12 +31,14 @@ struct RedirectedVar{T<:VarLocation}
     varlocation::T
 end
 
-@inline getfunc(vl::Union{VarLocation{T, subcontextname, originalname, func}, Type{<:VarLocation{T, subcontextname, originalname, func}}}) where {T, subcontextname, originalname, func} = func
+"""Return the read transform carried by a `VarLocation`."""
+@inline getfunc(vl::Union{VarLocation{S, field, func}, Type{<:VarLocation{S, field, func}}}) where {S, field, func} = func
 
 """Return the writeback transform carried by a `VarLocation`."""
-@inline getreversefunc(vl::Union{VarLocation{T, subcontextname, originalname, func, reversefunc}, Type{<:VarLocation{T, subcontextname, originalname, func, reversefunc}}}) where {T, subcontextname, originalname, func, reversefunc} = reversefunc
-@inline get_subcontextname(vl::Union{VarLocation{T, SCN, ON}, Type{<:VarLocation{T, SCN, ON}}}) where {T, SCN, ON} = SCN
-@inline location_fieldname(vl::Union{VarLocation{T, SCN, ON}, Type{<:VarLocation{T, SCN, ON}}}) where {T, SCN, ON} = ON
+@inline getreversefunc(vl::Union{VarLocation{S, field, func, reversefunc}, Type{<:VarLocation{S, field, func, reversefunc}}}) where {S, field, func, reversefunc} = reversefunc
+"""Return the subcontext name of the partition a `VarLocation` is stored in."""
+@inline get_subcontextname(vl::Union{VarLocation{P}, Type{<:VarLocation{P}}}) where {P<:Partition} = partition_name(P)
+@inline location_fieldname(vl::Union{VarLocation{S, field}, Type{<:VarLocation{S, field}}}) where {S, field} = field
 
 """
 For variable names :a, :b, :c
@@ -47,8 +62,8 @@ end
     numvars = varnames isa Tuple ? length(varnames) : 1
     varnames = varnames isa Tuple ? varnames : (varnames,)
     assign_symbols = ntuple(i -> gensym(:var), numvars)
-    target_subcontext = get_subcontextname(vl)
-    return [:($(assign_symbols[i]) = @inline partition_getproperty(sct, Val($(QuoteNode(target_subcontext))), Val($(QuoteNode(varnames[i])))))
+    partition = context_partition(vl)
+    return [:($(assign_symbols[i]) = @inline _read_partition($partition, sct, Val($(QuoteNode(varnames[i])))))
         for i in 1:numvars], assign_symbols
 end
 

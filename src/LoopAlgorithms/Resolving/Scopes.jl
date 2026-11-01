@@ -151,15 +151,17 @@ end
 """Return the route `r` pointed at its slot in `Sc` if it reads a declared local or a captured return, else `r`."""
 Base.@nospecializeinfer function _point_route_at_storage(@nospecialize(r::Route), @nospecialize(Sc::Type{<:Scope}))
     p = typeof(r).parameters
-    names = if p[1] === :_declared_locals
-        _look_up_storage_names(Sc.parameters[1], p[5], "local", "declared")
-    elseif p[1] === :_captured_returns
-        _look_up_storage_names(Sc.parameters[2], p[5], "return", "captured by a call")
-    else
-        return r
-    end
+    names = _look_up_route_storage_names(context_partition(p[1]), Sc, p[5])
+    names === nothing && return r
     return new_instance(Core.apply_type(Route, p[1], p[2], p[3], p[4], names, p[6], Nothing, Nothing), nothing, nothing)   # its constructor compiles per type
 end
+
+"""The storage names in `Sc` of the names a route reads from `partition`: declared locals and captured returns have them, others `nothing`."""
+_look_up_route_storage_names(@nospecialize(::Partition), @nospecialize(Sc::Type{<:Scope}), @nospecialize(names)) = nothing
+_look_up_route_storage_names(::RuntimePartition{:_declared_locals}, @nospecialize(Sc::Type{<:Scope}), @nospecialize(names)) =
+    _look_up_storage_names(Sc.parameters[1], names, "local", "declared")
+_look_up_route_storage_names(::RuntimePartition{:_captured_returns}, @nospecialize(Sc::Type{<:Scope}), @nospecialize(names)) =
+    _look_up_storage_names(Sc.parameters[2], names, "return", "captured by a call")
 
 """
 Look up the storage names of `names` (a name, or a tuple of them) in `storage` (name ⇒ storage name) and return them in

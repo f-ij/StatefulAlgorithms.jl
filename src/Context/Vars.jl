@@ -83,7 +83,7 @@ end
 end
 
 """The value stored at the state location `subcontext.field` of `c`, as stored: what a `ReadFrom` goes on with."""
-@inline stored_value_at(c::ProcessContext, ::VarLocation{:state, subcontext, field}) where {subcontext, field} =
+@inline stored_value_at(c::ProcessContext, ::VarLocation{StatePartition{subcontext}, field}) where {subcontext, field} =
     @inline getproperty((@inline getproperty(c, subcontext)), field)
 
 @inline function Base.getindex(c::ProcessContext, vars::Var...)

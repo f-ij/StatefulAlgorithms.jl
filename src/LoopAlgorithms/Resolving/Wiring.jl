@@ -47,7 +47,7 @@ Base.@nospecializeinfer function _resolve_wiring(@nospecialize(la::AbstractPlan)
             continue
         end
         target_ns = _read_child_namespace(la, i)
-        context_partition(Val(target_ns)) isa NamespacePartition && !(target_ns in owners) && push!(owners, target_ns)
+        context_partition(target_ns) isa StatePartition && !(target_ns in owners) && push!(owners, target_ns)
         # Wires attached to this child (`WithWiring`) point at the child itself until now;
         # give them its namespace so they resolve like any route into it.
         bucket = _retarget_owner_routes_untyped(getfield(old_children, i), target_ns)

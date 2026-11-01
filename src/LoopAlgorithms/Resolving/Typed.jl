@@ -85,7 +85,7 @@ Base.@nospecializeinfer function _compute_node_scope_typed(@nospecialize(LA::Typ
     for i in 1:fieldcount(F)
         fieldtype(F, i) <: LoopSpec && continue
         name = namesymbol(fieldtype(NS, i))::Symbol
-        context_partition(Val(name)) isa NamespacePartition && !(name in owners) && push!(owners, name)
+        context_partition(name) isa StatePartition && !(name in owners) && push!(owners, name)
     end
     Sc = Scope{locals, _add_scoped_names(outer_returns, Tuple(captured), at)}
     returns = Symbol[make_storage_name(name, at) for name in captured]

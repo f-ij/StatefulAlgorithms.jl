@@ -329,7 +329,7 @@ Base.@assume_effects :foldable function _compute_conditional_loopcontext_type(@n
     before = fieldtype(runtime_type(Before), :subcontexts)
     after = fieldtype(runtime_type(Stepped), :subcontexts)
     parts = map(fieldnames(before), fieldtypes(before)) do name, S
-        SubContext{name, _join_fields(getdatatype(S), getdatatype(fieldtype(after, name)), ran, name === :_declared_locals)}
+        SubContext{name, _join_fields(getdatatype(S), getdatatype(fieldtype(after, name)), ran, context_partition(name) isa RuntimePartition{:_declared_locals})}
     end
     runtime = ProcessContext{NamedTuple{fieldnames(before), Tuple{parts...}}, fieldtype(runtime_type(Stepped), :reg)}
     return LoopContext{persistent_type(Stepped), runtime, Stepped.parameters[3]}

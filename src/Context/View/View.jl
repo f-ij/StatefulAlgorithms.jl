@@ -1,4 +1,5 @@
 include("StructDef.jl")
+include("HookExtensions.jl")   # context_partition of a VarLocation
 include("Hooks.jl")            # extendable base: read_value, write_value, shown_value
 include("ReadingWriting.jl")   # _follow_reads, _follow_writes: follow read_value, write_value
 include("ContextView.jl")

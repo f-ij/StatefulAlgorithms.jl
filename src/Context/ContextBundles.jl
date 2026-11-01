@@ -86,14 +86,11 @@ runtime_type(::Type{<:LoopContext{PersistentContextType, RuntimeContextType}}) w
 @inline bundle_of(persistent_context::ProcessContext) = LoopContext(persistent_context, _empty_context())
 
 """
-Return values from a bundle's runtime context: one runtime context partition (`get_runtime_partition(bundle,
-CapturedReturns())`), or the values filed under a subcontext name (`_runtime_values(bundle, Val(:_captured_returns))`).
-Init has no runtime context, so it always gets an empty named tuple.
+The values a bundle's runtime context holds for a partition (see `get_runtime_values` on a runtime context). Init has no
+runtime context, so it always gets an empty named tuple.
 """
-@inline _runtime_values(lc::LoopContext, name::Val) = @inline _runtime_values(getruntime(lc), name)
-@inline _runtime_values(::InitContext, ::Val) = (;)
-@inline get_runtime_partition(lc::LoopContext, partition::RuntimePartition) = @inline get_runtime_partition(getruntime(lc), partition)
-@inline get_runtime_partition(::InitContext, ::RuntimePartition) = (;)
+@inline get_runtime_values(lc::LoopContext, partition::P) where {P<:Partition} = @inline get_runtime_values(getruntime(lc), partition)
+@inline get_runtime_values(::InitContext, ::P) where {P<:Partition} = (;)
 
 """
     final_context(lc::LoopContext)
@@ -113,9 +110,9 @@ does not change.
     runtime_context = @inline getruntime(lc)
     returns = map(r -> map(shown_value, r), (@inline get_subcontext_returns(runtime_context)))
     shown = @inline merge_into_subcontexts((@inline getpersistent(lc)), returns)
-    shown = @inline _show_partition(shown, runtime_context, Inputs())
-    shown = @inline _show_partition(shown, runtime_context, DeclaredLocals())
-    return @inline _show_partition(shown, runtime_context, CapturedReturns())
+    shown = @inline _show_partition(shown, runtime_context, RuntimePartition{:_inputs}())
+    shown = @inline _show_partition(shown, runtime_context, RuntimePartition{:_declared_locals}())
+    return @inline _show_partition(shown, runtime_context, RuntimePartition{:_captured_returns}())
 end
 
 """
@@ -123,15 +120,15 @@ Returns `pc` with one partition of `runtime_context` added as the subcontext of 
 when `runtime_context` does not have that partition.
 """
 @inline function _show_partition(pc::PC, runtime_context::RC, partition::P) where {PC<:ProcessContext, RC<:ProcessContext, P<:RuntimePartition}
-    name = runtime_partition_name(partition)
+    name = partition_name(partition)
     haskey(get_subcontexts(runtime_context), name) || return pc
-    values = _shown_values(partition, (@inline get_runtime_partition(runtime_context, partition)))
+    values = _shown_values(partition, (@inline get_runtime_values(runtime_context, partition)))
     return @inline with_subcontext(pc, Val(name), SubContext{name}(values))
 end
 
 """Returns a partition's values as the visible context shows them: captured returns unwrapped from their slots, the rest as stored."""
 _shown_values(::P, values::NT) where {P<:RuntimePartition, NT<:NamedTuple} = values
-_shown_values(::CapturedReturns, values::NT) where {NT<:NamedTuple} = map(shown_value, values)
+_shown_values(::RuntimePartition{:_captured_returns}, values::NT) where {NT<:NamedTuple} = map(shown_value, values)
 
 """Returns the lifetime of the run being prepared. Only init can ask for it (to size buffers). A step that asks gets an error."""
 @inline bundle_lifetime(ic::InitContext) = init_lifetime(ic)

@@ -20,7 +20,7 @@ function _apply_redirect_mapping(context::C, ::Val{source_ns}, ::Val{target_ns},
     _check_redirect_endpoint(context, Val(source_ns), Val(source_field), "source")
     _check_redirect_endpoint(context, Val(target_ns), Val(target_field), "target")
 
-    marker = RedirectedVar(VarLocation{:state}(source_ns, source_field))
+    marker = RedirectedVar(VarLocation(StatePartition{source_ns}(), source_field))
     patch = NamedTuple{(target_ns,)}((NamedTuple{(target_field,)}((marker,)),))
     return @inline merge_into_subcontexts(context, patch)
 end

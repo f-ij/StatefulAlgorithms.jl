@@ -69,7 +69,7 @@ are concrete subcontext names.
 
 Redirect is not stored in the route/share `PlanWiring`. After loop-algorithm init,
 `apply_redirect_specs(context, la)` resolves each root redirect and rewrites
-the target persistent field to a `RedirectedVar(VarLocation{:state}(...))`
+the target persistent field to a `RedirectedVar(VarLocation(StatePartition{namespace}(), field))`
 marker. The source and target fields must already exist in the initialized
 context, and self-redirect is rejected.
 
@@ -88,10 +88,10 @@ When creating `SubContextView` locations (`src/Context/View/Locations.jl`):
   `VarLocation` to the stored backing location.
 
 Shared fields and routes from persistent entity subcontexts become
-`VarLocation{:state}` entries. Routes whose source is `:_inputs` or
-`:_captured_returns` become `VarLocation{:runtime}` entries and read from the separate
-loop-local runtime context. Redirect-backed locals retain the location kind
-of their stored backing location.
+`VarLocation{StatePartition{namespace}}` entries. Routes whose source is `:_inputs` or
+`:_captured_returns` become `VarLocation{RuntimePartition{name}}` entries and read from the separate
+loop-local runtime context (`context_partition(name)` says which, see `src/Context/ContextPartitions.jl`).
+Redirect-backed locals retain the partition of their stored backing location.
 
 Returning a routed or shared variable backed by persistent state can therefore
 update the remote source field, not only local state.

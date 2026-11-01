@@ -1,7 +1,8 @@
 export ProcessContext
 
 
-include("ContextPartitions.jl")   # which partition of a run's context a subcontext name refers to
+include("ContextPartitions.jl")   # Partition{kind, name}: the parts of a run's context
+include("Hooks.jl")               # extendable base: context_partition
 include("StructDefs.jl")
 include("SubContext.jl")
 include("ProcessContexts.jl")

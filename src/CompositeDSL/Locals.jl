@@ -166,14 +166,11 @@ end
 
 """Whether a DSL producer reads by name from the scope (a declared local or a captured return): those need no wire into a call."""
 _dsl_read_by_name(owner) = false
-_dsl_read_by_name(owner::Symbol) = _is_scoped_runtime_partition(context_partition(Val(owner)))
-"""Whether a partition is one of the two runtime context partitions a plan node's scope holds: captured returns and declared locals."""
-_is_scoped_runtime_partition(::Union{CapturedReturns, DeclaredLocals}) = true
-_is_scoped_runtime_partition(::ContextPartition) = false
+_dsl_read_by_name(owner::Symbol) = context_partition(owner) isa Union{RuntimePartition{:_captured_returns}, RuntimePartition{:_declared_locals}}
 
 """Whether a DSL producer is the declared locals (a name declared with `local`)."""
 _dsl_is_declared(owner) = false
-_dsl_is_declared(owner::Symbol) = context_partition(Val(owner)) isa DeclaredLocals
+_dsl_is_declared(owner::Symbol) = context_partition(owner) isa RuntimePartition{:_declared_locals}
 
 """
     @mutable y = f()
