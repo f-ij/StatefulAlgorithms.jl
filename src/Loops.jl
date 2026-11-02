@@ -45,21 +45,6 @@ end
 @inline _clear_paused_subcontext(persistent_context::C, ::Val{name}) where {C<:ProcessContext,name} =
     haskey(get_subcontexts(persistent_context), name) ? (@inline with_subcontext(persistent_context, Val(name), SubContext{name}((;)))) : persistent_context
 
-"""
-    loop_context(algo, start_persistent_context, inputs, resume) -> LoopContext
-
-The bundle a run starts from, built by the code that hands the run to the loop (`run(ip)`, a `Process` task, the
-manager's inline run, `run(plan)`), so the loop gets it as an argument. `start_persistent_context` is the process's
-context without the map. A new run gets the run's inputs and the plan's declared locals as its runtime context; a paused
-run that resumes gets the inputs and declared locals kept in the paused context, which are cleared from the persistent
-context.
-"""
-@inline loop_context(algo::F, start_persistent_context::C, inputs::NamedTuple, ::Resuming{false}) where {F,C<:ProcessContext} =
-    LoopContext(start_persistent_context, (@inline _initial_runtime_context(inputs, collect_tree_locals(algo))))
-@inline loop_context(algo::F, start_persistent_context::C, ::NamedTuple, ::Resuming{true}) where {F,C<:ProcessContext} =
-    LoopContext((@inline _paused_state_context(start_persistent_context)),
-                (@inline _initial_runtime_context((@inline get_inputs(start_persistent_context)), get_declared_locals(start_persistent_context))))
-
 """Build the root wiring view for one loop execution."""
 @inline _root_wiring_view(algo, step_plan) = PlanWiringView(getwiring(step_plan))
 
@@ -81,7 +66,7 @@ end
     run_session_loop([loopfunc,] session, algo, loop_context, lifetime, resume = Resuming{false}()) -> (persistent_context, result)
 
 The loop as a call of its own, where a `Process`, an `InlineProcess` or a plan run directly (`run(plan)`) hands a run to it. Its
-arguments are the session, the plan, the `LoopContext` the run starts from (`loop_context`) and the lifetime, without the plan's `UniqueKeyMap`, so it is compiled once
+arguments are the session, the plan, the `LoopContext` the run starts from (made by the `LoopContext(plan, context, inputs, resume)` constructor) and the lifetime, without the plan's `UniqueKeyMap`, so it is compiled once
 for every set of `Unique` handles while the process calling it has the map in its type (in its plan's registry). Also compiled as its own function,
 so LLVM keeps the session's counters (`tickidx`) in registers.
 """

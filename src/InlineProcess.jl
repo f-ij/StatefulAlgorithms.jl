@@ -149,7 +149,7 @@ stays on `reset!`, where the process can rebuild its persistent context.
 """
 @inline function _inline_runtime_inputs(algo::A, inputs_overrides::IO, kwargs::K) where {A<:AbstractLoopAlgorithm, IO<:Tuple, K<:NamedTuple}
     isempty(inputs_overrides) || error("InlineProcess run accepts runtime inputs as keywords only. Use reset!(p, specs...) to reinitialize the context.")
-    return _validate_runtime_inputs(algo, kwargs)
+    return kwargs   # checked against the plan's `@input`s by the `LoopContext` constructor
 end
 
 # A context given to `run(ip)`: the run starts from it, so it becomes the process's context first.
@@ -200,14 +200,14 @@ end
 end
 
 """
-One run of `p`: the run's `LoopContext` built from the process's context and the inputs (`loop_context`), then the loop
+One run of `p`: the run's `LoopContext` built from the process's context and the inputs (its constructor), then the loop
 with the process's plan and it as arguments, the same entry as a `Process` run
 (`run_session_loop`, a call whose arguments have no map, so the loop is compiled once for every set of `Unique` handles;
 with `Val(true)`, the loop pasted in). The context it gives back becomes the process's. Returns the run's result with
 the plan's registry (`with_plan_registry`), so `run(ip)[handle]` is found from types, as `context(ip)[handle]` is.
 """
 @inline function _run_inline!(p::InlineProcess, algo::A, run_lifetime::LT, runtime_inputs::I, ::Val{inlined}) where {A, LT, I, inlined}
-    lc = @inline loop_context(algo, getfield(p, :context), runtime_inputs, Resuming{false}())
+    lc = @inline LoopContext(algo, getfield(p, :context), runtime_inputs, Resuming{false}())
     persistent_context, result = if inlined
         @inline loop(getsession(p), algo, lc, run_lifetime, Resuming{false}())
     else

@@ -20,21 +20,26 @@ its method here too.
 """
 precompile_interface(x::X) where {X} = nothing
 
-# A run: `run(p)`, the run's start with the process's own lifetime (`_makeloop!`, which makes the run's session), and
-# the task's body (`ProcessTaskBody`: the run's `LoopContext`, the loop, the run's end), in parallel (49-56 -> 25-28 ms per build on
-# 15 threads). `run(p)` reads the lifetime and the context from fields of abstract type, so its call into `_makeloop!`
+# A run: `run(p)`, the run's `LoopContext` (its constructor drops the map), the run's start with the process's own
+# lifetime (`_makeloop!`, which makes the run's session) and the task's body (`ProcessTaskBody`: the loop, the run's
+# end), in parallel (49-56 -> 25-28 ms per build on 15 threads). `run(p)` reads the lifetime and the context from fields of abstract type, so its call into `_makeloop!`
 # is dispatched at run time and is compiled here by itself. `pause`, `close` and a resumed run compile when first used
 # (16 ms together).
 Base.@nospecializeinfer function precompile_interface(@nospecialize(p::Process))
     # The loop's plan and context have no map (`_makeloop!`): their types as a run hands them over.
     loop_algo = strip_keymap(getfield(p, :algo))
     P = typeof(p); F = typeof(loop_algo); C = P.parameters[2]; LT = typeof(getfield(p, :lifetime))
-    Ctx = typeof(getpersistentcontext(loop_algo))
-    LC = typeof(loop_context(loop_algo, getpersistentcontext(loop_algo), (;), Resuming{false}()))
+    # The `LoopContext` type of a run without inputs, as its constructor makes it in `makeloop!` (inferred). A plan with
+    # required `@input`s cannot start without them (`Union{}`): its runs have other types, so only `run` is compiled here.
+    LCArgs = Tuple{F, typeof(getpersistentcontext(getfield(p, :algo))), NamedTuple{(), Tuple{}}, Resuming{false}}
+    LC = Core.Compiler.return_type(LoopContext, LCArgs)
     @sync begin
         Threads.@spawn precompile(run, (P,))
-        Threads.@spawn precompile(Core.kwcall, (NamedTuple{(:threaded, :loopfunc), Tuple{Bool, typeof(loop)}}, typeof(_makeloop!), P, NamedTuple{(), Tuple{}}, LT, Ctx, F))
-        Threads.@spawn precompile(Tuple{ProcessTaskBody{P, typeof(loop), InteractiveSession{C, LT}, F, LC, LT, Resuming{false}}})
+        if LC !== Union{}
+            Threads.@spawn precompile(LoopContext, (LCArgs.parameters...,))
+            Threads.@spawn precompile(Core.kwcall, (NamedTuple{(:threaded, :loopfunc), Tuple{Bool, typeof(loop)}}, typeof(_makeloop!), P, LT, F, LC))
+            Threads.@spawn precompile(Tuple{ProcessTaskBody{P, typeof(loop), InteractiveSession{C, LT}, F, LC, LT, Resuming{false}}})
+        end
     end
     return nothing
 end
