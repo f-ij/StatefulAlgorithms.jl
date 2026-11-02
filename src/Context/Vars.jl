@@ -1,37 +1,39 @@
 export Var
 
 """
-    Var(subcontext_ref, :name; transform = nothing)
+    Var(subcontext_ref, :name; transform = nothing, reverse_transform = nothing)
     Var(:name)
 
-Selects the variable `name` of a subcontext. `subcontext_ref` refers to it: an algorithm or
-state as it was put into the plan (its type, or the instance), or a context key (`:Sensor_1`,
-`:_captured_returns`, `:_declared_locals`). With
-`transform`, reading it gives `transform(value)`. Read with `context[var]`, used by lifetimes
+A `VarLocation` that is not resolved yet: its storage is the matcher its subcontext is found by.
+
+`Var(subcontext_ref, :name)` makes the location of the variable `name` of a subcontext. `subcontext_ref` refers to
+it: an algorithm or state as it was put into the plan (its type, or the instance), or a context key (`:Sensor_1`,
+`:_captured_returns`, `:_declared_locals`). With `transform`, reading it gives `transform(value)`;
+`reverse_transform` maps a value written back through it onto the field. Read with `context[var]`, used by lifetimes
 (`Until(cond, Var(counter, :count))`), and as the source of a wire in `WithWiring` (`From`).
 
-`subcontext_ref` is stored as its matcher (`scref_matcher`) in the `matcher` field: a context key as a `KeyMatcher`,
+`subcontext_ref` is stored as its matcher (`scref_matcher`) in the `storage` field: a context key as a `KeyMatcher`,
 anything else (a type, an instance, a `Unique` handle) as the matcher it is found by. The field's type `M` decides
 the read while compiling: a key reads that subcontext, any other matcher the registry entry it matches
 (`resolve_scref`); a type reads the first registered algorithm of that type. Only a matcher that carries data (a
-`Unique` handle's `UniquePlanId`) takes bytes. The transform must be a plain function or a closure without captured
+`Unique` handle's `UniquePlanId`) takes bytes. The transforms must be plain functions or closures without captured
 values, as for routes.
 """
-struct Var{M, name, transform}
-    matcher::M
-end
+const Var{M<:AbstractMatcher, field, func, reversefunc} = VarLocation{M, field, func, reversefunc}
 
 # Typed: `c[Var(:key, :x)]` in a function is inferred and does not allocate.
-Var(subcontext_ref, name::Symbol; transform = nothing) = _typed_var(scref_matcher(subcontext_ref), name, transform)
-Var(subcontext_ref::IdentifiableAlgo{F, Id, VA, AN, K, Nothing}, name::Symbol; transform = nothing) where {F, Id, VA, AN, K} =
-    _typed_var(scref_matcher(subcontext_ref), name, transform)
+Var(subcontext_ref, name::Symbol; transform = nothing, reverse_transform = nothing) =
+    _typed_var(scref_matcher(subcontext_ref), name, transform, reverse_transform)
+Var(subcontext_ref::IdentifiableAlgo{F, Id, VA, AN, K, Nothing}, name::Symbol; transform = nothing, reverse_transform = nothing) where {F, Id, VA, AN, K} =
+    _typed_var(scref_matcher(subcontext_ref), name, transform, reverse_transform)
 # A handle whose matcher carries data (a `Unique` handle) has a new type for every uuid: built untyped from its
 # `matcher` field (which is what it is found by), so a new handle compiles nothing. The result is not inferred.
-Base.@nospecializeinfer function Var(@nospecialize(subcontext_ref::IdentifiableAlgo), name::Symbol; transform = nothing)
+Base.@nospecializeinfer function Var(@nospecialize(subcontext_ref::IdentifiableAlgo), name::Symbol; transform = nothing, reverse_transform = nothing)
     matcher = getfield(subcontext_ref, :matcher)
-    return new_instance(Core.apply_type(Var, typeof(matcher), name, transform), matcher)
+    return new_instance(Core.apply_type(VarLocation, typeof(matcher), name, transform, reverse_transform), matcher)
 end
-@inline _typed_var(matcher::M, name::Symbol, transform::T) where {M, T} = Var{M, name, transform}(matcher)
+@inline _typed_var(matcher::M, name::Symbol, transform::T, reverse_transform::R) where {M, T, R} =
+    Var{M, name, transform, reverse_transform}(matcher)
 
 """
     reconstruct_var(V) -> the `Var` of type `V`
@@ -40,8 +42,8 @@ The `Var` of type `V`, from the type alone: its matcher from the matcher type (`
 a type, a plain instance and a held `Unique` handle; errors for a stripped or numbered `Unique` handle, whose uuid is
 only in the value (reading such a `Var` needs only its type).
 """
-reconstruct_var(::Type{Var{M, name, transform}}) where {M, name, transform} =
-    Var{M, name, transform}(reconstruct_matcher(M))
+reconstruct_var(::Type{Var{M, name, transform, reverse_transform}}) where {M<:AbstractMatcher, name, transform, reverse_transform} =
+    Var{M, name, transform, reverse_transform}(reconstruct_matcher(M))
 Var(name::Symbol) = Var(:_captured_returns, name)
 
 """
@@ -71,13 +73,13 @@ reading the registry; so is a `Var` in a context without a registry.
     isnothing(registry) && return var
     return _var_with_key(var, Val(resolve_scref(registry, M, nothing, "Var subcontext")))
 end
-@inline _var_with_key(::Var{M, name, transform}, ::Val{key}) where {M, name, transform, key} =
-    Var{KeyMatcher{key}, name, transform}(KeyMatcher{key}())
+@inline _var_with_key(::Var{M, name, transform, reverse_transform}, ::Val{key}) where {M<:AbstractMatcher, name, transform, reverse_transform, key} =
+    Var{KeyMatcher{key}, name, transform, reverse_transform}(KeyMatcher{key}())
 
-@inline _var_transform(::Var{M, N, nothing}, value) where {M, N} = value
-@inline _var_transform(::Var{M, N, transform}, value) where {M, N, transform} = transform(value)
+@inline _var_transform(::Var{M, N, nothing}, value) where {M<:AbstractMatcher, N} = value
+@inline _var_transform(::Var{M, N, transform}, value) where {M<:AbstractMatcher, N, transform} = transform(value)
 
-@inline function Base.getindex(c::ProcessContext, var::Var{M, name}) where {M, name}
+@inline function Base.getindex(c::ProcessContext, var::Var{M, name}) where {M<:AbstractMatcher, name}
     # A field redirected by `Redirect` reads the value of the field it points to, not its `RedirectedVar` marker.
     @inline _var_transform(var, (@inline _follow_reads(c, getproperty(_var_subcontext(c, M), name))))
 end

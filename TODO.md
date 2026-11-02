@@ -388,8 +388,8 @@ Restored 2026-10-09 from `fix/type-stability` (`e1dcbbf`, now tag `archive/type-
   11. ~~**Light work with a `Var` lifetime is 1.6x of hand-written.**~~ Not a cost of the package (2026-10-28): both loops do only adds in registers (no loads, stores or calls per step). LLVM folds the hand-written loop's `+= 1` steps into one add of the step count (an empty counting loop is left), while the package's loop does the adds, vectorized (14 instructions per 8 steps). Only visible when a step is an integer `+= 1`; with real work per step: 1.00-1.01x.
   7. **Holders that copy a field's matcher into a separate type parameter** (`list_field_derived_params`, the hook in
      src/Identifiable/UniquePlanId/Hooks.jl, exists only to keep that copy in step when the uuid rewrite changes the
-     field). `Var` holds only its matcher (`Var{M, name, transform}`, `matcher::M`, a context key as `KeyMatcher{k}`) on
-     `exp/unique-plan-id-cleanup` (2026-10-27); the others still copy. Give each the same shape, then remove the hook,
+     field). `Var` holds only its matcher (now `VarLocation{M, name, transform, reversefunc}`, `storage::M`, a context key as
+     `KeyMatcher{k}`; first as `Var{M, name, transform}`, `matcher::M` on `exp/unique-plan-id-cleanup`, 2026-10-27); the others still copy. Give each the same shape, then remove the hook,
      `_derive_params!` and `scref_match`'s use for it:
      1. `Route`, `Redirect` (`Smatch`/`Tmatch` from `source_ref`/`target_ref`) and `Share` (`FirstMatch`/`SecondMatch`
         from `a1`/`a2`): hold the endpoint's matcher instead of the object, a `KeyMatcher` once resolved instead of

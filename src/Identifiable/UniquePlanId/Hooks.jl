@@ -6,7 +6,7 @@ After a rewrite of the `UniquePlanId`s in a value (`rewrite_unique_ids`), each i
 field, so an id made dynamic or numbered in a field is so in the type too. A field that is `nothing` keeps
 its parameter. Default `()`.
 Extended by: `IdentifiableAlgo` (its id from its `matcher` field, `static_id`); `Route`, `Share`, `Redirect` (their
-matcher types from their endpoint fields, `scref_match`). A `Var` needs none: its only matcher parameter is the type
-of its `matcher` field.
+matcher types from their endpoint fields, `scref_match`). A `Var` (a `VarLocation`) needs none: its only matcher parameter is the
+type of its `storage` field.
 """
 list_field_derived_params(@nospecialize(T)) = ()

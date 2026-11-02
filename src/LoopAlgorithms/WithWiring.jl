@@ -34,19 +34,19 @@ WithWiring(child, wires::Route...) = WithWiring(child, wires)
 @inline fixed_namespace(w::WithWiring) = fixed_namespace(getfield(w, :child))
 
 """
-    From(Var(subcontext_ref, :name; transform) => :alias)
+    From(Var(subcontext_ref, :name; transform, reverse_transform) => :alias)
 
 A wire for [`WithWiring`](@ref): the wrapped child reads the variable `name` of the referenced
 subcontext (an algorithm, its type or key, `:_captured_returns` for a captured return, or `:_declared_locals` for a
-declared local), optionally transformed, as `alias`.
+declared local), optionally transformed (and written back through its reverse transform), as `alias`.
 """
 From(wire::Pair{<:Var, Symbol}) = _var_route(first(wire), last(wire))
 # The route's source endpoint from the `Var`'s matcher: a context key as itself; any other matcher as its type, with
 # the matcher as the object when it carries data (a `Unique` handle's `UniquePlanId`), else `nothing`.
-_var_route(var::Var{KeyMatcher{key}, name, transform}, alias::Symbol) where {key, name, transform} =
-    Route{key, OwnerMatcher, transform, nothing, (name,), (alias,), Nothing, ThisChild}(nothing, ThisChild())
-function _var_route(var::Var{M, name, transform}, alias::Symbol) where {M, name, transform}
-    matcher = getfield(var, :matcher)
+_var_route(var::Var{KeyMatcher{key}, name, transform, reverse_transform}, alias::Symbol) where {key, name, transform, reverse_transform} =
+    Route{key, OwnerMatcher, transform, reverse_transform, (name,), (alias,), Nothing, ThisChild}(nothing, ThisChild())
+function _var_route(var::Var{M, name, transform, reverse_transform}, alias::Symbol) where {M<:AbstractMatcher, name, transform, reverse_transform}
+    matcher = getfield(var, :storage)
     object = carries_data(matcher) ? matcher : nothing
-    return Route{M, OwnerMatcher, transform, nothing, (name,), (alias,), typeof(object), ThisChild}(object, ThisChild())
+    return Route{M, OwnerMatcher, transform, reverse_transform, (name,), (alias,), typeof(object), ThisChild}(object, ThisChild())
 end

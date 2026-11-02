@@ -158,7 +158,7 @@ function _resolve_exchange_specs(context::ProcessContext, selectors::Tuple)
     return ntuple(i -> _resolve_exchange_spec(context, selectors[i]), length(selectors))
 end
 
-@inline _exchange_selector_pair(selector::Var{M, Varname}) where {M, Varname} = Varname => selector
+@inline _exchange_selector_pair(selector::Var{M, Varname}) where {M<:AbstractMatcher, Varname} = Varname => selector
 @inline _exchange_selector_pair(pair::Pair{Symbol, <:Var}) = pair
 
 function _resolve_exchange_spec(context::ProcessContext, selector)
@@ -167,7 +167,7 @@ function _resolve_exchange_spec(context::ProcessContext, selector)
     return ResolvedExchangeVar(name, subcontext, varname, initial)
 end
 
-function _resolve_exchange_var(context::ProcessContext, ::Var{M, Varname}) where {M, Varname}
+function _resolve_exchange_var(context::ProcessContext, ::Var{M, Varname}) where {M<:AbstractMatcher, Varname}
     M === KeyMatcher{:globals} && error("ContextExchange selectors must target stored subcontext variables, not globals.")
     subcontext = _resolve_exchange_entity(context, M)
     initial = _validate_exchange_target(context, subcontext, Varname)

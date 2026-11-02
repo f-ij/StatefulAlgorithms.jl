@@ -10,16 +10,22 @@ struct InjectedValues end
 """
     VarLocation(storage, field, func = nothing, reversefunc = nothing)
 
-Where a name a view sees is stored: `field` (or a tuple of fields, read through `func`) in `storage`, which is
+Where a variable is stored: `field` (or a tuple of fields, read through `func`) in `storage`, which is
 - `StatePartition{namespace}()`: a field of a namespace's state (the view's own, or another's through a route or share);
 - `RuntimePartition{name}()`: a runtime value (declared local, input, captured or subcontext return);
-- `InjectedValues()`: a value given to the view directly.
+- `InjectedValues()`: a value given to the view directly;
+- a matcher (`TypeMatcher{Sensor}()`, `KeyMatcher{:Sensor_1}()`, ...): then it is a `Var`, found by that matcher when read.
 `reversefunc` maps a written value back onto the fields.
 """
-struct VarLocation{Storage, field, func, reversefunc} end
+struct VarLocation{Storage, field, func, reversefunc}
+    storage::Storage
+end
 # Not specialized, to save compile time: views are built for many namespaces, and each partition is its own type.
-VarLocation(@nospecialize(storage::Union{Partition, InjectedValues}), field::Union{Tuple, Symbol}, @nospecialize(func) = nothing, @nospecialize(reversefunc) = nothing) =
-    VarLocation{typeof(storage), field, func, reversefunc}()
+VarLocation(@nospecialize(storage::Union{Partition, InjectedValues, AbstractMatcher}), field::Union{Tuple, Symbol}, @nospecialize(func) = nothing, @nospecialize(reversefunc) = nothing) =
+    VarLocation{typeof(storage), field, func, reversefunc}(storage)
+# A location from its type alone (`ReadFrom{L}`, `StoreInto{L}`): its storage has no fields.
+VarLocation{Storage, field, func, reversefunc}() where {Storage, field, func, reversefunc} =
+    VarLocation{Storage, field, func, reversefunc}(Storage())
 
 """
     RedirectedVar(varlocation)
