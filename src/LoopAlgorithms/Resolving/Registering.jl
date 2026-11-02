@@ -129,7 +129,7 @@ Base.@nospecializeinfer function register_child!(b::RegistryBuilder, @nospeciali
     end
     # A named nested plan. Construction rejects `:name => plan`, but `IdentifiableAlgo(plan, :name)` and
     # `insert(la, i, :name => plan)` get here; the name is dropped and the plan is added as an unnamed one.
-    # TODO (TODO.md, "named plans as context slices"): record the name here as `:name => (child SCKeys...)`.
+    # TODO (TODO.md, "named plans as context slices"): record the name here as `:name => (child namespace keys...)`.
     if T <: AbstractIdentifiableAlgo{<:LoopSpec}
         return register_child!(b, unwrap_named_plan(child), multiplier)
     end

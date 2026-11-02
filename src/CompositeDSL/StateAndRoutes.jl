@@ -587,11 +587,11 @@ end
 
 _composite_dsl_is_state_owner(owner) = owner isa AbstractIdentifiableAlgo && getalgo(owner) isa AlgoState
 
-"""The bind (source owner, source field) that replaces reading `field` from the endpoint `endpoint` (an SCRef), or `nothing`."""
+"""The bind (source owner, source field) that replaces reading `field` from the endpoint `endpoint` (a partref), or `nothing`."""
 function _composite_dsl_bound_source(binds::Tuple, endpoint, field::Symbol)
     endpoint isa Symbol && return nothing
     for (source_owner, source_field, target_owner, target_field) in binds
-        target_field == field && same_scref(target_owner, endpoint) && return (source_owner, source_field)
+        target_field == field && same_nsref(target_owner, endpoint) && return (source_owner, source_field)
     end
     return nothing
 end
@@ -665,7 +665,7 @@ _composite_dsl_is_empty_state(state) = _composite_dsl_is_general_state(state) &&
 """A block's `@state` without the fields bound to a source elsewhere."""
 function _composite_dsl_unbind_state(state, binds::Tuple)
     _composite_dsl_is_general_state(state) || return state
-    fields = Tuple(target_field for (_, _, target, target_field) in binds if same_scref(target, state))
+    fields = Tuple(target_field for (_, _, target, target_field) in binds if same_nsref(target, state))
     isempty(fields) && return state
     return setfield(state, :func, _general_state_without(getalgo(state), fields))
 end

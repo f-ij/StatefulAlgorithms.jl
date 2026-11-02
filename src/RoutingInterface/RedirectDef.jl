@@ -42,11 +42,11 @@ Base.@nospecializeinfer function Redirect(
     end
     varnames = first.(completed_pairs)
     aliases = last.(completed_pairs)
-    source_ref = scref_object(source_ns)
-    target_ref = scref_object(target_ns)
+    source_ref = partref_object(source_ns)
+    target_ref = partref_object(target_ns)
     return new_instance(Redirect{
-        scref_match(source_ns),
-        scref_match(target_ns),
+        partref_match(source_ns),
+        partref_match(target_ns),
         varnames,
         aliases,
         typeof(source_ref),
@@ -55,7 +55,7 @@ Base.@nospecializeinfer function Redirect(
 end
 
 # The endpoint matchers (parameters 1, 2) are those of the endpoint fields `source_ref`, `target_ref` (`list_field_derived_params`).
-list_field_derived_params(::Type{<:Redirect}) = ((1, 1, scref_match), (2, 2, scref_match))
+list_field_derived_params(::Type{<:Redirect}) = ((1, 1, partref_match), (2, 2, partref_match))
 
 """Construct a resolved redirect from its type parameters."""
 function Redirect{Smatch, Tmatch, varnames, aliases, Nothing, Nothing}() where {Smatch, Tmatch, varnames, aliases}
@@ -88,16 +88,16 @@ isresolved(r::Union{Redirect{Smatch, Tmatch}, Type{<:Redirect{Smatch, Tmatch}}})
 
 """Resolve redirect endpoints against a registry."""
 function resolve_redirect(reg::NameSpaceRegistry, r::R) where {R<:Redirect}
-    source_ns = resolve_scref(reg, source_match_by(r), get_source_ref(r), "source namespace")
-    target_ns = resolve_scref(reg, target_match_by(r), get_target_ref(r), "target namespace")
+    source_ns = resolve_nsref(reg, source_match_by(r), get_source_ref(r), "source namespace")
+    target_ns = resolve_nsref(reg, target_match_by(r), get_target_ref(r), "target namespace")
     return Redirect{source_ns, target_ns, source_fieldnames(r), getaliases(r), Nothing, Nothing}()
 end
 
 """Update unresolved endpoint references against a parent registry."""
 function update_keys(r::R, reg::NameSpaceRegistry) where {R<:Redirect}
     isresolved(r) && return r
-    new_source_ns = update_scref(reg, source_match_by(r), get_source_ref(r))
-    new_target_ns = update_scref(reg, target_match_by(r), get_target_ref(r))
+    new_source_ns = update_partref(reg, source_match_by(r), get_source_ref(r))
+    new_target_ns = update_partref(reg, target_match_by(r), get_target_ref(r))
     varnames = source_fieldnames(r)
     aliases = getaliases(r)
     mappings = ntuple(i -> varnames[i] == aliases[i] ? varnames[i] : (varnames[i] => aliases[i]), length(varnames))

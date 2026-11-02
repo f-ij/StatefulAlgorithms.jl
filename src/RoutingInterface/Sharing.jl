@@ -38,8 +38,8 @@ end
 
 """Resolve share wiring into target-namespace-keyed pairs for tuple-recursive grouping."""
 function resolve_wiring_pairs(reg::NameSpaceRegistry, s::S) where {S<:Share}
-    source_ns = resolve_scref(reg, first_match_by(s), get_firstalgo(s), "first share endpoint")
-    target_ns = resolve_scref(reg, second_match_by(s), get_secondalgo(s), "second share endpoint")
+    source_ns = resolve_nsref(reg, first_match_by(s), get_firstalgo(s), "first share endpoint")
+    target_ns = resolve_nsref(reg, second_match_by(s), get_secondalgo(s), "second share endpoint")
     forward = Share{source_ns, target_ns, is_directional(s), Nothing, Nothing}()
     is_directional(s) && return (target_ns => forward,)
     backward = Share{target_ns, source_ns, is_directional(s), Nothing, Nothing}()
@@ -53,8 +53,8 @@ end
 resolved share per direction. Compiled once.
 """
 Base.@nospecializeinfer function dynamic_resolve_wiring_pairs(@nospecialize(reg::NameSpaceRegistry), @nospecialize(s::Share))
-    source_ns = dynamic_resolve_scref(reg, first_match_by(s), get_firstalgo(s), "first share endpoint")
-    target_ns = dynamic_resolve_scref(reg, second_match_by(s), get_secondalgo(s), "second share endpoint")
+    source_ns = dynamic_resolve_nsref(reg, first_match_by(s), get_firstalgo(s), "first share endpoint")
+    target_ns = dynamic_resolve_nsref(reg, second_match_by(s), get_secondalgo(s), "second share endpoint")
     _assert_resolved_endpoint(source_ns, "Share first namespace")
     _assert_resolved_endpoint(target_ns, "Share second namespace")
     directional = is_directional(s)
@@ -67,7 +67,7 @@ end
 """Update unresolved share endpoints against a parent registry."""
 function update_keys(s::S, reg::NameSpaceRegistry) where {S<:Share}
     isresolved(s) && return s
-    newfirst = update_scref(reg, first_match_by(s), get_firstalgo(s))
-    newsecond = update_scref(reg, second_match_by(s), get_secondalgo(s))
+    newfirst = update_partref(reg, first_match_by(s), get_firstalgo(s))
+    newsecond = update_partref(reg, second_match_by(s), get_secondalgo(s))
     return Share(newfirst, newsecond; directional = is_directional(s))
 end

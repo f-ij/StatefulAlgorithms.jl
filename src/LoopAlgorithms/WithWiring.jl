@@ -34,7 +34,7 @@ WithWiring(child, wires::Route...) = WithWiring(child, wires)
 @inline fixed_namespace(w::WithWiring) = fixed_namespace(getfield(w, :child))
 
 """
-    From(Var(subcontext_ref, :name; transform, reverse_transform) => :alias)
+    From(Var(partref, :name; transform, reverse_transform) => :alias)
 
 A wire for [`WithWiring`](@ref): the wrapped child reads the variable `name` of the referenced
 subcontext (an algorithm, its type or key, `:_captured_returns` for a captured return, or `:_declared_locals` for a

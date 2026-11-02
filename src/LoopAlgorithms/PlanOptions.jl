@@ -171,7 +171,7 @@ Base.@nospecializeinfer function _local_wiring_matches_child(@nospecialize(child
     if scoped_wiring isa Route
         # A route into a function call names the call object itself.
         target_match_by(scoped_wiring) === OwnerMatcher && return match(child, getfield(option, :owner))
-        return child_matches_scref(child, target_match_by(scoped_wiring))
+        return child_matches_nsref(child, target_match_by(scoped_wiring))
     end
 
     if match(child, getfield(option, :owner))
@@ -179,8 +179,8 @@ Base.@nospecializeinfer function _local_wiring_matches_child(@nospecialize(child
     end
 
     if scoped_wiring isa Share
-        return child_matches_scref(child, first_match_by(scoped_wiring)) ||
-            child_matches_scref(child, second_match_by(scoped_wiring))
+        return child_matches_nsref(child, first_match_by(scoped_wiring)) ||
+            child_matches_nsref(child, second_match_by(scoped_wiring))
     end
     return false
 end

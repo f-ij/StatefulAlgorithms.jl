@@ -175,7 +175,7 @@ function _resolve_exchange_var(context::ProcessContext, ::VarLocation{M, Varname
 end
 
 """
-Return the SCKey of the subcontext an exchange selector targets. The selector's storage is a namespace's partition
+Return the namespace key an exchange selector targets. The selector's storage is a namespace's partition
 (from a context key), which must name a subcontext of `context`, or a matcher (see `Var`).
 """
 function _resolve_exchange_entity(context::ProcessContext, ::Type{StatePartition{entity}}) where {entity}
@@ -198,7 +198,7 @@ end
 
 # An instance selector resolves as a route endpoint does.
 function _resolve_exchange_entity(context::ProcessContext, ::Type{M}) where {M<:AbstractMatcher}
-    return resolve_scref(getregistry(context), M, nothing, "ContextExchange target")
+    return resolve_nsref(getregistry(context), M, nothing, "ContextExchange target")
 end
 
 function _validate_exchange_target(context::ProcessContext, subcontext::Symbol, varname::Symbol)

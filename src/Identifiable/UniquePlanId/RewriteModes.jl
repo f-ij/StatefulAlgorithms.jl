@@ -32,7 +32,7 @@ struct _StripIds end
 
 # Held (`N` is the uuid): move the uuid out of the type. Dynamic or numbered already: leave it.
 rewrite_id(::_StripIds, @nospecialize(id::UniquePlanId)) = is_held_unique_id(id) ? make_dynamic(id) : id
-# An id only a type holds (a handle's type given as an SCRef) keeps its uuid (the default `rewrite_type_id`): without
+# An id only a type holds (a handle's type given as an nsref) keeps its uuid (the default `rewrite_type_id`): without
 # a value, it is all there is.
 
 ################################################
@@ -99,7 +99,7 @@ function rewrite_id(r::_MapIds, @nospecialize(id::UniquePlanId))
     k = get(r.numbers, origin(id), nothing)
     return isnothing(k) ? id : make_numbered(id, k)
 end
-# A handle's type given as an SCRef holds only the uuid (held form): numbered from the map too.
+# A handle's type given as an nsref holds only the uuid (held form): numbered from the map too.
 function rewrite_type_id(r::_MapIds, @nospecialize(T::Type{<:UniquePlanId}))
     is_held_unique_id(T) || return T
     k = get(r.numbers, plan_number(T), nothing)

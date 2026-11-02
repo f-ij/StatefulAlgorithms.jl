@@ -1,20 +1,20 @@
 export Var
 
 """
-    Var(subcontext_ref, :name; transform = nothing, reverse_transform = nothing)
+    Var(partref, :name; transform = nothing, reverse_transform = nothing)
     Var(:name)
 
 A `VarLocation` that is not resolved yet: its storage is the matcher its subcontext is found by.
 
-`Var(subcontext_ref, :name)` makes the location of the variable `name` of a subcontext. `subcontext_ref` refers to
-it: an algorithm or state as it was put into the plan (its type, or the instance), or a context key (`:Sensor_1`,
-`:_captured_returns`, `:_declared_locals`). A key needs no registry, so its location is resolved already (a
-`VarLocation{<:Partition}`, not a `Var`); anything else is stored as the matcher it is found by (`scref_matcher`), in
+`Var(partref, :name)` makes the location of the variable `name` in the namespace `partref` names (see the terms in
+SubContextRefs.jl): an algorithm or state as it was put into the plan (its type, or the instance), or a namespace key
+(`:Sensor_1`, `:_captured_returns`, `:_declared_locals`). A key needs no registry, so its location is resolved already (a
+`VarLocation{<:Partition}`, not a `Var`); anything else is stored as the matcher it is found by (`nsref_matcher`), in
 the `storage` field. With `transform`, reading it gives `transform(value)`; `reverse_transform` maps a value written
 back through it onto the field. Read with `context[location]`, used by lifetimes (`Until(cond, Var(counter, :count))`),
 and as the source of a wire in `WithWiring` (`From`).
 
-A `Var` is read through the registry entry its matcher matches (`resolve_scref`, while compiling); a type reads the
+A `Var` is read through the registry entry its matcher matches (`resolve_nsref`, while compiling); a type reads the
 first registered algorithm of that type. Only a matcher that carries data (a `Unique` handle's `UniquePlanId`) takes
 bytes. The transforms must be plain functions or closures without captured values, as for routes.
 """
@@ -25,14 +25,14 @@ function Var(key::Symbol, name::Symbol; transform = nothing, reverse_transform =
     partition = context_partition(key)
     return VarLocation{typeof(partition), name, transform, reverse_transform}(partition)
 end
-Var(subcontext_ref, name::Symbol; transform = nothing, reverse_transform = nothing) =
-    _typed_var(scref_matcher(subcontext_ref), name, transform, reverse_transform)
-Var(subcontext_ref::IdentifiableAlgo{F, Id, VA, AN, K, Nothing}, name::Symbol; transform = nothing, reverse_transform = nothing) where {F, Id, VA, AN, K} =
-    _typed_var(scref_matcher(subcontext_ref), name, transform, reverse_transform)
+Var(partref, name::Symbol; transform = nothing, reverse_transform = nothing) =
+    _typed_var(nsref_matcher(partref), name, transform, reverse_transform)
+Var(partref::IdentifiableAlgo{F, Id, VA, AN, K, Nothing}, name::Symbol; transform = nothing, reverse_transform = nothing) where {F, Id, VA, AN, K} =
+    _typed_var(nsref_matcher(partref), name, transform, reverse_transform)
 # A handle whose matcher carries data (a `Unique` handle) has a new type for every uuid: built untyped from its
 # `matcher` field (which is what it is found by), so a new handle compiles nothing. The result is not inferred.
-Base.@nospecializeinfer function Var(@nospecialize(subcontext_ref::IdentifiableAlgo), name::Symbol; transform = nothing, reverse_transform = nothing)
-    matcher = getfield(subcontext_ref, :matcher)
+Base.@nospecializeinfer function Var(@nospecialize(partref::IdentifiableAlgo), name::Symbol; transform = nothing, reverse_transform = nothing)
+    matcher = getfield(partref, :matcher)
     return new_instance(Core.apply_type(VarLocation, typeof(matcher), name, transform, reverse_transform), matcher)
 end
 @inline _typed_var(matcher::M, name::Symbol, transform::T, reverse_transform::R) where {M, T, R} =
@@ -57,14 +57,14 @@ key is found at compile time).
 @inline function _var_subcontext(c::ProcessContext, ::Type{M}) where {M<:AbstractMatcher}
     reg = getregistry(c)
     isnothing(reg) && error("Cannot look up a `Var`'s subcontext without a registry in this context.")
-    return getproperty(c, resolve_scref(reg, M, nothing, "Var subcontext"))
+    return getproperty(c, resolve_nsref(reg, M, nothing, "Var subcontext"))
 end
 
 """
     resolve_var(var, context) -> the location `var` resolves to
 
 `var`'s resolved location: its matcher replaced by the partition of the subcontext it reads
-(`StatePartition{key}`), found from `context`'s registry while compiling (`resolve_scref`). Reading the result needs no
+(`StatePartition{key}`), found from `context`'s registry while compiling (`resolve_nsref`). Reading the result needs no
 registry: the lifetime's `Var`s are resolved before the loop (`resolve_vars`), so the stop check before every step
 does not load the registry. A location that is resolved already, or anything else a lifetime reads, is returned as it
 is, without reading the registry; so is a `Var` in a context without a registry.
@@ -73,7 +73,7 @@ is, without reading the registry; so is a `Var` in a context without a registry.
 @inline function resolve_var(var::Var{M}, context::ProcessContext) where {M<:AbstractMatcher}
     registry = getregistry(context)
     isnothing(registry) && return var
-    return _var_location(var, Val(resolve_scref(registry, M, nothing, "Var subcontext")))
+    return _var_location(var, Val(resolve_nsref(registry, M, nothing, "Var subcontext")))
 end
 @inline _var_location(::Var{M, name, transform, reverse_transform}, ::Val{key}) where {M<:AbstractMatcher, name, transform, reverse_transform, key} =
     VarLocation{StatePartition{key}, name, transform, reverse_transform}(StatePartition{key}())

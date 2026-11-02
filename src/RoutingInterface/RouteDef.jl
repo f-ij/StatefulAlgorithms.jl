@@ -43,12 +43,12 @@ Base.@nospecializeinfer function Route(
 
     ((!isnothing(transform) || !isnothing(reverse_transform)) ? (length(originalname_or_aliaspairs) == 1) : true) || construction_assert_error("Transform-based routes must have exactly one variable mapping, but got ", originalname_or_aliaspairs)
 
-    source_ref = scref_object(source_ns)
-    target_ref = scref_object(target_ns)
+    source_ref = partref_object(source_ns)
+    target_ref = partref_object(target_ns)
     # `new_instance`: a route from a held `Unique` handle is a new type for every uuid.
     return new_instance(Route{
-        scref_match(source_ns),
-        scref_match(target_ns),
+        partref_match(source_ns),
+        partref_match(target_ns),
         transform,
         reverse_transform,
         varnames,
@@ -59,7 +59,7 @@ Base.@nospecializeinfer function Route(
 end
 
 # The endpoint matchers (parameters 1, 2) are those of the endpoint fields `source_ref`, `target_ref` (`list_field_derived_params`).
-list_field_derived_params(::Type{<:Route}) = ((1, 1, scref_match), (2, 2, scref_match))
+list_field_derived_params(::Type{<:Route}) = ((1, 1, partref_match), (2, 2, partref_match))
 
 """Construct a resolved route from its type parameters."""
 function Route{Smatch, Tmatch, FT, RFT, varnames, aliases, Nothing, Nothing}() where {Smatch, Tmatch, FT, RFT, varnames, aliases}
@@ -91,8 +91,8 @@ The returned route carries only context-name symbols in its type parameters and
 stores no endpoint references.
 """
 function resolve_wiring(reg::NameSpaceRegistry, r::R) where {R<:Route}
-    source_ns = resolve_scref(reg, source_match_by(r), get_source_ref(r), "source namespace")
-    target_ns = resolve_scref(reg, target_match_by(r), get_target_ref(r), "target namespace")
+    source_ns = resolve_nsref(reg, source_match_by(r), get_source_ref(r), "source namespace")
+    target_ns = resolve_nsref(reg, target_match_by(r), get_target_ref(r), "target namespace")
 
     # Resolved routes are pure type data: endpoint refs are dropped so
     # `typeof(route)()` reconstructs the same route without runtime lookup.
@@ -103,13 +103,13 @@ end
 """
     dynamic_resolve_wiring(reg, r::Route) -> (target_ns, resolved route)
 
-`resolve_wiring(reg, r)` on values, for `resolve`'s untyped step 3: the endpoints found with `dynamic_resolve_scref`,
+`resolve_wiring(reg, r)` on values, for `resolve`'s untyped step 3: the endpoints found with `dynamic_resolve_nsref`,
 the resolved route made with `new_instance`, and the two returned as a tuple (a `Pair` compiles for each route type).
 Compiled once.
 """
 Base.@nospecializeinfer function dynamic_resolve_wiring(@nospecialize(reg::NameSpaceRegistry), @nospecialize(r::Route))
-    source_ns = dynamic_resolve_scref(reg, source_match_by(r), get_source_ref(r), "source namespace")
-    target_ns = dynamic_resolve_scref(reg, target_match_by(r), get_target_ref(r), "target namespace")
+    source_ns = dynamic_resolve_nsref(reg, source_match_by(r), get_source_ref(r), "source namespace")
+    target_ns = dynamic_resolve_nsref(reg, target_match_by(r), get_target_ref(r), "target namespace")
     _assert_resolved_endpoint(source_ns, "Route source namespace")
     _assert_resolved_endpoint(target_ns, "Route target namespace")
     R = Core.apply_type(Route, source_ns, target_ns, gettransform(r), getreverse_transform(r), source_fieldnames(r), getaliases(r), Nothing, Nothing)
@@ -119,8 +119,8 @@ end
 """Update unresolved endpoint references against a parent registry."""
 function update_keys(r::R, reg::NameSpaceRegistry) where {R<:Route}
     isresolved(r) && return r
-    new_source_ns = update_scref(reg, source_match_by(r), get_source_ref(r))
-    new_target_ns = update_scref(reg, target_match_by(r), get_target_ref(r))
+    new_source_ns = update_partref(reg, source_match_by(r), get_source_ref(r))
+    new_target_ns = update_partref(reg, target_match_by(r), get_target_ref(r))
     varnames = source_fieldnames(r)
     aliases = getaliases(r)
     mappings = ntuple(i -> varnames[i] == aliases[i] ? varnames[i] : (varnames[i] => aliases[i]), length(varnames))

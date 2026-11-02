@@ -159,8 +159,8 @@ matcher_equals(m::MatchAnyOf, n::MatchAnyOf) = any(p -> _any_matches(m, p), matc
 """
     matches_type(value, M) -> Bool
 
-Whether the matcher value `value` (an algorithm's `match_by`) is matched by the matcher type `M` (a stored SCRef,
-`scref_match`). Default `value isa M`; a matcher type as the value (a handle type's id) by `<:`.
+Whether the matcher value `value` (an algorithm's `match_by`) is matched by the matcher type `M` (a stored partref,
+`partref_match`). Default `value isa M`; a matcher type as the value (a handle type's id) by `<:`.
 Extended by: `ValMatcher`, `MatchAnyOf`, `MatchAny` (below), `UniquePlanId` (Identifiable/UniquePlanId/HookExtensions.jl).
 """
 matches_type(value, M) = value isa M
