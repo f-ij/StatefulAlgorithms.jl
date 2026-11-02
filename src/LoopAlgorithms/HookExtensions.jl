@@ -6,14 +6,16 @@ this file), and how a plan run directly answers `prepare_loop` (AbstractProcesse
 - `always_runs`: only `Interval(1)` without an offset; with an offset it skips the first `Offset` ticks;
 - `compute_multiplier`: a child with interval `n` runs once every `n` runs of its plan, so `1/n` times per run. A `RunIf`
   counts as its interval; how often its condition holds is not known before the run.
-- `prepare_loop`: a plan run directly runs as it is, in a new `InlineSession`, from its own context.
+- `prepare_loop`: a plan run directly (already without the map) runs in a new `InlineSession`, from its own context.
 =#
 
 """
     prepare_loop(plan, inputs, lifetime, resume)
 
 A plan run directly (`run(plan)`): a new `InlineSession` for the run (the loop needs a counter; nothing can pause or
-close a direct run), the plan as it is, and the run starts from the plan's context (AbstractProcesses/Hooks.jl).
+close a direct run), the plan, and the run starts from the plan's context (AbstractProcesses/Hooks.jl). The plan comes
+without the map: `run(plan)` drops it at its entry (`strip_keymap`, untyped, so everything after compiles once for
+every set of `Unique` handles) and puts it back on the plan it returns.
 """
 @inline prepare_loop(plan::LA, inputs::I, lt::LT, resume::R) where {LA<:LoopSpec, I<:NamedTuple, LT, R<:Resuming} =
     InlineSession(), plan, (@inline LoopContext(plan, getpersistentcontext(plan), inputs, resume))

@@ -279,11 +279,8 @@ end
 
 function _run_plan(la::LA; repeats = 1, lifetime = nothing, kwargs...) where {LA<:LoopSpec}
     initialized = isnothing(getpersistentcontext(la)) ? _init_plan(la) : la
-    start_context = getpersistentcontext(initialized)
     lt = isnothing(lifetime) ? normalize_process_lifetime(initialized, repeats) : normalize_process_lifetime(initialized, lifetime)
     session, plan, lc = prepare_loop(initialized, (; kwargs...), lt, Resuming{false}())
     persistent_context, _ = run_session_loop(session, plan, lc, lt)
-    # The loop gives the context back without the map (dropped by `LoopContext`): the plan's registry gets it back.
-    persistent_context = with_keymap_typed(persistent_context, getfield(getregistry(start_context), :keymap))
     return _with_lifecycle(initialized, persistent_context, getstoredinits(initialized), getstoredoverrides(initialized))
 end
