@@ -154,7 +154,7 @@ does.
 |:--|:--|:--|:--|
 | `Process(...)` | `Process{F, C}`: `algo` (plan + context, registry with `K`), `lifetime`, `session` | constructor | `run`, `context(p)` |
 | `run(p; inputs...)` | `makeloop!` → `create_session` → a task running `run_session_loop` | `run` | — |
-| runtime inputs (`@input` keywords) | a `NamedTuple`, checked against the plan's `@input`s by the `LoopContext` constructor (from the types), then the `_inputs` partition of the runtime context | `run` | steps |
+| runtime inputs (`@input` keywords) | a `NamedTuple`, checked by `_validate_runtime_inputs`, then the `_inputs` partition of the runtime context | `run` | steps |
 | `repeats` / `lifetime` given to `run` | `p.lifetime`, numbered by `number_by_keymap` (`K` from the plan's registry, typed) | `run` | loop, before every step (`lifetime_breakcondition`) |
 | `pause(p)` | `InteractiveSession`: `paused = true`, `shouldrun = false` (atomic) | user | loop, after every step and every routine repeat (`process_breakcondition`) |
 | `close(p)` | `paused = false`, `shouldrun = false`; then waits for the task | user | as above |

@@ -91,6 +91,14 @@ end
 @inline with_keymap_typed(x, keymap::UniqueKeyMap) = with_keymap(x, keymap)
 
 """
+    has_keymap(context) -> Bool
+
+Whether the registry of `context` has a map. Decided while compiling where the context's type is known; where it is not,
+a check at run time that is compiled once (not specialized on the context).
+"""
+@inline has_keymap(@nospecialize(c::ProcessContext)) = getfield(c, :reg) isa Base.RefValue{<:NameSpaceRegistry{<:Any, <:UniqueKeyMap}}
+
+"""
     strip_keymap_typed(context) -> context without its registry's map
 
 `strip_keymap` for code typed on the map, as `with_keymap_typed`: a context the user got back from `context(ip)` and

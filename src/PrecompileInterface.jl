@@ -20,23 +20,25 @@ its method here too.
 """
 precompile_interface(x::X) where {X} = nothing
 
-# A run: `run(p)`, the run's `LoopContext` (its constructor drops the map), the run's start with the process's own
-# lifetime (`_makeloop!`, which makes the run's session) and the task's body (`ProcessTaskBody`: the loop, the run's
-# end), in parallel (49-56 -> 25-28 ms per build on 15 threads). `run(p)` reads the lifetime and the context from fields of abstract type, so its call into `_makeloop!`
-# is dispatched at run time and is compiled here by itself. `pause`, `close` and a resumed run compile when first used
-# (16 ms together).
+# A run: `run(p)`, the run's `LoopContext` (its constructor, compiled once as it is not specialized on the context, and
+# the bundle it makes from the context without the map), the run's start with the process's own lifetime
+# (`_makeloop!`, which makes the run's session) and the task's body (`ProcessTaskBody`: the loop, the run's end), in
+# parallel (49-56 -> 25-28 ms per build on 15 threads). `run(p)` reads the lifetime and the context from fields of
+# abstract type, so its calls into `LoopContext` and `_makeloop!` are dispatched at run time and compiled here by
+# themselves. `pause`, `close` and a resumed run compile when first used (16 ms together).
 Base.@nospecializeinfer function precompile_interface(@nospecialize(p::Process))
     # The loop's plan and context have no map (`_makeloop!`): their types as a run hands them over.
     loop_algo = strip_keymap(getfield(p, :algo))
     P = typeof(p); F = typeof(loop_algo); C = P.parameters[2]; LT = typeof(getfield(p, :lifetime))
-    # The `LoopContext` type of a run without inputs, as its constructor makes it in `makeloop!` (inferred). A plan with
-    # required `@input`s cannot start without them (`Union{}`): its runs have other types, so only `run` is compiled here.
-    LCArgs = Tuple{F, typeof(getpersistentcontext(getfield(p, :algo))), NamedTuple{(), Tuple{}}, Resuming{false}}
-    LC = Core.Compiler.return_type(LoopContext, LCArgs)
+    # The `LoopContext` type of a run without inputs, inferred from the context without the map (what the constructor
+    # makes from the process's context). A plan with required `@input`s cannot start without them (`Union{}`): its runs
+    # have other types, so only `run` is compiled here.
+    LC = Core.Compiler.return_type(LoopContext, Tuple{F, typeof(getpersistentcontext(loop_algo)), NamedTuple{(), Tuple{}}, Resuming{false}})
     @sync begin
         Threads.@spawn precompile(run, (P,))
         if LC !== Union{}
-            Threads.@spawn precompile(LoopContext, (LCArgs.parameters...,))
+            Threads.@spawn precompile(LoopContext, (F, ProcessContext, NamedTuple{(), Tuple{}}, Resuming{false}))
+            Threads.@spawn precompile(LoopContext, (persistent_type(LC), runtime_type(LC)))
             Threads.@spawn precompile(Core.kwcall, (NamedTuple{(:threaded, :loopfunc), Tuple{Bool, typeof(loop)}}, typeof(_makeloop!), P, LT, F, LC))
             Threads.@spawn precompile(Tuple{ProcessTaskBody{P, typeof(loop), InteractiveSession{C, LT}, F, LC, LT, Resuming{false}}})
         end
