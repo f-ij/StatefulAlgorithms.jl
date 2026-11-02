@@ -119,8 +119,8 @@ keyword calls are written out by hand (`Core.kwcall`), as Julia's own keyword me
      (`loop_cursor(plan, Val(true))`). It gets a new `InteractiveSession{C, LT}` and is registered in the process list.
    - `InlineProcess{TD, ContextType, Lt, Mode, A}`: `TD` the plan type (registry with `K`); `loop_algo` (`A`) and
      `context` (`ContextType`) are the plan and the context without `K`, as the loop takes them as arguments; its
-     `InlineSession` holds only the counter. Its lifetime's `Var`s get their context
-     keys here (`resolve_var_keys`), so the loop does not look them up.
+     `InlineSession` holds only the counter. Its lifetime's `Var`s are resolved to
+     their locations here (`resolve_vars`), so the loop does not look them up.
 8. `precompile_interface(p)` (`src/PrecompileInterface.jl`) compiles what a first run calls with `p` (typed on `K`, so
    compiled for every set of handles): for a `Process`, `run(p)`, its `_makeloop!` and the task body; for an
    `InlineProcess`, `run(ip)`.
@@ -223,7 +223,7 @@ runs it on a task (`@async`); as a `Val`, `run(ip)` compiles no task code otherw
 lifetimes (`_repeat_steps`) and one for indefinite ones (`_run_steps`). Both:
 
 1. `before_while(session)`: an `InteractiveSession` records the start time and thread.
-2. `resolve_var_keys(lifetime, context)`: the lifetime's `Var`s by key, so the stop check does not load the registry.
+2. `resolve_vars(lifetime, context)`: the lifetime's `Var`s resolved to their locations, so the stop check does not load the registry.
 3. The cursor: new (`loop_cursor(plan, Val(true))`), or on a resume the one the pause kept (`_loop_cursor`).
 4. The `LoopContext` it gets: built by the caller (the `LoopContext(plan, context, inputs, resume)` constructor, which drops the map and checks the inputs), with the inputs (`_inputs`) and declared locals
    (`_declared_locals`) as its runtime context; on a resume, those kept in the paused context.

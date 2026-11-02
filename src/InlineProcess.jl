@@ -67,8 +67,8 @@ end
     lifetime = normalize_process_lifetime(algo, lifetime)
     algo = isnothing(context) ? _init_plan(algo, inputs_overrides...; lifetime) : _with_lifecycle(resolve(algo), context, (), ())
     prepared_context = getpersistentcontext(algo)
-    # The lifetime's `Var`s by key (`resolve_var_keys`), once: the loop reads them without the registry.
-    lifetime = resolve_var_keys(lifetime, prepared_context)
+    # The lifetime's `Var`s resolved to their locations (`resolve_vars`), once: the loop reads them without the registry.
+    lifetime = resolve_vars(lifetime, prepared_context)
     return algo, prepared_context, lifetime
 end
 
@@ -146,11 +146,11 @@ end
 end
 
 # A lifetime given to `run(ip)`: numbered as the plan numbers its handles while compiling (`number_by_keymap`), and its
-# `Var`s given their keys (`resolve_var_keys`; the key is found while compiling), before the call to the loop. The
+# `Var`s resolved to their locations (`resolve_vars`; found while compiling), before the call to the loop. The
 # process's own lifetime got its keys when the process was built.
 @inline _inline_run_lifetime(p::InlineProcess, algo, repeats, ::Nothing) = _inline_process_lifetime(algo, repeats, lifetime(p))
 @inline _inline_run_lifetime(p::InlineProcess, algo, repeats, lt) =
-    resolve_var_keys(_inline_process_lifetime(algo, repeats, number_by_keymap(lt, getfield(getregistry(getalgo(p)), :keymap))), _context(p))
+    resolve_vars(_inline_process_lifetime(algo, repeats, number_by_keymap(lt, getfield(getregistry(getalgo(p)), :keymap))), _context(p))
 
 """
     run(ip; context, repeats, lifetime, async = Val(false), inlined = Val(false), inputs...)

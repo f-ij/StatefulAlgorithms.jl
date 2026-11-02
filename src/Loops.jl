@@ -83,9 +83,9 @@ Run a single function in a loop indefinitely.
 
 @inline function loop(session::S, func::F, lc::LC, lifetime::LT, ::Resuming{isresuming}, ::NonGenerated) where {S<:ProcessSession,F<:AbstractLoopAlgorithm,LC<:LoopContext,LT<:IndefiniteLifetime,isresuming}
     @inline before_while(session)
-    # The lifetime's `Var`s by key: the stop check before every step does not load the registry. A lifetime whose
-    # `Var`s have their keys already (an `InlineProcess` gives them before the loop) stays as it is.
-    lifetime = @inline resolve_var_keys(lifetime, (@inline getpersistent(lc)))
+    # The lifetime's `Var`s resolved to their locations: the stop check before every step does not load the registry. A
+    # lifetime whose `Var`s are resolved already (an `InlineProcess` resolves them before the loop) stays as it is.
+    lifetime = @inline resolve_vars(lifetime, (@inline getpersistent(lc)))
 
     step_plan = @inline getplan(func)
     step_wiring = @inline _root_wiring_view(func, step_plan)
@@ -122,9 +122,9 @@ Base.@constprop :aggressive @inline function loop(session::S, algo::F, lc::LC, l
     @DebugMode "Running the loop for $repeats times from thread $(Threads.threadid())"
     @assert isresolved(algo) "Algo must be resolved before running the loop. Got algo $(algo) which is not resolved."
     @inline before_while(session)
-    # The lifetime's `Var`s by key: the stop check before every step does not load the registry. A lifetime whose
-    # `Var`s have their keys already (an `InlineProcess` gives them before the loop) stays as it is.
-    lifetime = @inline resolve_var_keys(lifetime, (@inline getpersistent(lc)))
+    # The lifetime's `Var`s resolved to their locations: the stop check before every step does not load the registry. A
+    # lifetime whose `Var`s are resolved already (an `InlineProcess` resolves them before the loop) stays as it is.
+    lifetime = @inline resolve_vars(lifetime, (@inline getpersistent(lc)))
 
     step_plan = @inline getplan(algo)
     step_wiring = @inline _root_wiring_view(algo, step_plan)

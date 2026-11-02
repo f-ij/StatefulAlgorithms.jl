@@ -61,21 +61,21 @@ key is found at compile time).
 end
 
 """
-    resolve_var_key(var, context) -> the location `var` resolves to
+    resolve_var(var, context) -> the location `var` resolves to
 
 `var`'s resolved location: its matcher replaced by the partition of the subcontext it reads
 (`StatePartition{key}`), found from `context`'s registry while compiling (`resolve_scref`). Reading the result needs no
-registry: the lifetime's `Var`s are resolved before the loop (`resolve_var_keys`), so the stop check before every step
+registry: the lifetime's `Var`s are resolved before the loop (`resolve_vars`), so the stop check before every step
 does not load the registry. A location that is resolved already, or anything else a lifetime reads, is returned as it
 is, without reading the registry; so is a `Var` in a context without a registry.
 """
-@inline resolve_var_key(var::V, context::C) where {V, C} = var
-@inline function resolve_var_key(var::Var{M}, context::ProcessContext) where {M<:AbstractMatcher}
+@inline resolve_var(var::V, context::C) where {V, C} = var
+@inline function resolve_var(var::Var{M}, context::ProcessContext) where {M<:AbstractMatcher}
     registry = getregistry(context)
     isnothing(registry) && return var
-    return _var_with_key(var, Val(resolve_scref(registry, M, nothing, "Var subcontext")))
+    return _var_location(var, Val(resolve_scref(registry, M, nothing, "Var subcontext")))
 end
-@inline _var_with_key(::Var{M, name, transform, reverse_transform}, ::Val{key}) where {M<:AbstractMatcher, name, transform, reverse_transform, key} =
+@inline _var_location(::Var{M, name, transform, reverse_transform}, ::Val{key}) where {M<:AbstractMatcher, name, transform, reverse_transform, key} =
     VarLocation{StatePartition{key}, name, transform, reverse_transform}(StatePartition{key}())
 
 @inline _var_transform(::VarLocation{S, N, nothing}, value) where {S, N} = value

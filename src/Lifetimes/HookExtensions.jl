@@ -3,7 +3,7 @@ How lifetimes with their own stop condition extend the logical stop check `lifet
 this file): `Until` and `RepeatOrUntil` stop when their condition holds; `AtLeast` and `AtLeastAtMost` only after at
 least `atleast` repeats. `Repeat` and `Indefinite` have no condition of their own and use the default.
 
-The condition reads the variables `vars` (a field) from the context; `resolve_var_keys` gives them their context keys
+The condition reads the variables `vars` (a field) from the context; `resolve_vars` resolves them to their locations
 before the loop runs. A pause or close is not checked here: that is
 `process_breakcondition` (Sessions/Hooks.jl).
 =#
@@ -20,22 +20,22 @@ before the loop runs. A pause or close is not checked here: that is
 @inline lifetime_breakcondition(lt::AAM, context::C, done::D) where {AAM<:AtLeastAtMost, C, D<:Integer} =
     done >= lt.atleast && (@inline lt.cond((@inline getindex(context, lt.vars...))))
 
-# The same lifetime with its `Var`s given their context keys (`resolve_var_keys`, Hooks.jl).
-@inline _resolve_var_keys(vars::V, context::C) where {V<:Tuple, C} = map(var -> (@inline resolve_var_key(var, context)), vars)
+# The same lifetime with its `Var`s resolved to their locations (`resolve_vars`, Hooks.jl).
+@inline _resolve_vars(vars::V, context::C) where {V<:Tuple, C} = map(var -> (@inline resolve_var(var, context)), vars)
 
-@inline function resolve_var_keys(lt::U, context::C) where {V, F, U<:Until{V, F}, C}
-    vars = @inline _resolve_var_keys(lt.vars, context)
+@inline function resolve_vars(lt::U, context::C) where {V, F, U<:Until{V, F}, C}
+    vars = @inline _resolve_vars(lt.vars, context)
     return Until{typeof(vars), F}(lt.cond, vars)
 end
-@inline function resolve_var_keys(lt::AL, context::C) where {V, F, AL<:AtLeast{V, F}, C}
-    vars = @inline _resolve_var_keys(lt.vars, context)
+@inline function resolve_vars(lt::AL, context::C) where {V, F, AL<:AtLeast{V, F}, C}
+    vars = @inline _resolve_vars(lt.vars, context)
     return AtLeast{typeof(vars), F}(lt.atleast, lt.cond, vars)
 end
-@inline function resolve_var_keys(lt::ROU, context::C) where {V, F, ROU<:RepeatOrUntil{V, F}, C}
-    vars = @inline _resolve_var_keys(lt.vars, context)
+@inline function resolve_vars(lt::ROU, context::C) where {V, F, ROU<:RepeatOrUntil{V, F}, C}
+    vars = @inline _resolve_vars(lt.vars, context)
     return RepeatOrUntil{typeof(vars), F}(lt.repeats, lt.cond, vars)
 end
-@inline function resolve_var_keys(lt::AAM, context::C) where {V, F, AAM<:AtLeastAtMost{V, F}, C}
-    vars = @inline _resolve_var_keys(lt.vars, context)
+@inline function resolve_vars(lt::AAM, context::C) where {V, F, AAM<:AtLeastAtMost{V, F}, C}
+    vars = @inline _resolve_vars(lt.vars, context)
     return AtLeastAtMost{typeof(vars), F}(lt.atleast, lt.repeats, lt.cond, vars)
 end
