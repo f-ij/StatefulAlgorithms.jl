@@ -29,6 +29,8 @@ The loop never carries a `LoopContext` from one step to the next: it carries onl
 write and the runtime context, and builds the `LoopContext` again at the start of every step (see Carried/Carry.jl).
 Building it costs nothing once compiled, and the fields no step writes are read where they already are instead of
 being copied.
+
+A run's first `LoopContext` is made by `LoopContext(plan, context, inputs, resume)` (Context/LoopContextConstructor.jl).
 """
 struct LoopContext{PersistentContextType<:ProcessContext, RuntimeContextType<:ProcessContext, Node} <: ContextBundle
     persistent::PersistentContextType
@@ -41,25 +43,6 @@ LoopContext(persistent_context::PersistentContextType, runtime_context::RuntimeC
 """Makes a `LoopContext` that is in the scope of plan node `Node` (its `PlanWiring` type, or `Nothing` for no node)."""
 @inline LoopContext(persistent_context::PersistentContextType, runtime_context::RuntimeContextType, ::Type{Node}) where {PersistentContextType<:ProcessContext, RuntimeContextType<:ProcessContext, Node} =
     LoopContext{PersistentContextType, RuntimeContextType, Node}(persistent_context, runtime_context)
-
-"""
-    LoopContext(plan, context, inputs, resume)
-
-The `LoopContext` a run starts from, made where a run is handed to the loop (`run(ip)`, a `Process` run, the manager's
-inline run, `run(plan)`). `context` is the process's context as the user sees it: its registry has the plan's
-`UniqueKeyMap`, which is dropped here (`strip_keymap_typed`), so the loop is compiled once for every set of `Unique`
-handles. A new run (`Resuming{false}`) gets the inputs, checked against the plan's `@input`s, and the plan's declared
-locals as its runtime context. A paused run that resumes (`Resuming{true}`) gets the inputs and declared locals kept in
-the paused context, which are cleared from the persistent context; `inputs` is not used then.
-"""
-@inline function LoopContext(algo::A, context::C, inputs::I, ::Resuming{isresuming}) where {A, C<:ProcessContext, I<:NamedTuple, isresuming}
-    persistent_context = @inline strip_keymap_typed(context)
-    if isresuming
-        return LoopContext((@inline _paused_state_context(persistent_context)),
-                           (@inline _initial_runtime_context((@inline get_inputs(persistent_context)), get_declared_locals(persistent_context))))
-    end
-    return LoopContext(persistent_context, (@inline _initial_runtime_context(_validate_runtime_inputs(algo, inputs), collect_tree_locals(algo))))
-end
 
 """
     InitContext(persistent_context, algo, lifetime)

@@ -88,23 +88,29 @@ Base.@nospecializeinfer function collect_plan_locals_untyped(@nospecialize(optio
 end
 
 """
+For generators: the storage names, value expressions (from `expr`) and types of every local declared in plan type `T`
+and the plans in it, added to `names`, `values` and `types`. Compiled once, not per plan node type or depth.
+"""
+function _tree_locals!(names::Vector{Symbol}, values::Vector{Any}, types::Vector{Any}, @nospecialize(T::Type), @nospecialize(expr), @nospecialize(path))
+    L = fieldtype(fieldtype(T, :wiring), :locals)
+    for name in fieldnames(L)
+        push!(names, make_storage_name(name, join(path, ".")))
+        push!(values, :(getfield(getfield(getfield($expr, :wiring), :locals), $(QuoteNode(name)))))
+        push!(types, fieldtype(L, name))
+    end
+    F = fieldtype(T, :funcs)
+    for i in 1:fieldcount(F)
+        fieldtype(F, i) <: AbstractPlan && _tree_locals!(names, values, types, fieldtype(F, i), :(getfield(getfield($expr, :funcs), $i)), (path..., i))
+    end
+    return names, values, types
+end
+
+"""
 Collect the initial values of every local declared in a plan tree, keyed by storage name: the
 memory for all of them is allocated in `_declared_locals` when a run starts.
 """
 @generated function collect_tree_locals(plan::P) where {P<:AbstractPlan}
-    names = Symbol[]
-    values = Any[]
-    function collect!(@nospecialize(T::Type), @nospecialize(expr), @nospecialize(path))   # compiled once, not per plan node type or depth
-        for name in fieldnames(fieldtype(fieldtype(T, :wiring), :locals))
-            push!(names, make_storage_name(name, join(path, ".")))
-            push!(values, :(getfield(getfield(getfield($expr, :wiring), :locals), $(QuoteNode(name)))))
-        end
-        F = fieldtype(T, :funcs)
-        for i in 1:fieldcount(F)
-            fieldtype(F, i) <: AbstractPlan && collect!(fieldtype(F, i), :(getfield(getfield($expr, :funcs), $i)), (path..., i))
-        end
-    end
-    collect!(P, :plan, ())
+    names, values, _ = _tree_locals!(Symbol[], Any[], Any[], P, :plan, ())
     return :(NamedTuple{$(Tuple(names))}(($(values...),)))
 end
 @inline collect_tree_locals(la::LoopAlgorithm) = collect_tree_locals(getplan(la))

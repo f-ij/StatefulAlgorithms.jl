@@ -88,6 +88,7 @@ module StatefulAlgorithms
     include("Manager/Manager.jl")
 
     include("LoopAlgorithms/LoopAlgorithms.jl")
+    include("Context/LoopContextConstructor.jl")   # after LoopAlgorithms/: its generator reads @inputs and locals from plan types
     include("CompositeDSL/CompositeDSL.jl")
     include("Legacy/Legacy.jl")   # deprecated macros, removed in a later version
     include("ContextAnalyzer/ContextAnalyzer.jl")

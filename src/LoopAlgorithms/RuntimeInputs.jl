@@ -75,52 +75,6 @@ end
 @inline _runtime_input_type(::RuntimeInput{Name, T}) where {Name, T} = T
 @inline _runtime_input_required(::RuntimeInput{Name, T, Required}) where {Name, T, Required} = Required
 
-"""
-Build default keyword values for optional runtime inputs.
-
-Required inputs are intentionally omitted here so validation can report a
-missing input instead of silently supplying `nothing`.
-"""
-function _runtime_input_defaults(specs::Tuple)
-    pairs = Pair{Symbol, Any}[] 
-    for spec in specs
-        _runtime_input_required(spec) || push!(pairs, _runtime_input_name(spec) => spec.default)
-    end
-    return (; pairs...)
-end
-
-"""
-Validate one run's keyword arguments against `la`'s runtime input declarations.
-
-This rejects unknown names, checks required inputs, validates typed inputs with
-`isa`, and merges optional defaults into the returned `NamedTuple`.
-"""
-function _validate_runtime_inputs(la::LA, inputs::I) where {LA<:LoopSpec, I<:NamedTuple}
-    specs = runtimeinputs(la).specs
-    if isempty(specs)
-        isempty(inputs) || error("Runtime inputs were passed, but this LoopAlgorithm declares no @input values.")
-        return inputs
-    end
-
-    allowed = Tuple(_runtime_input_name(spec) for spec in specs)
-    for name in keys(inputs)
-        name in allowed || error("Unknown runtime input `$name`. Declared inputs are $(allowed).")
-    end
-
-    for spec in specs
-        name = _runtime_input_name(spec)
-        if haskey(inputs, name)
-            T = _runtime_input_type(spec)
-            value = getproperty(inputs, name)
-            value isa T || error("Runtime input `$name` has type $(typeof(value)), expected `$T`.")
-        elseif _runtime_input_required(spec)
-            error("Missing required runtime input `$name`.")
-        end
-    end
-
-    return merge(_runtime_input_defaults(specs), inputs)
-end
-
 # Lifecycle accessors keep `LoopAlgorithm`, plain plan nodes, and wrappers on a
 # shared path. Plain plans report no stored lifecycle data.
 @inline getstoredinits(la::LA) where {LA<:LoopSpec} = hasfield(LA, :inits) ? getfield(la, :inits) : ()
