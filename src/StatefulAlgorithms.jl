@@ -41,6 +41,7 @@ module StatefulAlgorithms
     include("Sessions/InteractiveSession.jl")
     include("Sessions/HookExtensions.jl")
     include("AbstractProcesses/Interface.jl")
+    include("AbstractProcesses/Hooks.jl")
     include("ProcessEntities/ProcessEntities.jl")
 
 

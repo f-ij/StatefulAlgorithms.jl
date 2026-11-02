@@ -311,13 +311,12 @@ function runprocessinline!(worker::P; lifetime = nothing, repeats = nothing, rep
     # Build the same runtime context as the asynchronous Process path, but run the
     # loop on the worker's session in this task (`run_session_loop`, then `_finish_run!`
     # as a `Process` task does), so no scheduler task is created for short manager jobs.
-    # The plan and the context go to the loop without the map, as in `makeloop!`.
-    algo = strip_keymap(getalgo(worker))
+    # The session, the plan and the `LoopContext` as a `Process` run makes them (`prepare_loop`).
     lt = StatefulAlgorithms.lifetime(worker)
-    session = worker.session = create_session(worker, lt)
+    session, algo, lc = prepare_loop(worker, (; kwargs...), lt, Resuming{false}())
     @atomic session.paused = false
     @atomic session.shouldrun = true
-    persistent_context, returnvalue = run_session_loop(session, algo, LoopContext(algo, _context(worker), (; kwargs...), Resuming{false}()), lt)
+    persistent_context, returnvalue = run_session_loop(session, algo, lc, lt)
     result = _finish_run!(worker, session, persistent_context, returnvalue)
 
     worker.lastresult = result

@@ -348,31 +348,32 @@ end
 """
 Runs the prepared task of a process on a thread
 """
-# The lifetime, the plan and the context are read from fields of abstract type, so the calls into `LoopContext` and
-# `_makeloop!` are dispatched on their types at run time; from there on everything is typed.
+# The lifetime, the plan and the context are read from fields of abstract type, so the call into `_makeloop!` is
+# dispatched on the types `prepare_loop` gives back; from there on everything is typed.
 makeloop!(p::Process, inputs::NamedTuple = (;); threaded = true, loopfunc::LF = loop) where {LF} =
     makeloop!(p, inputs, lifetime(p); threaded, loopfunc)
 
 # Not specialized on the process (its type has the map): compiled once for every set of `Unique` handles.
 Base.@nospecializeinfer function makeloop!(@nospecialize(p::Process), inputs::NamedTuple, @nospecialize(lt); threaded = true, loopfunc::LF = loop) where {LF}
-    func = strip_keymap(getalgo(p))
-    return _makeloop!(p, lt, func, LoopContext(func, _context(p), inputs, Resuming{false}()); threaded, loopfunc)
+    session, func, lc = prepare_loop(p, inputs, lt, Resuming{false}())
+    return _makeloop!(p, session, func, lc, lt; threaded, loopfunc)
 end
 
 """
-    _makeloop!(p, lifetime, func, loop_context; threaded, loopfunc)
+    prepare_loop(p::Process, inputs, lifetime, resume)
 
-Starts a run of `p`: its session, then the task running the loop. `func` is the process's plan without the plan's
-`UniqueKeyMap` (`strip_keymap` in `makeloop!`) and `loop_context` the `LoopContext` the run starts from (the map dropped
-by its constructor): the loop never reads the map, and without it the loop is compiled once for every set of `Unique`
-handles.
+A `Process` run runs in the process's session when it has `lifetime`'s type, else in a new one with the same counters
+(`create_session`), which becomes the process's session. The plan is the process's without the map (`strip_keymap`);
+the run starts from the process's context, or from the paused context when it resumes. Not specialized on the process
+(its type has the map): compiled once for every set of `Unique` handles.
 """
-function _makeloop!(p::Process, lt::LT, func::F, lc::LC; threaded = true, loopfunc::LF = loop) where {LT, F, LC<:LoopContext, LF}
-    session = p.session = create_session(p, lt)
-    @atomic session.paused = false
-    @atomic session.shouldrun = true
-    p.lastresult = nothing
-    return _makeloop_prepared!(p, session, func, lc, lt; threaded, loopfunc)
+Base.@nospecializeinfer function prepare_loop(@nospecialize(p::Process), inputs::NamedTuple, @nospecialize(lt), ::Resuming{isresuming}) where {isresuming}
+    # `setfield!`, a builtin: `p.session = ...` here would compile `setproperty!` for every process type.
+    session = create_session(p, lt)
+    setfield!(p, :session, session)
+    func = strip_keymap(getalgo(p))
+    start_context = isresuming ? p.paused_context : _context(p)
+    return session, func, LoopContext(func, start_context, inputs, Resuming{isresuming}())
 end
 
 """
@@ -389,7 +390,18 @@ function create_session(p::Process{F, C}, lt::LT) where {F, C, LT}
         session.starttime, session.endtime, session.loop_cursor, session.threadid)
 end
 
-function _makeloop_prepared!(p::P, session::S, func::F, lc::LC, lt::LT; threaded::Bool = true, loopfunc::LF = loop, resume::R = Resuming{false}()) where {P<:Process, S<:InteractiveSession, F, LC<:LoopContext, LT, LF, R<:Resuming}
+"""
+    _makeloop!(p, session, func, loop_context, lifetime; threaded, loopfunc, resume)
+
+Starts a run of `p` with what `prepare_loop` made: the session is set running, then the task running the loop is
+scheduled. `func` (the plan) and `loop_context` have no map: the loop never reads it, and without it the loop is
+compiled once for every set of `Unique` handles.
+"""
+function _makeloop!(p::P, session::S, func::F, lc::LC, lt::LT; threaded::Bool = true, loopfunc::LF = loop, resume::R = Resuming{false}()) where {P<:Process, S<:InteractiveSession, F, LC<:LoopContext, LT, LF, isresuming, R<:Resuming{isresuming}}
+    # A resumed run clears the pause flag in the loop, after reading the cursor the pause kept.
+    isresuming || @atomic session.paused = false
+    @atomic session.shouldrun = true
+    p.lastresult = nothing
     # The task runs `body` itself (as `Threads.@spawn` and `@async` do with a closure around it): its type is known
     # when the process is built, so it is compiled then.
     body = ProcessTaskBody(p, loopfunc, session, func, lc, lt, resume)
@@ -448,14 +460,9 @@ end
 
 function _resume_paused_loop!(p::Process; threaded = true)
     wait(p)
-    session = getsession(p)
-    @atomic session.shouldrun = true
-    p.lastresult = nothing
-
-    # Handed to the loop without the map, as in `makeloop!`.
-    func = strip_keymap(getalgo(p))
     lt = lifetime(p)
-    return _makeloop_prepared!(p, session, func, LoopContext(func, p.paused_context, (;), Resuming{true}()), lt; threaded, resume = Resuming{true}())
+    session, func, lc = prepare_loop(p, (;), lt, Resuming{true}())
+    return _makeloop!(p, session, func, lc, lt; threaded, resume = Resuming{true}())
 end
 
 makeloop!(p::Process, lt::Lifetime; threaded = true, loopfunc::LF = loop) where {LF} =

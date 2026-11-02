@@ -24,8 +24,8 @@ precompile_interface(x::X) where {X} = nothing
 # the bundle it makes from the context without the map), the run's start with the process's own lifetime
 # (`_makeloop!`, which makes the run's session) and the task's body (`ProcessTaskBody`: the loop, the run's end), in
 # parallel (49-56 -> 25-28 ms per build on 15 threads). `run(p)` reads the lifetime and the context from fields of
-# abstract type, so its calls into `LoopContext` and `_makeloop!` are dispatched at run time and compiled here by
-# themselves. `pause`, `close` and a resumed run compile when first used (16 ms together).
+# abstract type, so its calls into `prepare_loop` (the session, `LoopContext`) and `_makeloop!` are dispatched at run
+# time and compiled here by themselves. `pause`, `close` and a resumed run compile when first used (16 ms together).
 Base.@nospecializeinfer function precompile_interface(@nospecialize(p::Process))
     # The loop's plan and context have no map (`_makeloop!`): their types as a run hands them over.
     loop_algo = strip_keymap(getfield(p, :algo))
@@ -39,7 +39,8 @@ Base.@nospecializeinfer function precompile_interface(@nospecialize(p::Process))
         if LC !== Union{}
             Threads.@spawn precompile(LoopContext, (F, ProcessContext, NamedTuple{(), Tuple{}}, Resuming{false}))
             Threads.@spawn precompile(LoopContext, (persistent_type(LC), runtime_type(LC)))
-            Threads.@spawn precompile(Core.kwcall, (NamedTuple{(:threaded, :loopfunc), Tuple{Bool, typeof(loop)}}, typeof(_makeloop!), P, LT, F, LC))
+            Threads.@spawn precompile(create_session, (P, LT))
+            Threads.@spawn precompile(Core.kwcall, (NamedTuple{(:threaded, :loopfunc), Tuple{Bool, typeof(loop)}}, typeof(_makeloop!), P, InteractiveSession{C, LT}, F, LC, LT))
             Threads.@spawn precompile(Tuple{ProcessTaskBody{P, typeof(loop), InteractiveSession{C, LT}, F, LC, LT, Resuming{false}}})
         end
     end

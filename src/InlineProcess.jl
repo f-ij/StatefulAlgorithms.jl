@@ -183,11 +183,11 @@ context of the 3D Ising model with one step per run), but the loop's machine cod
     run_lifetime = _inline_run_lifetime(p, algo, repeats, lifetime)
 
     if (isnothing(threaded) && isthreaded(p)) || threaded === true
-        return Threads.@spawn _run_inline!(p, algo, run_lifetime, runtime_inputs, inlined)
+        return Threads.@spawn _run_inline!(p, run_lifetime, runtime_inputs, inlined)
     elseif (isnothing(threaded) && isasync(p)) || threaded === :async
-        return @async _run_inline!(p, algo, run_lifetime, runtime_inputs, inlined)
+        return @async _run_inline!(p, run_lifetime, runtime_inputs, inlined)
     else
-        return @inline _run_inline!(p, algo, run_lifetime, runtime_inputs, inlined)
+        return @inline _run_inline!(p, run_lifetime, runtime_inputs, inlined)
     end
 end
 
@@ -196,22 +196,33 @@ end
     _set_inline_run_context!(p, context)
     run_lifetime = _inline_run_lifetime(p, algo, repeats, lifetime)
     runtime_inputs = _inline_runtime_inputs(algo, inputs_overrides, (; kwargs...))
-    return @inline _run_inline!(p, algo, run_lifetime, runtime_inputs, Val(false))
+    return @inline _run_inline!(p, run_lifetime, runtime_inputs, Val(false))
 end
 
 """
-One run of `p`: the run's `LoopContext` built from the process's context and the inputs (its constructor), then the loop
-with the process's plan and it as arguments, the same entry as a `Process` run
-(`run_session_loop`, a call whose arguments have no map, so the loop is compiled once for every set of `Unique` handles;
-with `Val(true)`, the loop pasted in). The context it gives back becomes the process's. Returns the run's result with
-the plan's registry (`with_plan_registry`), so `run(ip)[handle]` is found from types, as `context(ip)[handle]` is.
+    prepare_loop(ip::InlineProcess, inputs, lifetime, resume)
+
+An `InlineProcess` runs every run in its one session, with its plan and context kept without the map (`loop_algo`,
+`context`); the `LoopContext` is made from that context and the run's inputs. Typed, and inlined into `run(ip)`.
 """
-@inline function _run_inline!(p::InlineProcess, algo::A, run_lifetime::LT, runtime_inputs::I, ::Val{inlined}) where {A, LT, I, inlined}
-    lc = @inline LoopContext(algo, getfield(p, :context), runtime_inputs, Resuming{false}())
+@inline function prepare_loop(p::P, inputs::I, lt::LT, resume::R) where {P<:InlineProcess, I<:NamedTuple, LT, R<:Resuming}
+    algo = getfield(p, :loop_algo)
+    return getsession(p), algo, (@inline LoopContext(algo, getfield(p, :context), inputs, resume))
+end
+
+"""
+One run of `p`: what `prepare_loop` makes (the session, the plan, the `LoopContext`), then the loop with those as
+arguments, the same entry as a `Process` run (`run_session_loop`, a call whose arguments have no map, so the loop is
+compiled once for every set of `Unique` handles; with `Val(true)`, the loop pasted in). The context it gives back
+becomes the process's. Returns the run's result with the plan's registry (`with_plan_registry`), so `run(ip)[handle]`
+is found from types, as `context(ip)[handle]` is.
+"""
+@inline function _run_inline!(p::InlineProcess, run_lifetime::LT, runtime_inputs::I, ::Val{inlined}) where {LT, I, inlined}
+    session, algo, lc = @inline prepare_loop(p, runtime_inputs, run_lifetime, Resuming{false}())
     persistent_context, result = if inlined
-        @inline loop(getsession(p), algo, lc, run_lifetime, Resuming{false}())
+        @inline loop(session, algo, lc, run_lifetime, Resuming{false}())
     else
-        run_session_loop(loop, getsession(p), algo, lc, run_lifetime)
+        run_session_loop(loop, session, algo, lc, run_lifetime)
     end
     p.context = persistent_context
     return @inline with_plan_registry(p, result)
