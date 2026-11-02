@@ -171,9 +171,10 @@ end
     run(ip; context, repeats, lifetime, threaded, inlined = Val(false), inputs...)
 
 One run of `ip`, from the context it holds, returning the final context. `inlined = Val(true)` pastes the loop into
-`run(ip)`: 1.1 ns less per call, but the loop's machine code is made again for every set of `Unique` handles at the
-first such run (5 ms for 2 children, 36 ms for 16), while the default call into the loop is compiled once for all
-(`run_session_loop`). The choice is in the `Val`'s type, so the branch is decided while compiling.
+`run(ip)`: the context is not passed into a call and back (57-62 instead of 121-150 ns per `run(ip)` for the 616-byte
+context of the 3D Ising model with one step per run), but the loop's machine code is made again for every set of
+`Unique` handles at the first such run (first run 8.5-8.8 instead of 5.4-5.6 ms for 4 counters, 20.6-24.0 instead of
+12.5-13.4 ms for 16), while the default call into the loop is compiled once for all (`run_session_loop`). The choice is in the `Val`'s type, so the branch is decided while compiling.
 """
 @inline function Base.run(p::InlineProcess, inputs_overrides...; context = nothing, repeats=nothing, lifetime=nothing, threaded=nothing, inlined::Val = Val(false), kwargs...)
     algo = getfield(p, :loop_algo)   # the plan without the map, as the loop runs it

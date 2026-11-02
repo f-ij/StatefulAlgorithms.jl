@@ -80,7 +80,7 @@ loop to be type stable, each of these must be concrete where the loop is entered
    on the 3D Ising graph, 2026-11-01). Passing the context in and back out costs about 50 ns per `run(ip)` for a
    616-byte context. The
    alternative, `run(ip; inlined = Val(true))`, pastes the loop into `run(ip)`, and its machine code is then made again
-   for every set of handles at the first such run (5 ms for 2 children, 36 ms for 16, per the docstring of `run(ip)`).
+   for every set of handles at the first such run (see the docstring of `run(ip)` for the numbers).
 
 A run of a `Process` whose lifetime has another type gets a new `InteractiveSession{C, LT}` with the same counters
 (`create_session`), so `LT` is concrete too.

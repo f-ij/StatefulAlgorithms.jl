@@ -121,9 +121,9 @@ Like finished `Process` runs, this means the persistent context is the persisten
 context shape rather than the transient loop context.
 
 `run(ip)` calls the loop, which is compiled once for every set of `Unique` handles. `run(ip; inlined = Val(true))`
-pastes the loop into `run(ip)` instead: about 1 ns less per call, for a compile of the loop at the first such run for
-every set of handles (5 ms for 2 children, 36 ms for 16). It only shows when `run(ip)` is called very often with a few
-light steps.
+pastes the loop into `run(ip)` instead, so the context is not passed into a call and back: about 60-90 ns less per
+call for a 616-byte context, for a compile of the loop at the first such run for every set of handles (about 3 ms more
+for 4 children, 8-11 ms more for 16). It only shows when `run(ip)` is called very often with a few light steps.
 
 If you need buffered external updates to context variables, see
 [Interactive Contexts](@ref interactive_user).
