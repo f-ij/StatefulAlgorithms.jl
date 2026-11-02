@@ -40,7 +40,7 @@ flowchart TD
   OPS -.->|"pause / close set the atomic flags"| S
   OPS -->|"K dropped (strip_keymap)<br/>Process: makeloop! → task → run_session_loop<br/>InlineProcess: run(ip) → run_session_loop"| L
   subgraph LOOP["Loop sees (no K in any type)"]
-    L["loop(session, plan, persistent context, lifetime, inputs, resume)"]
+    L["loop(session, plan, LoopContext, lifetime, resume)"]
     L --> B["setup: cursor, runtime context (inputs, declared locals),<br/>carried = the persistent fields a step can write"]
     B --> ST["each step: LoopContext(with_carried(persistent, carried), runtime)<br/>→ _step! → next_carried"]
     ST -->|"tick!, inc!, process_breakcondition"| ST
@@ -164,7 +164,7 @@ does.
 | `context(p)` | `_context(p)`: a paused, reshaped or the plan's context, each with the plan's registry | `_finish_run!`, `commit_context!` (`with_plan_registry`) | user |
 | `fetch(p)` | the task's result | `_finish_run!` | user |
 | `InlineProcess(...)` | `ip.loop_algo`, `ip.context` (both without `K`); `InlineSession`: `loopidx` | constructor, every run | `run(ip)`, `context(ip)` |
-| `run(ip; inputs...)` | `run_session_loop(loop, session, plan, context, lifetime, inputs)`, as for a `Process` | `run(ip)` | — |
+| `run(ip; inputs...)` | `run_session_loop(loop, session, plan, loop_context(plan, context, inputs, resume), lifetime)`, as for a `Process` | `run(ip)` | — |
 | `context(ip)`, the result of `run(ip)` | `ip.context` with the plan's registry (its `Ref`) | `with_plan_registry` | user |
 | *(internal only)* | `LoopContext{P, R, Node}`, the carried fields | the loop, every step | `_step!` |
 
@@ -197,15 +197,16 @@ What every session provides is in `src/Sessions/Interface.jl` (the counter `loop
 4. `_makeloop!` sets the session (`create_session`), sets `paused = false` and `shouldrun = true`, and checks the
    runtime inputs.
 5. The task runs a `ProcessTaskBody` (a struct, not a closure, so its type is known when the process is built):
-   `run_session_loop(loop, session, plan, context, lifetime, inputs, resume)`, then `_finish_run!`.
+   `run_session_loop(loop, session, plan, loop_context, lifetime, resume)`, then `_finish_run!`. The `LoopContext` is
+   built before the task (`loop_context` in `_makeloop_prepared!`).
 
 `run_session_loop` is `@noinline`: a call of its own whose arguments have no `K`.
 
 ### InlineProcess
 
 `run(ip; inputs...)` (`src/InlineProcess.jl`) sets a context given to the run, checks the inputs and numbers a given
-lifetime, then calls `run_session_loop(loop, session, plan, context, lifetime, inputs)` with the process's plan and
-context (`ip.loop_algo`, `ip.context`) as arguments, the same entry as a `Process`; the context it gives back becomes
+lifetime, builds the run's `LoopContext` from the process's context (`ip.context`) and the inputs (`loop_context`),
+then calls `run_session_loop(loop, session, plan, loop_context, lifetime)` with the process's plan (`ip.loop_algo`) and it as arguments, the same entry as a `Process`; the context it gives back becomes
 `ip.context`. The counter is reset at the loop's start (`before_while(::InlineSession)`). With `inlined = Val(true)`
 the loop is pasted into `run(ip)` instead. No session holds a context: kept in a mutable field and read by the loop's
 own function, its pointers have to be rooted inside the loop (22% slower per step on the 3D Ising graph). `threaded = true` or
@@ -218,14 +219,14 @@ own function, its pointers have to be rooted inside the loop (22% slower per ste
 
 ### The loop
 
-`loop(session, plan, persistent context, lifetime, inputs, resume)` (`src/Loops.jl`) has one method for repeat
+`loop(session, plan, loop_context, lifetime, resume)` (`src/Loops.jl`) has one method for repeat
 lifetimes (`_repeat_steps`) and one for indefinite ones (`_run_steps`). Both:
 
 1. `before_while(session)`: an `InteractiveSession` records the start time and thread.
 2. `resolve_var_keys(lifetime, context)`: the lifetime's `Var`s by key, so the stop check does not load the registry.
 3. The cursor: new (`loop_cursor(plan, Val(true))`), or on a resume the one the pause kept (`_loop_cursor`).
-4. The runtime context (`_loop_runtime_context`): the inputs (`_inputs`) and declared locals (`_declared_locals`); on a
-   resume, those kept in the paused context.
+4. The `LoopContext` it gets: built by the caller (`loop_context`), with the inputs (`_inputs`) and declared locals
+   (`_declared_locals`) as its runtime context; on a resume, those kept in the paused context.
 5. The carried fields (`create_carried`, section 9).
 6. Every step:
    1. `lifetime_breakcondition(lifetime, final_context(...), steps done)`: the lifetime's own stop condition.

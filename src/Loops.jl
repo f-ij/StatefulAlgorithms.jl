@@ -45,17 +45,20 @@ end
 @inline _clear_paused_subcontext(persistent_context::C, ::Val{name}) where {C<:ProcessContext,name} =
     haskey(get_subcontexts(persistent_context), name) ? (@inline with_subcontext(persistent_context, Val(name), SubContext{name}((;)))) : persistent_context
 
-@inline _loop_persistent_context(start_persistent_context::C, ::Resuming{false}) where {C<:ProcessContext} = start_persistent_context
-@inline _loop_persistent_context(start_persistent_context::C, ::Resuming{true}) where {C<:ProcessContext} = @inline _paused_state_context(start_persistent_context)
+"""
+    loop_context(algo, start_persistent_context, inputs, resume) -> LoopContext
 
-@inline function _loop_runtime_context(algo::F, inputs::NamedTuple, session::S, lifetime::LT, start_persistent_context::C, ::Resuming{false}) where {F,S<:ProcessSession,LT<:Lifetime,C<:ProcessContext}
-    return @inline _initial_runtime_context(inputs, collect_tree_locals(algo))
-end
-
-@inline function _loop_runtime_context(algo::F, inputs::NamedTuple, session::S, lifetime::LT, start_persistent_context::C, ::Resuming{true}) where {F,S<:ProcessSession,LT<:Lifetime,C<:ProcessContext}
-    runtime_inputs = @inline get_inputs(start_persistent_context)
-    return @inline _initial_runtime_context(runtime_inputs, get_declared_locals(start_persistent_context))
-end
+The bundle a run starts from, built by the code that hands the run to the loop (`run(ip)`, a `Process` task, the
+manager's inline run, `run(plan)`), so the loop gets it as an argument. `start_persistent_context` is the process's
+context without the map. A new run gets the run's inputs and the plan's declared locals as its runtime context; a paused
+run that resumes gets the inputs and declared locals kept in the paused context, which are cleared from the persistent
+context.
+"""
+@inline loop_context(algo::F, start_persistent_context::C, inputs::NamedTuple, ::Resuming{false}) where {F,C<:ProcessContext} =
+    LoopContext(start_persistent_context, (@inline _initial_runtime_context(inputs, collect_tree_locals(algo))))
+@inline loop_context(algo::F, start_persistent_context::C, ::NamedTuple, ::Resuming{true}) where {F,C<:ProcessContext} =
+    LoopContext((@inline _paused_state_context(start_persistent_context)),
+                (@inline _initial_runtime_context((@inline get_inputs(start_persistent_context)), get_declared_locals(start_persistent_context))))
 
 """Build the root wiring view for one loop execution."""
 @inline _root_wiring_view(algo, step_plan) = PlanWiringView(getwiring(step_plan))
@@ -75,42 +78,42 @@ registry).
 end
 
 """
-    run_session_loop([loopfunc,] session, algo, context, lifetime, inputs, resume = Resuming{false}()) -> (persistent_context, result)
+    run_session_loop([loopfunc,] session, algo, loop_context, lifetime, resume = Resuming{false}()) -> (persistent_context, result)
 
 The loop as a call of its own, where a `Process`, an `InlineProcess` or a plan run directly (`run(plan)`) hands a run to it. Its
-arguments are the session and the plan, context and lifetime without the plan's `UniqueKeyMap`, so it is compiled once
+arguments are the session, the plan, the `LoopContext` the run starts from (`loop_context`) and the lifetime, without the plan's `UniqueKeyMap`, so it is compiled once
 for every set of `Unique` handles while the process calling it has the map in its type (in its plan's registry). Also compiled as its own function,
 so LLVM keeps the session's counters (`tickidx`) in registers.
 """
-@noinline run_session_loop(loopfunc::LF, session::S, algo::A, context::C, lifetime::LT, inputs::I, resume::R = Resuming{false}()) where {LF, S<:ProcessSession, A, C, LT, I<:NamedTuple, R<:Resuming} =
-    loopfunc(session, algo, context, lifetime, inputs, resume)
-@inline run_session_loop(session::S, algo::A, context::C, lifetime::LT, inputs::I, resume::R = Resuming{false}()) where {S<:ProcessSession, A, C, LT, I<:NamedTuple, R<:Resuming} =
-    run_session_loop(loop, session, algo, context, lifetime, inputs, resume)
+@noinline run_session_loop(loopfunc::LF, session::S, algo::A, lc::LC, lifetime::LT, resume::R = Resuming{false}()) where {LF, S<:ProcessSession, A, LC<:LoopContext, LT, R<:Resuming} =
+    loopfunc(session, algo, lc, lifetime, resume)
+@inline run_session_loop(session::S, algo::A, lc::LC, lifetime::LT, resume::R = Resuming{false}()) where {S<:ProcessSession, A, LC<:LoopContext, LT, R<:Resuming} =
+    run_session_loop(loop, session, algo, lc, lifetime, resume)
 
 """
 Run a single function in a loop indefinitely.
 """
-@inline loop(session::S, func::F, start_persistent_context::C, lt::LT, inputs::NamedTuple = (;), resume::Resuming = Resuming{false}()) where {S<:ProcessSession, F, C, LT} =
-    loop(session, func, start_persistent_context, lt, inputs, resume, sys_looptype)
+@inline loop(session::S, func::F, lc::LC, lt::LT, resume::Resuming = Resuming{false}()) where {S<:ProcessSession, F, LC<:LoopContext, LT} =
+    loop(session, func, lc, lt, resume, sys_looptype)
 
-@inline function loop(session::S, func::F, start_persistent_context::C, lifetime::LT, inputs::NamedTuple, ::Resuming{isresuming}, ::NonGenerated) where {S<:ProcessSession,F<:AbstractLoopAlgorithm,C<:ProcessContext,LT<:IndefiniteLifetime,isresuming}
+@inline function loop(session::S, func::F, lc::LC, lifetime::LT, ::Resuming{isresuming}, ::NonGenerated) where {S<:ProcessSession,F<:AbstractLoopAlgorithm,LC<:LoopContext,LT<:IndefiniteLifetime,isresuming}
     @inline before_while(session)
     # The lifetime's `Var`s by key: the stop check before every step does not load the registry. A lifetime whose
     # `Var`s have their keys already (an `InlineProcess` gives them before the loop) stays as it is.
-    lifetime = @inline resolve_var_keys(lifetime, start_persistent_context)
+    lifetime = @inline resolve_var_keys(lifetime, (@inline getpersistent(lc)))
 
     step_plan = @inline getplan(func)
     step_wiring = @inline _root_wiring_view(func, step_plan)
     resume = Resuming{isresuming}()
     step_cursor = @inline _loop_cursor(session, step_plan, resume)
-    persistent_context = @inline _loop_persistent_context(start_persistent_context, resume)
-    runtime_context = @inline _loop_runtime_context(func, inputs, session, lifetime, start_persistent_context, resume)
+    persistent_context = @inline getpersistent(lc)
+    runtime_context = @inline getruntime(lc)
 
     isresuming && @inline _clear_pause!(session)
 
     # Carry only the fields the steps write, not the whole context: fields left unchanged would otherwise be copied every
     # step (see src/Context/Carried/Carry.jl).
-    carried = @inline create_carried(step_plan, step_cursor, LoopContext(persistent_context, runtime_context), step_wiring, Namespace{nothing}(), session, lifetime)
+    carried = @inline create_carried(step_plan, step_cursor, lc, step_wiring, Namespace{nothing}(), session, lifetime)
     carried, runtime_context = _run_steps(carried, runtime_context, step_plan, step_cursor, persistent_context, step_wiring, session, lifetime)
     persistent_context = @inline with_carried(persistent_context, carried)
 
@@ -127,29 +130,29 @@ end
 """
 Run a single function in a loop for a given number of times.
 """
-@inline loop(session::S, algo::F, start_persistent_context::C, r::R, inputs::NamedTuple = (;), resume::Resuming = Resuming{false}()) where {S<:ProcessSession, F, C, R <: RepeatLifetime} =
-    loop(session, algo, start_persistent_context, r, inputs, resume, sys_looptype)
+@inline loop(session::S, algo::F, lc::LC, r::R, resume::Resuming = Resuming{false}()) where {S<:ProcessSession, F, LC<:LoopContext, R <: RepeatLifetime} =
+    loop(session, algo, lc, r, resume, sys_looptype)
 
-Base.@constprop :aggressive @inline function loop(session::S, algo::F, start_persistent_context::C, lifetime::R, inputs::NamedTuple, ::Resuming{isresuming}, ::NonGenerated) where {S<:ProcessSession,F<:AbstractLoopAlgorithm,C<:ProcessContext,R<:RepeatLifetime,isresuming}
+Base.@constprop :aggressive @inline function loop(session::S, algo::F, lc::LC, lifetime::R, ::Resuming{isresuming}, ::NonGenerated) where {S<:ProcessSession,F<:AbstractLoopAlgorithm,LC<:LoopContext,R<:RepeatLifetime,isresuming}
     @DebugMode "Running the loop for $repeats times from thread $(Threads.threadid())"
     @assert isresolved(algo) "Algo must be resolved before running the loop. Got algo $(algo) which is not resolved."
     @inline before_while(session)
     # The lifetime's `Var`s by key: the stop check before every step does not load the registry. A lifetime whose
     # `Var`s have their keys already (an `InlineProcess` gives them before the loop) stays as it is.
-    lifetime = @inline resolve_var_keys(lifetime, start_persistent_context)
+    lifetime = @inline resolve_var_keys(lifetime, (@inline getpersistent(lc)))
 
     step_plan = @inline getplan(algo)
     step_wiring = @inline _root_wiring_view(algo, step_plan)
     resume = Resuming{isresuming}()
     step_cursor = @inline _loop_cursor(session, step_plan, resume)
-    persistent_context = @inline _loop_persistent_context(start_persistent_context, resume)
-    runtime_context = @inline _loop_runtime_context(algo, inputs, session, lifetime, start_persistent_context, resume)
+    persistent_context = @inline getpersistent(lc)
+    runtime_context = @inline getruntime(lc)
 
     isresuming && @inline _clear_pause!(session)
 
     # Carry only the fields the steps write, not the whole context: fields left unchanged would otherwise be copied every
     # step (see src/Context/Carried/Carry.jl).
-    carried = @inline create_carried(step_plan, step_cursor, LoopContext(persistent_context, runtime_context), step_wiring, Namespace{nothing}(), session, lifetime)
+    carried = @inline create_carried(step_plan, step_cursor, lc, step_wiring, Namespace{nothing}(), session, lifetime)
     carried, runtime_context = _repeat_steps((@inline loopidx(session)), carried, runtime_context, step_plan, step_cursor, persistent_context, step_wiring, session, lifetime)
     persistent_context = @inline with_carried(persistent_context, carried)
 

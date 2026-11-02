@@ -319,7 +319,7 @@ function runprocessinline!(worker::P; lifetime = nothing, repeats = nothing, rep
     session = worker.session = create_session(worker, lt)
     @atomic session.paused = false
     @atomic session.shouldrun = true
-    persistent_context, returnvalue = run_session_loop(session, algo, base_context, lt, inputs, Resuming{false}())
+    persistent_context, returnvalue = run_session_loop(session, algo, loop_context(algo, base_context, inputs, Resuming{false}()), lt)
     result = _finish_run!(worker, session, persistent_context, returnvalue)
 
     worker.lastresult = result

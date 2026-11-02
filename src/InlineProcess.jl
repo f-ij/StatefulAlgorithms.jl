@@ -200,16 +200,18 @@ end
 end
 
 """
-One run of `p`: the loop with the process's plan and context as its arguments, the same entry as a `Process` run
+One run of `p`: the run's `LoopContext` built from the process's context and the inputs (`loop_context`), then the loop
+with the process's plan and it as arguments, the same entry as a `Process` run
 (`run_session_loop`, a call whose arguments have no map, so the loop is compiled once for every set of `Unique` handles;
 with `Val(true)`, the loop pasted in). The context it gives back becomes the process's. Returns the run's result with
 the plan's registry (`with_plan_registry`), so `run(ip)[handle]` is found from types, as `context(ip)[handle]` is.
 """
 @inline function _run_inline!(p::InlineProcess, algo::A, run_lifetime::LT, runtime_inputs::I, ::Val{inlined}) where {A, LT, I, inlined}
+    lc = @inline loop_context(algo, getfield(p, :context), runtime_inputs, Resuming{false}())
     persistent_context, result = if inlined
-        @inline loop(getsession(p), algo, getfield(p, :context), run_lifetime, runtime_inputs, Resuming{false}())
+        @inline loop(getsession(p), algo, lc, run_lifetime, Resuming{false}())
     else
-        run_session_loop(loop, getsession(p), algo, getfield(p, :context), run_lifetime, runtime_inputs)
+        run_session_loop(loop, getsession(p), algo, lc, run_lifetime)
     end
     p.context = persistent_context
     return @inline with_plan_registry(p, result)

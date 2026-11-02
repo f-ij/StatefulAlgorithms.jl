@@ -65,7 +65,7 @@ see the process.
 
 ## 4. Type Stability at the Loop's Entry
 
-The loop is compiled for the types of its arguments: `loop(session, plan, context, lifetime, inputs, resume)`. For the
+The loop is compiled for the types of its arguments: `loop(session, plan, loop_context, lifetime, resume)`, where `loop_context` is the `LoopContext` the run hands over. For the
 loop to be type stable, each of these must be concrete where the loop is entered. Two places make sure of that:
 
 1. `Process` has fields of abstract type: `lifetime::Lifetime`, `paused_context` and `reshaped_context` (the context's

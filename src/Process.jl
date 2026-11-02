@@ -387,10 +387,10 @@ function create_session(p::Process{F, C}, lt::LT) where {F, C, LT}
         session.starttime, session.endtime, session.loop_cursor, session.threadid)
 end
 
-function _makeloop_prepared!(p::P, session::S, func::F, runtime_context::C, lt::LT, inputs::I; threaded::Bool = true, loopfunc::LF = loop, resume::R = Resuming{false}()) where {P<:Process, S<:InteractiveSession, F, C, LT, I<:NamedTuple, LF, R<:Resuming}
+function _makeloop_prepared!(p::P, session::S, func::F, start_context::C, lt::LT, inputs::I; threaded::Bool = true, loopfunc::LF = loop, resume::R = Resuming{false}()) where {P<:Process, S<:InteractiveSession, F, C, LT, I<:NamedTuple, LF, R<:Resuming}
     # The task runs `body` itself (as `Threads.@spawn` and `@async` do with a closure around it): its type is known
-    # when the process is built, so it is compiled then.
-    body = ProcessTaskBody(p, loopfunc, session, func, runtime_context, lt, inputs, resume)
+    # when the process is built, so it is compiled then. The run's `LoopContext` is built here, before the task.
+    body = ProcessTaskBody(p, loopfunc, session, func, (@inline loop_context(func, start_context, inputs, resume)), lt, resume)
     task = Task(body)
     if threaded
         task.sticky = false
@@ -401,30 +401,29 @@ function _makeloop_prepared!(p::P, session::S, func::F, runtime_context::C, lt::
 end
 
 """
-    ProcessTaskBody(p, loopfunc, session, func, runtime_context, lifetime, inputs, resume)
+    ProcessTaskBody(p, loopfunc, session, func, loop_context, lifetime, resume)
 
 What a `Process` task runs, as a value: calling it runs `_run_process_task` with its fields. A struct, not a closure,
 so its type is known before the task exists and it is compiled when the process is built (`precompile_interface`).
 """
-struct ProcessTaskBody{P, LF, S, F, C, LT, I, R}
+struct ProcessTaskBody{P, LF, S, F, LC, LT, R}
     p::P
     loopfunc::LF
     session::S
     func::F
-    runtime_context::C
+    loop_context::LC
     lifetime::LT
-    inputs::I
     resume::R
 end
-(body::ProcessTaskBody)() = _run_process_task(body.p, body.loopfunc, body.session, body.func, body.runtime_context, body.lifetime, body.inputs, body.resume)
+(body::ProcessTaskBody)() = _run_process_task(body.p, body.loopfunc, body.session, body.func, body.loop_context, body.lifetime, body.resume)
 
 """
 What a `Process` task runs: the loop on the session (`run_session_loop`, a call whose arguments have no map in their
 types, so the loop is compiled once for every set of `Unique` handles), then the run's end on the process
 (`_finish_run!`). Its result is what `fetch(p)` returns.
 """
-function _run_process_task(p::P, loopfunc::LF, session::S, func::F, runtime_context::C, lt::LT, inputs::I, resume::R) where {P<:Process, LF, S<:InteractiveSession, F, C, LT, I<:NamedTuple, R<:Resuming}
-    persistent_context, returnvalue = run_session_loop(loopfunc, session, func, runtime_context, lt, inputs, resume)
+function _run_process_task(p::P, loopfunc::LF, session::S, func::F, lc::LC, lt::LT, resume::R) where {P<:Process, LF, S<:InteractiveSession, F, LC<:LoopContext, LT, R<:Resuming}
+    persistent_context, returnvalue = run_session_loop(loopfunc, session, func, lc, lt, resume)
     return _finish_run!(p, session, persistent_context, returnvalue)
 end
 
