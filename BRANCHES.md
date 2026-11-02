@@ -12,7 +12,7 @@ Updated 2026-11-03.
 | Branch | Folder | On top of | Intent |
 |---|---|---|---|
 | `refactor/partitions` | `-partitions` | `main` | One partition system: `Partition{kind, name}` (`StatePartition`, `RuntimePartition`), no name turned into a partition; `Var` is an unresolved `VarLocation`; nsref/partref. Under review; plan-compiles and the others rebase onto it. |
-| `refactor/plan-inputs` | `-plan-inputs` | `refactor/partitions` (at `46b2275`) | Plan inputs as ordinary arguments: plans called like functions `(arg1, arg2, ...)`, inputs passed explicitly, header inputs as declared locals, `@input` and the registered input state removed. Design only so far. |
+| `refactor/plan-inputs` | `-plan-inputs` | `refactor/partitions` | Plan inputs as ordinary arguments: plans called like functions `(arg1, arg2, ...)`, inputs passed explicitly, header inputs as declared locals, `@input` and the registered input state removed. Design only so far. |
 | `refactor/plan-compiles` | `-plan-compiles` | `main` | Resolve and construction compile once per plan type, not per plan: untyped construction, endpoints found on values, the process/session redesign; the old id replacement. Generic work goes here. Rebases onto `refactor/partitions`. |
 | `refactor/monolithic-resolve` | `-monolithic-resolve` | `refactor/plan-compiles` | Only the monolithic `Unique` id replacement (`replace_unique_ids`), no caches. |
 | `exp/replace-ids-cache` | `-replace-ids-cache` | `refactor/monolithic-resolve` | Experiment: `replace_unique_ids` keeps its type walks in global caches. |
