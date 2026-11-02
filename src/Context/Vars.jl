@@ -106,9 +106,3 @@ slot), through its transform.
     end
 end
 
-@inline function Base.getindex(c::SubContext, vars::Var...)
-    ntuple(Val(length(vars))) do i
-        getindex(c, vars[i])
-    end
-end
-
