@@ -14,7 +14,7 @@ Where a variable is stored: `field` (or a tuple of fields, read through `func`) 
 - `StatePartition{namespace}()`: a field of a namespace's state (the view's own, or another's through a route or share);
 - `RuntimePartition{name}()`: a runtime value (declared local, input, captured or subcontext return);
 - `InjectedValues()`: a value given to the view directly;
-- a matcher (`TypeMatcher{Sensor}()`, `KeyMatcher{:Sensor_1}()`, ...): then it is a `Var`, found by that matcher when read.
+- a matcher (`TypeMatcher{Sensor}()`, ...) until it is resolved: then it is a `Var`, found by that matcher when read.
 `reversefunc` maps a written value back onto the fields.
 """
 struct VarLocation{Storage, field, func, reversefunc}

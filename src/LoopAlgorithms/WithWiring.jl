@@ -40,11 +40,11 @@ A wire for [`WithWiring`](@ref): the wrapped child reads the variable `name` of 
 subcontext (an algorithm, its type or key, `:_captured_returns` for a captured return, or `:_declared_locals` for a
 declared local), optionally transformed (and written back through its reverse transform), as `alias`.
 """
-From(wire::Pair{<:Var, Symbol}) = _var_route(first(wire), last(wire))
+From(wire::Pair{<:VarLocation, Symbol}) = _var_route(first(wire), last(wire))
 # The route's source endpoint from the `Var`'s matcher: a context key as itself; any other matcher as its type, with
 # the matcher as the object when it carries data (a `Unique` handle's `UniquePlanId`), else `nothing`.
-_var_route(var::Var{KeyMatcher{key}, name, transform, reverse_transform}, alias::Symbol) where {key, name, transform, reverse_transform} =
-    Route{key, OwnerMatcher, transform, reverse_transform, (name,), (alias,), Nothing, ThisChild}(nothing, ThisChild())
+_var_route(location::VarLocation{P, name, transform, reverse_transform}, alias::Symbol) where {P<:Partition, name, transform, reverse_transform} =
+    Route{partition_name(P), OwnerMatcher, transform, reverse_transform, (name,), (alias,), Nothing, ThisChild}(nothing, ThisChild())
 function _var_route(var::Var{M, name, transform, reverse_transform}, alias::Symbol) where {M<:AbstractMatcher, name, transform, reverse_transform}
     matcher = getfield(var, :storage)
     object = carries_data(matcher) ? matcher : nothing

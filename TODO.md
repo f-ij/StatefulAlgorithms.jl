@@ -388,12 +388,13 @@ Restored 2026-10-09 from `fix/type-stability` (`e1dcbbf`, now tag `archive/type-
   11. ~~**Light work with a `Var` lifetime is 1.6x of hand-written.**~~ Not a cost of the package (2026-10-28): both loops do only adds in registers (no loads, stores or calls per step). LLVM folds the hand-written loop's `+= 1` steps into one add of the step count (an empty counting loop is left), while the package's loop does the adds, vectorized (14 instructions per 8 steps). Only visible when a step is an integer `+= 1`; with real work per step: 1.00-1.01x.
   7. **Holders that copy a field's matcher into a separate type parameter** (`list_field_derived_params`, the hook in
      src/Identifiable/UniquePlanId/Hooks.jl, exists only to keep that copy in step when the uuid rewrite changes the
-     field). `Var` holds only its matcher (now `VarLocation{M, name, transform, reversefunc}`, `storage::M`, a context key as
-     `KeyMatcher{k}`; first as `Var{M, name, transform}`, `matcher::M` on `exp/unique-plan-id-cleanup`, 2026-10-27); the others still copy. Give each the same shape, then remove the hook,
+     field). `Var` holds only its matcher (now `VarLocation{M, name, transform, reversefunc}`, `storage::M`; a context key is
+     resolved straight away to its partition; first as `Var{M, name, transform}`, `matcher::M` on
+     `exp/unique-plan-id-cleanup`, 2026-10-27); the others still copy. Give each the same shape, then remove the hook,
      `_derive_params!` and `scref_match`'s use for it:
      1. `Route`, `Redirect` (`Smatch`/`Tmatch` from `source_ref`/`target_ref`) and `Share` (`FirstMatch`/`SecondMatch`
-        from `a1`/`a2`): hold the endpoint's matcher instead of the object, a `KeyMatcher` once resolved instead of
-        `nothing`. Check first: `getkey(reg, object)` and the matcher lookup (`matcher_sckey`) give the same key; no
+        from `a1`/`a2`): hold the endpoint's matcher instead of the object, its partition once resolved (a resolved
+        endpoint holds no matcher). Check first: `getkey(reg, object)` and the matcher lookup (`matcher_sckey`) give the same key; no
         handle gets its key after the route is built (`Autokey`); the DSL reads of endpoint objects
         (`fixed_namespace(owner)`, src/CompositeDSL/StateAndRoutes.jl:159, :258).
      2. `IdentifiableAlgo` (`Id` from `matcher`): always hold the matcher, `Id` = its type. `Id` is parameter 2 of

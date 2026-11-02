@@ -158,8 +158,8 @@ function _resolve_exchange_specs(context::ProcessContext, selectors::Tuple)
     return ntuple(i -> _resolve_exchange_spec(context, selectors[i]), length(selectors))
 end
 
-@inline _exchange_selector_pair(selector::Var{M, Varname}) where {M<:AbstractMatcher, Varname} = Varname => selector
-@inline _exchange_selector_pair(pair::Pair{Symbol, <:Var}) = pair
+@inline _exchange_selector_pair(selector::VarLocation{S, Varname}) where {S, Varname} = Varname => selector
+@inline _exchange_selector_pair(pair::Pair{Symbol, <:VarLocation}) = pair
 
 function _resolve_exchange_spec(context::ProcessContext, selector)
     name, var = _exchange_selector_pair(selector)
@@ -167,18 +167,18 @@ function _resolve_exchange_spec(context::ProcessContext, selector)
     return ResolvedExchangeVar(name, subcontext, varname, initial)
 end
 
-function _resolve_exchange_var(context::ProcessContext, ::Var{M, Varname}) where {M<:AbstractMatcher, Varname}
-    M === KeyMatcher{:globals} && error("ContextExchange selectors must target stored subcontext variables, not globals.")
+function _resolve_exchange_var(context::ProcessContext, ::VarLocation{M, Varname}) where {M, Varname}
+    M <: RuntimePartition && error("ContextExchange selectors must target stored subcontext variables, not runtime values ($(partition_name(M))).")
     subcontext = _resolve_exchange_entity(context, M)
     initial = _validate_exchange_target(context, subcontext, Varname)
     return subcontext, Varname, initial
 end
 
 """
-Return the SCKey of the subcontext an exchange selector `Var` targets. The `Var` stores a context
-key (`KeyMatcher`) or a matcher (see `Var`); a key must name a subcontext of `context`.
+Return the SCKey of the subcontext an exchange selector targets. The selector's storage is a namespace's partition
+(from a context key), which must name a subcontext of `context`, or a matcher (see `Var`).
 """
-function _resolve_exchange_entity(context::ProcessContext, ::Type{KeyMatcher{entity}}) where {entity}
+function _resolve_exchange_entity(context::ProcessContext, ::Type{StatePartition{entity}}) where {entity}
     entity in get_subcontexts_fieldnames(typeof(context)) || error("ContextExchange target subcontext $(entity) not found.")
     return entity
 end
@@ -372,7 +372,7 @@ function Base.view(context::ProcessContext, varname::Symbol; exchange::Union{Not
     return ContextExchangeVar(context, varname; exchange)
 end
 
-function Base.view(context::ProcessContext, ::Var{KeyMatcher{Exchange}, Varname}) where {Exchange, Varname}
+function Base.view(context::ProcessContext, ::VarLocation{StatePartition{Exchange}, Varname}) where {Exchange, Varname}
     return ContextExchangeVar(context, Varname; exchange = Exchange)
 end
 

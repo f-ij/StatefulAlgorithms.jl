@@ -125,19 +125,10 @@ end
 Base.@nospecializeinfer dynamic_equals(@nospecialize(a::ValMatcher), @nospecialize(b::ValMatcher)) = getmatchers(a) == getmatchers(b)
 
 """
-    KeyMatcher(key)
-
-The subcontext with SCKey `key` (`:Sensor_1`, `:_captured_returns`), as a matcher: the key in the type, no bytes. What a
-`Var` of a context key holds; it names a subcontext directly, so it is never looked up in a registry.
-"""
-struct KeyMatcher{key} <: AbstractMatcher{key} end
-KeyMatcher(key::Symbol) = KeyMatcher{key}()
-
-"""
     reconstruct_matcher(M) -> the matcher of type `M`
 
-The matcher of type `M`, from the type alone. A matcher without fields (`KeyMatcher{k}`, `TypeMatcher{T}`,
-`SimpleId{id}`, ...) is the only instance of its type. A matcher with data can be reconstructed only where its type
+The matcher of type `M`, from the type alone. A matcher without fields (`TypeMatcher{T}`, `SimpleId{id}`,
+...) is the only instance of its type. A matcher with data can be reconstructed only where its type
 holds that data; `UniquePlanId` adds a method (a held one has its uuid in the type). Errors otherwise.
 """
 function reconstruct_matcher(::Type{M}) where {M}

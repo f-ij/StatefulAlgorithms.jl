@@ -26,11 +26,10 @@ An SCRef is used in three steps:
 ################################################
 
 """
-The matcher an SCRef is found by: an SCKey as a `KeyMatcher`, anything else as its `match_by` made a matcher (a type
-as a `TypeMatcher`, a plain value as a `ValMatcher`). What a `Var` holds.
+The matcher an SCRef that is not a context key is found by: its `match_by` made a matcher (a type as a `TypeMatcher`,
+a plain value as a `ValMatcher`). What a `Var` holds.
 """
 function scref_matcher(ref)
-    ref isa Symbol && return KeyMatcher(ref)
     matcher = match_by(ref)
     matcher isa AbstractMatcher && return matcher
     matcher isa Type && return TypeMatcher(matcher)
