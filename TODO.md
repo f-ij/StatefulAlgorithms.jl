@@ -440,7 +440,7 @@ Restored 2026-10-09 from `fix/type-stability` (`e1dcbbf`, now tag `archive/type-
   - [ ] `AbstractSubContext` has one subtype (`SubContext`) and is used nowhere else. Keep it only if something should dispatch on it.
 
 ## Cleanup: `src/Context/View/Locations.jl` (noted 2026-10-17)
-- [x] ~~One `getproperty` method for `VarLocation{:state}` and `VarLocation{:runtime}`~~ Done on `refactor/partition-type` (2026-11-01): a location carries its partition (`VarLocation{<:Partition}`), and one `getproperty` reads through `_read_partition(partition, view, Val(varname))`.
+- [x] ~~One `getproperty` method for `VarLocation{:state}` and `VarLocation{:runtime}`~~ Done on `refactor/plan-compiles` (2026-11-01): a location carries its partition (`VarLocation{<:Partition}`), and one `getproperty` reads through `_read_partition(partition, view, Val(varname))`.
 - [ ] Then fold `_assigned_value` into `_read_partition(::RuntimePartition, ...)`, its only caller left: check `haskey(values, varname)` there, where `varname` is a type parameter. Today the check only folds away because `_assigned_value` is inlined: a `@noinline` copy of it infers `Union{...}` of all the partition's field types (the `Symbol` is not constant-propagated). Keep `_throw_unassigned` for its error message.
 - [ ] Remove `create_merge_tuples_expr`: nothing in `src/`, `test/` or `ext/` calls it.
 - [ ] Remove the commented-out `getproperty(::SubContextView, ::Symbol)` block and its TODO ("Do we really need the generated version?").
