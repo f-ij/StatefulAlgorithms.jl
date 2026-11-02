@@ -209,8 +209,8 @@ lifetime, builds the run's `LoopContext` from the process's context (`ip.context
 then calls `run_session_loop(loop, session, plan, loop_context, lifetime)` with the process's plan (`ip.loop_algo`) and it as arguments, the same entry as a `Process`; the context it gives back becomes
 `ip.context`. The counter is reset at the loop's start (`before_while(::InlineSession)`). With `inlined = Val(true)`
 the loop is pasted into `run(ip)` instead. No session holds a context: kept in a mutable field and read by the loop's
-own function, its pointers have to be rooted inside the loop (22% slower per step on the 3D Ising graph). `threaded = true` or
-`:async` runs it on a task.
+own function, its pointers have to be rooted inside the loop (22% slower per step on the 3D Ising graph). `async = Val(true)`
+runs it on a task (`@async`); as a `Val`, `run(ip)` compiles no task code otherwise.
 
 ### run(plan)
 

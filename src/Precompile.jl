@@ -663,7 +663,7 @@ end
 #== end: constructors ==#
 
 #===================================================================================================================
-Section: InlineProcess: run, run_nogen, reset!, threaded and async.
+Section: InlineProcess: run, run_nogen, reset!, async.
 Unique: within noise (≤0.015 s per phase, ≈0.06–0.1 s per scenario spread thin). Alone: −1.0 to −1.3 s, overlapping
 with process_basics. Cost: +0.0 s precompile, +0.3 MB.
 ===================================================================================================================#
@@ -687,13 +687,8 @@ with process_basics. Cost: +0.0 s precompile, +0.3 MB.
     run_nogen(composite_inline)
     reset!(composite_inline)
 
-    inline_threaded = InlineProcess(_ProcessPrecompileCounter; repeats = 1, threaded = true)
-    inline_threaded_task = run(inline_threaded)
-    wait(inline_threaded_task)
-    fetch(inline_threaded_task)
-
-    inline_async = InlineProcess(_ProcessPrecompileCounter; repeats = 1, threaded = :async)
-    inline_async_task = run(inline_async)
+    inline_async = InlineProcess(_ProcessPrecompileCounter; repeats = 1)
+    inline_async_task = run(inline_async; async = Val(true))
     wait(inline_async_task)
     fetch(inline_async_task)
 end

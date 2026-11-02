@@ -1,11 +1,11 @@
-export InlineProcess, InlineProcessAlgorithm, isthreaded, isasync, run, reset!
+export InlineProcess, InlineProcessAlgorithm, run, reset!
 """
 A fully typed process that is meant for inlining into other Functions
 Mainly used to compose algorithms in tight loops, plugging into the ProcessLoopAlgorithm system
 
 This doesn't provide the multitasking features of Process, but is faster to restart
 """
-mutable struct InlineProcess{TD,ContextType, Lt,Mode,A} <: AbstractProcess
+mutable struct InlineProcess{TD,ContextType, Lt,A} <: AbstractProcess
     const id::UUID
     # The plan, its registry with the plan's `UniqueKeyMap`: the only place the process has the map, so its type has it
     # (`context(ip)[handle]`, `run(ip; lifetime)` numbering while compiling).
@@ -22,18 +22,6 @@ end
 #TODO Improve context semantics
 contexttype(::Union{InlineProcess{TD,ContextType}, Type{<:InlineProcess{TD,ContextType}}}) where {TD,ContextType} = ContextType
 
-@inline function _inline_process_mode(threaded)
-    if threaded === true || threaded === :threaded
-        return :threaded
-    elseif threaded === false || threaded === :sync
-        return :sync
-    elseif threaded === :async
-        return :async
-    else
-        error("Unsupported InlineProcess execution mode `$threaded`. Use `true`, `false`, `:threaded`, or `:async`.")
-    end
-end
-
 @inline function _inline_process_lifetime(func, repeats, lifetime)
     if !isnothing(repeats)
         isnothing(lifetime) || error("Pass either `repeats` or `lifetime` to `InlineProcess`, not both.")
@@ -46,7 +34,7 @@ end
 end
 
 """
-    InlineProcess(func, Init(...), Override(...); threaded, repeats, lifetime, context)
+    InlineProcess(func, Init(...), Override(...); repeats, lifetime, context)
 
 Resolves `func` first (untyped) and prepares the plan, its context and the lifetime without the plan's `UniqueKeyMap`
 (`strip_keymap`, `number_by_keymap_dynamic`), so a new set of `Unique` handles compiles none of that again. The process
@@ -65,33 +53,30 @@ Base.@nospecializeinfer function _build_inline_process(@nospecialize(func), @nos
     algo isa LoopSpec && (algo = resolve(algo))
     keymap = getkeymap(algo)
     # The lifetime is not part of the plan: its `Var`s get the plan's numbers here, while the map is known.
-    algo, prepared_context, lifetime, mode = _prepare_inline_process(strip_keymap(algo), inputs_overrides...;
+    algo, prepared_context, lifetime = _prepare_inline_process(strip_keymap(algo), inputs_overrides...;
         context = strip_keymap(context), lifetime = number_by_keymap_dynamic(lifetime, keymap), kwargs...)
-    ip = _construct_inline_process(with_keymap(algo, keymap), algo, prepared_context, lifetime, Val(mode))
+    ip = _construct_inline_process(with_keymap(algo, keymap), algo, prepared_context, lifetime)
     # `run(ip)` is typed on the map, so compiled for every set of `Unique` handles: compiled here, so the first run does
     # not wait for it (src/PrecompileInterface.jl).
     precompile_interface(ip)
     return ip
 end
 
-@inline function _prepare_inline_process(algo, inputs_overrides...; threaded=false, repeats=nothing, lifetime=nothing, context=nothing)
+@inline function _prepare_inline_process(algo, inputs_overrides...; repeats=nothing, lifetime=nothing, context=nothing)
     lifetime = _inline_process_lifetime(algo, repeats, lifetime)
     lifetime = normalize_process_lifetime(algo, lifetime)
     algo = isnothing(context) ? _init_plan(algo, inputs_overrides...; lifetime) : _with_lifecycle(resolve(algo), context, (), ())
     prepared_context = getpersistentcontext(algo)
     # The lifetime's `Var`s by key (`resolve_var_keys`), once: the loop reads them without the registry.
     lifetime = resolve_var_keys(lifetime, prepared_context)
-    return algo, prepared_context, lifetime, _inline_process_mode(threaded)
+    return algo, prepared_context, lifetime
 end
 
 # The only step typed on the map (in `algo`'s registry): compiled once per set of `Unique` handles, and small.
 # `loop_algo` and `context` are the plan and its context without the map, the loop's arguments.
-function _construct_inline_process(algo::TD, loop_algo::A, context::C, lifetime::Lt, ::Val{mode}) where {TD, A, C, Lt, mode}
-    return InlineProcess{TD, C, Lt, mode, A}(uuid1(), algo, false, lifetime, loop_algo, context, InlineSession())
+function _construct_inline_process(algo::TD, loop_algo::A, context::C, lifetime::Lt) where {TD, A, C, Lt}
+    return InlineProcess{TD, C, Lt, A}(uuid1(), algo, false, lifetime, loop_algo, context, InlineSession())
 end
-
-@inline isthreaded(ip::InlineProcess{TD,ContextType,Lt,Mode}) where {TD,ContextType,Lt,Mode} = Mode == :threaded
-@inline isasync(ip::InlineProcess{TD,ContextType,Lt,Mode}) where {TD,ContextType,Lt,Mode} = Mode == :async
 
 @inline lifetime(ip::IP) where {IP<:InlineProcess} = ip.lifetime
 getcontext(ip::IP) where {IP<:InlineProcess} = context(ip)
@@ -168,30 +153,26 @@ end
     resolve_var_keys(_inline_process_lifetime(algo, repeats, number_by_keymap(lt, getfield(getregistry(getalgo(p)), :keymap))), _context(p))
 
 """
-    run(ip; context, repeats, lifetime, threaded, inlined = Val(false), inputs...)
+    run(ip; context, repeats, lifetime, async = Val(false), inlined = Val(false), inputs...)
 
-One run of `ip`, from the context it holds, returning the final context. `inlined = Val(true)` pastes the loop into
+One run of `ip`, from the context it holds, returning the final context. `async = Val(true)` runs it on a task
+(`@async`) and returns the task; as a `Val`, the branch is decided while compiling, so `run(ip)` compiles no task code.
+`inlined = Val(true)` pastes the loop into
 `run(ip)`: the context is not passed into a call and back (57-62 instead of 121-150 ns per `run(ip)` for the 616-byte
 context of the 3D Ising model with one step per run), but the loop's machine code is made again for every set of
 `Unique` handles at the first such run (first run 8.5-8.8 instead of 5.4-5.6 ms for 4 counters, 20.6-24.0 instead of
 12.5-13.4 ms for 16), while the default call into the loop is compiled once for all (`run_session_loop`). The choice is in the `Val`'s type, so the branch is decided while compiling.
 """
-@inline function Base.run(p::InlineProcess, inputs_overrides...; context = nothing, repeats=nothing, lifetime=nothing, threaded=nothing, inlined::Val = Val(false), kwargs...)
+@inline function Base.run(p::InlineProcess, inputs_overrides...; context = nothing, repeats=nothing, lifetime=nothing, async::Val{isasync} = Val(false), inlined::Val = Val(false), kwargs...) where {isasync}
     algo = getfield(p, :loop_algo)   # the plan without the map, as the loop runs it
     _set_inline_run_context!(p, context)
     runtime_inputs = _inline_runtime_inputs(algo, inputs_overrides, (; kwargs...))
     run_lifetime = _inline_run_lifetime(p, algo, repeats, lifetime)
-
-    if (isnothing(threaded) && isthreaded(p)) || threaded === true
-        return Threads.@spawn _run_inline!(p, run_lifetime, runtime_inputs, inlined)
-    elseif (isnothing(threaded) && isasync(p)) || threaded === :async
-        return @async _run_inline!(p, run_lifetime, runtime_inputs, inlined)
-    else
-        return @inline _run_inline!(p, run_lifetime, runtime_inputs, inlined)
-    end
+    isasync && return @async _run_inline!(p, run_lifetime, runtime_inputs, inlined)
+    return @inline _run_inline!(p, run_lifetime, runtime_inputs, inlined)
 end
 
-@inline function run_nogen(p::InlineProcess, inputs_overrides...; context = nothing, repeats=nothing, lifetime=nothing, threaded=nothing, kwargs...)
+@inline function run_nogen(p::InlineProcess, inputs_overrides...; context = nothing, repeats=nothing, lifetime=nothing, kwargs...)
     algo = getfield(p, :loop_algo)   # the plan without the map, as the loop runs it
     _set_inline_run_context!(p, context)
     run_lifetime = _inline_run_lifetime(p, algo, repeats, lifetime)
