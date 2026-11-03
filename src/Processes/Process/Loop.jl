@@ -169,7 +169,7 @@ was (TODO.md, "Packaging and threaded composites"). It does not change `process.
 function reset!(p::Process)
     session = getsession(p)
     reset_loopidx!(session)
-    session.tickidx = UInt(1)
+    reset_ticks!(p)
     session.loop_cursor = nothing
     @atomic session.paused = false
     @atomic session.shouldrun = true
