@@ -1,17 +1,9 @@
 export CompositeAlgorithm, Routine
 export step!, init, getmultiplier, getoptions, setoptions, get_shares, get_routes
 
-"""
-Return the execution plan carried by a loop wrapper.
-
-For plan nodes this returns the plan itself, so callers can accept either an
-unresolved plan (`CompositeAlgorithm`/`Routine`) or a runtime `LoopAlgorithm`
-without branching.
-"""
-@inline getplan(la::LoopAlgorithm) = getfield(la, :plan)
-@inline getplan(plan::AbstractPlan) = plan
-@inline getplan(::Type{<:LoopAlgorithm{Plan}}) where {Plan} = Plan
-@inline getplan(::Type{Plan}) where {Plan<:AbstractPlan} = Plan
+##########################################
+############## Constructors ##############
+##########################################
 
 """
 Build or rebuild a concrete `LoopAlgorithm` runtime wrapper.
@@ -25,27 +17,23 @@ LoopAlgorithm(plan::LoopAlgorithm; options = getoptions(plan), registry = getreg
 LoopAlgorithm(plan::AbstractPlan; options = (), registry = nothing, context = nothing, inits = (), overrides = (), id = getid(plan)) =
     LoopAlgorithm{typeof(plan), typeof(options), typeof(registry), typeof(context), typeof(inits), typeof(overrides), id}(plan, options, registry, context, inits, overrides)
 
-"""Return plan-global wiring inherited by every child."""
-@inline global_wiring(wiring::PlanWiring) = getfield(wiring, :global_wiring)
+##########################################
+############## Plan access ###############
+##########################################
 
-"""Return child-indexed wiring passed directly to each child."""
-@inline child_wiring(wiring::PlanWiring) = getfield(wiring, :child_wiring)
+"""
+Return the execution plan carried by a loop wrapper.
 
-"""Return whether a plan wiring object carries no usable wiring."""
-Base.isempty(wiring::PlanWiring) =
-    isempty(global_wiring(wiring)) && all(isempty, child_wiring(wiring))
+For plan nodes this returns the plan itself, so callers can accept either an
+unresolved plan (`CompositeAlgorithm`/`Routine`) or a runtime `LoopAlgorithm`
+without branching.
+"""
+@inline getplan(la::LoopAlgorithm) = getfield(la, :plan)
+@inline getplan(plan::AbstractPlan) = plan
+@inline getplan(::Type{<:LoopAlgorithm{Plan}}) where {Plan} = Plan
+@inline getplan(::Type{Plan}) where {Plan<:AbstractPlan} = Plan
 
-@inline getmultiplier(cla::LoopAlgorithm, obj) = getmultiplier(getregistry(cla), obj)
-@inline Base.getkey(cla::LoopAlgorithm, obj) = getkey(getregistry(cla), obj)
-"""The `RootOption`s of the whole plan tree, collected once by `resolve` (`_collect_root_options`)."""
-@inline getoptions(cla::LoopAlgorithm) = getfield(cla, :options)
 @inline getstates(cla::LoopAlgorithm) = getstates(getplan(cla))
-@inline getregistry(cla::LoopAlgorithm) = getfield(cla, :reg)
-@inline getpersistentcontext(cla::LoopAlgorithm) = getfield(cla, :context)
-@inline getstoredinits(cla::LoopAlgorithm) = getfield(cla, :inits)
-@inline getstoredoverrides(cla::LoopAlgorithm) = getfield(cla, :overrides)
-@inline getcontext(cla::LoopAlgorithm) = getpersistentcontext(cla)
-
 @inline getalgos(cla::LoopAlgorithm) = getalgos(getplan(cla))
 """Return a copy of `cla` whose plan has the children `funcs`."""
 @inline rebuild_loopalgorithm_funcs(cla::LoopAlgorithm, funcs::F) where {F} =
@@ -73,11 +61,51 @@ end
 
 @inline plan_child_namespace(la::LoopAlgorithm, idx::Int) = plan_child_namespace(getplan(la), idx)
 
+##########################################
+################# Wiring #################
+##########################################
+
+"""Return plan-global wiring inherited by every child."""
+@inline global_wiring(wiring::PlanWiring) = getfield(wiring, :global_wiring)
+
+"""Return child-indexed wiring passed directly to each child."""
+@inline child_wiring(wiring::PlanWiring) = getfield(wiring, :child_wiring)
+
+"""Return whether a plan wiring object carries no usable wiring."""
+Base.isempty(wiring::PlanWiring) =
+    isempty(global_wiring(wiring)) && all(isempty, child_wiring(wiring))
+
 """The `Share`s / `Route`s in the wiring of `cla`'s plan (plan-wide and per child)."""
 get_shares(cla::LA) where {LA<:LoopSpec} = @inline filter_by_type(Share, collect_wiring(cla))
 get_routes(cla::LA) where {LA<:LoopSpec} = @inline filter_by_type(Route, collect_wiring(cla))
 
+##########################################
+############# Stored fields ##############
+##########################################
+
+@inline getmultiplier(cla::LoopAlgorithm, obj) = getmultiplier(getregistry(cla), obj)
+@inline Base.getkey(cla::LoopAlgorithm, obj) = getkey(getregistry(cla), obj)
+"""The `RootOption`s of the whole plan tree, collected once by `resolve` (`_collect_root_options`)."""
+@inline getoptions(cla::LoopAlgorithm) = getfield(cla, :options)
+@inline getregistry(cla::LoopAlgorithm) = getfield(cla, :reg)
+@inline getpersistentcontext(cla::LoopAlgorithm) = getfield(cla, :context)
+@inline getstoredinits(cla::LoopAlgorithm) = getfield(cla, :inits)
+@inline getstoredoverrides(cla::LoopAlgorithm) = getfield(cla, :overrides)
+@inline getcontext(cla::LoopAlgorithm) = getpersistentcontext(cla)
+
 @inline getoptions(la::LA, T::Type{O}) where {LA<:LoopSpec, O} = filter_by_type(O, getoptions(la))
+
+# Lifecycle accessors keep `LoopAlgorithm`, plain plan nodes, and wrappers on a
+# shared path. Plain plans report no stored lifecycle data.
+@inline getstoredinits(la::LA) where {LA<:LoopSpec} = hasfield(LA, :inits) ? getfield(la, :inits) : ()
+@inline getstoredoverrides(la::LA) where {LA<:LoopSpec} = hasfield(LA, :overrides) ? getfield(la, :overrides) : ()
+@inline getpersistentcontext(la::LA) where {LA<:LoopSpec} = hasfield(LA, :context) ? getfield(la, :context) : nothing
+@inline getcontext(la::LA) where {LA<:LoopSpec} = getpersistentcontext(la)
+
+##########################################
+################ Setters #################
+##########################################
+
 setoptions(la::LA, options) where {LA<:LoopSpec} = error("setoptions not implemented for $(typeof(la))")
 setwiring(la::LoopAlgorithm, wiring) = setfield(la, :plan, setwiring(getplan(la), wiring))
 setstates(la::LoopAlgorithm, states) = setfield(la, :plan, setstates(getplan(la), states))
@@ -90,16 +118,14 @@ function _with_lifecycle(la::LoopAlgorithm{Plan, O, R, OldC, OldI, OldOv, id}, c
     LoopAlgorithm{Plan, O, R, C, I, Ov, id}(getplan(la), getoptions(la), getregistry(la), context, inits, overrides)
 end
 
-# Lifecycle accessors keep `LoopAlgorithm`, plain plan nodes, and wrappers on a
-# shared path. Plain plans report no stored lifecycle data.
-@inline getstoredinits(la::LA) where {LA<:LoopSpec} = hasfield(LA, :inits) ? getfield(la, :inits) : ()
-@inline getstoredoverrides(la::LA) where {LA<:LoopSpec} = hasfield(LA, :overrides) ? getfield(la, :overrides) : ()
-@inline getpersistentcontext(la::LA) where {LA<:LoopSpec} = hasfield(LA, :context) ? getfield(la, :context) : nothing
-@inline getcontext(la::LA) where {LA<:LoopSpec} = getpersistentcontext(la)
 @inline _without_lifecycle(la::LA) where {LA<:LoopSpec} = _with_lifecycle(la, nothing, (), ())
 
 @inline _attach_registry(la::LoopAlgorithm{Plan, O, OldR, C, Inits, Overrides, id}, registry::R) where {Plan, O, OldR, C, Inits, Overrides, id, R<:NameSpaceRegistry} =
     LoopAlgorithm{Plan, O, R, C, Inits, Overrides, id}(getplan(la), getoptions(la), registry, getpersistentcontext(la), getstoredinits(la), getstoredoverrides(la))
+
+##########################################
+########### Resolution and id ############
+##########################################
 
 """
     isresolved(la)
@@ -113,6 +139,9 @@ Decided by the type alone, so it folds to a constant.
 @inline hasid(la::Union{LoopAlgorithm{Plan,O,R,C,I,Ov,id}, Type{<:LoopAlgorithm{Plan,O,R,C,I,Ov,id}}}) where {Plan,O,R,C,I,Ov,id} = !isnothing(id)
 @inline id(la::Union{LoopAlgorithm{Plan,O,R,C,I,Ov,id}, Type{<:LoopAlgorithm{Plan,O,R,C,I,Ov,id}}}) where {Plan,O,R,C,I,Ov,id} = id
 
+##########################################
+########### Type-level queries ###########
+##########################################
 
 statetypes(::Type{<:LoopAlgorithm{Plan}}) where {Plan} = statetypes(Plan)
 algotypes(::Type{<:LoopAlgorithm{Plan}}) where {Plan} = algotypes(Plan)
@@ -128,6 +157,10 @@ Get the numbers Val(1), Val(2), ... Val(N) for the N algorithms in a composite o
     nums = ntuple(i -> Val(i), numalgos(ca))
     return :($nums)
 end
+
+##########################################
+############ Base extensions #############
+##########################################
 
 Base.@constprop :aggressive @inline function Base.getindex(cla::LA, name::Symbol) where {LA<:LoopSpec}
     getproperty(cla, name)
