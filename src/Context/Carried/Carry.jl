@@ -20,7 +20,7 @@ Julia keeps such a variable in a stack slot and copies it every step, and cannot
 InteractiveIsing 3D graph example copied 600 + 624 bytes per step and ran at 206 updates/s/spin; carrying only the
 written fields: 509.
 
-Which fields a step can write is worked out from the plan's types in Writes.jl (`_find_writable_fields`); `create_carried` asks it.
+Which fields a step can write is worked out from the plan's types in Writes.jl and the files after it (`_find_writable_fields`); `create_carried` asks it.
 =#
 
 """

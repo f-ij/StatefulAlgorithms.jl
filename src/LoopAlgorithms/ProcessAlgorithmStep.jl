@@ -54,30 +54,3 @@ end
 """The view a leaf step gets at its position in the plan: its namespace, and the shares and routes of its wiring."""
 @inline _leaf_view(algo::A, lc::L, wiring::W, namespace::N) where {A,L<:LoopContext,W<:PlanWiringView,N<:Namespace} =
     @inline view(lc, algo, namespace; shares = (@inline shares(wiring)), routes = (@inline routes(wiring)))
-
-# The persistent fields a leaf writes (see src/Context/Carried/Writes.jl).
-@inline _find_writable_fields(algo::AlgoType, ::NoLoopCursor, persistent_context::PersistentContextType, ::Type{RuntimeContextType}, wiring::WiringViewType, namespace::NamespaceType, session::SessionType, lifetime::LifetimeType) where {AlgoType<:ProcessAlgorithm, PersistentContextType<:ProcessContext, RuntimeContextType, WiringViewType, NamespaceType, SessionType, LifetimeType} =
-    @inline _find_leaf_writable_fields(algo, persistent_context, RuntimeContextType, wiring, namespace)
-
-"""The persistent fields one step of an algorithm can write: those of the payload its merge writes, read off its type."""
-@inline _find_leaf_writable_fields(algo::AlgoType, persistent_context::PersistentContextType, ::Type{RuntimeContextType}, wiring::WiringViewType, namespace::NamespaceType) where {AlgoType, PersistentContextType<:ProcessContext, RuntimeContextType, WiringViewType, NamespaceType} =
-    RuntimeContextType <: ProcessContext ?
-        _read_payload_fields(Core.Compiler.return_type(_leaf_payload, Tuple{AlgoType, _loop_context_type(PersistentContextType, RuntimeContextType, WiringViewType), WiringViewType, NamespaceType}), PersistentContextType) :
-        _every_field(PersistentContextType)
-
-"""
-What one step of a leaf writes into the persistent context (see `_build_merge_payload`), built from the same pieces as its
-`_step!`. Only its type is used.
-"""
-@inline function _leaf_payload(algo::A, lc::L, wiring::W, namespace::N) where {A,L,W,N}
-    contextview = @inline _leaf_view(algo, lc, wiring, namespace)
-    return @inline _step_payload(contextview, (@inline step!(algo, contextview)), wiring, namespace)
-end
-
-# As `_merge_step_return`: nothing is written when a step writes nothing.
-@inline function _step_payload(contextview, retval, wiring::PlanWiringView, namespace::Namespace)
-    demand = return_demand(wiring, namespace)
-    return @inline _writes_payload(contextview, (@inline _step_writes(retval, demand)), demand)
-end
-@inline _writes_payload(contextview, ::NamedTuple{()}, demand::ReturnDemand) = (;)
-@inline _writes_payload(contextview, writes::NamedTuple, demand::ReturnDemand) = @inline _build_merge_payload(contextview, writes, demand)

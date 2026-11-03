@@ -127,7 +127,3 @@ Base.@constprop :aggressive @inline @generated function _step!(tca::TCA, cursor:
     push!(exprs, :(return @inline leave_scope(lc, outer)))
     return Expr(:block, exprs...)
 end
-
-# The persistent fields a threaded composite writes (see src/Context/Carried/Writes.jl): as a composite's.
-@inline @generated _find_writable_fields(plan::PlanType, cursor::CursorType, persistent_context::PersistentContextType, ::Type{RuntimeContextType}, wiring::WiringViewType, namespace::NamespaceType, session::SessionType, lifetime::LifetimeType) where {PlanType<:ThreadedCompositeAlgorithm, CursorType, PersistentContextType<:ProcessContext, RuntimeContextType, WiringViewType, NamespaceType, SessionType, LifetimeType} =
-    _children_writes_expr(PlanType)

@@ -63,12 +63,6 @@ end
 """The returned values `retval` keeps for the view, as a named tuple expression."""
 _kept_returns_expr(names) = Expr(:tuple, Expr(:parameters, (Expr(:kw, name, :(getproperty(retval, $(QuoteNode(name))))) for name in names)...))
 
-@inline @generated function _call_payload(contextview::SCV, retval::R) where {SCV<:SubContextView, R<:NamedTuple}
-    names = _call_return_names(SCV, R)
-    isempty(names) && return :((;))
-    return :(@inline _build_merge_payload(contextview, $(_kept_returns_expr(names)), ReturnDemand{$names}()))
-end
-
 """Merge a `Callable` return through its view: each name the view sees is written where it lives (see `_call_return_names`)."""
 @inline @generated function merge_call_return(contextview::SCV, retval::R) where {SCV<:SubContextView, R<:NamedTuple}
     names = _call_return_names(SCV, R)
@@ -81,10 +75,4 @@ end
     contextview = @inline _leaf_view(ex, lc, wiring, Namespace{:_captured_returns}())
     retval = @inline step!(ex, contextview)
     return @inline merge_call_return(contextview, retval)
-end
-
-# The persistent fields a `Callable` writes (see src/Context/Carried/Writes.jl): its view-visible returns.
-@inline function _leaf_payload(ex::EX, lc::L, wiring::W, namespace::N) where {EX<:Callable,L,W,N}
-    contextview = @inline _leaf_view(ex, lc, wiring, Namespace{:_captured_returns}())
-    return @inline _call_payload(contextview, (@inline step!(ex, contextview)))
 end

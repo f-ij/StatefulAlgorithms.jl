@@ -256,7 +256,7 @@ end
 end
 
 # The persistent fields an exchange writes (see src/Context/Carried/Writes.jl): the targets it resolved at init.
-@inline _find_leaf_writable_fields(exchange::ContextExchange, persistent_context::PersistentContextType, ::Type{RuntimeContextType}, wiring::WiringViewType, ::Namespace{Name}) where {PersistentContextType<:ProcessContext, RuntimeContextType, WiringViewType, Name} =
+@inline _find_writable_fields(exchange::ExchangeType, cursor::CursorType, persistent_context::PersistentContextType, ::Type{RuntimeContextType}, wiring::WiringViewType, ::Namespace{Name}, session::SessionType, lifetime::LifetimeType) where {ExchangeType<:ContextExchange, CursorType, PersistentContextType<:ProcessContext, RuntimeContextType, WiringViewType, Name, SessionType, LifetimeType} =
     _find_exchange_writable_fields(PersistentContextType, Val(Name))
 
 @generated function _find_exchange_writable_fields(::Type{PersistentContextType}, ::Val{Name}) where {PersistentContextType<:ProcessContext, Name}

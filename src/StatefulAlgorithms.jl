@@ -94,6 +94,7 @@ module StatefulAlgorithms
     include("Threaded/Threaded.jl")
     include("LoopAlgorithms/Edit/Edit.jl")
     include("Packaging/Packaging.jl")
+    include("Context/Carried/Carried.jl")   # loops carry only the fields their steps write; after every node type it has a rule for
     include("Loops.jl")
     include("Trackers/Trackers.jl")
     include("TotalInc.jl")

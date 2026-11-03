@@ -7,7 +7,6 @@ include("SubContext.jl")
 include("ProcessContexts.jl")
 include("RuntimeContext.jl")
 include("ContextBundles.jl")
-include("Carried/Carried.jl")   # loops carry only the fields their steps write
 include("Constructor.jl")
 include("View/View.jl")
 include("Vars.jl")
