@@ -1,5 +1,15 @@
 export Interactive
 
+#=
+`Interactive`: the lifecycle option that wraps named context variables in `InteractiveVar`. Sections, in order: the
+type and its constructors, accessors, wrapping the context (applying resolved specs to a prepared context), merging
+and splitting specs, and at the end the methods of the InputInterface defaults (StructDefs.jl).
+=#
+
+##########################################
+######### Type and constructors ##########
+##########################################
+
 """
     Interactive(target, varnames...)
 
@@ -18,11 +28,15 @@ end
 @inline Interactive{Target, Names}(ref = nothing) where {Target, Names} =
     Interactive{Target, Names, typeof(ref)}(ref)
 
-@inline target_type(::Interactive{Target}) where {Target} = Target
-@inline get_target(::Interactive{Target}) where {Target} = Target
-@inline get_target(::Type{<:Interactive{Target}}) where {Target} = Target
+##########################################
+############### Accessors ################
+##########################################
 
 @inline interactive_names(::Union{Interactive{Target, Names}, Type{<:Interactive{Target, Names}}}) where {Target, Names} = Names
+
+##########################################
+########## Wrapping the context ##########
+##########################################
 
 """Wrap a context value for interactive mutation, unless it is already wrapped."""
 @inline interactive_wrapper(value) = InteractiveVar(value)
@@ -74,6 +88,10 @@ Wrap selected variables in one subcontext with `InteractiveVar`.
     end
 end
 
+##########################################
+###### Merging and splitting specs #######
+##########################################
+
 """
 Merge resolved `Interactive` specs by target while keeping all requested names.
 """
@@ -105,3 +123,11 @@ function _split_lifecycle_specs(specs)
     interactives = filter_by_type(Interactive, specs)
     return inits, overrides, interactives
 end
+
+##########################################
+####### InputInterface extensions ########
+##########################################
+
+@inline target_type(::Interactive{Target}) where {Target} = Target
+@inline get_target(::Interactive{Target}) where {Target} = Target
+@inline get_target(::Type{<:Interactive{Target}}) where {Target} = Target
