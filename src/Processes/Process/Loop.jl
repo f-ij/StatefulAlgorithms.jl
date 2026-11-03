@@ -23,10 +23,10 @@ function makeloop!(p::Process, inputs::NamedTuple, lt; threaded = true, loopfunc
 end
 
 @noinline _makeloop_dynamic!(p::Process, inputs::NamedTuple; threaded = true, loopfunc::LF = loop) where {LF} =
-    _makeloop!(p, inputs, lifetime(p), StatefulAlgorithms.context(p); threaded, loopfunc)
+    _makeloop!(p, inputs, lifetime(p), StatefulAlgorithms.getcontext(p); threaded, loopfunc)
 
 @noinline _makeloop_dynamic!(p::Process, inputs::NamedTuple, lt; threaded = true, loopfunc::LF = loop) where {LF} =
-    _makeloop!(p, inputs, lt, StatefulAlgorithms.context(p); threaded, loopfunc)
+    _makeloop!(p, inputs, lt, StatefulAlgorithms.getcontext(p); threaded, loopfunc)
 
 function _makeloop!(p::Process, inputs::NamedTuple, lt, base_context; threaded = true, loopfunc::LF = loop) where {LF}
     session, func, lc = prepare_for_loop(p, base_context, inputs, lt, Resuming{false}())
@@ -133,7 +133,7 @@ function _finish_run!(p::Process, session::InteractiveSession, persistent_contex
     if loop_ispaused(session)
         _sync_state_context!(p, getpersistent(returnvalue))
         p.runtime_context = getruntime(returnvalue)
-        return context(p)
+        return getcontext(p)
     end
     _sync_state_context!(p, persistent_context)
     session.loop_cursor = nothing
@@ -143,7 +143,7 @@ end
 function _resume_paused_loop!(p::Process; threaded = true)
     wait(p)
     lt = lifetime(p)
-    session, func, lc = prepare_for_loop(p, StatefulAlgorithms.context(p), (;), lt, Resuming{true}())
+    session, func, lc = prepare_for_loop(p, StatefulAlgorithms.getcontext(p), (;), lt, Resuming{true}())
     return _start_run!(p, session, func, lc, lt; threaded, resume = Resuming{true}())
 end
 
@@ -164,7 +164,7 @@ This performs these exact mutations:
 It does not reset counters an algorithm keeps in its own value: a `Package`'s interval counter goes on from where it
 was (TODO.md, "Packaging and threaded composites"). It does not change `process.state_context`, `process.runtime_context`, `process.task`, or
 `process.lastresult`. It does not clear or replace values stored in
-`context(process)`.
+`getcontext(process)`.
 """
 function reset!(p::Process)
     session = getsession(p)

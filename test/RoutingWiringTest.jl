@@ -102,7 +102,7 @@ end
         (1, 1),
         Route(RoutePrecedenceSource => RoutePrecedenceTarget, :level),
     )
-    c = StatefulAlgorithms.context(run(plan; repeats = 3))
+    c = StatefulAlgorithms.getcontext(run(plan; repeats = 3))
     # The target reads the routed `level` (the source's: 6, 7, 8), not its own (100)
     @test c[RoutePrecedenceTarget].seen == 8
     @test c[RoutePrecedenceTarget].level == 100
@@ -120,5 +120,5 @@ end
     # A declared local of the same name as the target's state is hidden by the state (it is only visible implicitly).
     hidden = CompositeAlgorithm(ClashSource, ClashTarget, (1, 1), Declaration(factor = 100.0))
     p = Process(hidden; repeats = 1); run(p); wait(p)
-    @test context(p)[ClashTarget].seen == 1.0
+    @test getcontext(p)[ClashTarget].seen == 1.0
 end

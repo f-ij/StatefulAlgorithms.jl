@@ -41,12 +41,12 @@ function run_package(case, runner, N)
         ip = InlineProcess(case.plan(); repeats = N)
         GC.gc(false)
         t = @elapsed run(ip)
-        return t, context(ip)
+        return t, getcontext(ip)
     else
         p = runner === :process_nostop ? Process(case.plan(); lifetime = NoStopRepeat(N)) : Process(case.plan(); repeats = N)
         GC.gc(false)
         t = @elapsed (run(p); wait(p))
-        return t, context(p)
+        return t, getcontext(p)
     end
 end
 

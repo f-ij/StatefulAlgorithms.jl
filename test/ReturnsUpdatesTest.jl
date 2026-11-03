@@ -72,14 +72,14 @@ ru_true() = true
             @repeat 3 c()
         end); repeats = 1)
         run(p)
-        @test SAru.context(p)[:c].count == 3
+        @test SAru.getcontext(p)[:c].count == 3
 
         p = InlineProcess(@CompositeAlgorithm(begin
             @state s = 0.0
             RUAddOne!(s)
         end); repeats = 3)
         run(p)
-        @test SAru.context(p)[:_state_1].s == 3.0
+        @test SAru.getcontext(p)[:_state_1].s == 3.0
 
         seen = Float64[]
         @test_logs (:warn, r"`RUAddOne!` updates its argument `val`, so it changes `x` here") run(@CompositeAlgorithm(begin
@@ -125,7 +125,7 @@ ru_true() = true
         end); repeats = 2)
         run(p)
         @test seen == [(11.0, 1.0, 2.0, 4.0), (11.0, 1.0, 6.0, 8.0)]
-        @test SAru.context(p)[RUCounter].count == 4   # one state, stepped twice per step
+        @test SAru.getcontext(p)[RUCounter].count == 4   # one state, stepped twice per step
     end
 
     @testset "`@bind` rewires each position's own arguments" begin
@@ -166,14 +166,14 @@ ru_true() = true
             RUMaybe!(s, flag)
         end); repeats = 3)
         run(p)
-        @test SAru.context(p)[:_state_1].s == 3.0
+        @test SAru.getcontext(p)[:_state_1].s == 3.0
         p = InlineProcess(@CompositeAlgorithm(begin
             @state s = 0.0
             @state flag = false
             RUMaybe!(s, flag)
         end); repeats = 3)
         run(p)
-        @test SAru.context(p)[:_state_1].s == 0.0
+        @test SAru.getcontext(p)[:_state_1].s == 0.0
     end
 
     @testset "An `@input` cannot be updated: an error when the block is built" begin
@@ -196,7 +196,7 @@ ru_true() = true
             ru_record!(seen, x)
         end); repeats = 2)
         @test seen == [-101, -102]                          # the return, not the field
-        @test SAru.context(result)[RUFieldX].x == 102       # the field changes only through `@update`
+        @test SAru.getcontext(result)[RUFieldX].x == 102       # the field changes only through `@update`
     end
 
     @testset "`(; a) = @state(X)` and `@state(X).a` read an algorithm's state" begin
@@ -236,7 +236,7 @@ ru_true() = true
         end); repeats = 3)
         run(p)
         @test seen == [0, 10, 20]
-        @test SAru.context(p)[:RUHandWritten_1].total == 3
+        @test SAru.getcontext(p)[:RUHandWritten_1].total == 3
     end
 
     @testset "Capturing a return and updating cost no allocation per step" begin
@@ -292,13 +292,13 @@ end
     run(p)
     # `doubled = Algo()` binds the returned field `doubled`; returning `count` updates it.
     @test ru_legacy_seen == [2, 4, 6]
-    @test SAru.context(p)[:RULegacyCounter_1].count == 3
+    @test SAru.getcontext(p)[:RULegacyCounter_1].count == 3
 
     # In a legacy routine, a lifetime selector the statement assigns reads the repeated algorithm's field.
     @eval ru_legacy_routine = @Routine_legacy begin
         count = @repeat Until(x -> x >= 3, count) RULegacyCounter()
     end
-    @test SAru.context(run(ru_legacy_routine; repeats = 1))[RULegacyCounter].count == 3
+    @test SAru.getcontext(run(ru_legacy_routine; repeats = 1))[RULegacyCounter].count == 3
 
     # `x = @repeat spec Algo()` keeps its legacy meaning (an error with `@Routine`): `x` binds the returned field `x`
     # of the last repeat.

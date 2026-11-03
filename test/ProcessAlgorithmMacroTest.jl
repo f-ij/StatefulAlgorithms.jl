@@ -202,7 +202,7 @@ end
     ip = InlineProcess(TypedConfigForTest(); repeats = 10)
     @test isconcretetype(Base.return_types(run, (typeof(ip),))[1])
     run(ip)
-    @test StatefulAlgorithms.context(ip)[:TypedConfigForTest_1].x ≈ 12 * (1 - 0.5^10)
+    @test StatefulAlgorithms.getcontext(ip)[:TypedConfigForTest_1].x ≈ 12 * (1 - 0.5^10)
 end
 
 @testset "StepAlgorithm macro @inline opt-in" begin

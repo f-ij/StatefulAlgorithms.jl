@@ -22,7 +22,7 @@ plan, its context and the lifetime) -> `_construct_process` (the process and its
 
 There is no `TaskData` layer. The initialized `LoopAlgorithm` carries the
 persistent context plus stored init/override specs. A `Process` normally reads
-its current state context from that wrapper (`context(p)`). Its separate
+its current state context from that wrapper (`getcontext(p)`). Its separate
 `state_context` slot is used only for shape-divergent state, its `runtime_context`
 slot only while a run is paused, and its session (`InteractiveSession`) keeps the
 counters, times, flags and the loop cursor across pause/resume.

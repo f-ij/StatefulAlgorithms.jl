@@ -54,7 +54,7 @@ recipe = (;
     makeworker = (idx, manager) -> Process(MyAlgo; repeats = 1),
 
     loadjob! = (slot, job, manager) -> begin
-        ctx = context(slot.worker)[MyAlgo]
+        ctx = getcontext(slot.worker)[MyAlgo]
         ctx.value[] = job.value
         resetworker!(slot)
     end,
@@ -62,13 +62,13 @@ recipe = (;
     providearguments = (slot, job, manager) -> (;),
 
     afterjob! = (slot, job, manager) -> begin
-        ctx = context(slot.worker)[MyAlgo]
+        ctx = getcontext(slot.worker)[MyAlgo]
         push!(ctx.local_outputs, ctx.output[])
     end,
 
     sync_to_state! = manager -> begin
         for slot in slots(manager)
-            ctx = context(slot.worker)[MyAlgo]
+            ctx = getcontext(slot.worker)[MyAlgo]
             append!(manager.state.outputs, ctx.local_outputs)
             empty!(ctx.local_outputs)
         end
@@ -76,7 +76,7 @@ recipe = (;
 )
 ```
 
-`loadjob!` is the normal place to write job data into `context(slot.worker)` and
+`loadjob!` is the normal place to write job data into `getcontext(slot.worker)` and
 reset the worker. `providearguments` returns runtime keyword arguments for the
 worker run; return `nothing` or omit it if no runtime arguments are needed.
 `afterjob!` reads one finished worker. `sync_to_state!` merges worker-local state
@@ -156,7 +156,7 @@ The old names `FlushAtEnd`, `NoFlush`, `FlushEvery`, and the constructor keyword
 
 - use `manager.state` for shared parameters, output buffers, counters, optimizer
   state, and history;
-- use `context(slot.worker)` for the current job, worker-local buffers, and
+- use `getcontext(slot.worker)` for the current job, worker-local buffers, and
   temporary state.
 
 Build manager state with `initstate`:
@@ -190,7 +190,7 @@ The usual form lets the manager create and own workers:
 recipe = (;
     makeworker = (idx, manager) -> Process(MyAlgo; repeats = 1),
     loadjob! = (slot, job, manager) -> begin
-        ctx = context(slot.worker)[MyAlgo]
+        ctx = getcontext(slot.worker)[MyAlgo]
         ctx.value[] = job.value
         resetworker!(slot)
     end,
@@ -214,7 +214,7 @@ recipe = (;
     makeworker = (idx, manager) -> Process(MyAlgo; repeats = 1),
     makecontext = (idx, manager, template) -> begin
         initialized = init(getalgo(template), Init(MyAlgo; seed = idx))
-        context(initialized)
+        getcontext(initialized)
     end,
 )
 ```
@@ -286,7 +286,7 @@ Use `loadjob!` for persistent context changes:
 
 ```julia
 loadjob! = (slot, job, manager) -> begin
-    ctx = context(slot.worker)[MyAlgo]
+    ctx = getcontext(slot.worker)[MyAlgo]
     ctx.value[] = job.value
     resetworker!(slot)
 end

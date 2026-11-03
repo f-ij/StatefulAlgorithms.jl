@@ -319,7 +319,7 @@ shared Process/resolve/context machinery; keep at least one section that runs a 
     typed_process = Process(_ProcessPrecompileCounter; repeats = 1)
     run(typed_process)
     wait(typed_process)
-    context(typed_process)[_ProcessPrecompileCounter].total
+    getcontext(typed_process)[_ProcessPrecompileCounter].total
     close(typed_process)
 
     input_process = Process(
@@ -776,7 +776,7 @@ Unique: the first on-demand threaded ProcessManager −0.16 s (manuscript, −0.
     end
 
     function _process_manager_precompile_context(worker)
-        return context(worker)[ProcessManagerPrecompileStep]
+        return getcontext(worker)[ProcessManagerPrecompileStep]
     end
 
     function _process_manager_precompile_reset!(ctx)

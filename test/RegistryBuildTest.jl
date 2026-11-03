@@ -151,7 +151,7 @@ rb_plus_one(x) = x + 1.0
     la = rb_loopalgorithm(named)
     @test rb_same_setup(RB.build_registry_and_key_plan(la), RB.build_registry_from_values(la))
     @test RB.all_keys(RB.getregistry(resolve(named))) == (:_state_1, :RBCount_1)
-    @test RB.context(run(named; repeats = 3))[:_state_1].x == 3.0
+    @test RB.getcontext(run(named; repeats = 3))[:_state_1].x == 3.0
 end
 
 @testset "Registry build: `add` and `RegistryBuilder`" begin

@@ -37,7 +37,7 @@ using StatefulAlgorithms
     # Test for correct cleanup output
     @test c isa ProcessContext
 
-    actual = StatefulAlgorithms.context(p)[Walker].state
+    actual = StatefulAlgorithms.getcontext(p)[Walker].state
     expected = [
         1.0,
         1.01,

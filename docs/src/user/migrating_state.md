@@ -8,11 +8,11 @@ what to write now.
 | Old code | What it did | Now |
 |---|---|---|
 | two nested blocks both declaring `@state buffers`, nothing else | one `buffers` shared by both, with an overlap warning | two separate `buffers`. To share them: `@merge f, n` (the whole states) or `@bind buffers => f.buffers` in the parent |
-| several blocks that share a set of fields by declaring the same `@state` names | one shared state | make the state once, outside the blocks, and add it to each: `phase = Unique(@state begin x; y end)`, then in each block `@alias ps = phase; ps` and use `ps.x`. It is one state named `ps`: `Init(:ps; x = ...)`, `context(p).ps` |
+| several blocks that share a set of fields by declaring the same `@state` names | one shared state | make the state once, outside the blocks, and add it to each: `phase = Unique(@state begin x; y end)`, then in each block `@alias ps = phase; ps` and use `ps.x`. It is one state named `ps`: `Init(:ps; x = ...)`, `getcontext(p).ps` |
 | `@bind buffers => f.buffers` | silenced the overlap warning; the sharing came from the equal names | the same line: `f.buffers` is the parent's `buffers` inside the parent. The names may now differ: `@bind log => f.buffers` |
 | `@merge f.buffers, n.buffers` | silenced the overlap warning | `@merge f, n` merges the whole states. For one field: `@bind buffers => f.buffers` and `@bind buffers => n.buffers` with a `@state buffers` in the parent, or `@redirect` |
 | `@merge f._state.buffers, n.buffers` | as above | as above |
-| `ctx[:_state]`, `context(p)[:_state]` | the one merged block state | `ctx[:_state_1]` (the first block state), or look it up: `keys(states(resolve(algo)))` |
+| `ctx[:_state]`, `getcontext(p)[:_state]` | the one merged block state | `ctx[:_state_1]` (the first block state), or look it up: `keys(states(resolve(algo)))` |
 | `Init(:_state; x = ...)` | init input for the merged block state | `Init(:_state_1; x = ...)`, or the name from `states(resolved)` |
 | `algo._state` | the block's state | `getstates(algo)` (the block's own states); in the DSL `c.x` still works |
 | `@redirect` only in the outer block | was collected from the root wrapper | allowed in any block; collected from every plan |

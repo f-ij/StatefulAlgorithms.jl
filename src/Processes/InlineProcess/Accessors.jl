@@ -9,5 +9,6 @@ contexttype(::Union{InlineProcess{TD,ContextType}, Type{<:InlineProcess{TD,Conte
 
 getalgo(ip::InlineProcess) = ip.algo
 
-@inline context(ip::InlineProcess, c) = (ip.context = c)
-@inline context(ip::InlineProcess) = ip.context::contexttype(ip)
+"""Make `c` the context of `ip`: later runs start from it."""
+@inline setcontext!(ip::InlineProcess, c) = (ip.context = c)
+@inline getcontext(ip::InlineProcess) = ip.context::contexttype(ip)

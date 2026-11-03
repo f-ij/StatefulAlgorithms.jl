@@ -59,7 +59,7 @@ _construct_inline_process(algo::TD, context::C, lifetime::Lt) where {TD, C, Lt} 
 @inline function reset!(p::InlineProcess, inputs_overrides...)
     reset_loopidx!(getsession(p))
     initialized = init(getalgo(p), inputs_overrides...; lifetime = lifetime(p))
-    p.context = StatefulAlgorithms.context(initialized)
+    p.context = StatefulAlgorithms.getcontext(initialized)
     # TODO: Probably remove consumed flag
     p.consumed = false
     return true
@@ -128,7 +128,7 @@ arguments, the same entry as a `Process` run (`run_session_loop`; with `Val(true
 gives back becomes the process's.
 """
 @inline function _run_inline!(p::InlineProcess, run_lifetime::LT, runtime_inputs::I, ::Val{inlined}) where {LT, I, inlined}
-    session, algo, lc = @inline prepare_for_loop(p, context(p), runtime_inputs, run_lifetime, Resuming{false}())
+    session, algo, lc = @inline prepare_for_loop(p, getcontext(p), runtime_inputs, run_lifetime, Resuming{false}())
     persistent_context, result = if inlined
         @inline loop(session, algo, lc, run_lifetime, Resuming{false}())
     else

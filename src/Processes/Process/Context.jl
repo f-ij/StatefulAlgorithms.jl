@@ -13,7 +13,7 @@ wrapper in `p.algo` is rebuilt with it, so later runs keep the typed path; other
 Leaves a paused run's runtime context alone.
 """
 @inline function _sync_state_context!(p::P, c::C) where {P<:Process, C<:ProcessContext}
-    synced = withsubcontexts(context(p), get_subcontexts(c))
+    synced = withsubcontexts(getcontext(p), get_subcontexts(c))
     algo = getalgo(p)
     persistent_context = getpersistentcontext(algo)
     if !isnothing(persistent_context) && typeof(synced) === typeof(persistent_context)

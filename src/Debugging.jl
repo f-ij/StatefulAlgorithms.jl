@@ -21,7 +21,7 @@ end
 
 function ex_p_and_context(func, rt; loopfunction = nothing)
     p = get_example_process(func, rt; loopfunction)
-    context = context(p)
+    context = getcontext(p)
     return p, context
 end
 export get_example_process, ex_p_and_context

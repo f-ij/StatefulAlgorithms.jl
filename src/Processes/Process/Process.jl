@@ -96,7 +96,7 @@ Base.:(==)(p1::Process, p2::Process) = p1.id == p2.id
 
 function createfrom!(p1::Process, p2::Process)
     p1.algo = p2.algo
-    _sync_state_context!(p1, context(p2))
+    _sync_state_context!(p1, getcontext(p2))
     p1.runtime_context = nothing
     getsession(p1).loop_cursor = nothing
     p1.timeout = p2.timeout

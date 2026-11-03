@@ -63,11 +63,11 @@ with `@state`, then update that existing name from `step!`.
 From a process:
 
 ```julia
-ctx = context(p)
+ctx = getcontext(p)
 ```
 
-`context(p)` returns the process's current stored context; index it by `key` with
-`context(p)[key]`.
+`getcontext(p)` returns the process's current stored context; index it by `key` with
+`getcontext(p)[key]`.
 
 From a context, index by:
 

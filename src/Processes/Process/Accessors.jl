@@ -24,12 +24,12 @@ shouldrun(p::Process, val) = @atomic getsession(p).shouldrun = val
 
 getalgo(p::P) where {P<:Process} = p.algo
 """
-    context(p::Process)
+    getcontext(p::Process)
 
 The process's state context: the user's handle on the process's state, with the registry. Never a run's runtime
 context: a paused run keeps that apart (`p.runtime_context`).
 """
-function context(p::P) where {P<:Process}
+function getcontext(p::P) where {P<:Process}
     state_context = p.state_context
     return isnothing(state_context) ? getpersistentcontext(getalgo(p)) : state_context
 end
@@ -38,7 +38,7 @@ end
     getruntimecontext(p::Process)
 
 The runtime context a paused run of `p` keeps (its inputs and declared locals), or `nothing` when no run is paused.
-Not exported: what the user works with is the state context, `context(p)`.
+Not exported: what the user works with is the state context, `getcontext(p)`.
 """
 getruntimecontext(p::Process) = p.runtime_context
 

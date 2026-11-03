@@ -14,4 +14,4 @@ loopint(s::ProcessSession) = loopidx(s) % Int
 
 @inline inc!(s::ProcessSession) = s.loopidx += oneunit(s.loopidx)
 
-export loopidx, loopint, inc!
+export inc!

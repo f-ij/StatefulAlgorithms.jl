@@ -26,11 +26,11 @@ function InlineChunkWorker(process::IP) where {IP<:InlineProcess}
 end
 
 """
-    context(worker::InlineChunkWorker)
+    getcontext(worker::InlineChunkWorker)
 
 Return the context owned by the worker's inline process.
 """
-context(worker::W) where {W<:InlineChunkWorker} = context(worker.process)
+getcontext(worker::W) where {W<:InlineChunkWorker} = getcontext(worker.process)
 
 """
     beforechunk!(recipe, process, chunk, slot, manager)

@@ -57,7 +57,7 @@ end
     # Producer first runs on step 10; the reader holds the last value (the declared 0.0 before that).
     plan = CompositeAlgorithm(LocalSensor, LocalReader, (10, 1), Declaration(reading = 0.0), Route(:_declared_locals => LocalSensor, :reading => :reading), Route(:_declared_locals => LocalReader, :reading => :reading))
     ip = InlineProcess(plan; repeats = 25); run(ip)
-    @test context(ip)[LocalReader].acc == 9 * 0.0 + 10 * 1.0 + 6 * 2.0
+    @test getcontext(ip)[LocalReader].acc == 9 * 0.0 + 10 * 1.0 + 6 * 2.0
 
     # Shape stays fixed: no per-step allocation even though the producer is conditional.
     run(InlineProcess(plan; repeats = 100))
@@ -67,7 +67,7 @@ end
 
     # Returned values are converted to the declared type.
     p = Process(plan; repeats = 30); run(p); wait(p)
-    @test context(p)[LocalReader].acc isa Float64
+    @test getcontext(p)[LocalReader].acc isa Float64
 end
 
 @testset "Declaring: Local(:x), Local(:x => T), Declaration(x = v); only wired algorithms see a local" begin
@@ -198,7 +198,7 @@ end
     plan = CompositeAlgorithm(StatefulAlgorithms.Callable(produce, (), :y), StatefulAlgorithms.Callable(pass_on, (:y,), :v), OutputCollector,
         (3, 1, 1), Declaration(y = nothing), Route(:_captured_returns => OutputCollector, :v => :v))
     p = Process(plan; repeats = 7); run(p); wait(p)
-    @test context(p)[OutputCollector].seen == [nothing, nothing, 1.0, 1.0, 1.0, 2.0, 2.0]
+    @test getcontext(p)[OutputCollector].seen == [nothing, nothing, 1.0, 1.0, 1.0, 2.0, 2.0]
 end
 
 const scope_seen = Any[]

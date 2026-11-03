@@ -37,8 +37,8 @@ end
     close(p_a)
     close(p_b)
 
-    ctx_a = context(p_a)
-    ctx_b = context(p_b)
+    ctx_a = getcontext(p_a)
+    ctx_b = getcontext(p_b)
 
     @test sink_a == [10, 12, 14]
     @test sink_b == [20, 22, 24]

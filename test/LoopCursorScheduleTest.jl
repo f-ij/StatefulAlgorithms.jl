@@ -45,8 +45,8 @@ end
     p2 = Process(initialized; repeats = 1)
     run(p1); wait(p1)
     run(p2); wait(p2)
-    @test context(p1)[LoopCursorIntervalCounter].count == 0
-    @test context(p2)[LoopCursorIntervalCounter].count == 0
+    @test getcontext(p1)[LoopCursorIntervalCounter].count == 0
+    @test getcontext(p2)[LoopCursorIntervalCounter].count == 0
     @test isnothing(StatefulAlgorithms.getsession(p1).loop_cursor)
     @test isnothing(StatefulAlgorithms.getsession(p2).loop_cursor)
 
@@ -84,11 +84,11 @@ end
         LoopRunIfFlag,
     )
     false_result = run(init(false_plan); repeats = 3)
-    @test context(false_result)[LoopRunIfCounter].count == 0
+    @test getcontext(false_result)[LoopRunIfCounter].count == 0
 
     true_initialized = init(false_plan, Override(LoopRunIfFlag; enabled = true))
     true_result = run(true_initialized; repeats = 3)
-    @test context(true_result)[LoopRunIfCounter].count == 3
+    @test getcontext(true_result)[LoopRunIfCounter].count == 3
 
     interval_plan = CompositeAlgorithm(
         LoopRunIfCounter,
@@ -96,7 +96,7 @@ end
         LoopRunIfFlag,
     )
     interval_result = run(init(interval_plan, Override(LoopRunIfFlag; enabled = true)); repeats = 3)
-    @test context(interval_result)[LoopRunIfCounter].count == 1
+    @test getcontext(interval_result)[LoopRunIfCounter].count == 1
 
     # `Interval(1)` with an offset skips the first `offset` ticks, so it is not stepped without a branch (`always_runs`).
     @test StatefulAlgorithms.always_runs(typeof(Interval(1)))
@@ -104,7 +104,7 @@ end
     # Broken: the offset is compared with the composite's tick, which wraps at the lcm of the intervals (here 1, so it
     # stays 1) and never passes the offset; the child runs 0 times (TODO.md, "Interval offsets").
     offset_result = run(init(CompositeAlgorithm(LoopRunIfCounter, (Interval(1, :end, 3),))); repeats = 5)
-    @test_broken context(offset_result)[LoopRunIfCounter].count == 2
+    @test_broken getcontext(offset_result)[LoopRunIfCounter].count == 2
 
     nested_plan = CompositeAlgorithm(
         CompositeAlgorithm(LoopRunIfCounter, (RunIf(x -> x, Var(LoopRunIfFlag, :enabled)),)),
@@ -112,7 +112,7 @@ end
         LoopRunIfFlag,
     )
     nested_result = run(init(nested_plan, Override(LoopRunIfFlag; enabled = true)); repeats = 2)
-    @test context(nested_result)[LoopRunIfCounter].count == 2
+    @test getcontext(nested_result)[LoopRunIfCounter].count == 2
 end
 
 # Defined at top level: defined inside a `@testset`, the plan allocates per step.
@@ -134,7 +134,7 @@ end
     allocs_small = @allocated run(small)
     allocs_large = @allocated run(large)
     @test allocs_large - allocs_small < 1_000
-    @test context(large)[BootReader].acc == 10_100 * 10_101 / 2
+    @test getcontext(large)[BootReader].acc == 10_100 * 10_101 / 2
 end
 
 @testset "Nested routines stay specialized (no per-step allocation)" begin
@@ -147,6 +147,6 @@ end
         allocs_small = @allocated run(small)
         allocs_large = @allocated run(large)
         @test allocs_large - allocs_small < 1_000
-        @test context(large)[NestLin1].x == 101_000
+        @test getcontext(large)[NestLin1].x == 101_000
     end
 end

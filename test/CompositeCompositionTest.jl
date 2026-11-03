@@ -108,12 +108,12 @@ end
     run(p)
     result = fetch(p)
     @test result == (; count = 12, cleaned = true)
-    @test context(p)[FinalCounter].count == 12
-    @test context(p)[FinalCounter].cleaned
+    @test getcontext(p)[FinalCounter].count == 12
+    @test getcontext(p)[FinalCounter].cleaned
 
     close(p)
     @test fetch(p) == result
-    @test context(p)[FinalCounter].count == 12
+    @test getcontext(p)[FinalCounter].count == 12
 
     inner = finalstep(CompositeAlgorithm(FinalCounter, (1,)), context -> :inner_final)
     nested = @test_logs (:warn, r"root-only") CompositeAlgorithm(inner, Luc, (1, 1))

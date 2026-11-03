@@ -84,7 +84,7 @@ function Base.show(io::IO, p::Process)
         print(io, "Error in process")
         return display(p.task)
     end
-    print(io, _process_state_label(p), " Process(", _process_algo_summary(p), ", lifetime=", lifetime(p), ", loopidx=", loopint(p), ")")
+    print(io, _process_state_label(p), " Process(", _process_algo_summary(p), ", lifetime=", lifetime(p), ", loopidx=", getlidx(p), ")")
 
     return nothing
 end
@@ -102,13 +102,13 @@ function Base.show(io::IO, ::MIME"text/plain", p::Process)
     println(io, "Process")
     println(io, "├── state = ", _process_state_label(p))
     println(io, "├── lifetime = ", lifetime(p))
-    println(io, "├── loopidx = ", loopint(p))
+    println(io, "├── loopidx = ", getlidx(p))
     println(io, "├── timeout = ", p.timeout)
 
     algo_lines = _process_nested_show_lines(io, getalgo(p))
     _print_process_nested_field(io, "├── ", "│   ", :algo, algo_lines)
 
-    context_lines = _process_context_show_lines(io, context(p))
+    context_lines = _process_context_show_lines(io, getcontext(p))
     _print_process_nested_field(io, "└── ", "    ", :context, context_lines)
 
     return nothing

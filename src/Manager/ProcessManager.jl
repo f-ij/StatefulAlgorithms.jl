@@ -176,15 +176,15 @@ WorkerSlot(idx::Integer, worker; name = Symbol(:worker_, idx), scratch = nothing
     WorkerSlot{typeof(worker), Any, Any, Any, Any, typeof(name)}(Int(idx), name, worker, nothing, scratch, nothing, nothing, false, 0)
 
 """
-    context(slot::WorkerSlot)
+    getcontext(slot::WorkerSlot)
 
 Return the current context of `slot.worker`.
 
 For a `Process` slot, this is the same object returned by
-`context(slot.worker)`. Mutating fields in this context changes the data the
+`getcontext(slot.worker)`. Mutating fields in this context changes the data the
 next managed run will see.
 """
-context(slot::WorkerSlot) = context(slot.worker)
+getcontext(slot::WorkerSlot) = getcontext(slot.worker)
 
 """
     resetworker!(slot)
@@ -221,7 +221,7 @@ it from `prepare!` when a job needs freshly initialized context state instead
 of reusing the previous context object.
 """
 function reinitworker!(slot::WorkerSlot{<:Process}, inputs_overrides...; kwargs...)
-    _sync_state_context!(slot.worker, context(init(getalgo(slot.worker), inputs_overrides...; lifetime = lifetime(slot.worker))))
+    _sync_state_context!(slot.worker, getcontext(init(getalgo(slot.worker), inputs_overrides...; lifetime = lifetime(slot.worker))))
     return slot
 end
 
@@ -241,11 +241,11 @@ and assigns the returned context back to `slot.worker`.
 function partialinitworker!(slot::WorkerSlot{<:Process}, inputs_overrides...)
     algo = _with_lifecycle(
         getalgo(slot.worker),
-        context(slot.worker),
+        getcontext(slot.worker),
         getstoredinits(getalgo(slot.worker)),
         getstoredoverrides(getalgo(slot.worker)),
     )
-    _sync_state_context!(slot.worker, context(partialinit(algo, inputs_overrides...)))
+    _sync_state_context!(slot.worker, getcontext(partialinit(algo, inputs_overrides...)))
     return slot
 end
 
@@ -293,7 +293,7 @@ function runprocessinline!(worker::P; lifetime = nothing, repeats = nothing, rep
 
     # Build the same runtime context as the asynchronous Process path, but call
     # the loop directly so no scheduler task is created for short manager jobs.
-    base_context = _has_typed_state_context(worker) ? _typed_state_context(worker) : context(worker)
+    base_context = _has_typed_state_context(worker) ? _typed_state_context(worker) : getcontext(worker)
     lt = StatefulAlgorithms.lifetime(worker)
     session, plan, lc = prepare_for_loop(worker, base_context, (; kwargs...), lt, Resuming{false}())
     @atomic session.paused = false
@@ -1049,7 +1049,7 @@ Default worker-copy rule. `Process` workers keep the same algorithm/lifetime and
 deep-copy context; other worker objects are deep-copied directly.
 """
 function _default_copyworker(template::Process, idx, manager)
-    return Process(getalgo(template); context = deepcopy(context(template)), lifetime = lifetime(template), timeout = template.timeout)
+    return Process(getalgo(template); context = deepcopy(getcontext(template)), lifetime = lifetime(template), timeout = template.timeout)
 end
 _default_copyworker(template, idx, manager) = deepcopy(template)
 
@@ -1082,7 +1082,7 @@ state.
 This state object is separate from worker contexts:
 
 - `manager.state` is shared manager-owned data.
-- `context(slot.worker)` is the per-worker process context.
+- `getcontext(slot.worker)` is the per-worker process context.
 
 If the recipe does not define `initstate`, the manager stores `nothing` in
 `manager.state`.

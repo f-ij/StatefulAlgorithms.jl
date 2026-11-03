@@ -1,7 +1,7 @@
 module StatefulAlgorithms
     const modulefolder = @__DIR__
 
-    export context, Process, start, quit
+    export getcontext, setcontext!, Process, start, quit
 
     using UUIDs, Preferences, MacroTools, PrecompileTools
     using Base: setindex # previously re-exported by StaticArrays

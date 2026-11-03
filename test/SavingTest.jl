@@ -17,7 +17,7 @@ using JLD2
     data = loadcontext(file)
     @test data.SaveCounter_1.count == 5
     @test data.SaveCounter_1.history == [0.0, 1.0, 2.0, 3.0, 4.0]
-    @test data == StatefulAlgorithms.contextdata(context(p))
+    @test data == StatefulAlgorithms.contextdata(getcontext(p))
     close(p)
     rm(file; force = true)
 end

@@ -50,26 +50,26 @@ runtime_input_bucket(ctx) = getproperty(StatefulAlgorithms.get_subcontexts(ctx),
     replayed = init(initialized)
     overridden = init(replayed, Init(LifecycleInitA; x = 5))
 
-    @test StatefulAlgorithms.context(replayed)[LifecycleInitA].x[] == 1
-    @test StatefulAlgorithms.context(replayed)[LifecycleInitB].y[] == 2
-    @test StatefulAlgorithms.context(overridden)[LifecycleInitA].x[] == 5
-    @test StatefulAlgorithms.context(overridden)[LifecycleInitB].y[] == 2
+    @test StatefulAlgorithms.getcontext(replayed)[LifecycleInitA].x[] == 1
+    @test StatefulAlgorithms.getcontext(replayed)[LifecycleInitB].y[] == 2
+    @test StatefulAlgorithms.getcontext(overridden)[LifecycleInitA].x[] == 5
+    @test StatefulAlgorithms.getcontext(overridden)[LifecycleInitB].y[] == 2
 
     general_init = init(la, Init(; x = 3, y = 4, z = 5))
-    @test StatefulAlgorithms.context(general_init)[LifecycleInitA].x[] == 3
-    @test StatefulAlgorithms.context(general_init)[LifecycleInitA].z == 5
-    @test StatefulAlgorithms.context(general_init)[LifecycleInitB].y[] == 4
+    @test StatefulAlgorithms.getcontext(general_init)[LifecycleInitA].x[] == 3
+    @test StatefulAlgorithms.getcontext(general_init)[LifecycleInitA].z == 5
+    @test StatefulAlgorithms.getcontext(general_init)[LifecycleInitB].y[] == 4
 
     targeted_after_general = init(la, Init(; x = 3, y = 4), Init(LifecycleInitA; x = 8))
-    @test StatefulAlgorithms.context(targeted_after_general)[LifecycleInitA].x[] == 8
-    @test StatefulAlgorithms.context(targeted_after_general)[LifecycleInitB].y[] == 4
+    @test StatefulAlgorithms.getcontext(targeted_after_general)[LifecycleInitA].x[] == 8
+    @test StatefulAlgorithms.getcontext(targeted_after_general)[LifecycleInitB].y[] == 4
 
-    b_ref = StatefulAlgorithms.context(overridden)[LifecycleInitB].y
+    b_ref = StatefulAlgorithms.getcontext(overridden)[LifecycleInitB].y
     partial = partialinit(overridden, Init(LifecycleInitA; x = 9, z = 4))
 
-    @test StatefulAlgorithms.context(partial)[LifecycleInitA].x[] == 9
-    @test StatefulAlgorithms.context(partial)[LifecycleInitA].z == 4
-    @test StatefulAlgorithms.context(partial)[LifecycleInitB].y === b_ref
+    @test StatefulAlgorithms.getcontext(partial)[LifecycleInitA].x[] == 9
+    @test StatefulAlgorithms.getcontext(partial)[LifecycleInitA].z == 4
+    @test StatefulAlgorithms.getcontext(partial)[LifecycleInitB].y === b_ref
 
     resolved_la = resolve(la)
     resolved_target = getkey(only(findall(LifecycleInitA, StatefulAlgorithms.getregistry(resolved_la))))
@@ -81,7 +81,7 @@ runtime_input_bucket(ctx) = getproperty(StatefulAlgorithms.get_subcontexts(ctx),
     @test length(resolved_general_inputs) == length(keys(StatefulAlgorithms.getregistry(resolved_la)))
     @test all(StatefulAlgorithms.isresolved, resolved_general_inputs)
     initialized_by_symbol = init(resolved_la, Init(resolved_target; x = 7))
-    @test StatefulAlgorithms.context(initialized_by_symbol)[LifecycleInitA].x[] == 7
+    @test StatefulAlgorithms.getcontext(initialized_by_symbol)[LifecycleInitA].x[] == 7
 
     runtime_algo = @CompositeAlgorithm begin
         @state seed = 1
@@ -97,7 +97,7 @@ runtime_input_bucket(ctx) = getproperty(StatefulAlgorithms.get_subcontexts(ctx),
     @test_throws ErrorException run(initialized_runtime; temp = 1, scale = 2)
 
     runtime_result = run(initialized_runtime; temp = 1.5, scale = 2)
-    runtime_context = StatefulAlgorithms.context(runtime_result)
+    runtime_context = StatefulAlgorithms.getcontext(runtime_result)
     @test !haskey(StatefulAlgorithms.get_subcontexts(runtime_context), :Callable_1)   # function calls have no persistent state
     @test !haskey(StatefulAlgorithms.get_captured_returns(runtime_context), :value)
     @test isempty(StatefulAlgorithms.get_inputs(runtime_context))
@@ -113,11 +113,11 @@ runtime_input_bucket(ctx) = getproperty(StatefulAlgorithms.get_subcontexts(ctx),
         @test isnothing(process.runtime_context)
         fetched_context = fetch(process)
         @test !haskey(StatefulAlgorithms.get_captured_returns(fetched_context), :value)
-        @test !haskey(StatefulAlgorithms.get_subcontexts(StatefulAlgorithms.context(process)), :Callable_1)   # function calls have no persistent state
-        @test !haskey(StatefulAlgorithms.get_captured_returns(StatefulAlgorithms.context(process)), :value)
-        @test isempty(StatefulAlgorithms.get_inputs(StatefulAlgorithms.context(process)))
-        @test isempty(runtime_input_bucket(StatefulAlgorithms.context(process)))
-        @test !haskey(StatefulAlgorithms.get_captured_returns(StatefulAlgorithms.context(process)), :process)
+        @test !haskey(StatefulAlgorithms.get_subcontexts(StatefulAlgorithms.getcontext(process)), :Callable_1)   # function calls have no persistent state
+        @test !haskey(StatefulAlgorithms.get_captured_returns(StatefulAlgorithms.getcontext(process)), :value)
+        @test isempty(StatefulAlgorithms.get_inputs(StatefulAlgorithms.getcontext(process)))
+        @test isempty(runtime_input_bucket(StatefulAlgorithms.getcontext(process)))
+        @test !haskey(StatefulAlgorithms.get_captured_returns(StatefulAlgorithms.getcontext(process)), :process)
         close(process)
     end
 
@@ -127,11 +127,11 @@ runtime_input_bucket(ctx) = getproperty(StatefulAlgorithms.get_subcontexts(ctx),
     @test isnothing(inline_worker.state_context)
     @test isnothing(inline_worker.runtime_context)
     @test !haskey(StatefulAlgorithms.get_captured_returns(fetch(inline_worker)), :value)
-    @test !haskey(StatefulAlgorithms.get_subcontexts(StatefulAlgorithms.context(inline_worker)), :Callable_1)   # function calls have no persistent state
-    @test !haskey(StatefulAlgorithms.get_captured_returns(StatefulAlgorithms.context(inline_worker)), :value)
-    @test isempty(StatefulAlgorithms.get_inputs(StatefulAlgorithms.context(inline_worker)))
-    @test isempty(runtime_input_bucket(StatefulAlgorithms.context(inline_worker)))
-    @test !haskey(StatefulAlgorithms.get_captured_returns(StatefulAlgorithms.context(inline_worker)), :process)
+    @test !haskey(StatefulAlgorithms.get_subcontexts(StatefulAlgorithms.getcontext(inline_worker)), :Callable_1)   # function calls have no persistent state
+    @test !haskey(StatefulAlgorithms.get_captured_returns(StatefulAlgorithms.getcontext(inline_worker)), :value)
+    @test isempty(StatefulAlgorithms.get_inputs(StatefulAlgorithms.getcontext(inline_worker)))
+    @test isempty(runtime_input_bucket(StatefulAlgorithms.getcontext(inline_worker)))
+    @test !haskey(StatefulAlgorithms.get_captured_returns(StatefulAlgorithms.getcontext(inline_worker)), :process)
     close(inline_worker)
 
     per_run_repeats_process = Process(runtime_algo)
@@ -153,23 +153,23 @@ runtime_input_bucket(ctx) = getproperty(StatefulAlgorithms.get_subcontexts(ctx),
     inline_process = InlineProcess(runtime_algo; repeats = 1)
     inline_result = run(inline_process; temp = 2.0, scale = 3)
     @test !haskey(StatefulAlgorithms.get_captured_returns(inline_result), :value)
-    @test !haskey(StatefulAlgorithms.get_subcontexts(StatefulAlgorithms.context(inline_process)), :Callable_1)   # function calls have no persistent state
-    @test !haskey(StatefulAlgorithms.get_captured_returns(StatefulAlgorithms.context(inline_process)), :value)
-    @test isempty(StatefulAlgorithms.get_inputs(StatefulAlgorithms.context(inline_process)))
-    @test isempty(getproperty(StatefulAlgorithms.get_subcontexts(StatefulAlgorithms.context(inline_process)), :_inputs))
+    @test !haskey(StatefulAlgorithms.get_subcontexts(StatefulAlgorithms.getcontext(inline_process)), :Callable_1)   # function calls have no persistent state
+    @test !haskey(StatefulAlgorithms.get_captured_returns(StatefulAlgorithms.getcontext(inline_process)), :value)
+    @test isempty(StatefulAlgorithms.get_inputs(StatefulAlgorithms.getcontext(inline_process)))
+    @test isempty(getproperty(StatefulAlgorithms.get_subcontexts(StatefulAlgorithms.getcontext(inline_process)), :_inputs))
 
     inline_nogen_result = StatefulAlgorithms.run_nogen(inline_process; temp = 1.5, scale = 2)
     @test !haskey(StatefulAlgorithms.get_captured_returns(inline_nogen_result), :value)
-    @test isempty(StatefulAlgorithms.get_inputs(StatefulAlgorithms.context(inline_process)))
-    @test isempty(getproperty(StatefulAlgorithms.get_subcontexts(StatefulAlgorithms.context(inline_process)), :_inputs))
+    @test isempty(StatefulAlgorithms.get_inputs(StatefulAlgorithms.getcontext(inline_process)))
+    @test isempty(getproperty(StatefulAlgorithms.get_subcontexts(StatefulAlgorithms.getcontext(inline_process)), :_inputs))
     @test_throws ErrorException run(inline_process)
     @test_throws ErrorException run(inline_process; temp = 1, scale = 2)
     @test_throws ErrorException run(inline_process, Input(; seed = 2); temp = 1.0, scale = 2)
 
     shape_result = run(init(CompositeAlgorithm(RuntimeShapeChanger(0))); lifetime = Repeat(0))
-    @test isempty(runtime_shape_context(StatefulAlgorithms.context(shape_result)))
+    @test isempty(runtime_shape_context(StatefulAlgorithms.getcontext(shape_result)))
     widened_shape_result = run(init(CompositeAlgorithm(RuntimeShapeChanger(0))); lifetime = Repeat(2))
-    @test isempty(runtime_shape_context(StatefulAlgorithms.context(widened_shape_result)))
+    @test isempty(runtime_shape_context(StatefulAlgorithms.getcontext(widened_shape_result)))
 
     pause_algo = @CompositeAlgorithm begin
         @input delta::Int
@@ -179,13 +179,13 @@ runtime_input_bucket(ctx) = getproperty(StatefulAlgorithms.get_subcontexts(ctx),
     run(process; delta = 2)
 
     deadline = time() + 2.0
-    while loopint(process) < 4 && time() < deadline
+    while getlidx(process) < 4 && time() < deadline
         sleep(0.005)
     end
     pause(process)
     wait(process)
 
-    paused_context = context(process)
+    paused_context = getcontext(process)
     paused_total = paused_context[PauseRuntimeInputConsumer].total
     @test paused_total > 0
     # The paused run's inputs are in its runtime context, kept apart from the state context the user gets.
@@ -196,17 +196,17 @@ runtime_input_bucket(ctx) = getproperty(StatefulAlgorithms.get_subcontexts(ctx),
     run(process)
     @test isnothing(process.runtime_context)   # the resumed run has it back in its LoopContext
     deadline = time() + 2.0
-    while loopint(process) < 7 && time() < deadline
+    while getlidx(process) < 7 && time() < deadline
         sleep(0.005)
     end
     pause(process)
     wait(process)
 
-    @test context(process)[PauseRuntimeInputConsumer].total > paused_total
+    @test getcontext(process)[PauseRuntimeInputConsumer].total > paused_total
     close(process)
     @test StatefulAlgorithms._has_typed_state_context(process)
     @test isnothing(process.state_context)
     @test isnothing(process.runtime_context)
-    @test isempty(StatefulAlgorithms.get_inputs(context(process)))
-    @test isempty(runtime_input_bucket(context(process)))
+    @test isempty(StatefulAlgorithms.get_inputs(getcontext(process)))
+    @test isempty(runtime_input_bucket(getcontext(process)))
 end

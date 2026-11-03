@@ -173,7 +173,7 @@ end
         # Every state namespace => its fields
         state_data(ctx) = (subcontexts = getfield(ctx, :subcontexts);
             Dict(k => getfield(getfield(subcontexts, k), :data) for k in keys(subcontexts) if startswith(string(k), "_state_")))
-        steps(plan, n = 1) = StatefulAlgorithms.context(run(plan; repeats = n))
+        steps(plan, n = 1) = StatefulAlgorithms.getcontext(run(plan; repeats = n))
 
         # Without any of them, two blocks' fields named `buffers` are two fields
         separate = resolve(@CompositeAlgorithm(begin
@@ -224,7 +224,7 @@ end
         end))
         name = only(keys(states(merged)))
         @test_throws ErrorException init(merged)    # `buffers` is required by both
-        @test state_data(StatefulAlgorithms.context(run(init(merged, Init(name; buffers = Symbol[])); repeats = 1))) ==
+        @test state_data(StatefulAlgorithms.getcontext(run(init(merged, Init(name; buffers = Symbol[])); repeats = 1))) ==
             Dict(name => (; buffers = [:writer, :reader]))
 
         # `@merge` takes whole states; one field is shared with `@bind` or `@redirect`
@@ -260,7 +260,7 @@ end
             @context f = forward()
             @context b = backward()
         end))
-        ctx = StatefulAlgorithms.context(run(init(both, Init(:ps; x = [1.0, 2.0, 3.0])); repeats = 2))
+        ctx = StatefulAlgorithms.getcontext(run(init(both, Init(:ps; x = [1.0, 2.0, 3.0])); repeats = 2))
         @test ctx[:ps].total == [4.0, 8.0, 12.0]    # 2 steps of 2 blocks
 
         # `@redirect` is an option of its block, also when that block is nested
@@ -576,7 +576,7 @@ end
         @info "Composite DSL: Routine repeat supports lifetime syntax with DSL selectors"
         # The condition reads the counter's state explicitly (`Var(Algo, :field)`); `n = …` inside the repeated block
         # captures the return of the last repeat into the local `n`, which `seen` records.
-        counter_state(result) = StatefulAlgorithms.context(result)[DSLRepeatLifetimeCounter].count
+        counter_state(result) = StatefulAlgorithms.getcontext(result)[DSLRepeatLifetimeCounter].count
 
         seen = Int[]
         until_result = run(@Routine(begin
@@ -699,7 +699,7 @@ end
             end
             error("no state field $name")
         end
-        steps(plan, n) = StatefulAlgorithms.context(run(plan; repeats = n))
+        steps(plan, n) = StatefulAlgorithms.getcontext(run(plan; repeats = n))
 
         by_hand = steps(CompositeAlgorithm(make_a(), make_b(), (1, 1)), 3)
         @test state_value(by_hand, :a) == 4
@@ -724,7 +724,7 @@ end
         # Every state namespace (`_state_1`, `_state_2`, ...) => its field `a`
         state_values(ctx) = (subcontexts = getfield(ctx, :subcontexts);
             Dict(k => getfield(getfield(subcontexts, k), :data).a for k in keys(subcontexts) if startswith(string(k), "_state_")))
-        steps(plan, n) = StatefulAlgorithms.context(run(plan; repeats = n))
+        steps(plan, n) = StatefulAlgorithms.getcontext(run(plan; repeats = n))
 
         b1, b2 = make(), make()
         # Two constructions: two states, each stepped 3 times
@@ -780,8 +780,8 @@ end
         StatefulAlgorithms.run(p)
         ctx = fetch(p)
         @test !haskey(StatefulAlgorithms.get_captured_returns(ctx), :result)
-        @test isempty(context(p)[wrapper_key])
-        @test !haskey(StatefulAlgorithms.get_captured_returns(context(p)), :result)
+        @test isempty(getcontext(p)[wrapper_key])
+        @test !haskey(StatefulAlgorithms.get_captured_returns(getcontext(p)), :result)
     end
 
     @testset "Function call positional args accept explicit @transform routes" begin
@@ -1012,7 +1012,7 @@ end
         p = Process(resolved, repeat = 1)
         run(p)
         @test fetch(p) == (; result = 321)
-        @test !haskey(StatefulAlgorithms.get_captured_returns(context(p)), :result)
+        @test !haskey(StatefulAlgorithms.get_captured_returns(getcontext(p)), :result)
         close(p)
     end
 
@@ -1311,12 +1311,12 @@ end
         p = Process(resolve(algo), repeat = 1)
         run(p)
         @test fetch(p) == (; result = 4)
-        @test !haskey(StatefulAlgorithms.get_subcontexts(context(p)), :Callable_1)   # function calls have no persistent state
-        @test !haskey(StatefulAlgorithms.get_captured_returns(context(p)), :result)
+        @test !haskey(StatefulAlgorithms.get_subcontexts(getcontext(p)), :Callable_1)   # function calls have no persistent state
+        @test !haskey(StatefulAlgorithms.get_captured_returns(getcontext(p)), :result)
 
         close(p)
         @test fetch(p) == (; result = 4)
-        @test !haskey(StatefulAlgorithms.get_captured_returns(context(p)), :result)
+        @test !haskey(StatefulAlgorithms.get_captured_returns(getcontext(p)), :result)
     end
 
     @testset "Function call literals: a quoted symbol and a captured Symbol value are values, not plan names" begin
@@ -1641,8 +1641,8 @@ end
         @test fetched isa StatefulAlgorithms.ProcessContext
         @test !haskey(StatefulAlgorithms.get_captured_returns(fetched), :result)
         @test count[] == 2
-        @test !haskey(StatefulAlgorithms.get_subcontexts(context(p)), :Callable_1)   # function calls have no persistent state
-        @test !haskey(StatefulAlgorithms.get_captured_returns(context(p)), :result)
+        @test !haskey(StatefulAlgorithms.get_subcontexts(getcontext(p)), :Callable_1)   # function calls have no persistent state
+        @test !haskey(StatefulAlgorithms.get_captured_returns(getcontext(p)), :result)
         close(p)
     end
 end

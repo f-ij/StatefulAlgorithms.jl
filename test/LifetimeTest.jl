@@ -55,7 +55,7 @@ end
 
     @test ctx[LifetimeCleanupCounter].count == 2
     @test ctx[LifetimeCleanupCounter].cleaned
-    @test context(p)[LifetimeCleanupCounter].cleaned
+    @test getcontext(p)[LifetimeCleanupCounter].cleaned
 end
 
 @testset "Indefinite close cleans up and pause preserves live context" begin
@@ -72,15 +72,15 @@ end
     run(closed)
     sleep(0.02)
     close(closed)
-    @test context(closed)[LifetimeIndefiniteCleanupCounter].cleaned
+    @test getcontext(closed)[LifetimeIndefiniteCleanupCounter].cleaned
 
     paused = Process(LifetimeIndefiniteCleanupCounter; lifetime = StatefulAlgorithms.Indefinite())
     run(paused)
     sleep(0.02)
     pause(paused)
     wait(paused)
-    @test !context(paused)[LifetimeIndefiniteCleanupCounter].cleaned
+    @test !getcontext(paused)[LifetimeIndefiniteCleanupCounter].cleaned
 
     close(paused)
-    @test context(paused)[LifetimeIndefiniteCleanupCounter].cleaned
+    @test getcontext(paused)[LifetimeIndefiniteCleanupCounter].cleaned
 end

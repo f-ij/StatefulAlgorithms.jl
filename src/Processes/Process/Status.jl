@@ -66,7 +66,7 @@ function progress(p::Process)
     isfinite(total) || return 0.0
     total > 0 || return isdone(p) ? 1.0 : 0.0
 
-    completed = max(loopint(p) - 1, 0)
+    completed = max(getlidx(p) - 1, 0)
     return clamp(completed / total, 0.0, 1.0)
 end
 

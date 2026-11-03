@@ -27,8 +27,8 @@ using StatefulAlgorithms
     p = Process(resolved, Input(:SymbolInitAlgo_1, :seed => 1); repeats = 1)
     reinit(p, :SymbolInitAlgo_1; inputs = (; seed = 13))
     wait(p)
-    @test context(p)[:SymbolInitAlgo_1].value == 13
-    @test isempty(context(p)[:SymbolOtherAlgo_1])
+    @test getcontext(p)[:SymbolInitAlgo_1].value == 13
+    @test isempty(getcontext(p)[:SymbolOtherAlgo_1])
 end
 
 @testset "ProcessContext properties expose subcontexts without storage-field collisions" begin

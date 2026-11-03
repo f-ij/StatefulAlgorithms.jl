@@ -35,12 +35,12 @@ Wait for a process to finish
 Finish a paused run when `close` is called on a paused `Process`.
 
 A paused loop never returns to its end, so this does that work instead: run `cleanup` on the state context and the
-runtime context the pause kept (`context(p)`, `p.runtime_context`), combined again into one `LoopContext` as on a
+runtime context the pause kept (`getcontext(p)`, `p.runtime_context`), combined again into one `LoopContext` as on a
 resume; store the final result in `p.lastresult`; clear `p.runtime_context`; and sync the cleaned persistent context
 into the state context (`_sync_state_context!`). Returns `p.lastresult`.
 """
 function _cleanup_paused_process!(p::Process)
-    cleaned = @inline cleanup(getalgo(p), LoopContext(context(p), p.runtime_context))
+    cleaned = @inline cleanup(getalgo(p), LoopContext(getcontext(p), p.runtime_context))
     p.lastresult = @inline loop_final_result(getalgo(p), (@inline final_context(cleaned)), getruntime(cleaned))
     p.runtime_context = nothing
     _sync_state_context!(p, getpersistent(cleaned))
@@ -67,7 +67,7 @@ function Base.close(p::Process)
         Base.showerror(stderr, err)
         p.task = nothing
         p.runtime_context = nothing
-        _sync_state_context!(p, context(init(getalgo(p); lifetime = lifetime(p))))
+        _sync_state_context!(p, getcontext(init(getalgo(p); lifetime = lifetime(p))))
 
     end
 
@@ -141,7 +141,7 @@ function reinit(p::Process)
     pause(p)
     wait(p)
     # A paused run keeps its runtime context: it resumes with the new state.
-    _sync_state_context!(p, context(init(getalgo(p); lifetime = lifetime(p))))
+    _sync_state_context!(p, getcontext(init(getalgo(p); lifetime = lifetime(p))))
     run(p)
     return true
 end
@@ -156,7 +156,7 @@ afterwards.
 function reinit(p::Process, target; inputs = (;), overrides = (;))
     pause(p)
     wait(p)
-    _sync_state_context!(p, initcontext(context(p), target; inputs, overrides))
+    _sync_state_context!(p, initcontext(getcontext(p), target; inputs, overrides))
     run(p)
     return true
 end

@@ -16,7 +16,7 @@ using StatefulAlgorithms
     ctx = run(ip)
 
     @test ctx[InlineAccumulator].delta == 2
-    @test loopidx(ip) == 5
+    @test getlidx(ip) == 5
     @test ctx[InlineAccumulator].value == 11
 end
 
@@ -35,7 +35,7 @@ end
     wait(p)
     close(p)
 
-    @test context(p)[TypeInputAccumulator].value == 6
+    @test getcontext(p)[TypeInputAccumulator].value == 6
 
     unresolved = CompositeAlgorithm(TypeInputAccumulator)
     @test_throws ArgumentError StatefulAlgorithms.resolve_process_inputs_overrides(

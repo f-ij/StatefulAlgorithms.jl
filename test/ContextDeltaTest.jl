@@ -58,7 +58,7 @@ function run_steps(plan, n)
     p = Process(plan; repeats = n)
     run(p)
     wait(p)
-    return context(p)
+    return getcontext(p)
 end
 
 @testset "Context delta: write sets" begin

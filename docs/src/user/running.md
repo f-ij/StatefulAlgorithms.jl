@@ -37,7 +37,7 @@ runtime input declarations, and become the run's inputs (`_inputs`, read-only) o
 that loop run. Finished processes strip runtime-only fields before storing their
 persistent context. A paused process keeps the run's runtime context (its inputs and
 declared locals) and loop cursor internally, apart from its context, so it can resume;
-`context(p)` is the process's state context, paused or not.
+`getcontext(p)` is the process's state context, paused or not.
 
 Initialized loop algorithms can also be run directly:
 
@@ -80,7 +80,7 @@ In practice:
 
 - use `wait(p)` when you just want to block until completion,
 - use `fetch(p)` when you want the task's return value,
-- use `context(p)` for the current stored process context, and `context(p)[key]` to index it by `key`.
+- use `getcontext(p)` for the current stored process context, and `getcontext(p)[key]` to index it by `key`.
 
 For an ordinary process, the task result is the final context: the cleaned
 persistent context with the runtime values still there at the end of the run, the
@@ -88,7 +88,7 @@ inputs (`_inputs`) and the declared locals (`_declared_locals`). Returns are not
 in it: a block's returns end with the block. A root finalizer gets this context,
 so `@finally ctx -> ctx.result` hands a `local result` out of the run.
 The process itself stores only the cleaned persistent context, so use
-`context(p)` when you need the state that will be reused by a later run. A
+`getcontext(p)` when you need the state that will be reused by a later run. A
 `FinalizedAlgorithm` can instead make `fetch(p)` return the finalizer function's
 result.
 

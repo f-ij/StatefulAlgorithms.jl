@@ -382,7 +382,7 @@ end
 end
 
 function manager_process_context(worker)
-    subcontexts = StatefulAlgorithms.get_subcontexts(StatefulAlgorithms.context(worker))
+    subcontexts = StatefulAlgorithms.get_subcontexts(StatefulAlgorithms.getcontext(worker))
     names = filter(!=(:globals), fieldnames(typeof(subcontexts)))
     return getproperty(subcontexts, only(names))
 end
@@ -402,8 +402,8 @@ end
     @test make_count[] == 1
     @test allequal(typeof(getalgo(slot.worker)) for slot in manager_slots)
     @test allequal(typeof(slot.worker) for slot in manager_slots)
-    @test allequal(typeof(StatefulAlgorithms.context(slot.worker)) for slot in manager_slots)
-    @test length(unique(objectid(StatefulAlgorithms.context(slot.worker)) for slot in manager_slots)) == 3
+    @test allequal(typeof(StatefulAlgorithms.getcontext(slot.worker)) for slot in manager_slots)
+    @test length(unique(objectid(StatefulAlgorithms.getcontext(slot.worker)) for slot in manager_slots)) == 3
 end
 
 @testset "ProcessManager can build per-slot Process contexts" begin
@@ -424,7 +424,7 @@ end
                 getalgo(template),
                 Input(ManagerProcessAccumulator, :start => idx),
             )
-            StatefulAlgorithms.context(initialized)
+            StatefulAlgorithms.getcontext(initialized)
         end,
     )
 
@@ -435,8 +435,8 @@ end
     @test make_count[] == 1
     @test context_count[] == 3
     @test allequal(typeof(getalgo(slot.worker)) for slot in manager_slots)
-    @test allequal(typeof(StatefulAlgorithms.context(slot.worker)) for slot in manager_slots)
-    @test length(unique(objectid(StatefulAlgorithms.context(slot.worker)) for slot in manager_slots)) == 3
+    @test allequal(typeof(StatefulAlgorithms.getcontext(slot.worker)) for slot in manager_slots)
+    @test length(unique(objectid(StatefulAlgorithms.getcontext(slot.worker)) for slot in manager_slots)) == 3
     @test [ctx.value[] for ctx in contexts] == [1, 2, 3]
 end
 
@@ -465,7 +465,7 @@ end
     contexts = map(slot -> manager_process_context(slot.worker), manager_slots)
 
     @test make_count[] == 3
-    @test length(unique(objectid(StatefulAlgorithms.context(slot.worker)) for slot in manager_slots)) == 3
+    @test length(unique(objectid(StatefulAlgorithms.getcontext(slot.worker)) for slot in manager_slots)) == 3
     @test [ctx.value[] for ctx in contexts] == worker_data
 end
 
@@ -695,7 +695,7 @@ end
     threaded_template = Process(ManagerProcessAccumulator(); repeats = 1)
     threaded_output = Int[]
     threaded_recipe = (;
-        makeworker = (idx, manager) -> copyprocess(threaded_template; context = deepcopy(context(threaded_template))),
+        makeworker = (idx, manager) -> copyprocess(threaded_template; context = deepcopy(getcontext(threaded_template))),
         loadjob! = polling_recipe.loadjob!,
         providearguments = polling_recipe.providearguments,
         sync_to_state! = manager -> begin
@@ -717,7 +717,7 @@ end
     template = Process(ManagerProcessAccumulator(); repeats = 1)
     external = Int[]
     recipe = (;
-        makeworker = (idx, manager) -> copyprocess(template; context = deepcopy(StatefulAlgorithms.context(template))),
+        makeworker = (idx, manager) -> copyprocess(template; context = deepcopy(StatefulAlgorithms.getcontext(template))),
         loadjob! = (slot, job, manager) -> begin
             local_context = manager_process_context(slot.worker)
             local_context.value[] = job
@@ -744,7 +744,7 @@ end
     template = Process(ManagerProcessAccumulator(); repeats = 1)
     external = Int[]
     recipe = (;
-        makeworker = (idx, manager) -> copyprocess(template; context = deepcopy(StatefulAlgorithms.context(template))),
+        makeworker = (idx, manager) -> copyprocess(template; context = deepcopy(StatefulAlgorithms.getcontext(template))),
         loadjob! = (slot, job, manager) -> begin
             local_context = manager_process_context(slot.worker)
             local_context.value[] = job
@@ -774,7 +774,7 @@ end
     template = Process(ManagerProcessAccumulator(); repeats = 1)
     external = Int[]
     recipe = (;
-        makeworker = (idx, manager) -> copyprocess(template; context = deepcopy(StatefulAlgorithms.context(template))),
+        makeworker = (idx, manager) -> copyprocess(template; context = deepcopy(StatefulAlgorithms.getcontext(template))),
         loadjob! = (slot, job, manager) -> begin
             local_context = manager_process_context(slot.worker)
             local_context.value[] = job
@@ -814,7 +814,7 @@ end
     template = Process(ManagerProcessAccumulator(); repeats = 1)
     recipe = (;
         initstate = (config, manager) -> (; output = Int[]),
-        makeworker = (idx, manager) -> copyprocess(template; context = deepcopy(StatefulAlgorithms.context(template))),
+        makeworker = (idx, manager) -> copyprocess(template; context = deepcopy(StatefulAlgorithms.getcontext(template))),
         loadjob! = (slot, job, manager) -> begin
             local_context = manager_process_context(slot.worker)
             local_context.value[] = job
@@ -848,7 +848,7 @@ end
 @testset "ProcessManager execution mode is fixed at construction" begin
     template = Process(ManagerProcessAccumulator(); repeats = 1)
     recipe = (;
-        makeworker = (idx, manager) -> copyprocess(template; context = deepcopy(StatefulAlgorithms.context(template))),
+        makeworker = (idx, manager) -> copyprocess(template; context = deepcopy(StatefulAlgorithms.getcontext(template))),
         loadjob! = (slot, job, manager) -> begin
             local_context = manager_process_context(slot.worker)
             local_context.value[] = job
@@ -866,7 +866,7 @@ end
     recipe = (;
         execution = ChannelWorkers(),
         initstate = (config, manager) -> (; output = Int[]),
-        makeworker = (idx, manager) -> copyprocess(template; context = deepcopy(StatefulAlgorithms.context(template))),
+        makeworker = (idx, manager) -> copyprocess(template; context = deepcopy(StatefulAlgorithms.getcontext(template))),
         loadjob! = (slot, job, manager) -> begin
             local_context = manager_process_context(slot.worker)
             local_context.value[] = job
@@ -952,7 +952,7 @@ end
         end,
         afterjob! = (slot, job, manager) -> push!(
             outputs,
-            context(slot.worker)[ManagerRuntimeJobStep].total,
+            getcontext(slot.worker)[ManagerRuntimeJobStep].total,
         ),
     )
 
@@ -982,7 +982,7 @@ end
 end
 
 function manager_inline_context(worker::W) where {W<:InlineChunkWorker}
-    subcontexts = StatefulAlgorithms.get_subcontexts(StatefulAlgorithms.context(worker.process))
+    subcontexts = StatefulAlgorithms.get_subcontexts(StatefulAlgorithms.getcontext(worker.process))
     names = filter(!=(:globals), fieldnames(typeof(subcontexts)))
     return getproperty(subcontexts, only(names))
 end

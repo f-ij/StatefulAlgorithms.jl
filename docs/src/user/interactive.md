@@ -19,7 +19,7 @@ initialized = init(
     Interactive(:target, :value),
 )
 
-ctx = context(initialized)
+ctx = getcontext(initialized)
 value_ref = ctx.target.value
 value_ref[] = 4.0
 ```
@@ -51,7 +51,7 @@ algo = resolve(CompositeAlgorithm(
     (1, 20),
 ))
 
-context = StatefulAlgorithms.context(init(
+context = StatefulAlgorithms.getcontext(init(
     algo,
     Init(:_exchange; vars = (Var(:target, :value), Var(:target, :seen))),
 ))
@@ -117,7 +117,7 @@ algo = resolve(CompositeAlgorithm(
     :_exchange => ContextExchange(),
     (1, 20),
 ))
-context = StatefulAlgorithms.context(init(
+context = StatefulAlgorithms.getcontext(init(
     algo,
     Init(:_exchange; vars = (Var(:target, :value),)),
 ))
@@ -154,7 +154,7 @@ initialized = init(
     lifetime = Repeat(3),
 )
 process = Process(initialized; repeats = 1)
-ref = view(context(process), :value)
+ref = view(getcontext(process), :value)
 
 ref[] == 1.0
 
@@ -163,5 +163,5 @@ run(process)
 wait(process)
 
 ref[] == 4.0
-context(process).target.value == 4.0
+getcontext(process).target.value == 4.0
 ```

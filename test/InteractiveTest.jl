@@ -19,7 +19,7 @@ using StatefulAlgorithms
         Interactive(:target, :value);
         lifetime = Repeat(1),
     )
-    context = StatefulAlgorithms.context(initialized)
+    context = StatefulAlgorithms.getcontext(initialized)
 
     @test context.target.value isa InteractiveVar{Float64}
     @test context.target.value[] == 3.0
@@ -35,6 +35,6 @@ using StatefulAlgorithms
     @test stepped_context.target.seen == 12.0
 
     replayed = init(initialized; lifetime = Repeat(1))
-    @test StatefulAlgorithms.context(replayed).target.value isa InteractiveVar{Float64}
-    @test StatefulAlgorithms.context(replayed).target.value[] == 3.0
+    @test StatefulAlgorithms.getcontext(replayed).target.value isa InteractiveVar{Float64}
+    @test StatefulAlgorithms.getcontext(replayed).target.value[] == 3.0
 end

@@ -44,7 +44,7 @@ Base.isempty(wiring::PlanWiring) =
 @inline getpersistentcontext(cla::LoopAlgorithm) = getfield(cla, :context)
 @inline getstoredinits(cla::LoopAlgorithm) = getfield(cla, :inits)
 @inline getstoredoverrides(cla::LoopAlgorithm) = getfield(cla, :overrides)
-@inline context(cla::LoopAlgorithm) = getpersistentcontext(cla)
+@inline getcontext(cla::LoopAlgorithm) = getpersistentcontext(cla)
 
 @inline getalgos(cla::LoopAlgorithm) = getalgos(getplan(cla))
 """Return a copy of `cla` whose plan has the children `funcs`."""
@@ -95,7 +95,7 @@ end
 @inline getstoredinits(la::LA) where {LA<:LoopSpec} = hasfield(LA, :inits) ? getfield(la, :inits) : ()
 @inline getstoredoverrides(la::LA) where {LA<:LoopSpec} = hasfield(LA, :overrides) ? getfield(la, :overrides) : ()
 @inline getpersistentcontext(la::LA) where {LA<:LoopSpec} = hasfield(LA, :context) ? getfield(la, :context) : nothing
-@inline context(la::LA) where {LA<:LoopSpec} = getpersistentcontext(la)
+@inline getcontext(la::LA) where {LA<:LoopSpec} = getpersistentcontext(la)
 @inline _without_lifecycle(la::LA) where {LA<:LoopSpec} = _with_lifecycle(la, nothing, (), ())
 
 @inline _attach_registry(la::LoopAlgorithm{Plan, O, OldR, C, Inits, Overrides, id}, registry::R) where {Plan, O, OldR, C, Inits, Overrides, id, R<:NameSpaceRegistry} =

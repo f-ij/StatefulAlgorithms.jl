@@ -10,7 +10,10 @@ loopidx(p::AbstractProcess) = loopidx(getsession(p))
 setloopidx!(p::AbstractProcess, value) = setloopidx!(getsession(p), value)
 reset_loopidx!(p::AbstractProcess) = reset_loopidx!(getsession(p))
 
-loopint(p::AbstractProcess) = loopint(getsession(p))
+"""The number of steps `p`'s current or last run has made plus one, as an `Int` (exported: the user's loop index)."""
+getlidx(p::AbstractProcess) = loopint(getsession(p))
+
+export getlidx
 
 """How many repeats `p` runs: those of its lifetime (`Inf` for an indefinite one)."""
 repeats(p::AbstractProcess) = repeats(lifetime(p))
