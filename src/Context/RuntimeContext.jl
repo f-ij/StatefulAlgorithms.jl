@@ -31,7 +31,7 @@ state, as `(; Sensor_1 = (; extra = ...), ...)`.
 """
 @inline get_subcontext_returns(pc::ProcessContext) = @inline get_runtime_partition(pc, SubcontextReturns())
 
-"""Return the declared loop-local variables (`Local`) held in a runtime or paused context."""
+"""Return the declared loop-local variables (`Local`) held in a runtime context."""
 @inline get_declared_locals(pc::ProcessContext) = @inline get_runtime_partition(pc, DeclaredLocals())
 
 ############################################################################################

@@ -40,8 +40,8 @@ Potential next targets, in the order they should be investigated:
 
 8. Keep `Process` first-entry context concrete but resumed context broad.
    The stored LoopAlgorithm context is already concrete and should remain the
-   first-run source. `Process.runtime_context` is deliberately
-   `Union{Nothing, ProcessContext}` for resumed/replaced contexts; do not add a
+   first-run source. `Process.state_context` is deliberately
+   `Union{Nothing, ProcessContext}` for replaced contexts; do not add a
    `Process{F,C}` parameter again unless a new profile shows a real win.
 
 9. Keep empty tuple paths specialized.
