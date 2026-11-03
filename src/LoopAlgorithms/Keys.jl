@@ -1,3 +1,14 @@
+#=
+Keys of a loop algorithm tree: the names of its children and states, and where each one sits. Sections, in order:
+`KeyLocation` (the type-stable path to a named child or state), entity and child lookup (the key, nested loop and
+children of one entry), listing keys (`Base.keys`), finding a key (`findkeyposition`, `Base.haskey`) and indexing by
+`KeyLocation` (`Base.getindex`). Each walk has a value method and a type method.
+=#
+
+##########################################
+############## KeyLocation ###############
+##########################################
+
 """
 Type-stable location for a named loop child or state.
 
@@ -9,6 +20,12 @@ struct KeyLocation{Path} end
 
 @inline KeyLocation(path::Tuple) = KeyLocation{path}()
 @inline keypath(::KeyLocation{Path}) where {Path} = Path
+
+##########################################
+######## Entity and child lookup #########
+##########################################
+
+@inline _key_source(loop) = loop
 
 """Return an entity key, or `Symbol()` when the entity is not directly keyed."""
 @inline _entity_key(::Any) = Symbol()
@@ -49,6 +66,10 @@ end
     return isnothing(key) ? _entity_key(child) : key
 end
 
+##########################################
+############## Listing keys ##############
+##########################################
+
 function _append_keys!(names::Vector{Symbol}, loop)
     children = getalgos(loop)
     for idx in eachindex(children)
@@ -85,8 +106,6 @@ function _append_keys!(names::Vector{Symbol}, ::Type{LA}) where {LA<:LoopSpec}
     return names
 end
 
-@inline _key_source(loop) = loop
-
 """Return all named children and states visible from a loop algorithm tree."""
 function Base.keys(loop::LA) where {LA<:LoopSpec}
     return tuple(_append_keys!(Symbol[], _key_source(loop))...)
@@ -96,6 +115,10 @@ end
     names = tuple(_append_keys!(Symbol[], _key_source(LA))...)
     return Expr(:tuple, (QuoteNode(name) for name in names)...)
 end
+
+##########################################
+############# Finding a key ##############
+##########################################
 
 function _findkeyposition(loop, key::Symbol, prefix::Tuple)
     children = getalgos(loop)
@@ -146,6 +169,10 @@ end
 @inline findkeyposition(::Type{LA}, key::Symbol) where {LA<:LoopSpec} = _findkeyposition(_key_source(LA), key, ())
 @inline Base.haskey(loop::LA, key::Symbol) where {LA<:LoopSpec} = !isnothing(findkeyposition(loop, key))
 @inline Base.haskey(::Type{LA}, key::Symbol) where {LA<:LoopSpec} = !isnothing(findkeyposition(LA, key))
+
+##########################################
+######## Indexing by KeyLocation #########
+##########################################
 
 function _getindex_keylocation(current, path::Tuple)
     child = _key_children(current)[first(path)]
