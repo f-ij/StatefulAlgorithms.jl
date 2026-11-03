@@ -24,19 +24,19 @@ Which fields a step can write is worked out from the plan's types in Writes.jl (
 =#
 
 """
-    create_carried(algo, cursor, lc, wiring, namespace, process, lifetime)
+    create_carried(algo, cursor, lc, wiring, namespace, session, lifetime)
 
 What a loop that runs `_step!` with these arguments carries before its first step: the values, in the persistent
 context of `lc`, of the fields the step can write, as `(; subcontext = (; field = value, ...), ...)` (every field when
 those are not known).
 """
 @inline function create_carried(algo::AlgoType, cursor::CursorType, lc::LoopContext{PersistentContextType, RuntimeContextType}, wiring::WiringViewType, namespace::NamespaceType,
-                                process::ProcessType, lifetime::LifetimeType) where {AlgoType, CursorType, PersistentContextType<:ProcessContext, RuntimeContextType, WiringViewType, NamespaceType, ProcessType, LifetimeType}
+                                session::SessionType, lifetime::LifetimeType) where {AlgoType, CursorType, PersistentContextType<:ProcessContext, RuntimeContextType, WiringViewType, NamespaceType, SessionType, LifetimeType}
     persistent_context = @inline getpersistent(lc)
     # The views, and so the writes, depend on the runtime context type. Every repeat sees the same one: a step removes
     # what it adds to the runtime context (a return lives until the end of its block), so its type at the end of a step
     # is its type at the start.
-    written = @inline _find_writable_fields(algo, cursor, persistent_context, RuntimeContextType, wiring, namespace, process, lifetime)
+    written = @inline _find_writable_fields(algo, cursor, persistent_context, RuntimeContextType, wiring, namespace, session, lifetime)
     return @inline _written_values(persistent_context, written)
 end
 

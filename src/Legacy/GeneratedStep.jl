@@ -65,7 +65,7 @@ function step!_expr(ca::Type{CA}, context::Type{C}, name::Symbol, wiringname::Sy
                 local $local_name = @inline getalgo($name, $i)
                 local $local_wiring = $child_step_wiring_type()
                 local $local_namespace = $child_namespace_type()
-                context = @inline _step!($local_name, context, $local_wiring, $local_namespace, process, lifetime)
+                context = @inline _step!($local_name, context, $local_wiring, $local_namespace, session, lifetime)
             end
         end)
     end
@@ -110,27 +110,27 @@ function step!_expr(routine::Type{R}, context::Type{C}, name::Symbol, wiringname
             local _subroutine_lifetime = $this_lifetime
             local _routine_repeat_count = @inline routine_repeat_count(_subroutine_lifetime)
             if resume_idx($name, $i) <= _routine_repeat_count
-                context = @inline _step!($local_name, context, $local_wiring, $local_namespace, process, lifetime)
-                @inline tick!(process)
+                context = @inline _step!($local_name, context, $local_wiring, $local_namespace, session, lifetime)
+                @inline tick!(session)
 
                 local _routine_next_idx = resume_idx($name, $i) + 1
                 local _routine_resume_point = resume_idx($name, $i)
-                if @inline routine_breakcondition(_subroutine_lifetime, lifetime, process, context, _routine_resume_point)
-                    if !(@inline _routine_local_breakcondition(_subroutine_lifetime, process, context, _routine_resume_point))
+                if @inline routine_breakcondition(_subroutine_lifetime, lifetime, session, context, _routine_resume_point)
+                    if !(@inline _routine_local_breakcondition(_subroutine_lifetime, session, context, _routine_resume_point))
                         set_resume_point!($name, $i, _routine_next_idx)
                     end
                     return context
                 end
 
                 for lidx in _routine_next_idx:_routine_repeat_count
-                    if @inline routine_breakcondition(_subroutine_lifetime, lifetime, process, context, lidx)
-                        if !(@inline _routine_local_breakcondition(_subroutine_lifetime, process, context, lidx))
+                    if @inline routine_breakcondition(_subroutine_lifetime, lifetime, session, context, lidx)
+                        if !(@inline _routine_local_breakcondition(_subroutine_lifetime, session, context, lidx))
                             set_resume_point!($name, $i, lidx)
                         end
                         return context
                     end
-                    context = @inline _step!($local_name, context, $local_wiring, $local_namespace, process, lifetime)
-                    @inline tick!(process)
+                    context = @inline _step!($local_name, context, $local_wiring, $local_namespace, session, lifetime)
+                    @inline tick!(session)
                 end
             end
         end)
@@ -146,8 +146,8 @@ Fallback expression form for non-CLA algorithms.
 """
 function step!_expr(::Type{T}, ::Type{C}, funcname::Symbol, wiringname::Symbol) where {T, C<:AbstractContext}
     # Generated single line:
-    #   context = _step!(funcname, context, wiring, namespace, process, lifetime)
+    #   context = _step!(funcname, context, wiring, namespace, session, lifetime)
     # This keeps generated loops aligned with the normal runtime route/share
     # semantics for algorithms that do not provide a custom expression form.
-    return :(context = @inline _step!($funcname, context, $wiringname, Namespace{nothing}(), process, lifetime))
+    return :(context = @inline _step!($funcname, context, $wiringname, Namespace{nothing}(), session, lifetime))
 end

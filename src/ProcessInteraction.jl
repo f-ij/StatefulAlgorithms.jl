@@ -36,9 +36,6 @@ function Base.run(p::Process, run_lifetime = nothing, inputs_and_overrides...; r
     end
     isempty(inputs_and_overrides) || error("Process run accepts runtime inputs as keywords only. Reinitialize the Process context before running to apply init/override specs.")
 
-    @atomic p.shouldrun = true
-    @atomic p.paused = false
-
     lt = _process_run_lifetime(getalgo(p), run_lifetime, repeats, lifetime)
     if !isnothing(lt)
         p.lifetime = lt
@@ -49,8 +46,6 @@ end
 
 function Base.run(p::AP, lifetime = nothing, inputs_and_overrides...; kwargs...) where AP <: AbstractProcess
     @assert isidle(p) "Process is already in use"
-    @atomic p.shouldrun = true
-    @atomic p.paused = false
     makeloop!(p, (; kwargs...))
 end
 
@@ -82,8 +77,9 @@ Close a process, stopping it from running
 """
 function Base.close(p::Process)
     was_paused = ispaused(p)
-    @atomic p.paused = false
-    @atomic p.shouldrun = false
+    session = getsession(p)
+    @atomic session.paused = false
+    @atomic session.shouldrun = false
 
     fetched_result = nothing
     try
@@ -104,15 +100,16 @@ function Base.close(p::Process)
 
     p.task = nothing 
 
-    p.loopidx = 1
-    p.loop_cursor = nothing
+    session = getsession(p)
+    reset_loopidx!(session)
+    session.loop_cursor = nothing
     return true
 end
 
 function restart(p::Process)
     close(p)
     wait(p)
-    @atomic p.paused = false # Force reinit
+    @atomic getsession(p).paused = false # Force reinit
     run(p)
 end
 
@@ -120,8 +117,9 @@ end
 Pause a process, allowing it to be unpaused later
 """
 function pause(p::Process)
-    @atomic p.paused = true
-    @atomic p.shouldrun = false
+    session = getsession(p)
+    @atomic session.paused = true
+    @atomic session.shouldrun = false
     return true
 end
 

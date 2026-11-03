@@ -10,10 +10,10 @@ mutable struct InlineProcess{TD,ContextType, Lt,Mode} <: AbstractProcess
     algo::TD
     context::ContextType
     consumed::Bool
-    loopidx::UInt
     lifetime::Lt
-    starttime::Union{Nothing,Float64,UInt64}
-    endtime::Union{Nothing,Float64,UInt64}
+    # The run's counter, one session for every run (Sessions/InlineSession.jl): what the loop gets instead of the
+    # process.
+    const session::InlineSession
 end
 #TODO Improve context semantics
 contexttype(::Union{InlineProcess{TD,ContextType}, Type{<:InlineProcess{TD,ContextType}}}) where {TD,ContextType} = ContextType
@@ -49,7 +49,7 @@ end
     prepared_context = getpersistentcontext(algo)
     mode = _inline_process_mode(threaded)
 
-    p = InlineProcess{typeof(algo), typeof(prepared_context), typeof(lifetime),mode}(uuid1(), algo, prepared_context, false, UInt(1), lifetime, nothing, nothing)
+    p = InlineProcess{typeof(algo), typeof(prepared_context), typeof(lifetime),mode}(uuid1(), algo, prepared_context, false, lifetime, InlineSession())
     return p
 end
 
@@ -60,15 +60,13 @@ end
 @inline lifetime(ip::IP) where {IP<:InlineProcess} = ip.lifetime
 @inline getcontext(ip::IP) where {IP<:InlineProcess} = ip.context::contexttype(ip)
 
-@inline set_starttime!(ip::InlineProcess) = (ip.starttime = time_ns())
-@inline set_endtime!(ip::InlineProcess) = (ip.endtime = time_ns())
 getalgo(ip::InlineProcess) = ip.algo
 
 @inline context(ip::InlineProcess, c) = (ip.context = c)
 @inline context(ip::InlineProcess) = ip.context::contexttype(ip)
 
 @inline function reset!(p::InlineProcess, inputs_overrides...)
-    p.loopidx = 1
+    reset_loopidx!(getsession(p))
     initialized = init(getalgo(p), inputs_overrides...; lifetime = lifetime(p))
     p.context = StatefulAlgorithms.context(initialized)
     # TODO: Probably remove consumed flag
@@ -98,17 +96,16 @@ end
         context
     end
 
-    p.loopidx = 1
     runtime_inputs = _inline_runtime_inputs(algo, inputs_overrides, (; kwargs...))
     inputlifetime = isnothing(lifetime) ? StatefulAlgorithms.lifetime(p) : lifetime
     run_lifetime = _inline_process_lifetime(algo, repeats, inputlifetime)
 
     if (isnothing(threaded) && isthreaded(p)) || threaded === true
-        return Threads.@spawn @inline loop(p, algo, run_context, run_lifetime, runtime_inputs)
+        return Threads.@spawn _run_inline!(p, algo, run_context, run_lifetime, runtime_inputs)
     elseif (isnothing(threaded) && isasync(p)) || threaded === :async
-        return @async @inline loop(p, algo, run_context, run_lifetime, runtime_inputs)
-    else 
-        return @inline @inline loop(p, algo, run_context, run_lifetime, runtime_inputs)
+        return @async _run_inline!(p, algo, run_context, run_lifetime, runtime_inputs)
+    else
+        return @inline _run_inline!(p, algo, run_context, run_lifetime, runtime_inputs)
     end
 end
 
@@ -122,14 +119,21 @@ end
         context
     end
 
-    p.loopidx = 1
     # loopdispatch = isnothing(repeat) ? lifetime(p) : _inline_process_lifetime(algo, repeat, nothing)
     inputlifetime = isnothing(lifetime) ? StatefulAlgorithms.lifetime(p) : lifetime
     run_lifetime = _inline_process_lifetime(algo, repeats, inputlifetime)
     runtime_inputs = _inline_runtime_inputs(algo, inputs_overrides, (; kwargs...))
 
-    # p.consumed = true
-    return @inline loop(p, algo, run_context, run_lifetime, runtime_inputs)
+    return @inline _run_inline!(p, algo, run_context, run_lifetime, runtime_inputs)
+end
+
+"""One run of `p`: the loop on the process's session (`run_session_loop`), then its context kept on the process."""
+@inline function _run_inline!(p::InlineProcess, algo::A, run_context::C, run_lifetime::LT, runtime_inputs::I) where {A, C, LT, I}
+    session = getsession(p)
+    reset_loopidx!(session)
+    persistent_context, returnvalue = run_session_loop(session, algo, run_context, run_lifetime, runtime_inputs)
+    p.context = persistent_context
+    return returnvalue
 end
 
 @inline function init_and_run(p::InlineProcess, inputs_overrides...)

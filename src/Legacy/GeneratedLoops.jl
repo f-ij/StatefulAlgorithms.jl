@@ -5,16 +5,16 @@
 Generated process loop that inlines the step! expression when available.
 """
 @inline @generated function loop(
-    process::P,
+    session::P,
     algo::F,
     context::C,
     lifetime::RL,
     inputs::I,
     ::Resuming{isresuming},
     ::Generated,
-) where {P<:AbstractProcess, F<:AbstractLoopAlgorithm, C<:AbstractContext, RL<:RepeatLifetime, I<:NamedTuple, isresuming}
+) where {P<:ProcessSession, F<:AbstractLoopAlgorithm, C<:AbstractContext, RL<:RepeatLifetime, I<:NamedTuple, isresuming}
     return quote
-        return @inline loop(process, algo, context, lifetime, inputs, Resuming{$isresuming}(), NonGenerated())
+        return @inline loop(session, algo, context, lifetime, inputs, Resuming{$isresuming}(), NonGenerated())
     end
 end
 
@@ -78,15 +78,15 @@ end
 Generated process loop that inlines the step! expression when available.
 """
 @generated function loop(
-    process::P,
+    session::P,
     func::F,
     context::C,
     lifetime::LT,
     inputs::I,
     ::Resuming{isresuming},
     ::Generated,
-) where {P<:AbstractProcess, F<:AbstractLoopAlgorithm, C<:AbstractContext, LT<:IndefiniteLifetime, I<:NamedTuple, isresuming}
+) where {P<:ProcessSession, F<:AbstractLoopAlgorithm, C<:AbstractContext, LT<:IndefiniteLifetime, I<:NamedTuple, isresuming}
     return quote
-        return @inline loop(process, func, context, lifetime, inputs, Resuming{$isresuming}(), NonGenerated())
+        return @inline loop(session, func, context, lifetime, inputs, Resuming{$isresuming}(), NonGenerated())
     end
 end

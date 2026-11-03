@@ -13,12 +13,12 @@ so a child on interval 2 never runs.)
 function exchange_stepper(algo, context)
     SA = StatefulAlgorithms
     lifetime = SA.Indefinite()
-    process = SA.LoopRunProcess(lifetime)
+    session = SA.InlineSession()
     plan = SA.getplan(algo)
     cursor = SA.loop_cursor(plan, Val(false))
     runtime_context = SA._empty_context()
     wiring = SA.PlanWiringView(SA.getwiring(plan))
-    return ctx -> SA.getpersistent(SA._step!(plan, cursor, SA.LoopContext(ctx, runtime_context), wiring, SA.Namespace{nothing}(), process, lifetime))
+    return ctx -> SA.getpersistent(SA._step!(plan, cursor, SA.LoopContext(ctx, runtime_context), wiring, SA.Namespace{nothing}(), session, lifetime))
 end
 
 @testset "ContextExchange buffers interactive updates" begin

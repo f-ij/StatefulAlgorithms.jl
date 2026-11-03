@@ -1,27 +1,5 @@
 export RuntimeInput, RuntimeInputState, RuntimeInputs, partialinit
 
-"""
-Lightweight process handle used by `run(::LoopAlgorithm; ...)`.
-
-Direct loop-algorithm runs need the same loop counter, timing, and lifetime
-interface as a normal `Process`, but they should not allocate or store an
-interactive task handle. `LoopRunProcess` is that minimal runtime object.
-"""
-mutable struct LoopRunProcess{LT} <: AbstractProcess
-    loopidx::UInt
-    tickidx::UInt
-    lifetime::LT
-    starttime::Union{Nothing, Float64, UInt64}
-    endtime::Union{Nothing, Float64, UInt64}
-    threadid::Int
-end
-
-LoopRunProcess(lifetime::LT) where {LT} = LoopRunProcess{LT}(UInt(1), UInt(1), lifetime, nothing, nothing, 0)
-@inline lifetime(p::LoopRunProcess) = p.lifetime
-@inline tick!(p::LoopRunProcess) = (p.tickidx += UInt(1))
-@inline set_starttime!(p::LoopRunProcess) = (p.starttime = time_ns())
-@inline set_endtime!(p::LoopRunProcess) = (p.endtime = time_ns())
-@inline context(::LoopRunProcess, ::Any) = nothing
 
 """
 Runtime input declaration produced by DSL `@input`.
@@ -286,7 +264,7 @@ function Base.run(la::LA; repeats = 1, lifetime = nothing, kwargs...) where {LA<
     persistent_context = getpersistentcontext(initialized)
     lt = isnothing(lifetime) ? normalize_process_lifetime(initialized, repeats) : normalize_process_lifetime(initialized, lifetime)
     inputs = _validate_runtime_inputs(initialized, (; kwargs...))
-    process = LoopRunProcess(lt)
-    persistent_context = loop(process, initialized, persistent_context, lt, inputs)
+    # One session per run, as the loop needs a counter and times; nothing can pause or close a direct run.
+    persistent_context, _ = run_session_loop(InlineSession(), initialized, persistent_context, lt, inputs)
     return _with_lifecycle(initialized, persistent_context, getstoredinits(initialized), getstoredoverrides(initialized))
 end

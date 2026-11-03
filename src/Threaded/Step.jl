@@ -98,7 +98,7 @@ Base.@constprop :aggressive function step!(tca::ThreadedCompositeAlgorithm, cont
     return current
 end
 
-Base.@constprop :aggressive @inline @generated function _step!(tca::TCA, cursor::S, lc::L, wiring::W, namespace::N, process::P, lifetime::LT) where {TCA <: ThreadedCompositeAlgorithm, S<:CompositeLoopCursor, L <: LoopContext, W <: PlanWiringView, N <: Namespace, P <: AbstractProcess, LT <: Lifetime}
+Base.@constprop :aggressive @inline @generated function _step!(tca::TCA, cursor::S, lc::L, wiring::W, namespace::N, session::P, lifetime::LT) where {TCA <: ThreadedCompositeAlgorithm, S<:CompositeLoopCursor, L <: LoopContext, W <: PlanWiringView, N <: Namespace, P <: ProcessSession, LT <: Lifetime}
     algo_count = numalgos(TCA)
     child_namespace_tuple_type = TCA.parameters[3]
 
@@ -118,7 +118,7 @@ Base.@constprop :aggressive @inline @generated function _step!(tca::TCA, cursor:
                 local child_cursor = @inline child_loop_cursor(cursor, Val($i))
                 local child_step_wiring = @inline child_wiring_view(wiring, Val($i))
                 local child_namespace = $child_namespace_type()
-                lc = @inline _step!(algo, child_cursor, lc, child_step_wiring, child_namespace, process, lifetime)
+                lc = @inline _step!(algo, child_cursor, lc, child_step_wiring, child_namespace, session, lifetime)
             end
         end)
     end
@@ -129,5 +129,5 @@ Base.@constprop :aggressive @inline @generated function _step!(tca::TCA, cursor:
 end
 
 # The persistent fields a threaded composite writes (see src/Context/Carried/Writes.jl): as a composite's.
-@inline @generated _find_writable_fields(plan::PlanType, cursor::CursorType, persistent_context::PersistentContextType, ::Type{RuntimeContextType}, wiring::WiringViewType, namespace::NamespaceType, process::ProcessType, lifetime::LifetimeType) where {PlanType<:ThreadedCompositeAlgorithm, CursorType, PersistentContextType<:ProcessContext, RuntimeContextType, WiringViewType, NamespaceType, ProcessType, LifetimeType} =
+@inline @generated _find_writable_fields(plan::PlanType, cursor::CursorType, persistent_context::PersistentContextType, ::Type{RuntimeContextType}, wiring::WiringViewType, namespace::NamespaceType, session::SessionType, lifetime::LifetimeType) where {PlanType<:ThreadedCompositeAlgorithm, CursorType, PersistentContextType<:ProcessContext, RuntimeContextType, WiringViewType, NamespaceType, SessionType, LifetimeType} =
     _children_writes_expr(PlanType)

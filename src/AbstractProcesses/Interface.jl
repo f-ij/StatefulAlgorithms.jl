@@ -1,16 +1,16 @@
 #=
-Interface of `AbstractProcess`: what every process provides (its loop counter), with defaults that a process type can
-overload. The process's stop check is a hook: Hooks.jl (`process_breakcondition`).
+Interface of `AbstractProcess`: what every process provides. A process runs in sessions (Sessions/Sessions.jl); its
+loop counter is that of its current (or last) session.
 =#
 
-loopidx(p::AbstractProcess) = p.loopidx
-setloopidx!(p::AbstractProcess, value) = (p.loopidx = value)
-reset_loopidx!(p::AbstractProcess) = setloopidx!(p, oneunit(loopidx(p)))
+"""The session of `p`'s current or last run (`InlineSession`, `InteractiveSession`); see Sessions/Sessions.jl."""
+@inline getsession(p::AbstractProcess) = getfield(p, :session)
 
-loopint(p::AbstractProcess) = Int(loopidx(p))
+loopidx(p::AbstractProcess) = loopidx(getsession(p))
+setloopidx!(p::AbstractProcess, value) = setloopidx!(getsession(p), value)
+reset_loopidx!(p::AbstractProcess) = reset_loopidx!(getsession(p))
+
+loopint(p::AbstractProcess) = loopint(getsession(p))
 getlidx(p::AbstractProcess) = loopint(p)
 
-@inline inc!(p::AbstractProcess) = p.loopidx += oneunit(p.loopidx)
-@inline tick!(p::AbstractProcess) = nothing
-
-export loopidx, loopint, getlidx, inc!
+export getlidx
