@@ -133,7 +133,7 @@ An `InlineProcess` run runs in the process's one session, on its plan, from `con
 (AbstractProcesses/Hooks.jl). An `InlineProcess` cannot pause, so it never resumes.
 """
 @inline prepare_for_loop(ip::IP, context::C, inputs::I, lt::LT, resume::Resuming{false}) where {IP<:InlineProcess, C<:ProcessContext, I<:NamedTuple, LT} =
-    getsession(ip), getalgo(ip), (@inline LoopContext(getalgo(ip), context, inputs, resume))
+    getsession(ip), getalgo(ip), (@inline with_inputs((@inline make_loop_context(getalgo(ip), context)), getalgo(ip), inputs))
 
 """
 One run of `p`: what `prepare_for_loop` makes (the session, the plan, the `LoopContext`), then the loop with those as

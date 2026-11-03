@@ -121,6 +121,21 @@ function _validate_runtime_inputs(la::LA, inputs::I) where {LA<:LoopSpec, I<:Nam
     return merge(_runtime_input_defaults(specs), inputs)
 end
 
+"""
+    with_inputs(lc, plan, inputs)
+
+Returns `lc`, the `LoopContext` a new run starts from (`make_loop_context`), with the run's inputs added to its runtime
+context as `_inputs`, after checking them against `plan`'s `@input` declarations (`_validate_runtime_inputs`). Every
+`prepare_for_loop` method for a new run calls it. Returns `lc` itself when the plan declares no inputs and none were
+passed.
+"""
+@inline function with_inputs(lc::LC, plan::A, inputs::I) where {LC<:LoopContext, A, I<:NamedTuple}
+    checked = _validate_runtime_inputs(plan, inputs)
+    isempty(checked) && return lc
+    runtime = @inline with_subcontext((@inline getruntime(lc)), Val(:_inputs), SubContext{:_inputs}(checked))
+    return LoopContext((@inline getpersistent(lc)), runtime)
+end
+
 # Lifecycle accessors keep `LoopAlgorithm`, plain plan nodes, and wrappers on a
 # shared path. Plain plans report no stored lifecycle data.
 @inline getstoredinits(la::LA) where {LA<:LoopSpec} = hasfield(LA, :inits) ? getfield(la, :inits) : ()

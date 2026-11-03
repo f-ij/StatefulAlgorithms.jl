@@ -366,7 +366,7 @@ function prepare_for_loop(p::Process, context::C, inputs::NamedTuple, lt::LT, re
     session = create_session(p, lt)
     p.session = session
     func = getalgo(p)
-    return session, func, LoopContext(func, context, inputs, resume)
+    return session, func, with_inputs(make_loop_context(func, context), func, inputs)
 end
 
 function prepare_for_loop(p::Process, context::C, inputs::NamedTuple, lt::LT, resume::Resuming{true}) where {C<:ProcessContext, LT}
@@ -375,7 +375,7 @@ function prepare_for_loop(p::Process, context::C, inputs::NamedTuple, lt::LT, re
     func = getalgo(p)
     runtime_context = p.runtime_context
     p.runtime_context = nothing
-    return session, func, LoopContext(func, context, runtime_context, resume)
+    return session, func, LoopContext(context, runtime_context)
 end
 
 """

@@ -43,19 +43,28 @@ LoopContext(persistent_context::PersistentContextType, runtime_context::RuntimeC
     LoopContext{PersistentContextType, RuntimeContextType, Node}(persistent_context, runtime_context)
 
 """
-    LoopContext(plan, context, inputs, resume)
+    make_loop_context(plan, context)
 
-The `LoopContext` a run starts from, made where a run is handed to the loop (`prepare_for_loop`: a `Process` run, an
-`InlineProcess` run, the manager's inline run, `run(plan)`). A new run (`Resuming{false}`) gets `context` as its
-persistent context and, as its runtime context, the inputs (checked against the plan's `@input`s) and the plan's
-declared locals. A paused run that resumes (`Resuming{true}`) gets `context` and, in place of the inputs, the runtime
-context its pause kept: the two halves the pause took apart, combined again.
+The `LoopContext` a new run starts from, before its inputs are added (`with_inputs`): `context` as its persistent
+context and, as its runtime context, the plan's declared locals (`_declared_locals`). Made where a run is handed to the
+loop (`prepare_for_loop`: a `Process` run, an `InlineProcess` run, the manager's inline run, `run(plan)`). A paused run
+that resumes does not use it: it gets `LoopContext(context, runtime_context)` with the runtime context its pause kept.
+
+Returns (`_captured_returns`, `_subcontext_returns`) are not in it: a step adds them where they are assigned and removes
+them when their plan node ends (see `LoopContext`), so every step gets and returns a runtime context of this type.
+
+The process (now its session) and the lifetime are not in it: no step read them (they were in `_captured_returns` until
+2026-10). Init still gets the lifetime, for sizing (`InitContext`, `processsizehint!`). To give steps loop information
+again (step index, total steps, elapsed time, a stop request), add narrow read-only values here rather than the session
+(`ProcessSession`), which would tie step code to the session type; most of those uses belong in the plan (schedules,
+lifetimes) instead.
 """
-@inline LoopContext(algo::A, context::C, inputs::I, ::Resuming{false}) where {A, C<:ProcessContext, I<:NamedTuple} =
-    LoopContext(context, (@inline _initial_runtime_context(_validate_runtime_inputs(algo, inputs), collect_tree_locals(algo))))
-
-@inline LoopContext(algo::A, context::C, runtime_context::RC, ::Resuming{true}) where {A, C<:ProcessContext, RC<:ProcessContext} =
-    LoopContext(context, runtime_context)
+@inline function make_loop_context(plan::A, context::C) where {A, C<:ProcessContext}
+    locals = collect_tree_locals(plan)
+    runtime = isempty(locals) ? (@inline _empty_context()) :
+              (@inline with_subcontext(_empty_context(), Val(:_declared_locals), SubContext{:_declared_locals}(locals)))
+    return LoopContext(context, runtime)
+end
 
 """
     InitContext(persistent_context, algo, lifetime)

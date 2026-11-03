@@ -11,22 +11,6 @@ there. Returns the persistent context and the result; the runtime values end wit
     return (@inline getpersistent(cleaned)), (@inline loop_final_result(func, (@inline final_context(cleaned)), getruntime(cleaned)))
 end
 
-"""
-Build the runtime context for one run: its inputs (`_inputs`) and declared locals (`_declared_locals`). Returns
-(`_captured_returns`, `_subcontext_returns`) are not in it: a step adds them where they are assigned and removes them
-when their plan node ends (see `LoopContext`), so every step gets and returns a runtime context of this type.
-
-The process (now its session) and the lifetime are not in it: no step read them (they were in `_captured_returns` until 2026-10). Init still gets
-the lifetime, for sizing (`InitContext`, `processsizehint!`). To give steps loop information again (step
-index, total steps, elapsed time, a stop request), add narrow read-only values here rather than the session (`ProcessSession`),
-which would tie step code to the session type; most of those uses belong in the plan (schedules, lifetimes) instead.
-"""
-@inline function _initial_runtime_context(inputs::NamedTuple, locals::NamedTuple = (;))
-    runtime = @inline _empty_context()
-    runtime = isempty(inputs) ? runtime : @inline with_subcontext(runtime, Val(:_inputs), SubContext{:_inputs}(inputs))
-    return isempty(locals) ? runtime : @inline with_subcontext(runtime, Val(:_declared_locals), SubContext{:_declared_locals}(locals))
-end
-
 """Build the root wiring view for one loop execution."""
 @inline _root_wiring_view(algo, step_plan) = PlanWiringView(getwiring(step_plan))
 

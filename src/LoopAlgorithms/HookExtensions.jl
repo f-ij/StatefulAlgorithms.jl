@@ -15,8 +15,8 @@ this file):
 A plan run directly (`run(plan)`): a new `InlineSession` for the run (the loop needs a counter; nothing can pause or
 close a direct run), the plan, and the `LoopContext` from `context` and the run's inputs (AbstractProcesses/Hooks.jl).
 """
-@inline prepare_for_loop(plan::LA, context::C, inputs::I, lt::LT, resume::R) where {LA<:LoopSpec, C<:ProcessContext, I<:NamedTuple, LT, R<:Resuming} =
-    InlineSession(), plan, (@inline LoopContext(plan, context, inputs, resume))
+@inline prepare_for_loop(plan::LA, context::C, inputs::I, lt::LT, resume::Resuming{false}) where {LA<:LoopSpec, C<:ProcessContext, I<:NamedTuple, LT} =
+    InlineSession(), plan, (@inline with_inputs((@inline make_loop_context(plan, context)), plan, inputs))
 
 @inline should_run_schedule(interval::I, loopidx::Int, context::C) where {I<:Interval, C} = @inline divides(loopidx, interval)
 

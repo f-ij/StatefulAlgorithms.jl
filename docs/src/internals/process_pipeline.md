@@ -57,9 +57,9 @@ the targeted subcontexts.
 - picks the state context (typed from the plan, or from `state_context`),
 - calls `prepare_for_loop(p, context, inputs, lifetime, resume)`, the first call
   of every run (AbstractProcesses/Hooks.jl): the session the run runs in, the plan
-  and the `LoopContext` the run starts from, made by
-  `LoopContext(plan, context, inputs, resume)`, which validates the inputs against
-  the plan's `@input` metadata, and
+  and the `LoopContext` the run starts from: `make_loop_context(plan, context)`
+  (the state context and the plan's declared locals), then `with_inputs`, which
+  checks the inputs against the plan's `@input` metadata and adds them, and
 - spawns the loop task (`_start_run!`), which calls
   `run_session_loop(session, plan, loop_context, lifetime, resume)`.
 

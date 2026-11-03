@@ -168,7 +168,7 @@ Checked 2026-10-18 against the refactor stack tip (`perf/julia-scoping` 4a816ac,
   1. Four `Init.jl` files: `src/Init.jl`, `src/Context/Init.jl`, `src/Identifiable/Init.jl`, `src/LoopAlgorithms/Init.jl`, plus `init` methods in `Packaging/Step.jl`, `AlgoStates/Destructure.jl`, `Widgets/Integrator.jl` and `LoopAlgorithms/RuntimeInputs.jl`.
   2. `init` means different things by signature: `init(algo, ::InitContext)` (lifecycle init of one algorithm), `init(la, specs::InputInterface...; lifetime)` (build a context for a plan, `RuntimeInputs.jl:241`), `init(la, ::NamedTuple)` / `init(sa, ::NamedTuple)`, and a fallback `init(t, c::Any)` that warns and returns `(;)`.
   3. `initcontext` is two unrelated functions: `initcontext(algo, c::ProcessContext, ...)` in `src/Init.jl` (run init on a plan) and `initcontext(context, algo_or_symbol; inputs, overrides)` in `src/Context/Init.jl` (argument order flipped, keyword inputs). `src/Init.jl` has two near-duplicate `initcontext` methods (with and without input specs).
-  4. `makecontext` / `makecontext!` (process) vs `initcontext` (plan) vs `_init_context_for` (`RuntimeInputs.jl:227`) vs `_initial_runtime_context` (`Loops.jl:33`, the runtime context, not init): four "make/init a context" names.
+  4. `makecontext` / `makecontext!` (process) vs `initcontext` (plan) vs `_init_context_for` (`RuntimeInputs.jl:227`) vs `make_loop_context` (`Context/ContextBundles.jl`, the runtime context, not init): four "make/init a context" names.
   5. Other process-level names: `init!(::TimedProcess)`, `init_and_run(::InlineProcess)`, `_init_state_context`.
   6. `src/Init.jl:71` exports `preparedata!`, which is defined nowhere (still called in `src/Debugging.jl:18`).
   7. Related: user `init` for a `@StepAlgorithm` (see "Later: algorithms written by signature") and `InitContext` (`src/Context/ContextBundles.jl:53`).
@@ -255,7 +255,7 @@ Checked 2026-10-18 against the refactor stack tip (`perf/julia-scoping` 4a816ac,
   8. New tools: list what users write by hand today (e.g. a progress bar or stop request, see `closeprocess` below) and decide which belong here. Noted 2026-10-17.
 - [ ] `src/Tools.jl:184`: `est_remaining` throws when `progress == 0.0` (inline TODO).
 - [ ] `src/Tools.jl:176`: `progress()` reports 0.0 once a completed process is closed *(unverified)*.
-- [ ] `src/Tools.jl`: `closeprocess(c)` was meant to close the process from inside a step through `_runtime.process`; it never worked (`getglobals` on a process), and steps no longer see the process at all (see `_initial_runtime_context`). Remove it, or give steps a stop request instead.
+- [ ] `src/Tools.jl`: `closeprocess(c)` was meant to close the process from inside a step through `_runtime.process`; it never worked (`getglobals` on a process), and steps no longer see the process at all (see `make_loop_context`). Remove it, or give steps a stop request instead.
 
 ## Packaging and threaded composites
 - [ ] **Broken on purpose (2026-10-21, `refactor/process-breakcondition`): `reset!(process)` no longer resets a `Package`'s interval counter.** The `reset!` hook is removed ("Hooks" 2); `Package.inc` is the one counter still kept in an algorithm value, not in a cursor. After a pause and `reset!` (no `cleanup` in between), a package's children run on the old schedule phase; a run that ends normally is fine, `cleanup` sets the counter back to 1. Fixed by the plan below.
