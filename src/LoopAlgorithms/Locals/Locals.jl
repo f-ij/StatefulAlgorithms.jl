@@ -11,7 +11,7 @@ in the runtime context's `_declared_locals` subcontext, one slot per declaration
 3. Reading and writing during a run; a local declared without a type takes the type of its first value
 
 `Maybe` itself, how it and a local that was never written (`undef`) read, and how a `Maybe` shows (their hook
-methods), are in Context/View/StorageWrappers/Maybe.jl.
+methods), are in Context/StoredValues/StorageWrappers/Maybe.jl.
 =#
 
 ############################################################################################

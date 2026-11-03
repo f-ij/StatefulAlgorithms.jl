@@ -9,6 +9,7 @@ include("RuntimeContext.jl")
 include("Bundles/Bundles.jl")
 include("Constructor.jl")
 include("View/View.jl")
+include("StoredValues/StoredValues.jl")   # how a stored value is read, written and shown; after View/ for `VarLocation`
 include("Vars.jl")
 include("Init.jl")
 include("Showing.jl")

@@ -1,7 +1,7 @@
 #=
 `Maybe`: flag-plus-value storage for a declared local that may not hold a value yet (LoopAlgorithms/Locals). The hook
 extensions at the end are how a `Maybe` and a local that was never written (`undef`) read, and how a `Maybe` shows,
-in the base of reading and writing stored values (Context/View/Hooks.jl).
+in the base of reading and writing stored values (Context/StoredValues/Hooks.jl).
 =#
 
 """

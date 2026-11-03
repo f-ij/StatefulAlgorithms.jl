@@ -1,7 +1,7 @@
 #=
 `RedirectedVar`: the marker `Redirect` writes into a state field (LoopAlgorithms/Redirect/Materialization.jl), so the
 field is read and written at the location it points to. The hook extensions at the end are its methods of the base of
-reading and writing stored values (Context/View/Hooks.jl).
+reading and writing stored values (Context/StoredValues/Hooks.jl).
 =#
 
 """

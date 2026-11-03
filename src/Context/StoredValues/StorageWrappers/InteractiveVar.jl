@@ -1,7 +1,7 @@
 #=
 `InteractiveVar`: mutable storage for a context value that external code changes while a process runs (made by the
 `Interactive` input option, InputInterface/Interactive.jl). The hook extensions at the end are its methods of the base
-of reading and writing stored values (Context/View/Hooks.jl).
+of reading and writing stored values (Context/StoredValues/Hooks.jl).
 =#
 
 export InteractiveVar

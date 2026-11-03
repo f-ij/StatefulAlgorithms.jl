@@ -29,7 +29,7 @@ matching its name.
 | `Context/RuntimeContext.jl:66` | `merge_runtime_return(rc, ::Val{:_captured_returns}, args)` only calls `_merge_into_captured_returns` (no other caller) | e | inline |
 | `Context/StructDefs.jl:44-55` | "SUBCONTEXT VIEW" docstring with no struct; `export inject` | f | `View/StructDef.jl`, `View/ContextView.jl` |
 | `Context/DynamicRouter.jl` | not included anywhere | f | delete or include |
-| `Context/Vars.jl:44`, `View/ReadingWriting.jl:38`, `View/Locations.jl:393` | `stored_value_at`: declared in machinery, methods in three files | a | an Interface/Hooks file in `View/`, methods with their types |
+| `Context/Vars.jl:44`, `StoredValues/ReadingWriting.jl:38`, `View/Locations.jl:393` | `stored_value_at`: declared in machinery, methods in three files | a | an Interface/Hooks file in `StoredValues/`, methods with their types |
 | `Context/Vars.jl:53` | `getindex(c::SubContext, vars::Var...)` calls `getindex(::SubContext, ::Var)`, which has no method | f | delete or add the method |
 | `Context/Showing.jl:89/109` | `_subcontext_var_lines` twice, same body but `getdata` | f | one method |
 | `Context/View/Locations.jl:374` | `runtime_values(::ProcessContext, ::Val)`: the `ProcessContext` method of the bundle hook | c | `Context/RuntimeContext.jl` |
