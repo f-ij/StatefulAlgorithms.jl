@@ -44,10 +44,14 @@ getinterval(i::Interval{I, First, Offset}) where {I, First, Offset} = I
 getinterval(::Type{<:Interval{I}}) where {I} = I
 
 Interval(i::Int) = Interval{i, :end, 0}()
+# A first tick of `i` is `:end` and of 1 is `:start`, so one schedule has one type (`Interval(3, 3) == Interval(3)`).
 function Interval(i::Int, first::Int, offset::Int = 0)
     @assert offset >= 0
     @assert i > 0
-    Interval{i, mod1(first, i), offset}()
+    tick = mod1(first, i)
+    tick == i && return Interval{i, :end, offset}()
+    tick == 1 && return Interval{i, :start, offset}()
+    Interval{i, tick, offset}()
 end
 function Interval(i::Int, first::Symbol, offset::Int = 0)
     @assert offset >= 0
@@ -138,16 +142,29 @@ Base.length(i::I) where {I<:Interval} = 1
 ########### Combining entries ############
 ##########################################
 
-function Base.:(*)(num::N, interval::Interval{I, First, Offset}) where {N<:Real, I, First, Offset}
-    @assert First == :start || First == :end "When multiplying an integer with an Interval, the first argument must be either :start or :end, otherwise the result is not well defined."
-    Interval(num*I, First, Offset)
-end
-Base.:(*)(interval::Interval{I, First, Offset}, num::N) where {I, First, Offset, N<:Real} = Interval(num*I, First, Offset)
+"""
+    child * parent
 
-function Base.:(*)(interval1::Interval{I1, First1, Offset1}, interval2::Interval{I2, First2, Offset2}) where {I1, First1, Offset1, I2, First2, Offset2}
-    @assert (First1 == :start && First2 == :start) || (First1 == :end && First2 == :end) "When multiplying two Intervals, both must have the same first argument (:start or :end), otherwise the result is not well defined."
-    Interval(I1*I2, First1, Offset1*I2 + Offset2*I1)
+The schedule of a child with schedule `child` inside a nested composite that runs on `parent`, in ticks of the
+parent's composite: what the child gets when the nested composite is flattened into its parent. The nested composite
+runs on ticks `p, p+P, ...` (`P` the parent's interval, `p` its first tick), and its `k`-th run is the child's tick
+`k`; a child running every `C` of its ticks from tick `c` runs every `C*P` parent ticks from tick `p + (c-1)*P`. A
+number `n` is `Interval(n)`.
+
+The offset is added as before (`Offset1*I2 + Offset2*I1`), see the TODO in TODO.md: offsets do not work with the
+wrapping composite counter.
+"""
+function Base.:(*)(child::Interval{I1, First1, Offset1}, parent::Interval{I2, First2, Offset2}) where {I1, First1, Offset1, I2, First2, Offset2}
+    first = first_tick(parent) + (first_tick(child) - 1) * I2
+    Interval(I1*I2, first, Offset1*I2 + Offset2*I1)
 end
+Base.:(*)(child::I, num::N) where {I<:Interval, N<:Real} = child * Interval(num)
+Base.:(*)(num::N, parent::I) where {N<:Real, I<:Interval} = Interval(num) * parent
+
+"""The tick of each period an interval runs on, as a number in `1:I`."""
+first_tick(::Interval{I, :end, Offset}) where {I, Offset} = I
+first_tick(::Interval{I, :start, Offset}) where {I, Offset} = 1
+first_tick(::Interval{I, First, Offset}) where {I, First, Offset} = First
 
 Base.:(*)(runif::RunIf{Vars}, interval::I) where {Vars, I<:Interval} =
     RunIf(schedule_interval(runif) * interval, getcondition(runif), Vars...)
