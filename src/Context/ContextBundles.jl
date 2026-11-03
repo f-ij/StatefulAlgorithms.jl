@@ -48,16 +48,14 @@ LoopContext(persistent_context::PersistentContextType, runtime_context::RuntimeC
 The `LoopContext` a run starts from, made where a run is handed to the loop (`_prepare_for_loop`: a `Process` run, an
 `InlineProcess` run, the manager's inline run, `run(plan)`). A new run (`Resuming{false}`) gets `context` as its
 persistent context and, as its runtime context, the inputs (checked against the plan's `@input`s) and the plan's
-declared locals. A paused run that resumes (`Resuming{true}`) gets the inputs and declared locals kept in the paused
-context, which are cleared from the persistent context; `inputs` is not used then.
+declared locals. A paused run that resumes (`Resuming{true}`) gets `context` and, in place of the inputs, the runtime
+context its pause kept: the two halves the pause took apart, combined again.
 """
-@inline function LoopContext(algo::A, context::C, inputs::I, ::Resuming{isresuming}) where {A, C<:ProcessContext, I<:NamedTuple, isresuming}
-    if isresuming
-        return LoopContext((@inline _paused_state_context(context)),
-                           (@inline _initial_runtime_context((@inline get_inputs(context)), get_declared_locals(context))))
-    end
-    return LoopContext(context, (@inline _initial_runtime_context(_validate_runtime_inputs(algo, inputs), collect_tree_locals(algo))))
-end
+@inline LoopContext(algo::A, context::C, inputs::I, ::Resuming{false}) where {A, C<:ProcessContext, I<:NamedTuple} =
+    LoopContext(context, (@inline _initial_runtime_context(_validate_runtime_inputs(algo, inputs), collect_tree_locals(algo))))
+
+@inline LoopContext(algo::A, context::C, runtime_context::RC, ::Resuming{true}) where {A, C<:ProcessContext, RC<:ProcessContext} =
+    LoopContext(context, runtime_context)
 
 """
     InitContext(persistent_context, algo, lifetime)

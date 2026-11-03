@@ -56,18 +56,14 @@ Wait for a process to finish
 """
 @inline Base.wait(@nospecialize(p::Process)) = if !isnothing(p.task) wait(p.task) else nothing end
 
-function _cleanup_paused_process!(p::Process, fetched_result)
-    # A paused task already stored its live runtime context when the loop exited.
-    # `close` turns that paused lifecycle into a final one, so cleanup must run
-    # here because the loop will not re-enter `after_while`.
-    cleanup_context = fetched_result isa AbstractContext ? fetched_result : context(p)
-    cleanup_runtime_context = @inline _initial_runtime_context(get_inputs(cleanup_context), get_declared_locals(cleanup_context))
-    cleanup_state_context = @inline _paused_state_context(cleanup_context)
-    cleaned = @inline cleanup(getalgo(p), LoopContext(cleanup_state_context, cleanup_runtime_context))
-    cleaned = @inline withpersistent(cleaned, _paused_state_context(getpersistent(cleaned)))
-    cleaned_context = @inline getpersistent(cleaned)
+function _cleanup_paused_process!(p::Process)
+    # `close` turns the paused run into a finished one: the loop will not run again for it, so the cleanup and the final
+    # result it would have made are made here, from the state context and the runtime context the pause kept, combined
+    # again as on a resume.
+    cleaned = @inline cleanup(getalgo(p), LoopContext(context(p), p.runtime_context))
     p.lastresult = @inline loop_final_result(getalgo(p), (@inline final_context(cleaned)), getruntime(cleaned))
-    commit_context!(p, cleaned_context)
+    p.runtime_context = nothing
+    _sync_state_context!(p, getpersistent(cleaned))
     return p.lastresult
 end
 
@@ -81,20 +77,17 @@ function Base.close(p::Process)
     @atomic session.paused = false
     @atomic session.shouldrun = false
 
-    fetched_result = nothing
     try
         wait(p)
-        if !isnothing(p.task)
-            fetched_result = fetch(p)
-            p.lastresult = fetched_result
-        end
+        isnothing(p.task) || (p.lastresult = fetch(p))
 
-        was_paused && _cleanup_paused_process!(p, fetched_result)
+        was_paused && _cleanup_paused_process!(p)
     catch(err)
         println("Process with error closed:")
         Base.showerror(stderr, err)
         p.task = nothing
-        commit_context!(p, context(init(getalgo(p); lifetime = lifetime(p))))
+        p.runtime_context = nothing
+        _sync_state_context!(p, context(init(getalgo(p); lifetime = lifetime(p))))
 
     end
 
@@ -166,7 +159,9 @@ so that the new loop function is newly compiled
 """
 function reinit(p::Process)
     pause(p)
-    commit_context!(p, context(init(getalgo(p); lifetime = lifetime(p))))
+    wait(p)
+    # A paused run keeps its runtime context: it resumes with the new state.
+    _sync_state_context!(p, context(init(getalgo(p); lifetime = lifetime(p))))
     run(p)
     return true
 end
@@ -180,7 +175,8 @@ afterwards.
 """
 function reinit(p::Process, target; inputs = (;), overrides = (;))
     pause(p)
-    commit_context!(p, initcontext(context(p), target; inputs, overrides))
+    wait(p)
+    _sync_state_context!(p, initcontext(context(p), target; inputs, overrides))
     run(p)
     return true
 end

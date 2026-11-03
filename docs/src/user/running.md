@@ -35,8 +35,9 @@ run(p; temperature = 2.0, sweep = 10)
 The keywords are converted to a `NamedTuple`, validated against the algorithm's
 runtime input declarations, and become the run's inputs (`_inputs`, read-only) only for
 that loop run. Finished processes strip runtime-only fields before storing their
-persistent context. A paused process may keep its live runtime context and loop
-cursor internally so it can resume.
+persistent context. A paused process keeps the run's runtime context (its inputs and
+declared locals) and loop cursor internally, apart from its context, so it can resume;
+`context(p)` is the process's state context, paused or not.
 
 Initialized loop algorithms can also be run directly:
 

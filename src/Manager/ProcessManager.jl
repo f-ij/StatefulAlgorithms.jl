@@ -196,7 +196,7 @@ For a `Process`, this performs these exact mutations:
 - in the worker's session (`getsession(slot.worker)`): `loopidx = 1`, `tickidx = 1`, `paused = false`,
   `shouldrun = true`, `starttime = nothing`, `endtime = nothing`, `loop_cursor = nothing`
 
-It does not change `slot.worker.runtime_context`, `slot.worker.task`, or
+It does not change `slot.worker.state_context`, `slot.worker.runtime_context`, `slot.worker.task`, or
 `slot.worker.lastresult`. It also does not rebuild or clear values stored in the
 process context. Context fields, arrays, buffers, and refs stay exactly as they
 were.
@@ -221,7 +221,7 @@ it from `prepare!` when a job needs freshly initialized context state instead
 of reusing the previous context object.
 """
 function reinitworker!(slot::WorkerSlot{<:Process}, inputs_overrides...; kwargs...)
-    commit_context!(slot.worker, context(init(getalgo(slot.worker), inputs_overrides...; lifetime = lifetime(slot.worker))))
+    _sync_state_context!(slot.worker, context(init(getalgo(slot.worker), inputs_overrides...; lifetime = lifetime(slot.worker))))
     return slot
 end
 
@@ -245,7 +245,7 @@ function partialinitworker!(slot::WorkerSlot{<:Process}, inputs_overrides...)
         getstoredinits(getalgo(slot.worker)),
         getstoredoverrides(getalgo(slot.worker)),
     )
-    commit_context!(slot.worker, context(partialinit(algo, inputs_overrides...)))
+    _sync_state_context!(slot.worker, context(partialinit(algo, inputs_overrides...)))
     return slot
 end
 
@@ -308,7 +308,7 @@ function runprocessinline!(worker::P; lifetime = nothing, repeats = nothing, rep
 
     # Build the same runtime context as the asynchronous Process path, but call
     # the loop directly so no scheduler task is created for short manager jobs.
-    base_context = _has_typed_runtime_context(worker) ? _typed_runtime_context(worker) : context(worker)
+    base_context = _has_typed_state_context(worker) ? _typed_state_context(worker) : context(worker)
     lt = StatefulAlgorithms.lifetime(worker)
     session, plan, lc = _prepare_for_loop(worker, base_context, (; kwargs...), lt, Resuming{false}())
     @atomic session.paused = false

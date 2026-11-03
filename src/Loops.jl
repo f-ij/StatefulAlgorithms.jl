@@ -27,33 +27,15 @@ which would tie step code to the session type; most of those uses belong in the 
     return isempty(locals) ? runtime : @inline with_subcontext(runtime, Val(:_declared_locals), SubContext{:_declared_locals}(locals))
 end
 
-"""Build the visible paused context that keeps runtime inputs and declared locals for resuming."""
-@inline function _paused_visible_context(persistent_context::C, runtime_context::RC) where {C<:ProcessContext,RC<:ProcessContext}
-    inputs = @inline get_inputs(runtime_context)
-    persistent_context = isempty(inputs) ? persistent_context : @inline with_subcontext(persistent_context, Val(:_inputs), SubContext{:_inputs}(inputs))
-    locals = @inline get_declared_locals(runtime_context)
-    return isempty(locals) ? persistent_context : @inline with_subcontext(persistent_context, Val(:_declared_locals), SubContext{:_declared_locals}(locals))
-end
-
-"""Clear pause-only runtime inputs and declared locals before re-entering the hot loop."""
-@inline function _paused_state_context(persistent_context::C) where {C<:ProcessContext}
-    # Written out per field: reassigning `persistent_context` in a loop would change its type per iteration.
-    persistent_context = @inline _clear_paused_subcontext(persistent_context, Val(:_inputs))
-    return @inline _clear_paused_subcontext(persistent_context, Val(:_declared_locals))
-end
-
-@inline _clear_paused_subcontext(persistent_context::C, ::Val{name}) where {C<:ProcessContext,name} =
-    haskey(get_subcontexts(persistent_context), name) ? (@inline with_subcontext(persistent_context, Val(name), SubContext{name}((;)))) : persistent_context
-
 """Build the root wiring view for one loop execution."""
 @inline _root_wiring_view(algo, step_plan) = PlanWiringView(getwiring(step_plan))
 
 """
     after_while(session, persistent_context, returnvalue) -> (persistent_context, returnvalue)
 
-The loop's exit: records the end time (a session that keeps times) and returns the persistent context and the run's result (on a pause, the paused
-context as both). The process that started the run keeps them (`Process`: `_finish_run!`, `InlineProcess`:
-`_run_inline!`).
+The loop's exit: records the end time (a session that keeps times) and returns the persistent context and the run's
+result; on a pause, the result is the run's `LoopContext` (its persistent and runtime context). The process that
+started the run keeps them (`Process`: `_finish_run!`, `InlineProcess`: `_run_inline!`).
 """
 @inline function after_while(session::S, persistent_context::C, returnvalue::R) where {S<:ProcessSession, C<:ProcessContext, R}
     @inline set_endtime!(session)
@@ -99,8 +81,8 @@ Run a single function in a loop indefinitely.
 
     if @inline _loop_ispaused(session)
         @inline _keep_loop_cursor!(session, step_cursor)
-        paused_context = @inline _paused_visible_context(persistent_context, runtime_context)
-        return @inline after_while(session, paused_context, paused_context)
+        # The run's contexts, taken apart by the process (`_finish_run!`) and combined again when it resumes.
+        return @inline after_while(session, persistent_context, LoopContext(persistent_context, runtime_context))
     end
 
     persistent_context, returnvalue = @inline finalizer!(func, persistent_context, runtime_context, session, lifetime)
@@ -135,8 +117,8 @@ Base.@constprop :aggressive @inline function loop(session::S, algo::F, lc::LC, l
 
     if @inline _loop_ispaused(session)
         @inline _keep_loop_cursor!(session, step_cursor)
-        paused_context = @inline _paused_visible_context(persistent_context, runtime_context)
-        return @inline after_while(session, paused_context, paused_context)
+        # The run's contexts, taken apart by the process (`_finish_run!`) and combined again when it resumes.
+        return @inline after_while(session, persistent_context, LoopContext(persistent_context, runtime_context))
     end
 
     persistent_context, returnvalue = @inline finalizer!(algo, persistent_context, runtime_context, session, lifetime)

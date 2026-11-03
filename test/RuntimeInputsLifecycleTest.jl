@@ -108,7 +108,8 @@ runtime_input_bucket(ctx) = getproperty(StatefulAlgorithms.get_subcontexts(ctx),
         process = Process(entry; repeats = 1)
         run(process; temp = 2.0, scale = 3)
         wait(process)
-        @test StatefulAlgorithms._has_typed_runtime_context(process)
+        @test StatefulAlgorithms._has_typed_state_context(process)
+        @test isnothing(process.state_context)
         @test isnothing(process.runtime_context)
         fetched_context = fetch(process)
         @test !haskey(StatefulAlgorithms.get_captured_returns(fetched_context), :value)
@@ -122,7 +123,8 @@ runtime_input_bucket(ctx) = getproperty(StatefulAlgorithms.get_subcontexts(ctx),
 
     inline_worker = Process(runtime_algo; repeats = 1)
     StatefulAlgorithms.runprocessinline!(inline_worker; temp = 2.0, scale = 3)
-    @test StatefulAlgorithms._has_typed_runtime_context(inline_worker)
+    @test StatefulAlgorithms._has_typed_state_context(inline_worker)
+    @test isnothing(inline_worker.state_context)
     @test isnothing(inline_worker.runtime_context)
     @test !haskey(StatefulAlgorithms.get_captured_returns(fetch(inline_worker)), :value)
     @test !haskey(StatefulAlgorithms.get_subcontexts(StatefulAlgorithms.context(inline_worker)), :Callable_1)   # function calls have no persistent state
@@ -186,10 +188,13 @@ runtime_input_bucket(ctx) = getproperty(StatefulAlgorithms.get_subcontexts(ctx),
     paused_context = context(process)
     paused_total = paused_context[PauseRuntimeInputConsumer].total
     @test paused_total > 0
-    @test haskey(StatefulAlgorithms.get_subcontexts(paused_context), :_inputs)
+    # The paused run's inputs are in its runtime context, kept apart from the state context the user gets.
+    @test isempty(runtime_input_bucket(paused_context))
+    @test StatefulAlgorithms.get_inputs(process.runtime_context).delta == 2
     @test_throws ErrorException run(process; delta = 3)
 
     run(process)
+    @test isnothing(process.runtime_context)   # the resumed run has it back in its LoopContext
     deadline = time() + 2.0
     while loopint(process) < 7 && time() < deadline
         sleep(0.005)
@@ -199,7 +204,8 @@ runtime_input_bucket(ctx) = getproperty(StatefulAlgorithms.get_subcontexts(ctx),
 
     @test context(process)[PauseRuntimeInputConsumer].total > paused_total
     close(process)
-    @test StatefulAlgorithms._has_typed_runtime_context(process)
+    @test StatefulAlgorithms._has_typed_state_context(process)
+    @test isnothing(process.state_context)
     @test isnothing(process.runtime_context)
     @test isempty(StatefulAlgorithms.get_inputs(context(process)))
     @test isempty(runtime_input_bucket(context(process)))

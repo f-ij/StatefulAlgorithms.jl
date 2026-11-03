@@ -5,6 +5,11 @@ mutable struct Process{F,C} <: AbstractProcess
     id::UUID
     algo::F
     lifetime::Lifetime
+    # The process's state when its type is not the one stored in the plan (`algo`), which is in the process's type;
+    # `nothing` when the plan holds it. Written only by `_sync_state_context!`.
+    state_context::Union{Nothing, ProcessContext}
+    # A paused run's runtime context (its inputs and declared locals), kept by the run's end (`_finish_run!`) and read by
+    # the resumed run or by `close`, which both clear it. `nothing` when no run is paused.
     runtime_context::Union{Nothing, ProcessContext}
     timeout::Float64
     task::Union{Nothing, Task}
@@ -17,7 +22,7 @@ mutable struct Process{F,C} <: AbstractProcess
     session::InteractiveSession{C}
 end
 
-@setterGetter Process lock runtime_context session
+@setterGetter Process lock session
 """
     getloopcursor(p::Process)
 
@@ -167,7 +172,7 @@ end
 function _construct_process(algo::F, lifetime::LT, timeout) where {F<:AbstractLoopAlgorithm, LT}
     C = typeof(loop_cursor(getplan(algo), Val(true)))
     session = InteractiveSession{C, LT}()
-    p = Process{F, C}(uuid1(), algo, lifetime, nothing, timeout, nothing, Threads.ReentrantLock(), nothing, RuntimeListeners(), session)
+    p = Process{F, C}(uuid1(), algo, lifetime, nothing, nothing, timeout, nothing, Threads.ReentrantLock(), nothing, RuntimeListeners(), session)
 
     register_process!(p)
     schedule_loop_precompile!(p, lifetime)
@@ -200,53 +205,44 @@ end
 Base.:(==)(p1::Process, p2::Process) = p1.id == p2.id
 
 getalgo(p::P) where {P<:Process} = p.algo
+"""
+    context(p::Process)
+
+The process's state context: the user's handle on the process's state, with the registry. Never a run's runtime
+context: a paused run keeps that apart (`p.runtime_context`).
+"""
 function context(p::P) where {P<:Process}
-    runtime_context = p.runtime_context
-    return isnothing(runtime_context) ? getpersistentcontext(getalgo(p)) : runtime_context
+    state_context = p.state_context
+    return isnothing(state_context) ? getpersistentcontext(getalgo(p)) : state_context
 end
 
 """
-Store one live process context in the dynamic runtime slot.
+    _sync_state_context!(p, c)
 
-Use this while a `Process` is still resumable, for example after a pause or
-before a run with per-call lifetime changes. The stored value may intentionally
-deviate from the lifecycle context carried in `p.algo`.
+Makes the values of `c` the process's state: a run's persistent context when it ends or pauses, or a context made by
+init. The values (the subcontexts of `c`) go into the process's state context, which keeps everything else of the
+user's handle (the registry). When the result has the type of the context stored in the plan, the plan's lifecycle
+wrapper in `p.algo` is rebuilt with it, so later runs keep the typed path; otherwise it goes to `p.state_context`.
+Leaves a paused run's runtime context alone.
 """
-@inline function _store_runtime_context!(p::P, c::C) where {P<:Process, C}
-    context(p, c)
-    return c
-end
-
-"""
-Commit one finished or reinitialized process context back onto the process.
-
-When the context strips back to the same concrete type as the stored lifecycle
-context, the lifecycle wrapper in `p.algo` is rebuilt so later runs keep using
-the typed fast path. Only genuine shape changes fall back to the dynamic
-`runtime_context` slot.
-"""
-@inline function commit_context!(p::P, c::C) where {P<:Process, C}
+@inline function _sync_state_context!(p::P, c::C) where {P<:Process, C<:ProcessContext}
+    synced = withsubcontexts(context(p), get_subcontexts(c))
     algo = getalgo(p)
     persistent_context = getpersistentcontext(algo)
-
-    # Preserve the typed lifecycle path whenever finalization returns to the
-    # stored concrete context shape.
-    if !isnothing(persistent_context) && typeof(c) === typeof(persistent_context)
-        p.algo = _with_lifecycle(algo, c, getstoredinits(algo), getstoredoverrides(algo))
-        p.runtime_context = nothing
+    if !isnothing(persistent_context) && typeof(synced) === typeof(persistent_context)
+        p.algo = _with_lifecycle(algo, synced, getstoredinits(algo), getstoredoverrides(algo))
+        p.state_context = nothing
     else
-        p.runtime_context = c
+        p.state_context = synced
     end
-    return c
+    return synced
 end
 
-function context(p::P, c::C) where {P<:Process, C}
-    p.runtime_context = c
-    return c
-end
+# A `Process` manages its state context: the new context's values go into it.
+makecontext!(p::Process, inputs_overrides...; lifetime=nothing) = _sync_state_context!(p, makecontext(p, inputs_overrides...; lifetime))
 
-@inline _has_typed_runtime_context(p::P) where {P<:Process} = isnothing(p.runtime_context)
-@inline _typed_runtime_context(p::P) where {P<:Process} = getpersistentcontext(getalgo(p))
+@inline _has_typed_state_context(p::P) where {P<:Process} = isnothing(p.state_context)
+@inline _typed_state_context(p::P) where {P<:Process} = getpersistentcontext(getalgo(p))
 
 function getcontext(p::Process)
     return context(p)
@@ -298,7 +294,8 @@ end
 
 function createfrom!(p1::Process, p2::Process)
     p1.algo = p2.algo
-    commit_context!(p1, context(p2))
+    _sync_state_context!(p1, context(p2))
+    p1.runtime_context = nothing
     getsession(p1).loop_cursor = nothing
     p1.timeout = p2.timeout
     reset!(p1)
@@ -323,17 +320,16 @@ end
 Runs the prepared task of a process on a thread
 """
 function makeloop!(p::Process, inputs::NamedTuple = (;); threaded = true, loopfunc::LF = loop) where {LF}
-    if _has_typed_runtime_context(p)
-        runtime_context = _typed_runtime_context(p)
-        return _makeloop!(p, inputs, lifetime(p), runtime_context; threaded, loopfunc)
+    if _has_typed_state_context(p)
+        return _makeloop!(p, inputs, lifetime(p), _typed_state_context(p); threaded, loopfunc)
     else
         return _makeloop_dynamic!(p, inputs; threaded, loopfunc)
     end
 end
 
 function makeloop!(p::Process, inputs::NamedTuple, lt; threaded = true, loopfunc::LF = loop) where {LF}
-    if _has_typed_runtime_context(p)
-        return _makeloop!(p, inputs, lt, _typed_runtime_context(p); threaded, loopfunc)
+    if _has_typed_state_context(p)
+        return _makeloop!(p, inputs, lt, _typed_state_context(p); threaded, loopfunc)
     else
         return _makeloop_dynamic!(p, inputs, lt; threaded, loopfunc)
     end
@@ -354,14 +350,24 @@ end
     _prepare_for_loop(p::Process, context, inputs, lifetime, resume)
 
 A `Process` run runs in the process's session when it has `lifetime`'s type, else in a new one with the same counters
-(`create_session`), which becomes the process's session. The run starts from `context` (the process's context, or for
-a resumed run its paused context) and the run's inputs (AbstractProcesses/Hooks.jl).
+(`create_session`), which becomes the process's session. A new run starts from `context` (the process's state context)
+and the run's inputs. A resumed run starts from `context` and the runtime context its pause kept, combined again into
+one `LoopContext`; the process no longer keeps that runtime context (AbstractProcesses/Hooks.jl).
 """
-function _prepare_for_loop(p::Process, context::C, inputs::NamedTuple, lt::LT, resume::R) where {C<:ProcessContext, LT, R<:Resuming}
+function _prepare_for_loop(p::Process, context::C, inputs::NamedTuple, lt::LT, resume::Resuming{false}) where {C<:ProcessContext, LT}
     session = create_session(p, lt)
     p.session = session
     func = getalgo(p)
     return session, func, LoopContext(func, context, inputs, resume)
+end
+
+function _prepare_for_loop(p::Process, context::C, inputs::NamedTuple, lt::LT, resume::Resuming{true}) where {C<:ProcessContext, LT}
+    session = create_session(p, lt)
+    p.session = session
+    func = getalgo(p)
+    runtime_context = p.runtime_context
+    p.runtime_context = nothing
+    return session, func, LoopContext(func, context, runtime_context, resume)
 end
 
 """
@@ -431,14 +437,18 @@ end
 """
     _finish_run!(p, session, persistent_context, returnvalue) -> what the user gets (`fetch(p)`)
 
-A run's end on the process: on a pause, the paused context is kept (with the cursor, kept by the loop in the session) so
-the run resumes from it; otherwise the context is committed and the cursor dropped.
+A run's end on the process. On a pause the loop gives back its `LoopContext` as `returnvalue`, and it is taken apart:
+the persistent context's values go into the process's state context (`_sync_state_context!`), the runtime context into
+`p.runtime_context`; the cursor is kept by the loop in the session. The run resumes from these and the user gets the
+state context. Otherwise the persistent context's values go into the state context and the cursor is dropped.
 """
 function _finish_run!(p::Process, session::InteractiveSession, persistent_context, returnvalue)
     if _loop_ispaused(session)
-        return _store_runtime_context!(p, persistent_context)
+        _sync_state_context!(p, getpersistent(returnvalue))
+        p.runtime_context = getruntime(returnvalue)
+        return context(p)
     end
-    commit_context!(p, persistent_context)
+    _sync_state_context!(p, persistent_context)
     session.loop_cursor = nothing
     return returnvalue
 end
@@ -465,7 +475,7 @@ This performs these exact mutations:
   interval counter and resume point starts over.
 
 It does not reset counters an algorithm keeps in its own value: a `Package`'s interval counter goes on from where it
-was (TODO.md, "Packaging and threaded composites"). It does not change `process.runtime_context`, `process.task`, or
+was (TODO.md, "Packaging and threaded composites"). It does not change `process.state_context`, `process.runtime_context`, `process.task`, or
 `process.lastresult`. It does not clear or replace values stored in
 `context(process)`.
 """
