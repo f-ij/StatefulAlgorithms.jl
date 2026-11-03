@@ -1,3 +1,13 @@
+#=
+`LoopContext`: the bundle a step works on while the loop runs. Sections, in order: the type and its constructors,
+accessors, scopes (entering and leaving a plan node), the final context (what a run ends with), and at the end the
+methods of the bundle Interface (Interface.jl) and of the bundle hooks (Hooks.jl).
+=#
+
+##########################################
+########## Type and constructors #########
+##########################################
+
 """
     LoopContext(persistent_context, runtime_context)
 
@@ -19,15 +29,11 @@ being copied.
 struct LoopContext{PersistentContextType<:ProcessContext, RuntimeContextType<:ProcessContext, Node} <: ContextBundle
     persistent::PersistentContextType
     runtime::RuntimeContextType
-    LoopContext{PersistentContextType, RuntimeContextType, Node}(persistent::PersistentContextType, runtime::RuntimeContextType) where {PersistentContextType<:ProcessContext, RuntimeContextType<:ProcessContext, Node} =
-        new{PersistentContextType, RuntimeContextType, Node}(persistent, runtime)
 end
-LoopContext(persistent_context::PersistentContextType, runtime_context::RuntimeContextType) where {PersistentContextType<:ProcessContext, RuntimeContextType<:ProcessContext} =
-    LoopContext{PersistentContextType, RuntimeContextType, Nothing}(persistent_context, runtime_context)
-"""Makes a `LoopContext` that is in the scope of plan node `Node` (its `PlanWiring` type, or `Nothing` for no node)."""
-@inline LoopContext(persistent_context::PersistentContextType, runtime_context::RuntimeContextType, ::Type{Node}) where {PersistentContextType<:ProcessContext, RuntimeContextType<:ProcessContext, Node} =
-    LoopContext{PersistentContextType, RuntimeContextType, Node}(persistent_context, runtime_context)
 
+"""Makes a `LoopContext` that is in the scope of plan node `Node` (its `PlanWiring` type, or `Nothing` for no node, the default)."""
+@inline LoopContext(persistent_context::PersistentContextType, runtime_context::RuntimeContextType, ::Type{Node} = Nothing) where {PersistentContextType<:ProcessContext, RuntimeContextType<:ProcessContext, Node} =
+    LoopContext{PersistentContextType, RuntimeContextType, Node}(persistent_context, runtime_context)
 
 """
     LoopContext(plan, context)
@@ -53,29 +59,46 @@ lifetimes) instead.
     return LoopContext(context, runtime)
 end
 
+"""Wraps a persistent context in a bundle with an empty runtime context, for looking at a context outside a loop."""
+@inline bundle_of(persistent_context::PC) where {PC<:ProcessContext} = LoopContext(persistent_context, _empty_context())
+
+##########################################
+############### Accessors ################
+##########################################
+
 """Returns the bundle's runtime context. Only a `LoopContext` has one."""
-@inline getruntime(lc::LoopContext) = getfield(lc, :runtime)
+@inline getruntime(lc::LC) where {LC<:LoopContext} = getfield(lc, :runtime)
 """Returns the type of a `LoopContext` type's runtime context."""
 runtime_type(::Type{<:LoopContext{PersistentContextType, RuntimeContextType}}) where {PersistentContextType, RuntimeContextType} = RuntimeContextType
 
 """Copies a `LoopContext` with both its contexts swapped. The copy stays in the same scope."""
-@inline withcontexts(::LoopContext{PersistentContextType, RuntimeContextType, Node}, persistent_context::ProcessContext, runtime_context::ProcessContext) where {PersistentContextType, RuntimeContextType, Node} =
+@inline withcontexts(::LoopContext{PersistentContextType, RuntimeContextType, Node}, persistent_context::PC, runtime_context::RC) where {PersistentContextType, RuntimeContextType, Node, PC<:ProcessContext, RC<:ProcessContext} =
     LoopContext(persistent_context, runtime_context, Node)
 
-"""Wraps a persistent context in a bundle with an empty runtime context, for looking at a context outside a loop."""
-@inline bundle_of(persistent_context::ProcessContext) = LoopContext(persistent_context, _empty_context())
+##########################################
+################# Scopes #################
+##########################################
 
-# Interface.jl
-persistent_type(::Type{<:LoopContext{PersistentContextType}}) where {PersistentContextType} = PersistentContextType
-@inline withpersistent(lc::LoopContext{PersistentContextType, RuntimeContextType, Node}, persistent_context::ProcessContext) where {PersistentContextType, RuntimeContextType, Node} =
-    LoopContext(persistent_context, getruntime(lc), Node)
-@inline _rebundle(lc::LoopContext, persistent_context::ProcessContext, runtime_patch::NamedTuple) =
-    @inline withcontexts(lc, persistent_context, (@inline merge_runtime_returns(getruntime(lc), runtime_patch)))
+"""
+    enter_scope(lc, wiring)
 
-# Hooks.jl
-bundle_scope(::Type{<:LoopContext{PersistentContextType, RuntimeContextType, Node}}) where {PersistentContextType, RuntimeContextType, Node} = node_scope(Node)
-@inline runtime_values(lc::LoopContext, name::Val) = @inline runtime_values(getruntime(lc), name)
-@inline get_runtime_partition(lc::LoopContext, partition::RuntimePartition) = @inline get_runtime_partition(getruntime(lc), partition)
+`lc` in the scope of the plan node whose wiring view is `wiring`: the node's names become visible. Nothing of the
+node's own is in the runtime context yet: its returns are added at the line that writes them (see `LoopContext`).
+"""
+@inline enter_scope(lc::LC, wiring::PlanWiringView{Root, WiringType}) where {LC<:LoopContext, Root, WiringType<:PlanWiring} =
+    LoopContext(getpersistent(lc), getruntime(lc), WiringType)
+
+"""
+`inner` (a `LoopContext` after the steps of a scope) back in the scope of `outer`: the returns of the node (its
+captured returns, and the subcontext returns of the algorithms directly in it) are removed, so nothing after the node
+sees them, and the runtime context has the type it had before the node.
+"""
+@inline leave_scope(inner::LoopContext{PersistentContextType, InnerRuntimeContextType, InnerNode}, ::LoopContext{OuterPersistentContextType, RuntimeContextType, Node}) where {PersistentContextType, InnerRuntimeContextType, InnerNode, OuterPersistentContextType, RuntimeContextType, Node} =
+    LoopContext(getpersistent(inner), (@inline _strip_returns(getruntime(inner), Val(node_resets(InnerNode)))), Node)
+
+##########################################
+############# Final context ##############
+##########################################
 
 """
     final_context(lc::LoopContext)
@@ -91,7 +114,7 @@ At the end of a run only the inputs and declared locals are left: a block's retu
 Returns show only when it is built inside a run, by the routine stop checks. The persistent context the loop stores
 does not change.
 """
-@inline function final_context(lc::LoopContext)
+@inline function final_context(lc::LC) where {LC<:LoopContext}
     runtime_context = @inline getruntime(lc)
     returns = map(r -> map(shown_value, r), (@inline get_subcontext_returns(runtime_context)))
     shown = @inline merge_into_subcontexts((@inline getpersistent(lc)), returns)
@@ -115,19 +138,20 @@ end
 _shown_values(::P, values::NT) where {P<:RuntimePartition, NT<:NamedTuple} = values
 _shown_values(::CapturedReturns, values::NT) where {NT<:NamedTuple} = map(shown_value, values)
 
-"""
-    enter_scope(lc, wiring)
+##########################################
+########## Interface extensions ##########
+##########################################
 
-`lc` in the scope of the plan node whose wiring view is `wiring`: the node's names become visible. Nothing of the
-node's own is in the runtime context yet: its returns are added at the line that writes them (see `LoopContext`).
-"""
-@inline enter_scope(lc::LoopContext, wiring::PlanWiringView{Root, WiringType}) where {Root, WiringType<:PlanWiring} =
-    LoopContext(getpersistent(lc), getruntime(lc), WiringType)
+persistent_type(::Type{<:LoopContext{PersistentContextType}}) where {PersistentContextType} = PersistentContextType
+@inline withpersistent(lc::LoopContext{PersistentContextType, RuntimeContextType, Node}, persistent_context::PC) where {PersistentContextType, RuntimeContextType, Node, PC<:ProcessContext} =
+    LoopContext(persistent_context, getruntime(lc), Node)
+@inline _rebundle(lc::LC, persistent_context::PC, runtime_patch::NT) where {LC<:LoopContext, PC<:ProcessContext, NT<:NamedTuple} =
+    @inline withcontexts(lc, persistent_context, (@inline merge_runtime_returns(getruntime(lc), runtime_patch)))
 
-"""
-`inner` (a `LoopContext` after the steps of a scope) back in the scope of `outer`: the returns of the node (its
-captured returns, and the subcontext returns of the algorithms directly in it) are removed, so nothing after the node
-sees them, and the runtime context has the type it had before the node.
-"""
-@inline leave_scope(inner::LoopContext{PersistentContextType, InnerRuntimeContextType, InnerNode}, ::LoopContext{OuterPersistentContextType, RuntimeContextType, Node}) where {PersistentContextType, InnerRuntimeContextType, InnerNode, OuterPersistentContextType, RuntimeContextType, Node} =
-    LoopContext(getpersistent(inner), (@inline _strip_returns(getruntime(inner), Val(node_resets(InnerNode)))), Node)
+##########################################
+############ Hook extensions #############
+##########################################
+
+bundle_scope(::Type{<:LoopContext{PersistentContextType, RuntimeContextType, Node}}) where {PersistentContextType, RuntimeContextType, Node} = node_scope(Node)
+@inline runtime_values(lc::LC, name::N) where {LC<:LoopContext, N<:Val} = @inline runtime_values(getruntime(lc), name)
+@inline get_runtime_partition(lc::LC, partition::P) where {LC<:LoopContext, P<:RuntimePartition} = @inline get_runtime_partition(getruntime(lc), partition)
