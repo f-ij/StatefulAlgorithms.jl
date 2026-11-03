@@ -1,3 +1,12 @@
+#=
+`InitContext`: the bundle init works on. Sections, in order: the type, and at the end the methods of the bundle
+Interface (Interface.jl) and of the bundle hooks (Hooks.jl).
+=#
+
+##########################################
+################## Type ##################
+##########################################
+
 """
     InitContext(persistent_context, algo, lifetime)
 
@@ -12,12 +21,16 @@ struct InitContext{PersistentContextType<:ProcessContext, AlgoType, LifetimeType
     lifetime::LifetimeType
 end
 
-@inline init_lifetime(ic::InitContext) = getfield(ic, :lifetime)
+##########################################
+########## Interface extensions ##########
+##########################################
 
-# Interface.jl
 persistent_type(::Type{<:InitContext{PersistentContextType}}) where {PersistentContextType} = PersistentContextType
-@inline withpersistent(ic::InitContext, persistent_context::ProcessContext) = InitContext(persistent_context, getfield(ic, :algo), getfield(ic, :lifetime))
-@inline _rebundle(ic::InitContext, persistent_context::ProcessContext, ::NamedTuple{()}) = withpersistent(ic, persistent_context)
+@inline withpersistent(ic::IC, persistent_context::PC) where {IC<:InitContext, PC<:ProcessContext} = InitContext(persistent_context, getfield(ic, :algo), getfield(ic, :lifetime))
+@inline rebundle(ic::IC, persistent_context::PC, ::NamedTuple{()}) where {IC<:InitContext, PC<:ProcessContext} = withpersistent(ic, persistent_context)
 
-# Hooks.jl
-@inline bundle_lifetime(ic::InitContext) = init_lifetime(ic)
+##########################################
+############ Hook extensions #############
+##########################################
+
+@inline bundle_lifetime(ic::IC) where {IC<:InitContext} = getfield(ic, :lifetime)

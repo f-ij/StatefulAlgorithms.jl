@@ -38,7 +38,6 @@ matching its name.
 | `Context/View/StructDef.jl:22/35` | `funcexpr`, `getvar_expressions_and_varnames`: code generation in the struct file | f | `Locations.jl` |
 | `Context/View/ContextView.jl:34` | `algo_to_subcontext_name`: docstring describes something else | f | fix docstring |
 | `Context/View/ContextView.jl:44` vs `RoutingInterface/Construction.jl:28` | `wiring_from_tuple_type` / `wiring_from_type` (unused) | f | keep one |
-| `Context/Bundles/InitContext.jl:15/23` | `bundle_lifetime(ic) = init_lifetime(ic)`, `init_lifetime` used only there | e | inline |
 | `Context/Carried/Writes.jl:30` (+ `AlgorithmWrites.jl`, `PlanWrites.jl`, `Interactive/ContextExchange.jl:259`) | `_find_writable_fields`: `::Any` default extended per node type | a, b | `Context/Carried/Hooks.jl`, no `_` |
 | `Context/Carried/RuntimeContextTypes.jl:49` | `_view_node(::Type{<:PlanWiringView})` | c | with the other `PlanWiringView` getters |
 | `Context/View/Old/ProcessContextView.jl:33` | keyword `inject` shadows the function `inject` (bug) | — | — |

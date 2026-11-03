@@ -140,7 +140,7 @@ outputs) into the runtime context. Returns the new bundle.
         newcontext = merge_into_subcontexts(getpersistent(scv), mergetuple)
         @assert typeof(newcontext) == typeof(getpersistent(scv)) "A variable type in a subcontext was changed. This is prohibited for performance reasons.\nIf type mutation is needed, set the variable up as a Ref\n$(sprint(show, ContextTypeDiff(getpersistent(scv), newcontext)))"
         runtimetuple = $runtimetuple_expr
-        return @inline _rebundle(getbundle(scv), newcontext, runtimetuple)
+        return @inline rebundle(getbundle(scv), newcontext, runtimetuple)
     end
 end
 

@@ -320,7 +320,7 @@ Base.@assume_effects :foldable function _compute_conditional_loopcontext_type(@n
         SubContext{name, _join_fields(getdatatype(S), getdatatype(fieldtype(after, name)), ran, name === :_declared_locals)}
     end
     runtime = ProcessContext{NamedTuple{fieldnames(before), Tuple{parts...}}, fieldtype(runtime_type(Stepped), :reg)}
-    return LoopContext{persistent_type(Stepped), runtime, Stepped.parameters[3]}
+    return LoopContext{persistent_type(Stepped), runtime, node_type(Stepped)}
 end
 
 """
@@ -351,7 +351,7 @@ converted to its field type there. Returns `lc` itself when it already has type 
         :($S($(_conditional_value_expr(getdatatype(S), :(getdata(getfield(get_subcontexts(getruntime(lc)), $(QuoteNode(name)))))))))
     end
     runtime = :($target_runtime(NamedTuple{$(fieldnames(target_parts))}(($(part_exprs...),)), getfield(getruntime(lc), :reg)))
-    return :(LoopContext{$(persistent_type(Target)), $target_runtime, $(Target.parameters[3])}(getpersistent(lc), $runtime))
+    return :(LoopContext{$(persistent_type(Target)), $target_runtime, $(node_type(Target))}(getpersistent(lc), $runtime))
 end
 
 """

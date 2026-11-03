@@ -38,19 +38,16 @@ end
 """
     LoopContext(plan, context)
 
-The `LoopContext` a new run starts from, before its inputs are added (`with_inputs`): `context` as its persistent
-context and, as its runtime context, the plan's declared locals (`_declared_locals`). Made where a run is handed to the
-loop (`prepare_for_loop`: a `Process` run, an `InlineProcess` run, the manager's inline run, `run(plan)`). A paused run
-that resumes does not use it: it gets `LoopContext(context, runtime_context)` with the runtime context its pause kept.
+The `LoopContext` a new run starts from: `context` as its persistent context and, as its runtime context, the plan's
+declared locals (`_declared_locals`). The run's inputs are added to it afterwards (`with_inputs`). A paused run that
+resumes does not start from it but from `LoopContext(context, runtime_context)`, with the runtime context its pause kept.
 
 Returns (`_captured_returns`, `_subcontext_returns`) are not in it: a step adds them where they are assigned and removes
 them when their plan node ends (see `LoopContext`), so every step gets and returns a runtime context of this type.
 
-The process (now its session) and the lifetime are not in it: no step read them (they were in `_captured_returns` until
-2026-10). Init still gets the lifetime, for sizing (`InitContext`, `processsizehint!`). To give steps loop information
-again (step index, total steps, elapsed time, a stop request), add narrow read-only values here rather than the session
-(`ProcessSession`), which would tie step code to the session type; most of those uses belong in the plan (schedules,
-lifetimes) instead.
+Steps get no loop information: not the session, the lifetime or the step index (init gets the lifetime, for sizing:
+`InitContext`). To give steps some, add narrow read-only values here rather than the session (`ProcessSession`), which
+would tie step code to the session type; most such uses belong in the plan (schedules, lifetimes) instead.
 """
 @inline function LoopContext(plan::A, context::C) where {A, C<:ProcessContext}
     locals = collect_tree_locals(plan)
@@ -70,6 +67,8 @@ end
 @inline getruntime(lc::LC) where {LC<:LoopContext} = getfield(lc, :runtime)
 """Returns the type of a `LoopContext` type's runtime context."""
 runtime_type(::Type{<:LoopContext{PersistentContextType, RuntimeContextType}}) where {PersistentContextType, RuntimeContextType} = RuntimeContextType
+"""Returns the plan node type (`PlanWiring` type, or `Nothing`) whose scope a `LoopContext` type is in."""
+node_type(::Type{<:LoopContext{PersistentContextType, RuntimeContextType, Node}}) where {PersistentContextType, RuntimeContextType, Node} = Node
 
 """Copies a `LoopContext` with both its contexts swapped. The copy stays in the same scope."""
 @inline withcontexts(::LoopContext{PersistentContextType, RuntimeContextType, Node}, persistent_context::PC, runtime_context::RC) where {PersistentContextType, RuntimeContextType, Node, PC<:ProcessContext, RC<:ProcessContext} =
@@ -145,7 +144,7 @@ _shown_values(::CapturedReturns, values::NT) where {NT<:NamedTuple} = map(shown_
 persistent_type(::Type{<:LoopContext{PersistentContextType}}) where {PersistentContextType} = PersistentContextType
 @inline withpersistent(lc::LoopContext{PersistentContextType, RuntimeContextType, Node}, persistent_context::PC) where {PersistentContextType, RuntimeContextType, Node, PC<:ProcessContext} =
     LoopContext(persistent_context, getruntime(lc), Node)
-@inline _rebundle(lc::LC, persistent_context::PC, runtime_patch::NT) where {LC<:LoopContext, PC<:ProcessContext, NT<:NamedTuple} =
+@inline rebundle(lc::LC, persistent_context::PC, runtime_patch::NT) where {LC<:LoopContext, PC<:ProcessContext, NT<:NamedTuple} =
     @inline withcontexts(lc, persistent_context, (@inline merge_runtime_returns(getruntime(lc), runtime_patch)))
 
 ##########################################
