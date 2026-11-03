@@ -18,6 +18,12 @@ Updated 2026-11-03.
 | `exp/replace-ids-cache` | `-replace-ids-cache` | `refactor/monolithic-resolve` | Experiment: `replace_unique_ids` keeps its type walks in global caches. |
 | `exp/resolve-cache` | `-resolve-cache` | `exp/replace-ids-cache` | Experiment: step 1 of resolve walks the plan's type at run time, its expression cached per type. |
 
+## Fixes
+
+| Branch | Folder | On top of | Intent |
+|---|---|---|---|
+| `fix/paused-loop-context` | `-paused-context` | `main` | A paused `Process` keeps its `LoopContext` (runtime part stripped of what a resume does not need) instead of merging inputs and declared locals into the persistent context; `context(p)` while paused combines it with the handle parts of the stored context. |
+
 ## Experiments
 
 | Branch | Folder | Intent |
