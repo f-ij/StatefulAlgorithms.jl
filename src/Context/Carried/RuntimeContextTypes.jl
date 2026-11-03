@@ -1,6 +1,5 @@
 #=
-Runtime context types, from inference. Used for the write sets of plans (PlanWrites.jl) and for typing the runtime context before the
-loop (Outputs.jl).
+Runtime context types, from inference. Used only for the write sets (AlgorithmWrites.jl, PlanWrites.jl).
 
 The helpers that take types as arguments are `@nospecialize` and `Base.@assume_effects :foldable`. `@nospecialize`
 compiles them once for all argument types instead of once per plan. `:foldable` promises that they are pure (no side
