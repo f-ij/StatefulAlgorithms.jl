@@ -73,10 +73,7 @@ module StatefulAlgorithms
     include("Processes/Construction.jl")
     include("Processes/Context.jl")
     include("Processes/Process/Process.jl")
-    include("Processes/InlineProcess/Session.jl")
     include("Processes/InlineProcess/InlineProcess.jl")
-    include("Processes/InlineProcess/Accessors.jl")
-    include("Processes/InlineProcess/Showing.jl")
 
 
 

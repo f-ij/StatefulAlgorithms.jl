@@ -10,7 +10,7 @@ mutable struct Process{F,C} <: AbstractProcess
     algo::F
     lifetime::Lifetime
     # The process's state when its type is not the one stored in the plan (`algo`), which is in the process's type;
-    # `nothing` when the plan holds it. Written only by `_sync_state_context!`.
+    # `nothing` when the plan holds it. Written only by `setcontext!`.
     state_context::Union{Nothing, ProcessContext}
     # A paused run's runtime context (its inputs and declared locals), kept by the run's end (`_finish_run!`) and read by
     # the resumed run or by `close`, which both clear it. `nothing` when no run is paused.

@@ -5,7 +5,7 @@ execution.
 
 ## 1. Construction
 
-`Process(func, inputs_overrides...; repeats, lifetime, timeout)` (`src/Processes/Process/Process.jl`):
+`Process(func, inputs_overrides...; repeats, lifetime, timeout)` (`src/Processes/Process/Constructors.jl`):
 
 1. Wrap a bare `StepAlgorithm` as a one-child `CompositeAlgorithm` plan.
 2. Normalize stop behavior: `repeats = n` becomes `Repeat(n)`, `lifetime` accepts `Lifetime` objects, and `Routine` defaults to `Repeat(1)` when no lifetime is provided.

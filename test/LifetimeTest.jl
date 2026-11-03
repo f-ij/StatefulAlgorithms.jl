@@ -85,7 +85,7 @@ end
     @test getcontext(paused)[LifetimeIndefiniteCleanupCounter].cleaned
 end
 
-@testset "setcontext! on a Process: idle, and while running" begin
+@testset "setcontext! on a Process: idle, and paused" begin
     @StepAlgorithm function SetContextCounter(@managed(count = 0))
         @update count += 1
     end
@@ -96,16 +96,15 @@ end
     run(p); wait(p)
     @test getcontext(p)[SetContextCounter].count == 102
 
-    running = Process(SetContextCounter; lifetime = Indefinite())
-    run(running)
-    while getlidx(running) < 10
-        yield()
-    end
-    setcontext!(running, StatefulAlgorithms.makecontext(running, Override(SetContextCounter, :count => -1_000_000)))
-    @test isrunning(running)
-    while getlidx(running) < 20
-        yield()
-    end
-    close(running)
-    @test getcontext(running)[SetContextCounter].count < 0
+    # The setter does not pause: the caller pauses, sets, and resumes.
+    paused = Process(SetContextCounter; lifetime = Indefinite())
+    run(paused)
+    sleep(0.2)
+    pause(paused); wait(paused)
+    setcontext!(paused, StatefulAlgorithms.makecontext(paused, Override(SetContextCounter, :count => -10^15)))
+    @test getcontext(paused)[SetContextCounter].count == -10^15
+    run(paused)
+    sleep(0.2)
+    close(paused)
+    @test getcontext(paused)[SetContextCounter].count < 0
 end

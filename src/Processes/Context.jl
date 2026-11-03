@@ -1,7 +1,7 @@
 #=
 The context of any process: building a new one by replaying init on its plan (`makecontext`, `makecontext!`), cleanup,
 and the context-exchange calls on a process (`isinteractive`, `interact!`, which go to its context;
-Interactive/ContextExchange.jl). A `Process` manages its state context itself (Process/Context.jl).
+Interactive/ContextExchange.jl). A `Process` stores its state context through its accessors (Process/Accessors.jl).
 =#
 
 function makecontext(p::AbstractProcess, inputs_overrides...; lifetime=nothing)

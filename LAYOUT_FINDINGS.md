@@ -118,7 +118,7 @@ matching its name.
 | `LoopAlgorithms/LoopCursor.jl:16` | `loop_cursor(::Any, ::Val)` default extended per plan type | a | `Hooks.jl` |
 | `LoopAlgorithms/Setup.jl:37-38` | `parse_parser_option(::ParserOption)`: abstract contract in parsing machinery | a | `Interface.jl` |
 | `LoopAlgorithms/PlanOptions.jl:101-102` | `setstates`/`setoptions(::AbstractPlan)` fallbacks | a | `Interface.jl` |
-| `LoopAlgorithms/Accessors.jl:83,97-100,113` | `LoopSpec` fallbacks (`setoptions`, `getstoredinits`, `getstoredoverrides`, `getpersistentcontext`, `context`, `isresolved`) | a | `Interface.jl` |
+| `LoopAlgorithms/Accessors.jl:83,97-100,113` | `LoopSpec` fallbacks (`setoptions`, `getstoredinits`, `getstoredoverrides`, `getpersistentcontext`, `getcontext`, `isresolved`) | a | `Interface.jl` |
 | `LoopAlgorithms/Flatten.jl:66` | `states(::LoopSpec) = error(...)` | a | `Interface.jl` |
 | `LoopAlgorithms/Redirect/Materialization.jl:6` | `getstoredredirects` getter | d | `Accessors.jl` |
 | `LoopAlgorithms/Interface.jl:94` | `replace_fields`: generic machinery in the contract file | f | `Utils.jl` / `GeneratedCode/` |
@@ -133,7 +133,7 @@ matching its name.
 | `LoopAlgorithms/Accessors.jl:129-151` | Base protocol on `LoopSpec` (`getindex`, `getproperty`, `length`, ...) | f | `BaseExt.jl` |
 | `LoopAlgorithms/Interface.jl:32` | `getschedule(::LoopAlgorithm)`: concrete getter in the contract | d | `Accessors.jl` |
 | `LoopAlgorithms/Interface.jl:29`, `Accessors.jl:57` | `subalgorithms`: unused aliases | e | delete |
-| `LoopAlgorithms/Accessors.jl:49,100,116,134`, `CompositeAlgorithms.jl:78,81,110`, `ParameterReplacement.jl:34-45`, `Edit/Constructor.jl:10` | `context(la)`, `id`, `getindex(cla, ::Symbol)`, `get_intervals`, `type_instances`, `setrepeats`/`setintervals`, `_stored_schedule_spec` | e | — |
+| `LoopAlgorithms/Accessors.jl:49,100,116,134`, `CompositeAlgorithms.jl:78,81,110`, `ParameterReplacement.jl:34-45`, `Edit/Constructor.jl:10` | `getcontext(la)`, `id`, `getindex(cla, ::Symbol)`, `get_intervals`, `type_instances`, `setrepeats`/`setintervals`, `_stored_schedule_spec` | e | — |
 | `LoopAlgorithms/Recipes.jl:9,17`, `CompositeAlgorithms.jl:24`, `Routines.jl:19` | two sets of type aliases for the same types | e | — |
 | `LoopAlgorithms/Routines/Routines.jl:37/51` | `statetypes(::Routine)` twice; the second returns `()` | f | keep one |
 | `LoopAlgorithms/CompositeAlgorithms.jl:30`, `Routines.jl:26` | `newfuncs` repeats `rebuild_loopalgorithm_funcs` | f | keep one |

@@ -1,6 +1,6 @@
 #=
 Operations on a `Process` that are not getters or setters: its run time computed from the session's start and end
-times, locking it, and linking processes to it.
+times, locking it, and linking processes to it. `stop_time` and the linking functions are broken for now (see below).
 =#
 
 function runtime(p::Process)
@@ -17,6 +17,7 @@ end
 export runtime_ns, runtime
 
 # Exact time the process stopped in hh:mm:ss
+# Broken for now: `Dates` is not loaded by the package, so this throws an `UndefVarError`.
 function stop_time(p::Process)
     if isdone(p)
         return Dates.format(Dates.DateTime(getsession(p).endtime), "HH:MM:SS")
@@ -30,6 +31,7 @@ end
 @inline unlock(p::Process) =  unlock(p.lock)
 
 ### LINKING
+# Broken for now: `Process` has no `linked_processes` field, so both throw (TODO.md, "A way to sync processes again").
 
 link_process!(p1::Process, p2::Process) = push!(p1.linked_processes, p2)
 unlink_process!(p1::Process, p2::Process) = filter!(x -> x != p2, p1.linked_processes)
