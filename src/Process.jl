@@ -135,30 +135,39 @@ end
     end
 end
 
-function Process(func::Func, inputs_overrides::Vararg{Any,N}; context::C = nothing, repeats = nothing, lifetime = nothing, repeat = nothing, timeout = 1.0) where {Func,N,C}
-    lifetime = _process_constructor_lifetime(repeats, lifetime, repeat)
+"""
+    Process(func, Init(...), Override(...); context, repeats, lifetime, timeout)
 
-    algo = normalize_process_algo(func)
+A process running `func`: the plan is initialized (or given its `context`) and the lifetime made from `repeats` or
+`lifetime` (`_prepare_process`), then the process is built around them (`_construct_process`).
+"""
+Process(func::Func, inputs_overrides::Vararg{Any,N}) where {Func,N} = _build_process(func, inputs_overrides, nothing, nothing, (;))
+# The keyword call, by hand: Julia's own specializes on the keywords' `NamedTuple`, whose type has the handles' uuids
+# (a lifetime's `Var`), so it compiled once for every new set of handles.
+function Core.kwcall(kw::NamedTuple, ::Type{Process}, func, inputs_overrides...)
+    rest = Base.structdiff(kw, NamedTuple{(:context, :lifetime)})
+    return _build_process(func, inputs_overrides, get(kw, :context, nothing), get(kw, :lifetime, nothing), rest)
+end
+function _build_process(func::Func, inputs_overrides::Tuple, context::C, lifetime::LT, kwargs::NamedTuple) where {Func, C, LT}
+    algo, lifetime, timeout = _prepare_process(normalize_process_algo(func), inputs_overrides...; context, lifetime, kwargs...)
+    return _construct_process(algo, lifetime, timeout)
+end
+
+"""The plan, initialized or with the given `context`, the lifetime and the timeout a new `Process` gets."""
+function _prepare_process(algo::A, inputs_overrides::Vararg{Any,N}; context::C = nothing, repeats = nothing, lifetime = nothing, repeat = nothing, timeout = 1.0) where {A,N,C}
+    lifetime = _process_constructor_lifetime(repeats, lifetime, repeat)
     lifetime = normalize_process_lifetime(algo, lifetime)
     algo = _process_constructor_algo(algo, context, inputs_overrides, lifetime)
-    return _finish_process_constructor(algo, context, lifetime, timeout)
-end
-
-@inline function _finish_process_constructor(algo::A, ::Nothing, lifetime::LT, timeout) where {A<:AbstractLoopAlgorithm, LT}
-    prepared_context = getpersistentcontext(algo)
-    return _finish_process_constructor_with_context(algo, prepared_context, lifetime, timeout)
-end
-
-@inline function _finish_process_constructor(algo::A, context::C, lifetime::LT, timeout) where {A<:AbstractLoopAlgorithm, C, LT}
-    return _finish_process_constructor_with_context(algo, context, lifetime, timeout)
-end
-
-function _finish_process_constructor_with_context(algo::A, prepared_context::PC, lifetime::LT, timeout) where {A<:AbstractLoopAlgorithm, PC, LT}
+    prepared_context = isnothing(context) ? getpersistentcontext(algo) : context
     algo = _with_lifecycle(algo, prepared_context, getstoredinits(algo), getstoredoverrides(algo))
+    return algo, lifetime, timeout
+end
 
+"""The `Process` around a prepared plan: its session (made for the lifetime's type) and its place in `processlist`."""
+function _construct_process(algo::F, lifetime::LT, timeout) where {F<:AbstractLoopAlgorithm, LT}
     C = typeof(loop_cursor(getplan(algo), Val(true)))
-    session = InteractiveSession{C, typeof(lifetime)}()
-    p = Process{typeof(algo),C}(uuid1(), algo, lifetime, nothing, timeout, nothing, Threads.ReentrantLock(), nothing, RuntimeListeners(), session)
+    session = InteractiveSession{C, LT}()
+    p = Process{F, C}(uuid1(), algo, lifetime, nothing, timeout, nothing, Threads.ReentrantLock(), nothing, RuntimeListeners(), session)
 
     register_process!(p)
     schedule_loop_precompile!(p, lifetime)
@@ -337,15 +346,22 @@ end
     _makeloop!(p, inputs, lt, StatefulAlgorithms.context(p); threaded, loopfunc)
 
 function _makeloop!(p::Process, inputs::NamedTuple, lt, base_context; threaded = true, loopfunc::LF = loop) where {LF}
+    session, func, lc = _prepare_for_loop(p, base_context, inputs, lt, Resuming{false}())
+    return _start_run!(p, session, func, lc, lt; threaded, loopfunc)
+end
+
+"""
+    _prepare_for_loop(p::Process, context, inputs, lifetime, resume)
+
+A `Process` run runs in the process's session when it has `lifetime`'s type, else in a new one with the same counters
+(`create_session`), which becomes the process's session. The run starts from `context` (the process's context, or for
+a resumed run its paused context) and the run's inputs (AbstractProcesses/Hooks.jl).
+"""
+function _prepare_for_loop(p::Process, context::C, inputs::NamedTuple, lt::LT, resume::R) where {C<:ProcessContext, LT, R<:Resuming}
     session = create_session(p, lt)
     p.session = session
-    @atomic session.paused = false
-    @atomic session.shouldrun = true
-    p.lastresult = nothing
-
     func = getalgo(p)
-    inputs = _validate_runtime_inputs(func, inputs)
-    return _makeloop_prepared!(p, session, func, base_context, lt, inputs; threaded, loopfunc)
+    return session, func, LoopContext(func, context, inputs, resume)
 end
 
 """
@@ -362,22 +378,53 @@ function create_session(p::Process{F, C}, lt::LT) where {F, C, LT}
         session.starttime, session.endtime, session.loop_cursor, session.threadid)
 end
 
-function _makeloop_prepared!(p::P, session::S, func::F, runtime_context::C, lt::LT, inputs::I; threaded::Bool = true, loopfunc::LF = loop, resume::R = Resuming{false}()) where {P<:Process, S<:InteractiveSession, F, C, LT, I<:NamedTuple, LF, R<:Resuming}
-    wait_loop_precompile!(p, func, runtime_context, lt, inputs, resume; loopfunc)
+"""
+    _start_run!(p, session, func, loop_context, lifetime; threaded, loopfunc, resume)
+
+Starts a run of `p` with what `_prepare_for_loop` made: the session is set running, then the task running the loop is
+scheduled.
+"""
+function _start_run!(p::P, session::S, func::F, lc::LC, lt::LT; threaded::Bool = true, loopfunc::LF = loop, resume::R = Resuming{false}()) where {P<:Process, S<:InteractiveSession, F, LC<:LoopContext, LT, LF, isresuming, R<:Resuming{isresuming}}
+    # A resumed run clears the pause flag in the loop, after reading the cursor the pause kept.
+    isresuming || @atomic session.paused = false
+    @atomic session.shouldrun = true
+    p.lastresult = nothing
+    wait_loop_precompile!(p, func, lc, lt, resume; loopfunc)
+    # The task runs `body` itself (as `Threads.@spawn` and `@async` do with a closure around it): its type is known
+    # before the task exists, so it can be compiled ahead (src/ProcessPrecompile.jl).
+    body = ProcessTaskBody(p, loopfunc, session, func, lc, lt, resume)
+    task = Task(body)
     if threaded
-        p.task = Threads.@spawn _run_process_task(p, loopfunc, session, func, runtime_context, lt, inputs, resume)
-    else
-        p.task = @async _run_process_task(p, loopfunc, session, func, runtime_context, lt, inputs, resume)
+        task.sticky = false
+        Threads._spawn_set_thrpool(task, :default)
     end
+    p.task = schedule(task)
     return p
 end
+
+"""
+    ProcessTaskBody(p, loopfunc, session, func, loop_context, lifetime, resume)
+
+What a `Process` task runs, as a value: calling it runs `_run_process_task` with its fields. A struct, not a closure,
+so its type is known before the task exists.
+"""
+struct ProcessTaskBody{P, LF, S, F, LC, LT, R}
+    p::P
+    loopfunc::LF
+    session::S
+    func::F
+    loop_context::LC
+    lifetime::LT
+    resume::R
+end
+(body::ProcessTaskBody)() = _run_process_task(body.p, body.loopfunc, body.session, body.func, body.loop_context, body.lifetime, body.resume)
 
 """
 What a `Process` task runs: the loop on the session (`run_session_loop`), then the run's end on the process
 (`_finish_run!`). Its result is what `fetch(p)` returns.
 """
-function _run_process_task(p::P, loopfunc::LF, session::S, func::F, runtime_context::C, lt::LT, inputs::I, resume::R) where {P<:Process, LF, S<:InteractiveSession, F, C, LT, I<:NamedTuple, R<:Resuming}
-    persistent_context, returnvalue = run_session_loop(loopfunc, session, func, runtime_context, lt, inputs, resume)
+function _run_process_task(p::P, loopfunc::LF, session::S, func::F, lc::LC, lt::LT, resume::R) where {P<:Process, LF, S<:InteractiveSession, F, LC<:LoopContext, LT, R<:Resuming}
+    persistent_context, returnvalue = run_session_loop(loopfunc, session, func, lc, lt, resume)
     return _finish_run!(p, session, persistent_context, returnvalue)
 end
 
@@ -398,14 +445,9 @@ end
 
 function _resume_paused_loop!(p::Process; threaded = true)
     wait(p)
-    session = getsession(p)
-    @atomic session.shouldrun = true
-    p.lastresult = nothing
-
-    func = getalgo(p)
-    runtime_context = StatefulAlgorithms.context(p)
     lt = lifetime(p)
-    return _makeloop_prepared!(p, session, func, runtime_context, lt, (;); threaded, resume = Resuming{true}())
+    session, func, lc = _prepare_for_loop(p, StatefulAlgorithms.context(p), (;), lt, Resuming{true}())
+    return _start_run!(p, session, func, lc, lt; threaded, resume = Resuming{true}())
 end
 
 makeloop!(p::Process, lt::Lifetime; threaded = true, loopfunc::LF = loop) where {LF} =

@@ -75,7 +75,8 @@ getalgo(ip::InlineProcess) = ip.algo
 end
 
 """
-Validate the runtime inputs for one `InlineProcess` execution.
+The runtime inputs for one `InlineProcess` execution; they are checked against the plan's `@input`s where the run's
+`LoopContext` is made (`_prepare_for_loop`).
 
 `InlineProcess` has a fixed context type after construction. Per-run data is
 therefore limited to declared `@input` keywords; structural reinitialization
@@ -83,7 +84,7 @@ stays on `reset!`, where the process can rebuild its persistent context.
 """
 @inline function _inline_runtime_inputs(algo::A, inputs_overrides::IO, kwargs::K) where {A<:AbstractLoopAlgorithm, IO<:Tuple, K<:NamedTuple}
     isempty(inputs_overrides) || error("InlineProcess run accepts runtime inputs as keywords only. Use reset!(p, specs...) to reinitialize the context.")
-    return _validate_runtime_inputs(algo, kwargs)
+    return kwargs
 end
 
 @inline function Base.run(p::InlineProcess, inputs_overrides...; context = nothing, repeats=nothing, lifetime=nothing, threaded=nothing, kwargs...)
@@ -129,12 +130,21 @@ end
 
 """One run of `p`: the loop on the process's session (`run_session_loop`), then its context kept on the process."""
 @inline function _run_inline!(p::InlineProcess, algo::A, run_context::C, run_lifetime::LT, runtime_inputs::I) where {A, C, LT, I}
-    session = getsession(p)
+    session, plan, lc = _prepare_for_loop(p, run_context, runtime_inputs, run_lifetime, Resuming{false}())
     reset_loopidx!(session)
-    persistent_context, returnvalue = run_session_loop(session, algo, run_context, run_lifetime, runtime_inputs)
+    persistent_context, returnvalue = run_session_loop(session, plan, lc, run_lifetime)
     p.context = persistent_context
     return returnvalue
 end
+
+"""
+    _prepare_for_loop(ip::InlineProcess, context, inputs, lifetime, resume)
+
+An `InlineProcess` run runs in the process's one session, on its plan, from `context` (its own or one given to `run`)
+and the run's inputs (AbstractProcesses/Hooks.jl). An `InlineProcess` cannot pause, so it never resumes.
+"""
+@inline _prepare_for_loop(ip::IP, context::C, inputs::I, lt::LT, resume::Resuming{false}) where {IP<:InlineProcess, C<:ProcessContext, I<:NamedTuple, LT} =
+    getsession(ip), getalgo(ip), (@inline LoopContext(getalgo(ip), context, inputs, resume))
 
 @inline function init_and_run(p::InlineProcess, inputs_overrides...)
     @inline makecontext!(p, inputs_overrides...)

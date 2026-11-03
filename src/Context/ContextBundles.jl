@@ -43,6 +43,23 @@ LoopContext(persistent_context::PersistentContextType, runtime_context::RuntimeC
     LoopContext{PersistentContextType, RuntimeContextType, Node}(persistent_context, runtime_context)
 
 """
+    LoopContext(plan, context, inputs, resume)
+
+The `LoopContext` a run starts from, made where a run is handed to the loop (`_prepare_for_loop`: a `Process` run, an
+`InlineProcess` run, the manager's inline run, `run(plan)`). A new run (`Resuming{false}`) gets `context` as its
+persistent context and, as its runtime context, the inputs (checked against the plan's `@input`s) and the plan's
+declared locals. A paused run that resumes (`Resuming{true}`) gets the inputs and declared locals kept in the paused
+context, which are cleared from the persistent context; `inputs` is not used then.
+"""
+@inline function LoopContext(algo::A, context::C, inputs::I, ::Resuming{isresuming}) where {A, C<:ProcessContext, I<:NamedTuple, isresuming}
+    if isresuming
+        return LoopContext((@inline _paused_state_context(context)),
+                           (@inline _initial_runtime_context((@inline get_inputs(context)), get_declared_locals(context))))
+    end
+    return LoopContext(context, (@inline _initial_runtime_context(_validate_runtime_inputs(algo, inputs), collect_tree_locals(algo))))
+end
+
+"""
     InitContext(persistent_context, algo, lifetime)
 
 What init works on. Init runs before the loop starts, so there is no runtime context yet.

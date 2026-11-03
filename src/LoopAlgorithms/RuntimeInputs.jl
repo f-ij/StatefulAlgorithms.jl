@@ -263,8 +263,7 @@ function Base.run(la::LA; repeats = 1, lifetime = nothing, kwargs...) where {LA<
     initialized = isnothing(getpersistentcontext(la)) ? init(la) : la
     persistent_context = getpersistentcontext(initialized)
     lt = isnothing(lifetime) ? normalize_process_lifetime(initialized, repeats) : normalize_process_lifetime(initialized, lifetime)
-    inputs = _validate_runtime_inputs(initialized, (; kwargs...))
-    # One session per run, as the loop needs a counter and times; nothing can pause or close a direct run.
-    persistent_context, _ = run_session_loop(InlineSession(), initialized, persistent_context, lt, inputs)
+    session, plan, lc = _prepare_for_loop(initialized, persistent_context, (; kwargs...), lt, Resuming{false}())
+    persistent_context, _ = run_session_loop(session, plan, lc, lt)
     return _with_lifecycle(initialized, persistent_context, getstoredinits(initialized), getstoredoverrides(initialized))
 end
