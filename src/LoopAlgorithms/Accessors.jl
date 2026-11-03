@@ -92,6 +92,14 @@ function _with_lifecycle(la::LoopAlgorithm{Plan, O, R, OldC, OldI, OldOv, id}, c
     LoopAlgorithm{Plan, O, R, C, I, Ov, id}(getplan(la), getoptions(la), getregistry(la), context, inits, overrides)
 end
 
+# Lifecycle accessors keep `LoopAlgorithm`, plain plan nodes, and wrappers on a
+# shared path. Plain plans report no stored lifecycle data.
+@inline getstoredinits(la::LA) where {LA<:LoopSpec} = hasfield(LA, :inits) ? getfield(la, :inits) : ()
+@inline getstoredoverrides(la::LA) where {LA<:LoopSpec} = hasfield(LA, :overrides) ? getfield(la, :overrides) : ()
+@inline getpersistentcontext(la::LA) where {LA<:LoopSpec} = hasfield(LA, :context) ? getfield(la, :context) : nothing
+@inline context(la::LA) where {LA<:LoopSpec} = getpersistentcontext(la)
+@inline _without_lifecycle(la::LA) where {LA<:LoopSpec} = _with_lifecycle(la, nothing, (), ())
+
 @inline _attach_registry(la::LoopAlgorithm{Plan, O, OldR, C, Inits, Overrides, id}, registry::R) where {Plan, O, OldR, C, Inits, Overrides, id, R<:NameSpaceRegistry} =
     LoopAlgorithm{Plan, O, R, C, Inits, Overrides, id}(getplan(la), getoptions(la), registry, getpersistentcontext(la), getstoredinits(la), getstoredoverrides(la))
 
