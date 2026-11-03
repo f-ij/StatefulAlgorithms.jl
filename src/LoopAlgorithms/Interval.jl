@@ -173,6 +173,8 @@ end
 # - `compute_multiplier`: a child with interval `n` runs once every `n` runs of its plan, so `1/n` times per run. A
 #   `RunIf` counts as its interval; how often its condition holds is not known before the run.
 
+# TODO: check these two `should_run_schedule` methods and the names they use (`should_run_schedule`, `divides`,
+# `getcondition`, `Vars`).
 @inline should_run_schedule(interval::I, loopidx::Int, context::C) where {I<:Interval, C} = @inline divides(loopidx, interval)
 
 @inline function should_run_schedule(runif::R, loopidx::Int, context::C) where {Vars, R<:RunIf{Vars}, C}
