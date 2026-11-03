@@ -6,16 +6,16 @@ this file):
 - `always_runs`: only `Interval(1)` without an offset; with an offset it skips the first `Offset` ticks;
 - `compute_multiplier`: a child with interval `n` runs once every `n` runs of its plan, so `1/n` times per run. A `RunIf`
   counts as its interval; how often its condition holds is not known before the run.
-- `_prepare_for_loop`: a plan run directly runs in a new `InlineSession` (AbstractProcesses/Hooks.jl).
+- `prepare_for_loop`: a plan run directly runs in a new `InlineSession` (AbstractProcesses/Hooks.jl).
 =#
 
 """
-    _prepare_for_loop(plan, context, inputs, lifetime, resume)
+    prepare_for_loop(plan, context, inputs, lifetime, resume)
 
 A plan run directly (`run(plan)`): a new `InlineSession` for the run (the loop needs a counter; nothing can pause or
 close a direct run), the plan, and the `LoopContext` from `context` and the run's inputs (AbstractProcesses/Hooks.jl).
 """
-@inline _prepare_for_loop(plan::LA, context::C, inputs::I, lt::LT, resume::R) where {LA<:LoopSpec, C<:ProcessContext, I<:NamedTuple, LT, R<:Resuming} =
+@inline prepare_for_loop(plan::LA, context::C, inputs::I, lt::LT, resume::R) where {LA<:LoopSpec, C<:ProcessContext, I<:NamedTuple, LT, R<:Resuming} =
     InlineSession(), plan, (@inline LoopContext(plan, context, inputs, resume))
 
 @inline should_run_schedule(interval::I, loopidx::Int, context::C) where {I<:Interval, C} = @inline divides(loopidx, interval)

@@ -263,7 +263,7 @@ function Base.run(la::LA; repeats = 1, lifetime = nothing, kwargs...) where {LA<
     initialized = isnothing(getpersistentcontext(la)) ? init(la) : la
     persistent_context = getpersistentcontext(initialized)
     lt = isnothing(lifetime) ? normalize_process_lifetime(initialized, repeats) : normalize_process_lifetime(initialized, lifetime)
-    session, plan, lc = _prepare_for_loop(initialized, persistent_context, (; kwargs...), lt, Resuming{false}())
+    session, plan, lc = prepare_for_loop(initialized, persistent_context, (; kwargs...), lt, Resuming{false}())
     persistent_context, _ = run_session_loop(session, plan, lc, lt)
     return _with_lifecycle(initialized, persistent_context, getstoredinits(initialized), getstoredoverrides(initialized))
 end

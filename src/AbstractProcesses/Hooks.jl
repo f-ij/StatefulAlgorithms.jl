@@ -8,7 +8,7 @@ Extended in:
 =#
 
 """
-    _prepare_for_loop(owner, context, inputs, lifetime, resume) -> (session, plan, loop_context)
+    prepare_for_loop(owner, context, inputs, lifetime, resume) -> (session, plan, loop_context)
 
 Everything a run of `owner` hands to the loop, made from what the user holds: the session the run runs in, the plan the
 loop runs and the `LoopContext` the run starts from (made by the `LoopContext(plan, context, inputs, resume)`
@@ -17,4 +17,4 @@ constructor from `context` and the run's `inputs`). With the run's `lifetime` th
 resumes. The first call of every run: `run(ip)`, `run(p)` and its resume, the manager's inline run, `run(plan)`. What
 the loop does not need of the user's handle is left out here, so this is where it is dropped.
 """
-function _prepare_for_loop end
+function prepare_for_loop end

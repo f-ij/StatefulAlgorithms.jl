@@ -46,7 +46,7 @@ end
     run_session_loop([loopfunc,] session, algo, loop_context, lifetime, resume = Resuming{false}()) -> (persistent_context, result)
 
 The loop as a call of its own, where a process hands a run to it (`Process`, `InlineProcess`, `run(plan)`): its
-arguments are the session, the plan, the `LoopContext` the run starts from (what `_prepare_for_loop` gives) and the
+arguments are the session, the plan, the `LoopContext` the run starts from (what `prepare_for_loop` gives) and the
 lifetime, never the process. Compiled as its own function, so
 LLVM keeps the session's counters (`tickidx`) in registers.
 """

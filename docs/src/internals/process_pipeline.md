@@ -55,7 +55,7 @@ the targeted subcontexts.
 `makeloop!`:
 
 - picks the state context (typed from the plan, or from `state_context`),
-- calls `_prepare_for_loop(p, context, inputs, lifetime, resume)`, the first call
+- calls `prepare_for_loop(p, context, inputs, lifetime, resume)`, the first call
   of every run (AbstractProcesses/Hooks.jl): the session the run runs in, the plan
   and the `LoopContext` the run starts from, made by
   `LoopContext(plan, context, inputs, resume)`, which validates the inputs against
@@ -64,7 +64,7 @@ the targeted subcontexts.
   `run_session_loop(session, plan, loop_context, lifetime, resume)`.
 
 `InlineProcess`, the manager's inline run and `run(plan)` start from
-`_prepare_for_loop` too.
+`prepare_for_loop` too.
 
 The entered `loop` method then builds or restores the per-run
 `AbstractLoopCursor` from the resolved plan.

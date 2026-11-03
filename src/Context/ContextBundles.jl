@@ -45,7 +45,7 @@ LoopContext(persistent_context::PersistentContextType, runtime_context::RuntimeC
 """
     LoopContext(plan, context, inputs, resume)
 
-The `LoopContext` a run starts from, made where a run is handed to the loop (`_prepare_for_loop`: a `Process` run, an
+The `LoopContext` a run starts from, made where a run is handed to the loop (`prepare_for_loop`: a `Process` run, an
 `InlineProcess` run, the manager's inline run, `run(plan)`). A new run (`Resuming{false}`) gets `context` as its
 persistent context and, as its runtime context, the inputs (checked against the plan's `@input`s) and the plan's
 declared locals. A paused run that resumes (`Resuming{true}`) gets `context` and, in place of the inputs, the runtime

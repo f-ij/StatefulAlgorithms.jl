@@ -310,7 +310,7 @@ function runprocessinline!(worker::P; lifetime = nothing, repeats = nothing, rep
     # the loop directly so no scheduler task is created for short manager jobs.
     base_context = _has_typed_state_context(worker) ? _typed_state_context(worker) : context(worker)
     lt = StatefulAlgorithms.lifetime(worker)
-    session, plan, lc = _prepare_for_loop(worker, base_context, (; kwargs...), lt, Resuming{false}())
+    session, plan, lc = prepare_for_loop(worker, base_context, (; kwargs...), lt, Resuming{false}())
     @atomic session.paused = false
     @atomic session.shouldrun = true
     persistent_context, returnvalue = run_session_loop(session, plan, lc, lt)

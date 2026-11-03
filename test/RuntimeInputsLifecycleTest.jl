@@ -190,7 +190,7 @@ runtime_input_bucket(ctx) = getproperty(StatefulAlgorithms.get_subcontexts(ctx),
     @test paused_total > 0
     # The paused run's inputs are in its runtime context, kept apart from the state context the user gets.
     @test isempty(runtime_input_bucket(paused_context))
-    @test StatefulAlgorithms.get_inputs(process.runtime_context).delta == 2
+    @test StatefulAlgorithms.get_inputs(StatefulAlgorithms.getruntimecontext(process)).delta == 2
     @test_throws ErrorException run(process; delta = 3)
 
     run(process)

@@ -241,6 +241,14 @@ end
 # A `Process` manages its state context: the new context's values go into it.
 makecontext!(p::Process, inputs_overrides...; lifetime=nothing) = _sync_state_context!(p, makecontext(p, inputs_overrides...; lifetime))
 
+"""
+    getruntimecontext(p::Process)
+
+The runtime context a paused run of `p` keeps (its inputs and declared locals), or `nothing` when no run is paused.
+Not exported: what the user works with is the state context, `context(p)`.
+"""
+getruntimecontext(p::Process) = p.runtime_context
+
 @inline _has_typed_state_context(p::P) where {P<:Process} = isnothing(p.state_context)
 @inline _typed_state_context(p::P) where {P<:Process} = getpersistentcontext(getalgo(p))
 
@@ -342,26 +350,26 @@ end
     _makeloop!(p, inputs, lt, StatefulAlgorithms.context(p); threaded, loopfunc)
 
 function _makeloop!(p::Process, inputs::NamedTuple, lt, base_context; threaded = true, loopfunc::LF = loop) where {LF}
-    session, func, lc = _prepare_for_loop(p, base_context, inputs, lt, Resuming{false}())
+    session, func, lc = prepare_for_loop(p, base_context, inputs, lt, Resuming{false}())
     return _start_run!(p, session, func, lc, lt; threaded, loopfunc)
 end
 
 """
-    _prepare_for_loop(p::Process, context, inputs, lifetime, resume)
+    prepare_for_loop(p::Process, context, inputs, lifetime, resume)
 
 A `Process` run runs in the process's session when it has `lifetime`'s type, else in a new one with the same counters
 (`create_session`), which becomes the process's session. A new run starts from `context` (the process's state context)
 and the run's inputs. A resumed run starts from `context` and the runtime context its pause kept, combined again into
 one `LoopContext`; the process no longer keeps that runtime context (AbstractProcesses/Hooks.jl).
 """
-function _prepare_for_loop(p::Process, context::C, inputs::NamedTuple, lt::LT, resume::Resuming{false}) where {C<:ProcessContext, LT}
+function prepare_for_loop(p::Process, context::C, inputs::NamedTuple, lt::LT, resume::Resuming{false}) where {C<:ProcessContext, LT}
     session = create_session(p, lt)
     p.session = session
     func = getalgo(p)
     return session, func, LoopContext(func, context, inputs, resume)
 end
 
-function _prepare_for_loop(p::Process, context::C, inputs::NamedTuple, lt::LT, resume::Resuming{true}) where {C<:ProcessContext, LT}
+function prepare_for_loop(p::Process, context::C, inputs::NamedTuple, lt::LT, resume::Resuming{true}) where {C<:ProcessContext, LT}
     session = create_session(p, lt)
     p.session = session
     func = getalgo(p)
@@ -387,7 +395,7 @@ end
 """
     _start_run!(p, session, func, loop_context, lifetime; threaded, loopfunc, resume)
 
-Starts a run of `p` with what `_prepare_for_loop` made: the session is set running, then the task running the loop is
+Starts a run of `p` with what `prepare_for_loop` made: the session is set running, then the task running the loop is
 scheduled.
 """
 function _start_run!(p::P, session::S, func::F, lc::LC, lt::LT; threaded::Bool = true, loopfunc::LF = loop, resume::R = Resuming{false}()) where {P<:Process, S<:InteractiveSession, F, LC<:LoopContext, LT, LF, isresuming, R<:Resuming{isresuming}}
@@ -456,7 +464,7 @@ end
 function _resume_paused_loop!(p::Process; threaded = true)
     wait(p)
     lt = lifetime(p)
-    session, func, lc = _prepare_for_loop(p, StatefulAlgorithms.context(p), (;), lt, Resuming{true}())
+    session, func, lc = prepare_for_loop(p, StatefulAlgorithms.context(p), (;), lt, Resuming{true}())
     return _start_run!(p, session, func, lc, lt; threaded, resume = Resuming{true}())
 end
 
