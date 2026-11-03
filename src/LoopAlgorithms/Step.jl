@@ -69,7 +69,7 @@ Terms used in this file:
            runtime = getruntime(stepped)
            carried = next_carried(carried, getpersistent(stepped))
            tick!(session)
-           if process_breakcondition(session)                          # pause or close of the process
+           if session_breakcondition(session)                          # pause or close of the process
                set_resume_point!(cursor, 2, lidx + 1)
                @goto done
            end
@@ -225,7 +225,7 @@ function _inline_routine_child_exprs(ChildType::Type, child, child_cursor, child
     end
     # After repeat `idx_expr`: a pause or close of the process stops the child; it resumes at the next repeat.
     paused_after(idx_expr) = quote
-        if @inline process_breakcondition(session)
+        if @inline session_breakcondition(session)
             @inline set_resume_point!($routine_cursor, $i, $idx_expr + 1)
             $(Expr(:symbolicgoto, done))
         end
@@ -411,7 +411,7 @@ is past the last repeat.
             runtime_context = @inline getruntime(stepped_lc)
             carried = @inline next_carried(carried, (@inline getpersistent(stepped_lc)))
             @inline tick!(session)
-            if @inline process_breakcondition(session)
+            if @inline session_breakcondition(session)
                 @inline set_resume_point!(routine_cursor, idx, lidx + 1)
                 break
             end
@@ -444,7 +444,7 @@ after the step stays.
     if resume_point <= 1   # `RepeatOnce`: no own stop condition, only a pause or close after the repeat
         lc = @inline _step!(func, func_cursor, lc, child_step_wiring, namespace, session, lifetime)
         @inline tick!(session)
-        if @inline process_breakcondition(session)
+        if @inline session_breakcondition(session)
             @inline set_resume_point!(routine_cursor, idx, resume_point + 1)
         end
     end

@@ -13,9 +13,10 @@ Each way of running has its own session type, as each has its own process type:
 | `InlineSession`      | `InlineProcess` (once), `run(plan)` (per run) | loop counter                                          |
 | `InteractiveSession` | `Process` (with it; a new one for a run with a lifetime of another type) | also ticks, the start and end time, the `shouldrun` and `paused` flags, the cursor of a paused run, the thread |
 
-Interface.jl: what every session provides (the loop counter; the times, kept only by
-`InteractiveSession`). Hooks.jl: the stop check
-(`process_breakcondition`).
+This folder holds what every session shares: the abstract type (here), Interface.jl (what every session provides: the
+loop counter; the times, kept only by `InteractiveSession`) and Hooks.jl (the stop check, `session_breakcondition`).
+Each session type is defined with its process, in `Processes/<process>/Session.jl`, which also holds that type's
+methods of the session hooks.
 =#
 
 """

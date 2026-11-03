@@ -14,7 +14,7 @@ mutable struct InlineProcess{TD,ContextType, Lt} <: AbstractProcess
     context::ContextType
     consumed::Bool
     lifetime::Lt
-    # The run's counter, one session for every run (Sessions/InlineSession.jl): what the loop gets instead of the
+    # The run's counter, one session for every run (Processes/InlineProcess/Session.jl): what the loop gets instead of the
     # process.
     const session::InlineSession
 end

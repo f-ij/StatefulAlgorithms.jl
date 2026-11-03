@@ -132,7 +132,7 @@ up to 1.9x slower); the call for a new type stays a call.
         @inline tick!(session)
         @inline inc!(session)
         # After the step: a pause or close of the process.
-        (@inline process_breakcondition(session)) && return carried, stepped_runtime_context
+        (@inline session_breakcondition(session)) && return carried, stepped_runtime_context
         stepped_runtime_context isa RuntimeContextType || return _repeat_steps(j + 1, carried, stepped_runtime_context, step_plan, step_cursor, persistent_context, step_wiring, session, lifetime)
         runtime_context = stepped_runtime_context
     end
@@ -159,7 +159,7 @@ last one; a runtime context of another type continues in a call compiled for tha
         @inline tick!(session)
         @inline inc!(session)
         # After the step: a pause or close of the process.
-        (@inline process_breakcondition(session)) && return carried, stepped_runtime_context
+        (@inline session_breakcondition(session)) && return carried, stepped_runtime_context
         stepped_runtime_context isa RuntimeContextType || return _run_steps(carried, stepped_runtime_context, step_plan, step_cursor, persistent_context, step_wiring, session, lifetime)
         runtime_context = stepped_runtime_context
     end

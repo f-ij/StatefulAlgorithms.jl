@@ -4,7 +4,7 @@ this file): `Until` and `RepeatOrUntil` stop when their condition holds; `AtLeas
 least `atleast` repeats. `Repeat` and `Indefinite` have no condition of their own and use the default.
 
 The condition reads the variables `Vars` from the context. A pause or close is not checked here: that is
-`process_breakcondition` (Sessions/Hooks.jl).
+`session_breakcondition` (Sessions/Hooks.jl).
 =#
 
 @inline lifetime_breakcondition(lt::U, context::C, done::D) where {Vars, U<:Until{Vars}, C, D<:Integer} =

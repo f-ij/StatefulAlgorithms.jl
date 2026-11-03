@@ -17,7 +17,7 @@ mutable struct Process{F,C} <: AbstractProcess
     lock::ReentrantLock
     lastresult::Any
     rls::RuntimeListeners
-    # The current or last run (Sessions/InteractiveSession.jl): what the loop gets instead of the process. The run's
+    # The current or last run (Processes/Process/Session.jl): what the loop gets instead of the process. The run's
     # counters, times, cursor and the flags `pause(p)` and `close(p)` set are its fields.
     session::InteractiveSession{C}
 end
@@ -405,7 +405,7 @@ function _start_run!(p::P, session::S, func::F, lc::LC, lt::LT; threaded::Bool =
     p.lastresult = nothing
     wait_loop_precompile!(p, func, lc, lt, resume; loopfunc)
     # The task runs `body` itself (as `Threads.@spawn` and `@async` do with a closure around it): its type is known
-    # before the task exists, so it can be compiled ahead (src/ProcessPrecompile.jl).
+    # before the task exists, so it can be compiled ahead (Processes/Process/ProcessPrecompile.jl).
     body = ProcessTaskBody(p, loopfunc, session, func, lc, lt, resume)
     task = Task(body)
     if threaded

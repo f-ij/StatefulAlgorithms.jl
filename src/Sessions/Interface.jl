@@ -1,6 +1,6 @@
 #=
 Interface of `ProcessSession`: what every session provides (its loop counter; its times, which by default it does not
-keep), with defaults a session type can overload. The stop check is a hook: Hooks.jl (`process_breakcondition`). A process gives its session with
+keep), with defaults a session type can overload. The stop check is a hook: Hooks.jl (`session_breakcondition`). A process gives its session with
 `getsession`, and forwards the counter to it (`loopidx(p)`).
 =#
 

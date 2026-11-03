@@ -7,7 +7,7 @@ const SA = StatefulAlgorithms
 
 """
 `NoStopRepeat(n)`: `n` repeats like `Repeat(n)`, but a `Process` running it is never interrupted: its
-`process_breakcondition` is always `false`, so it never reads `shouldrun` (not after routine repeats, not after steps)
+`session_breakcondition` is always `false`, so it never reads `shouldrun` (not after routine repeats, not after steps)
 and cannot be paused or closed early. Perf only: the `process, no stop checks` runner uses it to measure what the
 pause check costs, which a hand-written loop does not pay. The session of a `Process` run carries the run's lifetime
 type as a type parameter (`InteractiveSession{C, LT}`).
@@ -15,7 +15,7 @@ type as a type parameter (`InteractiveSession{C, LT}`).
 struct NoStopRepeat <: SA.RepeatLifetime
     repeats::Int
 end
-SA.process_breakcondition(session::S) where {C, LT<:NoStopRepeat, S<:SA.InteractiveSession{C, LT}} = false
+SA.session_breakcondition(session::S) where {C, LT<:NoStopRepeat, S<:SA.InteractiveSession{C, LT}} = false
 
 #################
 ### Algorithms ###

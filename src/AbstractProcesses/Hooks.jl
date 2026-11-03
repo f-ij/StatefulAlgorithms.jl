@@ -2,8 +2,8 @@
 Extendable API of what runs a loop (a process, or a plan run directly): what a run hands to the loop.
 
 Extended in:
-- Process.jl: `Process` (a session for the run's lifetime, its plan, the context it starts from or the paused one);
-- InlineProcess.jl: `InlineProcess` (its one session, its plan and context);
+- Processes/Process/Process.jl: `Process` (a session for the run's lifetime, its plan, the context it starts from or the paused one);
+- Processes/InlineProcess/InlineProcess.jl: `InlineProcess` (its one session, its plan and context);
 - LoopAlgorithms/HookExtensions.jl: a plan run directly (`run(plan)`: a new `InlineSession`).
 =#
 

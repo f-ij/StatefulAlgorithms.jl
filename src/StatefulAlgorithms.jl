@@ -37,9 +37,6 @@ module StatefulAlgorithms
     include("Sessions/Sessions.jl")
     include("Sessions/Interface.jl")
     include("Sessions/Hooks.jl")
-    include("Sessions/InlineSession.jl")
-    include("Sessions/InteractiveSession.jl")
-    include("Sessions/HookExtensions.jl")
     include("AbstractProcesses/Interface.jl")
     include("AbstractProcesses/Hooks.jl")
     include("ProcessEntities/ProcessEntities.jl")
@@ -68,10 +65,12 @@ module StatefulAlgorithms
     include("Debugging.jl")
     include("Listeners.jl")
 
-    include("Process.jl")
-    include("ProcessPrecompile.jl")
-    include("InlineProcess.jl")
-    include("InlineProcessShowing.jl")
+    include("Processes/Process/Session.jl")
+    include("Processes/Process/Process.jl")
+    include("Processes/Process/ProcessPrecompile.jl")
+    include("Processes/InlineProcess/Session.jl")
+    include("Processes/InlineProcess/InlineProcess.jl")
+    include("Processes/InlineProcess/InlineProcessShowing.jl")
 
 
     include("ProcessList.jl")
