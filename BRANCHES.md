@@ -13,7 +13,7 @@ Updated 2026-11-03.
 |---|---|---|---|
 | `refactor/partitions` | `-partitions` | `main` | One partition system: `Partition{kind, name}` (`StatePartition`, `RuntimePartition`), no name turned into a partition; `Var` is an unresolved `VarLocation`; nsref/partref. Under review; plan-compiles and the others rebase onto it. |
 | `refactor/plan-inputs` | `-plan-inputs` | `refactor/partitions` | Plan inputs as ordinary arguments: plans called like functions `(arg1, arg2, ...)`, inputs passed explicitly, header inputs as declared locals, `@input` removed. Design doc, and the registered input state (`IdentifiableAlgo{<:RuntimeInputState}`) already removed. |
-| `refactor/processes-and-pausing` | `-processes-and-pausing` | `main` | The process/session split from `refactor/plan-compiles` rebuilt on `main` without the `UniqueKeyMap` parts, with the pause design: a pause splits the `LoopContext`, the state synced into the process's handle (`_sync_state_context!`), the runtime context in its own slot, combined again on resume; no `context(p, c)`; every process type checked. `refactor/plan-compiles` rebases onto it and `refactor/partitions` in one pass. |
+| `refactor/contexts-processes-pausing` | `-contexts-processes-pausing` | `main` | The process/session split from `refactor/plan-compiles` rebuilt on `main`: sessions, `_prepare_for_loop` and the `LoopContext` built there (the place where the plan's map is dropped once plan-compiles is rebased onto it; precompiles not included), the `InlineProcess` changes (inlined loop, no threaded or async path), and the pause design: a pause splits the `LoopContext`, the state synced into the process's `state_context` handle (`_sync_state_context!`), the runtime context in its own slot, combined again on resume; no `context(p, c)`; every process type checked. `refactor/plan-compiles` rebases onto it and `refactor/partitions` in one pass. |
 | `refactor/plan-compiles` | `-plan-compiles` | `main` | Resolve and construction compile once per plan type, not per plan: untyped construction, endpoints found on values, the process/session redesign; the old id replacement. Generic work goes here. Rebases onto `refactor/partitions`. |
 | `refactor/monolithic-resolve` | `-monolithic-resolve` | `refactor/plan-compiles` | Only the monolithic `Unique` id replacement (`replace_unique_ids`), no caches. |
 | `exp/replace-ids-cache` | `-replace-ids-cache` | `refactor/monolithic-resolve` | Experiment: `replace_unique_ids` keeps its type walks in global caches. |
@@ -23,7 +23,7 @@ Updated 2026-11-03.
 
 | Branch | Folder | On top of | Intent |
 |---|---|---|---|
-| `fix/paused-loop-context` | `-paused-context` | `main` | Superseded by `refactor/processes-and-pausing`; to be deleted. A paused `Process` keeps its `LoopContext`; `context(p)` while paused combines it with the handle. |
+| `fix/paused-loop-context` | `-paused-context` | `main` | Superseded by `refactor/contexts-processes-pausing`; to be deleted. A paused `Process` keeps its `LoopContext`; `context(p)` while paused combines it with the handle. |
 
 ## Experiments
 
