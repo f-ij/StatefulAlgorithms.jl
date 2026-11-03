@@ -34,8 +34,12 @@ One of the runtime context's four partitions. Its values last one step or the ru
 """
 const RuntimePartition{name} = Partition{:runtime, name} where {name}
 
-"""The subcontext name a partition is stored under, e.g. `:_inputs`."""
-partition_name(::Union{Partition{kind, name}, Type{Partition{kind, name}}}) where {kind, name} = name
+"""
+The subcontext name a partition is stored under, e.g. `:_inputs`. Not specialized: it is compiled once for every
+partition, and still folds to a constant where the partition is known.
+"""
+partition_name(@nospecialize(partition::Partition)) = typeof(partition).parameters[2]::Symbol
+partition_name(@nospecialize(P::Type{<:Partition})) = P.parameters[2]::Symbol
 
 #######################################
 ############# CONTEXT #################
