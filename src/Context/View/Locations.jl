@@ -376,7 +376,7 @@ function _read_partition end
 
 Return the backing value stored for one `SubContextView` location without
 applying `_follow_reads`: what the hooks `read_value` and `write_value` are asked
-about (through `stored_value_at`).
+about (through `getproperty_raw`).
 """
 @inline function partition_storedproperty(
     scv::SCV,
@@ -421,8 +421,8 @@ steps). Whether it is there is known from the type, so the check costs nothing.
 
 @noinline _throw_unassigned(name::Symbol) = error("`$name` has no value in this step: it is assigned by a step that does not run in every step (on a schedule). Declare it first (`local $name` in a DSL block, `Local` in a plan) to keep its last value between steps.")
 
-"""The value stored at the state location `subcontext.field` of a view's bundle, as stored (see `partition_storedproperty`)."""
-@inline stored_value_at(view::V, ::VarLocation{:state, subcontext, field}) where {V<:SubContextView, subcontext, field} =
+"""What is literally stored in the state field `subcontext.field` of a view's bundle, no hook asked (see `getproperty_raw`)."""
+@inline getproperty_raw(view::V, ::VarLocation{:state, subcontext, field}) where {V<:SubContextView, subcontext, field} =
     @inline partition_storedproperty(view, Val(subcontext), Val(field))
 
 ##########################################

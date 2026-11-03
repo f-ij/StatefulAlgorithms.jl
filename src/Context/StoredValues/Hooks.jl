@@ -29,7 +29,7 @@ abstract type ReadAction end
     ReadFrom{L}()
 
 "Read at location `L` instead" (`L` a `VarLocation` type). Written for redirects: a field holding a `RedirectedVar`
-has no value of its own, it stands for another field. The value stored at `L` is fetched (`stored_value_at`) and
+has no value of its own, it stands for another field. The value stored at `L` is fetched (`getproperty_raw`) and
 `read_value` is asked about it in turn, so a redirect to a field that is itself redirected or wrapped is followed too.
 Only `RedirectedVar` answers this.
 """

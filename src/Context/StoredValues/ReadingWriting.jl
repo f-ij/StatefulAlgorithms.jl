@@ -22,20 +22,22 @@ asked, and its answers are followed until one is a `DirectRead`.
 @inline _follow_read(reader::R, action::DirectRead{T}) where {R<:AbstractContext, T} = getfield(action, :value)
 
 # The value stored at `L` is asked about in turn, so a redirect to a redirect is followed as well.
-@inline _follow_read(reader::R, ::ReadFrom{L}) where {R<:AbstractContext, L} = @inline _follow_reads(reader, (@inline stored_value_at(reader, L())))
+@inline _follow_read(reader::R, ::ReadFrom{L}) where {R<:AbstractContext, L} = @inline _follow_reads(reader, (@inline getproperty_raw(reader, L())))
 
 # Unused API for now (see `ReadVar`): no wrapper in the package answers it.
 @inline _follow_read(reader::R, action::ReadVar{T}) where {R<:AbstractContext, T} =
     @inline _follow_reads(reader, getfield(action, :value))
 
 """
-    stored_value_at(reader, location)
+    getproperty_raw(reader, location)
 
-Return the value stored at the state location `location` (a `VarLocation{:state}`), as it is stored: no hook is asked
-about it. What a `ReadFrom` and a `StoreInto` go on with. A view reads it with `partition_storedproperty`, a
+Return what is literally stored in the state field at `location` (a `VarLocation{:state}`), without asking a hook: a
+`RedirectedVar` comes back as the marker, not as the value it points to. Written for following redirects: when a hook
+answers "go on at `L`" (`ReadFrom{L}`, `StoreInto{L}`), the stored value at `L` is fetched with this, and the hook is
+asked about it in turn. Each reader type has its method: a view reads through `partition_storedproperty`, a
 `ProcessContext` from its subcontext.
 """
-function stored_value_at end
+function getproperty_raw end
 
 ##########################################
 ########## Writing #######################
@@ -59,7 +61,7 @@ Return the `DirectWrite`s that the write actions `requests` end in: each `StoreI
 @inline _follow_write(view::V, action::DirectWrite) where {V<:SubContextView} = (action,)
 @inline _follow_write(view::V, ::NoWrite) where {V<:SubContextView} = ()
 @inline _follow_write(view::V, request::StoreInto{L}) where {V<:SubContextView, L} =
-    @inline _follow_store(view, (@inline stored_value_at(view, L())), request)
+    @inline _follow_store(view, (@inline getproperty_raw(view, L())), request)
 
 # The recursion goes through the stored value, as reads do (`_follow_reads`): it gets simpler at each step of a redirect
 # chain (a marker, then the value), so Julia's inference follows it; recursing on the request alone (`StoreInto{L1}`,
@@ -70,7 +72,7 @@ Return the `DirectWrite`s that the write actions `requests` end in: each `StoreI
 @inline _follow_answer(view::V, action::DirectWrite) where {V<:SubContextView} = (action,)
 @inline _follow_answer(view::V, ::NoWrite) where {V<:SubContextView} = ()
 @inline _follow_answer(view::V, request::StoreInto{L}) where {V<:SubContextView, L} =
-    @inline _follow_store(view, (@inline stored_value_at(view, L())), request)
+    @inline _follow_store(view, (@inline getproperty_raw(view, L())), request)
 @inline _follow_answer(view::V, actions::A) where {V<:SubContextView, A<:Tuple} = @inline _follow_writes(view, actions)
 
 """

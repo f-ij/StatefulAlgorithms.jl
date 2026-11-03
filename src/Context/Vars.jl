@@ -40,8 +40,8 @@ end
     @inline _var_transform(var, (@inline _follow_reads(c, getproperty(_var_subcontext(c, SubcontextRef), name))))
 end
 
-"""The value stored at the state location `subcontext.field` of `c`, as stored: what a `ReadFrom` goes on with."""
-@inline stored_value_at(c::ProcessContext, ::VarLocation{:state, subcontext, field}) where {subcontext, field} =
+"""What is literally stored in the state field `subcontext.field` of `c`, no hook asked (see `getproperty_raw`)."""
+@inline getproperty_raw(c::ProcessContext, ::VarLocation{:state, subcontext, field}) where {subcontext, field} =
     @inline getproperty((@inline getproperty(c, subcontext)), field)
 
 @inline function Base.getindex(c::ProcessContext, vars::Var...)
