@@ -56,10 +56,15 @@ Wait for a process to finish
 """
 @inline Base.wait(@nospecialize(p::Process)) = if !isnothing(p.task) wait(p.task) else nothing end
 
+"""
+Finish a paused run when `close` is called on a paused `Process`.
+
+A paused loop never returns to its end, so this does that work instead: run `cleanup` on the state context and the
+runtime context the pause kept (`context(p)`, `p.runtime_context`), combined again into one `LoopContext` as on a
+resume; store the final result in `p.lastresult`; clear `p.runtime_context`; and sync the cleaned persistent context
+into the state context (`_sync_state_context!`). Returns `p.lastresult`.
+"""
 function _cleanup_paused_process!(p::Process)
-    # `close` turns the paused run into a finished one: the loop will not run again for it, so the cleanup and the final
-    # result it would have made are made here, from the state context and the runtime context the pause kept, combined
-    # again as on a resume.
     cleaned = @inline cleanup(getalgo(p), LoopContext(context(p), p.runtime_context))
     p.lastresult = @inline loop_final_result(getalgo(p), (@inline final_context(cleaned)), getruntime(cleaned))
     p.runtime_context = nothing
