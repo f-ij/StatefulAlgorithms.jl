@@ -254,6 +254,38 @@ end
 ########## Reading a location ############
 ##########################################
 
+#=
+Code generation for a location read through a transform: each field is read into its own variable, and the transform
+is called on those variables.
+=#
+
+"""
+For variable names :a, :b, :c
+    create the expression :(func(:a, :b, :c)) where func is the read transform of `vl`
+"""
+function funcexpr(vl::Union{VL, Type{<:VL}}, varnames...) where VL <: VarLocation
+    func = getfunc(vl)
+    if isnothing(func)
+        if length(varnames) == 1 # If no func, can only have one var
+            return :($(varnames[1]))
+        else
+            error("Error: VarLocation: $vl without a function must have exactly one variable name, got $(varnames)")
+        end
+    end
+    return Expr(:call, func, varnames...)
+end
+
+"""For a state location, one assignment per field (`var = <field read>`), and the variables assigned to."""
+function getvar_expressions_and_varnames(vl::Union{VL, Type{<:VL}}) where VL <: VarLocation
+    varnames = location_fieldname(vl)
+    numvars = varnames isa Tuple ? length(varnames) : 1
+    varnames = varnames isa Tuple ? varnames : (varnames,)
+    assign_symbols = ntuple(i -> gensym(:var), numvars)
+    target_subcontext = get_subcontextname(vl)
+    return [:($(assign_symbols[i]) = @inline partition_getproperty(sct, Val($(QuoteNode(target_subcontext))), Val($(QuoteNode(varnames[i])))))
+        for i in 1:numvars], assign_symbols
+end
+
 @inline @generated function Base.getproperty(sct::SCV, vl::VarLocation{:state}) where SCV <: SubContextView
     target_subcontext = get_subcontextname(vl)
     target_variable = location_fieldname(vl)

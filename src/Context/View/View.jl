@@ -1,3 +1,5 @@
+include("VarLocation/StructDef.jl")
+include("VarLocation/Accessors.jl")
 include("StructDef.jl")
 include("ContextView.jl")
 include("Locations.jl")

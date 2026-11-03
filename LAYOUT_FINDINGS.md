@@ -35,7 +35,6 @@ matching its name.
 | `Context/View/Locations.jl:374` | `runtime_values(::ProcessContext, ::Val)`: the `ProcessContext` method of the bundle hook | c | `Context/RuntimeContext.jl` |
 | `Context/View/Locations.jl:193`, `:139` | `getregistry(scv)`, `view_instance_type` | d | `ContextView.jl` properties |
 | `Context/View/Locations.jl:405` | `create_merge_tuples_expr`, marked unused | f | delete |
-| `Context/View/StructDef.jl:22/35` | `funcexpr`, `getvar_expressions_and_varnames`: code generation in the struct file | f | `Locations.jl` |
 | `Context/View/ContextView.jl:34` | `algo_to_subcontext_name`: docstring describes something else | f | fix docstring |
 | `Context/View/ContextView.jl:44` vs `RoutingInterface/Construction.jl:28` | `wiring_from_tuple_type` / `wiring_from_type` (unused) | f | keep one |
 | `Context/Carried/Writes.jl:30` (+ `AlgorithmWrites.jl`, `PlanWrites.jl`, `Interactive/ContextExchange.jl:259`) | `_find_writable_fields`: `::Any` default extended per node type | a, b | `Context/Carried/Hooks.jl`, no `_` |
