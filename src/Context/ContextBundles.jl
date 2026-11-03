@@ -43,7 +43,7 @@ LoopContext(persistent_context::PersistentContextType, runtime_context::RuntimeC
     LoopContext{PersistentContextType, RuntimeContextType, Node}(persistent_context, runtime_context)
 
 """
-    make_loop_context(plan, context)
+    LoopContext(plan, context)
 
 The `LoopContext` a new run starts from, before its inputs are added (`with_inputs`): `context` as its persistent
 context and, as its runtime context, the plan's declared locals (`_declared_locals`). Made where a run is handed to the
@@ -59,7 +59,7 @@ again (step index, total steps, elapsed time, a stop request), add narrow read-o
 (`ProcessSession`), which would tie step code to the session type; most of those uses belong in the plan (schedules,
 lifetimes) instead.
 """
-@inline function make_loop_context(plan::A, context::C) where {A, C<:ProcessContext}
+@inline function LoopContext(plan::A, context::C) where {A, C<:ProcessContext}
     locals = collect_tree_locals(plan)
     runtime = isempty(locals) ? (@inline _empty_context()) :
               (@inline with_subcontext(_empty_context(), Val(:_declared_locals), SubContext{:_declared_locals}(locals)))

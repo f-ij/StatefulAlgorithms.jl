@@ -1,3 +1,7 @@
+#=
+What a user calls on a `Process`: `run`, `wait`, `fetch`, `pause`, `close`, `restart`, `reinit`, `quit`, `quitall`
+(TODO.md, "Rename `src/ProcessInteraction.jl`": still mixes in loop internals and dead code).
+=#
 
 export start, restart, quit, pause, syncclose, reinit
 
@@ -224,3 +228,12 @@ function quitall()
     end
 end
 export quitall
+
+function timedwait(p, timeout = wait_timeout)
+    t = time()
+    
+    while !isdone(p) && time() - t < timeout
+    end
+
+    return isdone(p)
+end

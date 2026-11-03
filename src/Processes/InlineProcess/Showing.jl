@@ -1,3 +1,7 @@
+#=
+How an `InlineProcess` is shown: `summary` and `show`.
+=#
+
 @inline function _inline_process_algo_summary(ip::InlineProcess)
     return sprint(summary, getalgo(ip))
 end

@@ -1,8 +1,8 @@
 #=
 Extendable API of lifetimes: the logical stop check, whether a lifetime's own condition ends the repeats.
 
-Each function here has the default every lifetime gets. Extended in HookExtensions.jl next to this file: `Until`,
-`AtLeast`, `RepeatOrUntil`, `AtLeastAtMost`.
+Each function here has the default every lifetime gets. Extended by the lifetimes with a condition of their own, each in
+its own file next to its struct: `Until.jl`, `AtLeast.jl`, `RepeatOrUntil.jl`, `AtLeastAtMost.jl`.
 
 The interactive stop check, a pause or close of the process, is `session_breakcondition` (Sessions/Hooks.jl).
 =#

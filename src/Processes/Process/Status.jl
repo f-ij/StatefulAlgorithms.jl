@@ -1,3 +1,7 @@
+#=
+The status of a `Process` as the user asks for it: running, paused, done, idle, free, used.
+=#
+
 export isfree, isused, isrunning, ispaused, isdone, isidle, status
 """
 Is it running or not

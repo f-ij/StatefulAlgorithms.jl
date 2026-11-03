@@ -1,4 +1,6 @@
-# List of processes in use
+#=
+The list of live processes (`processlist`), by id, so a process can be found and quit without a reference to it.
+=#
 """
 Module dict for managing alive processes if no active reference is alive
 """
@@ -8,3 +10,8 @@ function remove_process!(p::Process)
     close(p)
     pop!(processlist, p.id, nothing)
 end
+
+# function Base.finalizer(p::Process)
+#     quit(p)
+#     delete!(processlist, p.id)
+# end

@@ -1,3 +1,7 @@
+#=
+Precompiling the loop of a `Process` run before its task exists (`precompile_loop!`).
+=#
+
 _is_generating_package_output() = ccall(:jl_generating_output, Cint, ()) != 0
 
 @inline function precompile_loop!(loopfunc, p::Process{F, C}, func, lc, lt, resume::Resuming = Resuming{false}()) where {F, C}

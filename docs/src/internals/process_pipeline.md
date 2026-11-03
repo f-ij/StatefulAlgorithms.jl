@@ -50,14 +50,14 @@ the targeted subcontexts.
 
 ## 3. Running
 
-`run(p; kwargs...)` (`src/ProcessInteraction.jl`) calls `makeloop!` (`src/Processes/Process/Process.jl`).
+`run(p; kwargs...)` (`src/Processes/Process/Lifecycle.jl`) calls `makeloop!` (`src/Processes/Process/Loop.jl`).
 
 `makeloop!`:
 
 - picks the state context (typed from the plan, or from `state_context`),
 - calls `prepare_for_loop(p, context, inputs, lifetime, resume)`, the first call
-  of every run (AbstractProcesses/Hooks.jl): the session the run runs in, the plan
-  and the `LoopContext` the run starts from: `make_loop_context(plan, context)`
+  of every run (Processes/Hooks.jl): the session the run runs in, the plan
+  and the `LoopContext` the run starts from: `LoopContext(plan, context)`
   (the state context and the plan's declared locals), then `with_inputs`, which
   checks the inputs against the plan's `@input` metadata and adds them, and
 - spawns the loop task (`_start_run!`), which calls

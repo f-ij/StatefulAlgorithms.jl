@@ -124,7 +124,7 @@ end
 """
     with_inputs(lc, plan, inputs)
 
-Returns `lc`, the `LoopContext` a new run starts from (`make_loop_context`), with the run's inputs added to its runtime
+Returns `lc`, the `LoopContext` a new run starts from (`LoopContext(plan, context)`), with the run's inputs added to its runtime
 context as `_inputs`, after checking them against `plan`'s `@input` declarations (`_validate_runtime_inputs`). Every
 `prepare_for_loop` method for a new run calls it. Returns `lc` itself when the plan declares no inputs and none were
 passed.

@@ -1,3 +1,9 @@
+#=
+`InlineProcess`: a plan run in the caller's task, fully typed, for tight loops. This file holds the struct, its
+constructors, `run`, `reset!` and its loop setup. Its session (Session.jl), getters and setters (Accessors.jl) and
+showing (Showing.jl) are in their own files.
+=#
+
 export InlineProcess, InlineProcessAlgorithm, run, reset!
 """
 A fully typed process that is meant for inlining into other Functions
@@ -18,8 +24,6 @@ mutable struct InlineProcess{TD,ContextType, Lt} <: AbstractProcess
     # process.
     const session::InlineSession
 end
-#TODO Improve context semantics
-contexttype(::Union{InlineProcess{TD,ContextType}, Type{<:InlineProcess{TD,ContextType}}}) where {TD,ContextType} = ContextType
 
 @inline function _inline_process_lifetime(func, repeats, lifetime)
     if !isnothing(repeats)
@@ -62,14 +66,6 @@ end
 """The `InlineProcess` around a prepared plan, its context and lifetime, with its one session."""
 _construct_inline_process(algo::TD, context::C, lifetime::Lt) where {TD, C, Lt} =
     InlineProcess{TD, C, Lt}(uuid1(), algo, context, false, lifetime, InlineSession())
-
-@inline lifetime(ip::IP) where {IP<:InlineProcess} = ip.lifetime
-@inline getcontext(ip::IP) where {IP<:InlineProcess} = context(ip)
-
-getalgo(ip::InlineProcess) = ip.algo
-
-@inline context(ip::InlineProcess, c) = (ip.context = c)
-@inline context(ip::InlineProcess) = ip.context::contexttype(ip)
 
 @inline function reset!(p::InlineProcess, inputs_overrides...)
     reset_loopidx!(getsession(p))
@@ -130,10 +126,10 @@ end
     prepare_for_loop(ip::InlineProcess, context, inputs, lifetime, resume)
 
 An `InlineProcess` run runs in the process's one session, on its plan, from `context` and the run's inputs
-(AbstractProcesses/Hooks.jl). An `InlineProcess` cannot pause, so it never resumes.
+(Processes/Hooks.jl). An `InlineProcess` cannot pause, so it never resumes.
 """
 @inline prepare_for_loop(ip::IP, context::C, inputs::I, lt::LT, resume::Resuming{false}) where {IP<:InlineProcess, C<:ProcessContext, I<:NamedTuple, LT} =
-    getsession(ip), getalgo(ip), (@inline with_inputs((@inline make_loop_context(getalgo(ip), context)), getalgo(ip), inputs))
+    getsession(ip), getalgo(ip), (@inline with_inputs((@inline LoopContext(getalgo(ip), context)), getalgo(ip), inputs))
 
 """
 One run of `p`: what `prepare_for_loop` makes (the session, the plan, the `LoopContext`), then the loop with those as

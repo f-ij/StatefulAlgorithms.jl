@@ -30,15 +30,21 @@ module StatefulAlgorithms
     # include("Arena.jl")
 
 
-    include("AbstractProcesses/AbstractProcesses.jl")
+    include("Processes/AbstractProcesses.jl")
     include("Lifetimes/Lifetimes.jl")
     include("Lifetimes/Hooks.jl")
-    include("Lifetimes/HookExtensions.jl")
+    include("Lifetimes/Indefinite.jl")
+    include("Lifetimes/Repeat.jl")
+    include("Lifetimes/RepeatOnce.jl")
+    include("Lifetimes/Until.jl")
+    include("Lifetimes/AtLeast.jl")
+    include("Lifetimes/RepeatOrUntil.jl")
+    include("Lifetimes/AtLeastAtMost.jl")
     include("Sessions/Sessions.jl")
     include("Sessions/Interface.jl")
     include("Sessions/Hooks.jl")
-    include("AbstractProcesses/Interface.jl")
-    include("AbstractProcesses/Hooks.jl")
+    include("Processes/Interface.jl")
+    include("Processes/Hooks.jl")
     include("ProcessEntities/ProcessEntities.jl")
 
 
@@ -67,21 +73,26 @@ module StatefulAlgorithms
 
     include("Processes/Process/Session.jl")
     include("Processes/Process/Process.jl")
-    include("Processes/Process/ProcessPrecompile.jl")
+    include("Processes/Process/Accessors.jl")
+    include("Processes/Process/Context.jl")
+    include("Processes/Process/Loop.jl")
+    include("Processes/Process/Precompile.jl")
+    include("Processes/Process/Showing.jl")
+    include("Processes/Process/ProcessList.jl")
+    include("Processes/Process/Status.jl")
+    include("Processes/Process/Lifecycle.jl")
     include("Processes/InlineProcess/Session.jl")
     include("Processes/InlineProcess/InlineProcess.jl")
-    include("Processes/InlineProcess/InlineProcessShowing.jl")
+    include("Processes/InlineProcess/Accessors.jl")
+    include("Processes/InlineProcess/Showing.jl")
 
 
-    include("ProcessList.jl")
 
     include("Interactive/Interactive.jl")
 
     include("Widgets/Widgets.jl")
 
 
-    include("ProcessStatus.jl")
-    include("ProcessInteraction.jl")
     include("Copy.jl")
     include("Manager/Manager.jl")
 
