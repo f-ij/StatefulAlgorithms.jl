@@ -10,10 +10,8 @@ without branching.
 """
 @inline getplan(la::LoopAlgorithm) = getfield(la, :plan)
 @inline getplan(plan::AbstractPlan) = plan
-@inline getplan(fa::FinalizedAlgorithm) = getplan(inneralgorithm(fa))
 @inline getplan(::Type{<:LoopAlgorithm{Plan}}) where {Plan} = Plan
 @inline getplan(::Type{Plan}) where {Plan<:AbstractPlan} = Plan
-@inline getplan(::Type{FA}) where {LA, FA<:FinalizedAlgorithm{LA}} = getplan(LA)
 
 """
 Build or rebuild a concrete `LoopAlgorithm` runtime wrapper.

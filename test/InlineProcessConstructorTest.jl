@@ -10,7 +10,7 @@ using StatefulAlgorithms
         InlineAccumulator,
         Input(InlineAccumulator, :start => 3),
         Override(InlineAccumulator, :delta => 2);
-        lifetime = 4,
+        repeats = 4,
     )
 
     ctx = run(ip)

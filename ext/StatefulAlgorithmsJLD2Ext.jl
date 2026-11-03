@@ -3,7 +3,7 @@ module StatefulAlgorithmsJLD2Ext
 using StatefulAlgorithms, JLD2
 import StatefulAlgorithms: savecontext, loadcontext, contextdata
 
-savecontext(p::Process, filename::AbstractString) = savecontext(getcontext(p), filename)
+savecontext(p::Process, filename::AbstractString) = savecontext(StatefulAlgorithms.context(p), filename)
 savecontext(context::StatefulAlgorithms.ProcessContext, filename::AbstractString) =
     jldsave(filename; context = contextdata(context))
 

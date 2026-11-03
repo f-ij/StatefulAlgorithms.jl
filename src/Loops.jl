@@ -1,5 +1,3 @@
-const start_finished = Ref(false)
-
 """
     finalizer!(func, persistent_context, runtime_context, session, lifetime)
 

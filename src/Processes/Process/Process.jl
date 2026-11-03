@@ -7,7 +7,7 @@ process (Lifecycle.jl), its status and progress (Status.jl), the list of live pr
 (Interface.jl, Hooks.jl, Construction.jl, Context.jl).
 =#
 
-export Process, getallocator, getnewallocator, getcontext, getticks
+export Process, getallocator, getnewallocator, getticks
 
 
 mutable struct Process{F,C} <: AbstractProcess
@@ -31,30 +31,6 @@ mutable struct Process{F,C} <: AbstractProcess
     session::InteractiveSession{C}
 end
 
-@inline function _process_constructor_lifetime(repeats, lifetime, repeat)
-    if !isnothing(repeat)
-        isnothing(repeats) || error("Pass either `repeats = ...` or `repeat = ...`, not both.")
-        repeats = repeat
-    end
-
-    if !isnothing(repeats)
-        isnothing(lifetime) || error("Pass either `repeats = ...` or `lifetime = ...`, not both.")
-        if repeats isa AbstractFloat && isinf(repeats)
-            return Indefinite()
-        else
-            return repeats
-        end
-    end
-
-    if isnothing(lifetime)
-        return nothing
-    elseif lifetime isa Lifetime
-        return lifetime
-    else
-        error("Pass `repeats = ...` for repeat counts. The `lifetime` keyword is reserved for Lifetime objects.")
-    end
-end
-
 """
     Process(func, Init(...), Override(...); context, repeats, lifetime, timeout)
 
@@ -75,8 +51,7 @@ end
 
 """The plan, initialized or with the given `context`, the lifetime and the timeout a new `Process` gets."""
 function _prepare_process(algo::A, inputs_overrides::Vararg{Any,N}; context::C = nothing, repeats = nothing, lifetime = nothing, repeat = nothing, timeout = 1.0) where {A,N,C}
-    lifetime = _process_constructor_lifetime(repeats, lifetime, repeat)
-    lifetime = normalize_process_lifetime(algo, lifetime)
+    lifetime = normalize_process_lifetime(algo, normalize_lifetime_arguments(algo, nothing, lifetime, repeats, repeat))
     algo = _process_constructor_algo(algo, context, inputs_overrides, lifetime)
     prepared_context = isnothing(context) ? getpersistentcontext(algo) : context
     algo = _with_lifecycle(algo, prepared_context, getstoredinits(algo), getstoredoverrides(algo))

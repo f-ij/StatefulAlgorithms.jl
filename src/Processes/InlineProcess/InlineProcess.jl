@@ -25,17 +25,6 @@ mutable struct InlineProcess{TD,ContextType, Lt} <: AbstractProcess
     const session::InlineSession
 end
 
-@inline function _inline_process_lifetime(func, repeats, lifetime)
-    if !isnothing(repeats)
-        isnothing(lifetime) || error("Pass either `repeats` or `lifetime` to `InlineProcess`, not both.")
-        return normalize_process_lifetime(func, repeats)
-    elseif isnothing(lifetime)
-        return normalize_process_lifetime(func, 1)
-    else
-        return normalize_process_lifetime(func, lifetime)
-    end
-end
-
 """
     InlineProcess(func, Init(...), Override(...); repeats, lifetime, context)
 
@@ -57,8 +46,8 @@ end
 
 """The plan, initialized or with the given `context`, its context and the lifetime a new `InlineProcess` gets."""
 @inline function _prepare_inline_process(algo, inputs_overrides...; repeats=nothing, lifetime=nothing, context=nothing)
-    lifetime = _inline_process_lifetime(algo, repeats, lifetime)
-    lifetime = normalize_process_lifetime(algo, lifetime)
+    given = normalize_lifetime_arguments(algo, nothing, lifetime, repeats, nothing)
+    lifetime = isnothing(given) ? Repeat(1) : given
     algo = isnothing(context) ? init(algo, inputs_overrides...; lifetime) : _with_lifecycle(resolve(algo), context, (), ())
     return algo, getpersistentcontext(algo), lifetime
 end
@@ -110,14 +99,16 @@ default call into the loop (`run_session_loop`) is compiled once. As a `Val`, th
     algo = getalgo(p)
     _set_inline_run_context!(p, context)
     runtime_inputs = _inline_runtime_inputs(algo, inputs_overrides, (; kwargs...))
-    run_lifetime = _inline_process_lifetime(algo, repeats, isnothing(lifetime) ? StatefulAlgorithms.lifetime(p) : lifetime)
+    given = normalize_lifetime_arguments(algo, nothing, lifetime, repeats, nothing)
+    run_lifetime = isnothing(given) ? StatefulAlgorithms.lifetime(p) : given
     return @inline _run_inline!(p, run_lifetime, runtime_inputs, inlined)
 end
 
 @inline function run_nogen(p::InlineProcess, inputs_overrides...; context = nothing, repeats=nothing, lifetime=nothing, kwargs...)
     algo = getalgo(p)
     _set_inline_run_context!(p, context)
-    run_lifetime = _inline_process_lifetime(algo, repeats, isnothing(lifetime) ? StatefulAlgorithms.lifetime(p) : lifetime)
+    given = normalize_lifetime_arguments(algo, nothing, lifetime, repeats, nothing)
+    run_lifetime = isnothing(given) ? StatefulAlgorithms.lifetime(p) : given
     runtime_inputs = _inline_runtime_inputs(algo, inputs_overrides, (; kwargs...))
     return @inline _run_inline!(p, run_lifetime, runtime_inputs, Val(false))
 end

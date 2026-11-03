@@ -1,6 +1,6 @@
 #=
 What every process constructor shares: the plan a function becomes (`normalize_process_algo`), the lifetime a
-`repeats`/`lifetime` argument becomes (`normalize_process_lifetime`), and the inputs and overrides given to a
+`repeats`/`lifetime` argument becomes (`normalize_lifetime_arguments`, `normalize_process_lifetime`), and the inputs and overrides given to a
 constructor resolved against the plan's registry (`resolve_process_inputs_overrides`).
 =#
 
@@ -21,6 +21,25 @@ end
 @inline normalize_process_lifetime(func, lifetime::LT) where {LT<:Lifetime} = lifetime
 normalize_process_lifetime(func, lifetime) =
     construction_error("Unsupported process lifetime `", lifetime, "` for `", func, "`.")
+
+"""
+    normalize_lifetime_arguments(algo, positional, lifetime, repeats, repeat) -> Union{Nothing, Lifetime}
+
+The lifetime the lifetime arguments of a process call give: a positional lifetime (`run(p, lt)`) or the `lifetime`
+keyword, which take a `Lifetime` (a number there is an error), or a repeat count (`repeats`, `repeat`; `Inf` is
+`Indefinite()`). At most one may be given. `nothing` when none is, so the caller picks its default. Used by the `Process` and `InlineProcess` constructors and runs, and by the
+manager's launches.
+"""
+@inline function normalize_lifetime_arguments(algo::A, positional::P, lifetime::L, repeats::R, repeat::RR) where {A, P, L, R, RR}
+    count(!isnothing, (positional, lifetime, repeats, repeat)) > 1 &&
+        throw(ArgumentError("Pass only one of a positional lifetime, `lifetime`, `repeats` or `repeat`."))
+    (positional isa Union{Nothing, Lifetime} && lifetime isa Union{Nothing, Lifetime}) ||
+        throw(ArgumentError("`lifetime` takes a `Lifetime` (`Repeat(n)`, `Until(...)`, ...); pass a repeat count as `repeats = n`."))
+    value = something(positional, lifetime, repeats, repeat, Some(nothing))
+    isnothing(value) && return nothing
+    value isa AbstractFloat && isinf(value) && return Indefinite()
+    return normalize_process_lifetime(algo, value)
+end
 
 @inline instantiate_process_algo(func::F) where {F<:LoopSpec} = func
 @inline instantiate_process_algo(func::Type{F}) where {F<:LoopSpec} = func()

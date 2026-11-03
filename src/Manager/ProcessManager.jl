@@ -256,25 +256,7 @@ Extract a per-run process lifetime from manager launch keyword arguments.
 `lifetime`, `repeats`, and `repeat` are launch controls, not runtime inputs.
 """
 function _manager_launch_lifetime(worker::P, kwargs::K) where {P<:Process, K<:NamedTuple}
-    lifetime_value = get(kwargs, :lifetime, nothing)
-    repeats_value = get(kwargs, :repeats, nothing)
-    repeat_value = get(kwargs, :repeat, nothing)
-    has_lifetime = !isnothing(lifetime_value)
-    has_repeats = !isnothing(repeats_value)
-    has_repeat = !isnothing(repeat_value)
-    has_repeats && has_repeat && throw(ArgumentError("Pass either `repeats` or `repeat`, not both."))
-    has_lifetime && (has_repeats || has_repeat) && throw(ArgumentError("Pass either `lifetime` or `repeats`/`repeat`, not both."))
-
-    raw_lifetime = if has_lifetime
-        lifetime_value
-    elseif has_repeats
-        repeats_value
-    elseif has_repeat
-        repeat_value
-    else
-        nothing
-    end
-    return isnothing(raw_lifetime) ? nothing : normalize_process_lifetime(getalgo(worker), raw_lifetime)
+    return normalize_lifetime_arguments(getalgo(worker), nothing, get(kwargs, :lifetime, nothing), get(kwargs, :repeats, nothing), get(kwargs, :repeat, nothing))
 end
 
 """

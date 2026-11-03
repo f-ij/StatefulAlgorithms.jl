@@ -66,8 +66,8 @@ From a process:
 ctx = context(p)
 ```
 
-`context(p)` and `getcontext(p)` both return the process's current stored
-context. `getcontext(p, key)` is shorthand for indexing that context by `key`.
+`context(p)` returns the process's current stored context; index it by `key` with
+`context(p)[key]`.
 
 From a context, index by:
 

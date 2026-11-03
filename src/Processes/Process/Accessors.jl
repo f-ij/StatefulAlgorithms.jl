@@ -3,7 +3,9 @@ Getters and setters of `Process`: its session's flags and counters, its plan and
 processes linked to it.
 =#
 
-@setterGetter Process lock session
+"""The lifetime later runs of `p` get when `run` is given none."""
+@inline lifetime(p::P) where {P<:Process} = getfield(p, :lifetime)
+
 """
     getloopcursor(p::Process)
 
@@ -39,12 +41,6 @@ The runtime context a paused run of `p` keeps (its inputs and declared locals), 
 Not exported: what the user works with is the state context, `context(p)`.
 """
 getruntimecontext(p::Process) = p.runtime_context
-
-function getcontext(p::Process)
-    return context(p)
-end
-
-getcontext(p::Process, context) = getcontext(p)[context]
 
 runtimelisteners(p::Process) = p.rls
 

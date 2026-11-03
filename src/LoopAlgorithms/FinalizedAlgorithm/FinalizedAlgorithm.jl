@@ -142,6 +142,29 @@ function Base.summary(io::IO, fa::FinalizedAlgorithm)
 end
 
 ##########################################
+########## Its inner algorithm's #########
+##########################################
+
+# What a `FinalizedAlgorithm` answers with its inner algorithm's answer: its plan, namespaces, key source, loop
+# cursor, declared locals and states.
+@inline getplan(fa::FinalizedAlgorithm) = getplan(inneralgorithm(fa))
+@inline getplan(::Type{FA}) where {LA, FA<:FinalizedAlgorithm{LA}} = getplan(LA)
+
+@inline _namespace_tuple(loop::FinalizedAlgorithm) = _namespace_tuple(inneralgorithm(loop))
+@inline _namespace_tuple(::Type{FA}) where {LA,FA<:FinalizedAlgorithm{LA}} = _namespace_tuple(LA)
+
+@inline _key_source(loop::FinalizedAlgorithm) = inneralgorithm(loop)
+@inline _key_source(::Type{FA}) where {LA,FA<:FinalizedAlgorithm{LA}} = LA
+
+"""Build a loop cursor from a finalized wrapper by using its inner loop."""
+@inline loop_cursor(fa::FinalizedAlgorithm, pausable::Val{Pausable} = Val(false)) where {Pausable} =
+    loop_cursor(inneralgorithm(fa), pausable)
+
+@inline collect_tree_locals(fa::FinalizedAlgorithm) = collect_tree_locals(inneralgorithm(fa))
+
+states(fa::FinalizedAlgorithm) = states(inneralgorithm(fa))
+
+##########################################
 ########## Hook extensions ###############
 ##########################################
 # The result of a run is its final function applied to the context after cleanup (LoopAlgorithms/Hooks.jl).

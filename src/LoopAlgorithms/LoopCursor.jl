@@ -19,9 +19,6 @@ export AbstractLoopCursor, NoLoopCursor, loop_cursor
 @inline loop_cursor(la::LoopAlgorithm, pausable::Val{Pausable} = Val(false)) where {Pausable} =
     loop_cursor(getplan(la), pausable)
 
-"""Build a loop cursor from a finalized wrapper by using its inner loop."""
-@inline loop_cursor(fa::FinalizedAlgorithm, pausable::Val{Pausable} = Val(false)) where {Pausable} =
-    loop_cursor(inneralgorithm(fa), pausable)
 
 """Build a per-run loop cursor for a composite plan.
 

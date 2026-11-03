@@ -16,7 +16,7 @@ end
 
 function cleanup(p::AbstractProcess)
     lifetime = tasklifetime(p)
-    returncontext = cleanup(getalgo(p), (;process = p, lifetime, getcontext(p)...))
+    returncontext = cleanup(getalgo(p), (;process = p, lifetime, context(p)...))
     return deletekeys(returncontext, :process, :lifetime)
 end
 

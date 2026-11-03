@@ -11,9 +11,6 @@ setloopidx!(p::AbstractProcess, value) = setloopidx!(getsession(p), value)
 reset_loopidx!(p::AbstractProcess) = reset_loopidx!(getsession(p))
 
 loopint(p::AbstractProcess) = loopint(getsession(p))
-getlidx(p::AbstractProcess) = loopint(p)
-
-export getlidx
 
 """How many repeats `p` runs: those of its lifetime (`Inf` for an indefinite one)."""
 repeats(p::AbstractProcess) = repeats(lifetime(p))

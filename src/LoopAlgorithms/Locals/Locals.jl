@@ -93,7 +93,6 @@ memory for all of them is allocated in `_declared_locals` when a run starts.
     return :(NamedTuple{$(Tuple(names))}(($(values...),)))
 end
 @inline collect_tree_locals(la::LoopAlgorithm) = collect_tree_locals(getplan(la))
-@inline collect_tree_locals(fa::FinalizedAlgorithm) = collect_tree_locals(inneralgorithm(fa))
 @inline collect_tree_locals(::T) where {T} = (;)
 
 ############################################################################################

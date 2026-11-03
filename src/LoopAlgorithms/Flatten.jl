@@ -62,7 +62,6 @@ state used by several blocks appears once, under the namespace it has in the con
 Names are given by `resolve`, so a plan has to be resolved first: `states(resolve(plan))`.
 """
 states(la::LoopAlgorithm) = _registry_states(getregistry(la))
-states(fa::FinalizedAlgorithm) = states(inneralgorithm(fa))
 states(::LoopSpec) = error("States are named when the plan is resolved; use `states(resolve(plan))`.")
 
 """The states among the algorithms of `reg` (handles wrapping an `AlgoState`), as namespace => state."""

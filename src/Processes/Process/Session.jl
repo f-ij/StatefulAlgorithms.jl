@@ -51,7 +51,6 @@ repeats out one after another (perf/README.md shows the cost).
 @inline reset_times!(s::InteractiveSession) = (s.starttime = nothing; s.endtime = nothing)
 
 @inline function before_while(s::InteractiveSession)
-    start_finished[] = true
     s.threadid = Threads.threadid()
     @inline set_starttime!(s)
 end

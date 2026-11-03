@@ -40,8 +40,6 @@ end
 @inline _namespace_tuple(::Type{<:Routine{FT,S,NS}}) where {FT,S,NS} = NS
 @inline _namespace_tuple(loop::LoopAlgorithm) = _namespace_tuple(getplan(loop))
 @inline _namespace_tuple(::Type{<:LoopAlgorithm{Plan}}) where {Plan} = _namespace_tuple(Plan)
-@inline _namespace_tuple(loop::FinalizedAlgorithm) = _namespace_tuple(inneralgorithm(loop))
-@inline _namespace_tuple(::Type{FA}) where {LA,FA<:FinalizedAlgorithm{LA}} = _namespace_tuple(LA)
 @inline _namespace_tuple(::Any) = nothing
 @inline _namespace_tuple(::Type) = nothing
 
@@ -87,8 +85,6 @@ function _append_keys!(names::Vector{Symbol}, ::Type{LA}) where {LA<:LoopSpec}
     return names
 end
 
-@inline _key_source(loop::FinalizedAlgorithm) = inneralgorithm(loop)
-@inline _key_source(::Type{FA}) where {LA,FA<:FinalizedAlgorithm{LA}} = LA
 @inline _key_source(loop) = loop
 
 """Return all named children and states visible from a loop algorithm tree."""

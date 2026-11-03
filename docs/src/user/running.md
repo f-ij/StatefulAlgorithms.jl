@@ -80,8 +80,7 @@ In practice:
 
 - use `wait(p)` when you just want to block until completion,
 - use `fetch(p)` when you want the task's return value,
-- use either `context(p)` or `getcontext(p)` for the current stored process
-  context; `getcontext(p, key)` additionally indexes it by `key`.
+- use `context(p)` for the current stored process context, and `context(p)[key]` to index it by `key`.
 
 For an ordinary process, the task result is the final context: the cleaned
 persistent context with the runtime values still there at the end of the run, the
@@ -111,8 +110,8 @@ ip = InlineProcess(algo, Init(...), Override(...); repeats = 10_000)
 run(ip)
 ```
 
-`InlineProcess` also accepts `lifetime = 10_000` and converts it to a repeat
-count. For `Process`, use `repeats = 10_000` or `lifetime = Repeat(10_000)`.
+Both process types take a repeat count as `repeats = 10_000` and a lifetime as
+`lifetime = Repeat(10_000)`; a number given as `lifetime` is an error.
 Unlike `Process`, `InlineProcess` stores a context that can be absorbed back
 into an algorithm, so the run's runtime values (inputs and declared locals) are
 stripped after the loop. `run(ip)` returns the same final context as `fetch(p)`

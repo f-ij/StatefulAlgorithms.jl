@@ -5,28 +5,6 @@ What a user calls on a `Process`: `run`, `wait`, `fetch`, `pause`, `close`, `res
 
 export start, restart, quit, pause, syncclose, reinit, closeprocess
 
-"""
-Resolve the optional lifetime controls for one `Process` run.
-
-`Process` construction may intentionally store an indefinite lifetime. These
-per-run controls let callers execute the same prepared process for a finite or
-otherwise different lifetime without rebuilding its initialized context.
-"""
-@inline function _process_run_lifetime(algo::A, run_lifetime::RL, repeats::R, keyword_lifetime::KL) where {A<:AbstractLoopAlgorithm, RL, R, KL}
-    if !isnothing(repeats)
-        isnothing(run_lifetime) || error("Pass either a positional lifetime or `repeats`, not both.")
-        isnothing(keyword_lifetime) || error("Pass either `repeats` or `lifetime`, not both.")
-        return normalize_process_lifetime(algo, repeats)
-    elseif !isnothing(keyword_lifetime)
-        isnothing(run_lifetime) || error("Pass either a positional lifetime or `lifetime`, not both.")
-        return normalize_process_lifetime(algo, keyword_lifetime)
-    elseif isnothing(run_lifetime)
-        return nothing
-    else
-        return normalize_process_lifetime(algo, run_lifetime)
-    end
-end
-
 function Base.run(p::Process, run_lifetime = nothing, inputs_and_overrides...; repeats = nothing, lifetime = nothing, kwargs...)
     @assert isidle(p) "Process is already in use"
 
@@ -40,15 +18,13 @@ function Base.run(p::Process, run_lifetime = nothing, inputs_and_overrides...; r
     end
     isempty(inputs_and_overrides) || error("Process run accepts runtime inputs as keywords only. Reinitialize the Process context before running to apply init/override specs.")
 
-    lt = _process_run_lifetime(getalgo(p), run_lifetime, repeats, lifetime)
+    lt = normalize_lifetime_arguments(getalgo(p), run_lifetime, lifetime, repeats, nothing)
     if !isnothing(lt)
         p.lifetime = lt
     end
 
     makeloop!(p, (; kwargs...))
 end
-
-run!(p::Process; kwargs...) = run(p; kwargs...)
 
 """
 Wait for a process to finish
