@@ -26,7 +26,7 @@ include("Redirect/Materialization.jl")
 include("Redirect/Checking.jl")
 include("Redirect/HookExtensions.jl")
 include("RuntimeInputs.jl")
-include("HeadlessRuns.jl")       # init, partialinit and run on a plan, with no process around it
+include("DirectRuns.jl")           # init, partialinit and run on a plan, with no process around it
 include("Step.jl")
 include("ProcessAlgorithmStep.jl")
 include("Fusing/Fusing.jl")

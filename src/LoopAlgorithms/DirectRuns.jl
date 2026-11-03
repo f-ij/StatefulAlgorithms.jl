@@ -1,4 +1,4 @@
-# Headless runs: a plan run from the user's own code, with no process around it (mode 1, "Modes of operation" in
+# Direct runs: a plan run from the user's own code, with no process around it (mode 1, "Modes of operation" in
 # TODO.md). `init(la, Init(...), Override(...))` builds the plan's state context, `partialinit` re-initializes only the
 # named targets, and `run(la; inputs...)` runs the plan once on its context. Today all three store the context and the
 # Init/Override specs in the returned `LoopAlgorithm`; the Init/Override merging below exists to replay those stored
