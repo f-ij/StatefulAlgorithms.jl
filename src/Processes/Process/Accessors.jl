@@ -1,6 +1,6 @@
 #=
-Getters and setters of `Process`: its session's flags and counters, its plan and context, its times, its lock and the
-processes linked to it.
+Getters and setters of `Process`: its lifetime, its session's flags and counters, its plan and context, its listeners.
+Operations that are not getters or setters (run time, locking, linking) live in Tools.jl.
 =#
 
 """The lifetime later runs of `p` get when `run` is given none."""
@@ -19,6 +19,7 @@ shouldrun(p::Process) = shouldrun(getsession(p))
 """Set whether the process should run."""
 shouldrun(p::Process, val) = @atomic getsession(p).shouldrun = val
 
+export getticks
 @inline getticks(p::Process) = getsession(p).tickidx
 @inline reset_ticks!(p::Process) = (getsession(p).tickidx = UInt(1))
 
@@ -52,34 +53,3 @@ different loopfunction can be passed to the process through overrides
 function getloopfunc(p::Process)
     loop
 end
-
-function runtime(p::Process)
-    @assert !isnothing(getsession(p).starttime) "Process has not started"
-    return runtime_ns(p) / 1e9
-end
-
-function runtime_ns(p::Process)
-    session = getsession(p)
-    @assert !isnothing(session.starttime) "Process has not started"
-    timens = isnothing(session.endtime) ? time_ns() - session.starttime : session.endtime - session.starttime
-    return Int(timens)
-end
-export runtime_ns, runtime
-
-# Exact time the process stopped in hh:mm:ss
-function stop_time(p::Process)
-    if isdone(p)
-        return Dates.format(Dates.DateTime(getsession(p).endtime), "HH:MM:SS")
-    else
-        return nothing
-    end
-end
-
-@inline lock(p::Process) = lock(p.lock)
-@inline lock(f, p::Process) = lock(f, p.lock)
-@inline unlock(p::Process) =  unlock(p.lock)
-
-### LINKING
-
-link_process!(p1::Process, p2::Process) = push!(p1.linked_processes, p2)
-unlink_process!(p1::Process, p2::Process) = filter!(x -> x != p2, p1.linked_processes)

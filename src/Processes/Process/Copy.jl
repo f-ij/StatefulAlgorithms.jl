@@ -1,6 +1,6 @@
 #=
 Copying a `Process`: its stored `Init`/`Override` specs (`copyinputs`, `copyoverrides`) and a new process from its
-initialized plan, or from a plan (`copyprocess`).
+initialized plan, or from a plan (`copyprocess`); making a process run another's plan and context (`createfrom!`).
 =#
 
 export copyprocess
@@ -21,3 +21,13 @@ end
 
 copyprocess(la::ALA, specs...; lifetime = Indefinite(), timeout = 1.0, context = nothing, kwargs...) where {ALA<:AbstractLoopAlgorithm} =
     Process(isnothing(context) ? init(la, specs...) : _with_lifecycle(resolve(la), context, copyinputs(la), copyoverrides(la)); lifetime, timeout)
+
+"""Make `p1` run `p2`'s plan, state context and timeout, from the start."""
+function createfrom!(p1::Process, p2::Process)
+    p1.algo = p2.algo
+    _sync_state_context!(p1, getcontext(p2))
+    p1.runtime_context = nothing
+    getsession(p1).loop_cursor = nothing
+    p1.timeout = p2.timeout
+    reset!(p1)
+end
