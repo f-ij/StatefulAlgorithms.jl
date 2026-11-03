@@ -72,6 +72,10 @@ getinterval(::Type{<:RunIf{V, F, I}}) where {V, F, I} = getinterval(I)
 @inline schedule_interval(interval::I) where {I<:Interval} = interval
 @inline schedule_interval(runif::R) where {R<:RunIf} = getfield(runif, :interval)
 
+"""How many ticks of its composite a schedule entry skips at the start (its `Offset`), from the type alone."""
+getoffset(::Type{<:Interval{I, First, Offset}}) where {I, First, Offset} = Offset
+getoffset(::Type{<:RunIf{V, F, I}}) where {V, F, I} = getoffset(I)
+
 ##########################################
 ############ Tick arithmetic #############
 ##########################################
@@ -136,6 +140,21 @@ end
 
 @inline divides(num::N, runif::R) where {N<:Integer, R<:RunIf} = @inline divides(num, schedule_interval(runif))
 
+"""
+    counter_cycle(EntryTypes::Tuple) -> (last, restart)
+
+How the tick counter of a composite with schedule entries of types `EntryTypes` cycles: `1, 2, ..., last`, then back
+to `restart`, with `restart = max offset + 1` and `last = max offset + lcm of the intervals`. Restarting past every
+offset makes an offset skip ticks once, at the start of a run; a period of the lcm keeps every child on its ticks (the
+lcm is a multiple of each interval, so `(tick - First) % I` is the same after the wrap). Without offsets the counter
+cycles `1:lcm`. Used by `inc!` (CompositeAlgorithms.jl, Packaging/Step.jl).
+"""
+function counter_cycle(entry_types::T) where {T<:Tuple}
+    offset = maximum(getoffset, entry_types; init = 0)
+    period = lcm(map(getinterval, entry_types)...)
+    return offset + period, offset + 1
+end
+
 Base.length(i::I) where {I<:Interval} = 1
 
 ##########################################
@@ -146,17 +165,21 @@ Base.length(i::I) where {I<:Interval} = 1
     child * parent
 
 The schedule of a child with schedule `child` inside a nested composite that runs on `parent`, in ticks of the
-parent's composite: what the child gets when the nested composite is flattened into its parent. The nested composite
-runs on ticks `p, p+P, ...` (`P` the parent's interval, `p` its first tick), and its `k`-th run is the child's tick
-`k`; a child running every `C` of its ticks from tick `c` runs every `C*P` parent ticks from tick `p + (c-1)*P`. A
-number `n` is `Interval(n)`.
+parent's composite: what the child gets when the nested composite is flattened into its parent. A number `n` is
+`Interval(n)`.
 
-The offset is added as before (`Offset1*I2 + Offset2*I1`), see the TODO in TODO.md: offsets do not work with the
-wrapping composite counter.
+The nested composite runs on the parent ticks `t0, t0+P, ...` (`P` the parent's interval; `t0` its first tick after
+the parent's offset), and its `k`-th run is the child's tick `k`. A child running every `C` of its ticks from tick
+`c`, skipping its first `Oc`, so runs every `C*P` parent ticks from tick `t0 + (c-1)*P`, skipping the parent ticks
+before `t0 + Oc*P`. An offset that skips no tick is dropped, so the result has one type per schedule.
 """
 function Base.:(*)(child::Interval{I1, First1, Offset1}, parent::Interval{I2, First2, Offset2}) where {I1, First1, Offset1, I2, First2, Offset2}
-    first = first_tick(parent) + (first_tick(child) - 1) * I2
-    Interval(I1*I2, first, Offset1*I2 + Offset2*I1)
+    p = first_tick(parent)
+    t0 = p > Offset2 ? p : p + I2 * cld(Offset2 - p + 1, I2)
+    period = I1 * I2
+    first = mod1(t0 + (first_tick(child) - 1) * I2, period)
+    offset = t0 + Offset1 * I2 - 1
+    Interval(period, first, offset < first ? 0 : offset)
 end
 Base.:(*)(child::I, num::N) where {I<:Interval, N<:Real} = child * Interval(num)
 Base.:(*)(num::N, parent::I) where {N<:Real, I<:Interval} = Interval(num) * parent

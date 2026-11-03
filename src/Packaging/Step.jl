@@ -43,8 +43,8 @@ Base.@constprop :aggressive @inline function cleanup(pkg::Package, context::C) w
     return ret
 end
 
+# The counter cycles as `counter_cycle` gives (Interval.jl), with the compare/select wrap of the core `inc!`.
 @inline @generated function inc!(pkg::Package)
-    _lcm = lcm(intervals(pkg)...)
-    # TODO: Use the compare/select wrap from the core inc! (LoopAlgorithms/CompositeAlgorithms.jl); mod1 costs ~3 ns per tick.
-    return :(getinc(pkg)[] = mod1(getinc(pkg)[] + 1, $_lcm))
+    last, restart = counter_cycle(map(typeof, intervals(pkg)))
+    return :(getinc(pkg)[] = ifelse(getinc(pkg)[] >= $last, $restart, getinc(pkg)[] + 1))
 end

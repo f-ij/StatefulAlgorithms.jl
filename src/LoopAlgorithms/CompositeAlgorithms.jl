@@ -90,17 +90,17 @@ track_algo(ca::CompositeAlgorithm) = hasflag(ca, :trackalgo)
 """
 Increment the stepidx for the composite algorithm.
 
-The counter cycles through `1:lcm`. A compare/select wrap keeps the loop-carried
-counter off the division path that `mod1` would put on every tick; with an lcm
-of 1 the counter never changes.
+The counter cycles as `counter_cycle` (Interval.jl) gives: `1:lcm` without offsets, and past the largest offset
+after the first wrap. A compare/select wrap keeps the loop-carried counter off the division path that `mod1` would
+put on every tick; with a cycle of one tick the counter never changes.
 """
-@inline @generated function inc!(cursor::CompositeLoopCursor, ca::CA) where CA <: CompositeAlgorithm
-    _lcm = lcm(interval_numbers(ca)...)
-    _lcm == 1 && return :(nothing)
+@inline @generated function inc!(cursor::CompositeLoopCursor, ca::CompositeAlgorithm{T, I}) where {T, I}
+    last, restart = counter_cycle(fieldtypes(I))
+    last == 1 && return :(nothing)
     return quote
         cainc = getinc(cursor)
         i = cainc[]
-        cainc[] = ifelse(i >= $_lcm, 1, i + 1)
+        cainc[] = ifelse(i >= $last, $restart, i + 1)
     end
 end
 
