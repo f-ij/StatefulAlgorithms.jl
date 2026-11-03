@@ -226,7 +226,6 @@ function _context_exchanges(context::ProcessContext)
 end
 
 @inline isinteractive(context::ProcessContext) = !isempty(_context_exchanges(context))
-@inline isinteractive(process::AbstractProcess) = isinteractive(context(process))
 
 @inline function _context_exchange_due!(store::ContextExchangeStore)
     period = getfield(store, :period)
@@ -345,9 +344,6 @@ function interact!(context::ProcessContext, pair::Pair{Symbol, <:Any}; exchange:
     haspending[] = true
     return context
 end
-
-interact!(process::AbstractProcess, pair::Pair{Symbol, <:Any}; exchange::Union{Nothing, Symbol} = nothing) =
-    interact!(context(process), pair; exchange)
 
 """
 Ref-like view of one exchange variable.

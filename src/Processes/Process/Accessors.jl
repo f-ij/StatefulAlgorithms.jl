@@ -46,7 +46,6 @@ end
 
 getcontext(p::Process, context) = getcontext(p)[context]
 
-runtimelisteners(::Any) = nothing
 runtimelisteners(p::Process) = p.rls
 
 isthreaded(p::Process) = true

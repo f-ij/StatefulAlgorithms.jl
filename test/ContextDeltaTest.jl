@@ -43,7 +43,7 @@ function written_fields_of(plan)
     step_plan = StatefulAlgorithms.getplan(func)
     carried = StatefulAlgorithms.create_carried(
         step_plan,
-        StatefulAlgorithms._loop_cursor(session, step_plan, resume),
+        StatefulAlgorithms.starting_cursor(session, step_plan, resume),
         lc,
         StatefulAlgorithms._root_wiring_view(func, step_plan),
         StatefulAlgorithms.Namespace{nothing}(),

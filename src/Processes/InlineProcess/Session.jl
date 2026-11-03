@@ -12,6 +12,10 @@ end
 
 InlineSession() = InlineSession(UInt(1))
 
+##########################################
+########## Hook extensions ###############
+##########################################
+
 # The counter starts at 1 for every run, set in the loop's own function: LLVM then knows its value and that its memory is
 # written before the loop, so it keeps the counter in a register (written once, at the end).
 @inline before_while(s::InlineSession) = reset_loopidx!(s)

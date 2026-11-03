@@ -52,20 +52,4 @@ function initcontext(algo::F, c::ProcessContext = ProcessContext(algo), override
     return @inline apply_redirect_specs(interactive_context, algo)
 end
 
-function makecontext(p::AbstractProcess, inputs_overrides...; lifetime=nothing)
-    lt = isnothing(lifetime) ? StatefulAlgorithms.lifetime(p) : lifetime
-    context(init(getalgo(p), inputs_overrides...; lifetime = lt))
-end
-"""Build a fresh context for a process by replaying lifecycle init on its LA."""
-function makecontext!(p::AbstractProcess, inputs_overrides...; lifetime=nothing)
-    c = makecontext(p, inputs_overrides...; lifetime)
-    context(p,c)
-end
-
-function cleanup(p::AbstractProcess)
-    lifetime = tasklifetime(p)
-    returncontext = cleanup(getalgo(p), (;process = p, lifetime, getcontext(p)...))
-    return deletekeys(returncontext, :process, :lifetime)
-end
-
 export preparedata!, cleanup

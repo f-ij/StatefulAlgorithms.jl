@@ -130,7 +130,7 @@ the persistent context's values go into the process's state context (`_sync_stat
 state context. Otherwise the persistent context's values go into the state context and the cursor is dropped.
 """
 function _finish_run!(p::Process, session::InteractiveSession, persistent_context, returnvalue)
-    if _loop_ispaused(session)
+    if loop_ispaused(session)
         _sync_state_context!(p, getpersistent(returnvalue))
         p.runtime_context = getruntime(returnvalue)
         return context(p)

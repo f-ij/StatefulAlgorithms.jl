@@ -3,7 +3,7 @@ What a user calls on a `Process`: `run`, `wait`, `fetch`, `pause`, `close`, `res
 (TODO.md, "Rename `src/ProcessInteraction.jl`": still mixes in loop internals and dead code).
 =#
 
-export start, restart, quit, pause, syncclose, reinit
+export start, restart, quit, pause, syncclose, reinit, closeprocess
 
 """
 Resolve the optional lifetime controls for one `Process` run.
@@ -45,11 +45,6 @@ function Base.run(p::Process, run_lifetime = nothing, inputs_and_overrides...; r
         p.lifetime = lt
     end
 
-    makeloop!(p, (; kwargs...))
-end
-
-function Base.run(p::AP, lifetime = nothing, inputs_and_overrides...; kwargs...) where AP <: AbstractProcess
-    @assert isidle(p) "Process is already in use"
     makeloop!(p, (; kwargs...))
 end
 
@@ -229,11 +224,19 @@ function quitall()
 end
 export quitall
 
-function timedwait(p, timeout = wait_timeout)
+function timedwait(p::Process, timeout = wait_timeout)
     t = time()
     
     while !isdone(p) && time() - t < timeout
     end
 
     return isdone(p)
+end
+
+# TODO: broken, `getglobals` has no method for a process; check whether it is used and what it should close.
+function closeprocess(c::AbstractProcess)
+    globals = getglobals(c).process
+    @assert haskey(globals, :process) "Process context does not have a :process key, cannot close process"
+    proc = globals.process
+    close(proc)
 end

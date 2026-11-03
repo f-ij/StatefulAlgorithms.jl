@@ -17,4 +17,3 @@ Base.:(/)(r::RepeatLifetime, n) = repeats(r) / n
 repeats(r::RepeatLifetime) = r.repeats
 
 repeats(::IndefiniteLifetime) = Inf
-repeats(p::AbstractProcess) = repeats(lifetime(p))

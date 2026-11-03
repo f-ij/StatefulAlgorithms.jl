@@ -51,11 +51,11 @@ Run a single function in a loop indefinitely.
     step_plan = @inline getplan(func)
     step_wiring = @inline _root_wiring_view(func, step_plan)
     resume = Resuming{isresuming}()
-    step_cursor = @inline _loop_cursor(session, step_plan, resume)
+    step_cursor = @inline starting_cursor(session, step_plan, resume)
     persistent_context = @inline getpersistent(lc)
     runtime_context = @inline getruntime(lc)
 
-    isresuming && @inline _clear_pause!(session)
+    isresuming && @inline clear_pause!(session)
 
     # Carry only the fields the steps write, not the whole context: fields left unchanged would otherwise be copied every
     # step (see src/Context/Carried/Carry.jl).
@@ -63,8 +63,8 @@ Run a single function in a loop indefinitely.
     carried, runtime_context = _run_steps(carried, runtime_context, step_plan, step_cursor, persistent_context, step_wiring, session, lifetime)
     persistent_context = @inline with_carried(persistent_context, carried)
 
-    if @inline _loop_ispaused(session)
-        @inline _keep_loop_cursor!(session, step_cursor)
+    if @inline loop_ispaused(session)
+        @inline keep_loop_cursor!(session, step_cursor)
         # The run's contexts, taken apart by the process (`_finish_run!`) and combined again when it resumes.
         return @inline after_while(session, persistent_context, LoopContext(persistent_context, runtime_context))
     end
@@ -87,11 +87,11 @@ Base.@constprop :aggressive @inline function loop(session::S, algo::F, lc::LC, l
     step_plan = @inline getplan(algo)
     step_wiring = @inline _root_wiring_view(algo, step_plan)
     resume = Resuming{isresuming}()
-    step_cursor = @inline _loop_cursor(session, step_plan, resume)
+    step_cursor = @inline starting_cursor(session, step_plan, resume)
     persistent_context = @inline getpersistent(lc)
     runtime_context = @inline getruntime(lc)
 
-    isresuming && @inline _clear_pause!(session)
+    isresuming && @inline clear_pause!(session)
 
     # Carry only the fields the steps write, not the whole context: fields left unchanged would otherwise be copied every
     # step (see src/Context/Carried/Carry.jl).
@@ -99,8 +99,8 @@ Base.@constprop :aggressive @inline function loop(session::S, algo::F, lc::LC, l
     carried, runtime_context = _repeat_steps((@inline loopidx(session)), carried, runtime_context, step_plan, step_cursor, persistent_context, step_wiring, session, lifetime)
     persistent_context = @inline with_carried(persistent_context, carried)
 
-    if @inline _loop_ispaused(session)
-        @inline _keep_loop_cursor!(session, step_cursor)
+    if @inline loop_ispaused(session)
+        @inline keep_loop_cursor!(session, step_cursor)
         # The run's contexts, taken apart by the process (`_finish_run!`) and combined again when it resumes.
         return @inline after_while(session, persistent_context, LoopContext(persistent_context, runtime_context))
     end

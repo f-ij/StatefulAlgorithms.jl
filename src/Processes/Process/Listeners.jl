@@ -1,3 +1,10 @@
+#=
+The start and close listeners of a `Process` (`RuntimeListeners`, its `rls` field) and how a listener is added and
+removed (`on`, `off`).
+TODO: broken and not called: `StartCloseListener` has a field `procAbstractProcess` where `process` was meant, `on`
+reads `process.rl` while the field is `rls`, and nothing calls `start(rl)`/`close(rl)`. Fix or delete.
+=#
+
 struct StartCloseListener{F}
     f::F
     procAbstractProcess

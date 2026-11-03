@@ -29,6 +29,10 @@ InteractiveSession{C, LT}() where {C, LT} = InteractiveSession{C, LT}(false, tru
 
 @inline shouldrun(s::InteractiveSession) = @atomic :monotonic s.shouldrun
 
+##########################################
+########## Hook extensions ###############
+##########################################
+
 """
     session_breakcondition(session::InteractiveSession) -> Bool
 
@@ -52,10 +56,10 @@ repeats out one after another (perf/README.md shows the cost).
     @inline set_starttime!(s)
 end
 
-@inline _loop_ispaused(s::InteractiveSession) = @atomic s.paused
-@inline function _loop_cursor(s::InteractiveSession{C}, plan, ::Resuming{IsResuming}) where {C, IsResuming}
+@inline loop_ispaused(s::InteractiveSession) = @atomic s.paused
+@inline function starting_cursor(s::InteractiveSession{C}, plan, ::Resuming{IsResuming}) where {C, IsResuming}
     IsResuming && return s.loop_cursor::C
     return @inline loop_cursor(plan, Val(true))
 end
-@inline _keep_loop_cursor!(s::InteractiveSession, cursor) = (s.loop_cursor = cursor; nothing)
-@inline _clear_pause!(s::InteractiveSession) = (@atomic s.paused = false; nothing)
+@inline keep_loop_cursor!(s::InteractiveSession, cursor) = (s.loop_cursor = cursor; nothing)
+@inline clear_pause!(s::InteractiveSession) = (@atomic s.paused = false; nothing)

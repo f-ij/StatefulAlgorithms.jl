@@ -1,8 +1,10 @@
 #=
 `Process`: a plan run on its own task, which the user can pause, resume and close while it runs. This file holds the
-struct and its constructors. Its session (Session.jl), getters and setters (Accessors.jl), state context (Context.jl),
-loop setup (Loop.jl), the user calls on a running process (Lifecycle.jl), its status (Status.jl), the list of live
-processes (ProcessList.jl), showing (Showing.jl) and precompiling (Precompile.jl) are in their own files.
+struct and its constructors. Its session (Session.jl), start and close listeners (Listeners.jl), getters and setters
+(Accessors.jl), state context (Context.jl), loop setup (Loop.jl), copying (Copy.jl), the user calls on a running
+process (Lifecycle.jl), its status and progress (Status.jl), the list of live processes (ProcessList.jl), showing
+(Showing.jl) and precompiling (Precompile.jl) are in their own files. What every process type shares is one folder up
+(Interface.jl, Hooks.jl, Construction.jl, Context.jl).
 =#
 
 export Process, getallocator, getnewallocator, getcontext, getticks

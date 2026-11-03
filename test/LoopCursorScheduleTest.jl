@@ -65,7 +65,7 @@ end
     wait(paused)
     @test StatefulAlgorithms.getsession(paused).loop_cursor isa StatefulAlgorithms.PausableRoutineCursor
     @test !isempty(StatefulAlgorithms.resume_idxs(StatefulAlgorithms.getsession(paused).loop_cursor))
-    resumed_cursor = @inferred StatefulAlgorithms._loop_cursor(StatefulAlgorithms.getsession(paused), StatefulAlgorithms.getplan(paused.algo), StatefulAlgorithms.Resuming{true}())
+    resumed_cursor = @inferred StatefulAlgorithms.starting_cursor(StatefulAlgorithms.getsession(paused), StatefulAlgorithms.getplan(paused.algo), StatefulAlgorithms.Resuming{true}())
     @test resumed_cursor === StatefulAlgorithms.getsession(paused).loop_cursor
     @test @inferred(StatefulAlgorithms.getloopcursor(paused)) === StatefulAlgorithms.getsession(paused).loop_cursor
     close(paused)

@@ -289,6 +289,9 @@ function _manager_process_launch_args(worker::P, kwargs::K) where {P<:Process, K
     return lifetime, runtime_kwargs
 end
 
+# TODO: check whether this is still used, and whether it should be: a second, synchronous way to run a `Process`
+# (sets the session flags and calls `prepare_for_loop`, `run_session_loop` and `_finish_run!` itself) next to
+# Processes/Process/Loop.jl.
 """
     runprocessinline!(worker; lifetime = nothing, repeats = nothing, repeat = nothing, kwargs...)
 
