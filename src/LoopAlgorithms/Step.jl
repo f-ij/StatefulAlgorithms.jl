@@ -7,7 +7,7 @@ Terms used in this file:
 - leaf: any child that is not a plan (an algorithm, a `Callable`, a threaded composite, ...). It is stepped by a call
   to its own `_step!`.
 - `lc`: the `LoopContext` variable: the persistent context, the runtime context, and the plan node whose scope the step
-  is in (see Context/ContextBundles.jl). Every generated line that steps something reads `lc` and assigns it again.
+  is in (see Context/Bundles/LoopContext.jl). Every generated line that steps something reads `lc` and assigns it again.
 - schedule: when a composite child runs (`Interval(1)` = every step, without a branch: `always_runs`, Hooks.jl;
   `@every n` = every n-th step; `RunIf` = on its interval when a condition on the context holds).
 - repeat: how often a routine child runs in one step of the routine (`Repeat(n)`, `Until(...)`, ...).

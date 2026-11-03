@@ -280,14 +280,14 @@ Read a routed runtime variable from the runtime context.
     target_variables = location_fieldname(vl)
     if isnothing(getfunc(vl)) && target_variables isa Symbol
         return quote
-            return @inline _follow_reads(sct, _assigned_value(_runtime_values(getbundle(sct), Val($(QuoteNode(target_subcontext)))), $(QuoteNode(target_variables))))
+            return @inline _follow_reads(sct, _assigned_value(runtime_values(getbundle(sct), Val($(QuoteNode(target_subcontext)))), $(QuoteNode(target_variables))))
         end
     end
 
     varnames = target_variables isa Tuple ? target_variables : (target_variables,)
     varsymbols = ntuple(i -> gensym(:runtime_var), length(varnames))
     assign_exprs = [
-        :($(varsymbols[i]) = @inline _follow_reads(sct, _assigned_value(_runtime_values(getbundle(sct), Val($(QuoteNode(target_subcontext)))), $(QuoteNode(varnames[i])))))
+        :($(varsymbols[i]) = @inline _follow_reads(sct, _assigned_value(runtime_values(getbundle(sct), Val($(QuoteNode(target_subcontext)))), $(QuoteNode(varnames[i])))))
         for i in eachindex(varnames)
     ]
     fexpr = funcexpr(vl, varsymbols...)
@@ -333,7 +333,7 @@ function _read_partition end
 
 """`subcontextname` is a runtime context partition (`_inputs`, ...): read `varname` from that partition of the runtime context."""
 @inline _read_partition(::RuntimePartition, scv::SCV, ::Val{subcontextname}, ::Val{varname}) where {SCV<:SubContextView, subcontextname, varname} =
-    @inline _follow_reads(scv, _assigned_value(_runtime_values(getbundle(scv), Val(subcontextname)), varname))
+    @inline _follow_reads(scv, _assigned_value(runtime_values(getbundle(scv), Val(subcontextname)), varname))
 
 """`subcontextname` is a namespace: read `varname` from its state, or, if its state has no `varname`, from what its algorithm returned this step (see `partition_storedproperty`)."""
 @inline _read_partition(::NamespacePartition, scv::SCV, ::Val{subcontextname}, ::Val{varname}) where {SCV<:SubContextView, subcontextname, varname} =
@@ -359,8 +359,8 @@ about (through `stored_value_at`).
             return @inline getproperty(subcontext, varname)
         end
     end
-    runtime_values = @inline _runtime_values(getbundle(scv), Val(subcontextname))
-    haskey(runtime_values, varname) && return @inline getfield(runtime_values, varname)
+    values = @inline runtime_values(getbundle(scv), Val(subcontextname))
+    haskey(values, varname) && return @inline getfield(values, varname)
     error("Variable `$subcontextname.$varname` is not available in state or runtime context.")
 end
 
@@ -371,7 +371,7 @@ If `subcontextname` is one of the runtime context's fields (`_captured_returns`,
 `_declared_locals`, `_inputs`), that is the field's contents. Otherwise `subcontextname` is a namespace, and it is what
 that namespace's algorithm returned this step besides its state (empty if nothing).
 """
-@inline function _runtime_values(runtime_context::ProcessContext, ::Val{subcontextname}) where {subcontextname}
+@inline function runtime_values(runtime_context::ProcessContext, ::Val{subcontextname}) where {subcontextname}
     subcontexts = @inline get_subcontexts(runtime_context)
     haskey(subcontexts, subcontextname) && return getdata(getproperty(subcontexts, subcontextname))
     outputs = @inline get_subcontext_returns(runtime_context)

@@ -1,17 +1,3 @@
-#=
-Context bundles: everything a step (or init) can read and write, packed into one value.
-
-During a loop there are two contexts. The persistent context holds the state of every algorithm and lives for the whole
-run. The runtime context holds values that only exist while the loop runs: inputs, declared locals and returns. A
-bundle carries both, plus whatever else the phase needs (see `LoopContext` and `InitContext`). Views are made from a
-bundle. Bundles are internal: users only ever see `ProcessContext`s.
-
-Names used everywhere: `getpersistent` / `persistent_context` for the persistent context, `getruntime` /
-`runtime_context` for the runtime context.
-=#
-
-abstract type ContextBundle end
-
 """
     LoopContext(persistent_context, runtime_context)
 
@@ -42,6 +28,7 @@ LoopContext(persistent_context::PersistentContextType, runtime_context::RuntimeC
 @inline LoopContext(persistent_context::PersistentContextType, runtime_context::RuntimeContextType, ::Type{Node}) where {PersistentContextType<:ProcessContext, RuntimeContextType<:ProcessContext, Node} =
     LoopContext{PersistentContextType, RuntimeContextType, Node}(persistent_context, runtime_context)
 
+
 """
     LoopContext(plan, context)
 
@@ -66,58 +53,29 @@ lifetimes) instead.
     return LoopContext(context, runtime)
 end
 
-"""
-    InitContext(persistent_context, algo, lifetime)
-
-What init works on. Init runs before the loop starts, so there is no runtime context yet.
-
-It holds the persistent context that init is filling in, the algorithm being prepared, and the run's lifetime. The
-lifetime is there so init can size buffers by the number of steps (`processsizehint!`).
-"""
-struct InitContext{PersistentContextType<:ProcessContext, AlgoType, LifetimeType} <: ContextBundle
-    persistent::PersistentContextType
-    algo::AlgoType
-    lifetime::LifetimeType
-end
-
-"""Returns the bundle's persistent context."""
-@inline getpersistent(bundle::ContextBundle) = getfield(bundle, :persistent)
 """Returns the bundle's runtime context. Only a `LoopContext` has one."""
 @inline getruntime(lc::LoopContext) = getfield(lc, :runtime)
-@inline getregistry(bundle::ContextBundle) = @inline getregistry(getpersistent(bundle))
-@inline init_lifetime(ic::InitContext) = getfield(ic, :lifetime)
+"""Returns the type of a `LoopContext` type's runtime context."""
+runtime_type(::Type{<:LoopContext{PersistentContextType, RuntimeContextType}}) where {PersistentContextType, RuntimeContextType} = RuntimeContextType
 
-"""Returns the `Scope` type of the plan node a bundle is in. Init is never in a node, so it gets `NoScope`."""
-bundle_scope(::Type{<:LoopContext{PersistentContextType, RuntimeContextType, Node}}) where {PersistentContextType, RuntimeContextType, Node} = node_scope(Node)
-bundle_scope(::Type{<:InitContext}) = NoScope
-
-"""
-Copies a bundle with its persistent context swapped (`withpersistent`), or both its contexts swapped
-(`withcontexts`, `LoopContext` only). The copy stays in the same scope.
-"""
-@inline withpersistent(lc::LoopContext{PersistentContextType, RuntimeContextType, Node}, persistent_context::ProcessContext) where {PersistentContextType, RuntimeContextType, Node} =
-    LoopContext(persistent_context, getruntime(lc), Node)
+"""Copies a `LoopContext` with both its contexts swapped. The copy stays in the same scope."""
 @inline withcontexts(::LoopContext{PersistentContextType, RuntimeContextType, Node}, persistent_context::ProcessContext, runtime_context::ProcessContext) where {PersistentContextType, RuntimeContextType, Node} =
     LoopContext(persistent_context, runtime_context, Node)
-@inline withpersistent(ic::InitContext, persistent_context::ProcessContext) = InitContext(persistent_context, getfield(ic, :algo), getfield(ic, :lifetime))
-
-"""Return the type of a bundle type's persistent context (`persistent_type`) or runtime context (`runtime_type`)."""
-persistent_type(::Type{<:LoopContext{PersistentContextType}}) where {PersistentContextType} = PersistentContextType
-persistent_type(::Type{<:InitContext{PersistentContextType}}) where {PersistentContextType} = PersistentContextType
-runtime_type(::Type{<:LoopContext{PersistentContextType, RuntimeContextType}}) where {PersistentContextType, RuntimeContextType} = RuntimeContextType
 
 """Wraps a persistent context in a bundle with an empty runtime context, for looking at a context outside a loop."""
 @inline bundle_of(persistent_context::ProcessContext) = LoopContext(persistent_context, _empty_context())
 
-"""
-Return values from a bundle's runtime context: one runtime context partition (`get_runtime_partition(bundle,
-CapturedReturns())`), or the values filed under a subcontext name (`_runtime_values(bundle, Val(:_captured_returns))`).
-Init has no runtime context, so it always gets an empty named tuple.
-"""
-@inline _runtime_values(lc::LoopContext, name::Val) = @inline _runtime_values(getruntime(lc), name)
-@inline _runtime_values(::InitContext, ::Val) = (;)
+# Interface.jl
+persistent_type(::Type{<:LoopContext{PersistentContextType}}) where {PersistentContextType} = PersistentContextType
+@inline withpersistent(lc::LoopContext{PersistentContextType, RuntimeContextType, Node}, persistent_context::ProcessContext) where {PersistentContextType, RuntimeContextType, Node} =
+    LoopContext(persistent_context, getruntime(lc), Node)
+@inline _rebundle(lc::LoopContext, persistent_context::ProcessContext, runtime_patch::NamedTuple) =
+    @inline withcontexts(lc, persistent_context, (@inline merge_runtime_returns(getruntime(lc), runtime_patch)))
+
+# Hooks.jl
+bundle_scope(::Type{<:LoopContext{PersistentContextType, RuntimeContextType, Node}}) where {PersistentContextType, RuntimeContextType, Node} = node_scope(Node)
+@inline runtime_values(lc::LoopContext, name::Val) = @inline runtime_values(getruntime(lc), name)
 @inline get_runtime_partition(lc::LoopContext, partition::RuntimePartition) = @inline get_runtime_partition(getruntime(lc), partition)
-@inline get_runtime_partition(::InitContext, ::RuntimePartition) = (;)
 
 """
     final_context(lc::LoopContext)
@@ -156,24 +114,6 @@ end
 """Returns a partition's values as the visible context shows them: captured returns unwrapped from their slots, the rest as stored."""
 _shown_values(::P, values::NT) where {P<:RuntimePartition, NT<:NamedTuple} = values
 _shown_values(::CapturedReturns, values::NT) where {NT<:NamedTuple} = map(shown_value, values)
-
-"""Returns the lifetime of the run being prepared. Only init can ask for it (to size buffers). A step that asks gets an error."""
-@inline bundle_lifetime(ic::InitContext) = init_lifetime(ic)
-bundle_lifetime(::LoopContext) = error("The lifetime is only known while init runs (for sizing, e.g. `processsizehint!`); steps do not see it.")
-
-"""
-    _rebundle(bundle, persistent_context, runtime_patch)
-
-Builds the bundle a step continues with, after one algorithm's return has been written back. The state it wrote is
-already in `persistent_context`, which replaces the old one; the runtime values it wrote (declared locals, returns) are
-in `runtime_patch` and are written into the runtime context.
-
-`runtime_patch` is grouped by runtime context partition: `(; _declared_locals = (; x = 1.0), _captured_returns = (; y = 2))`.
-During init there is no runtime context, so the patch is always empty there.
-"""
-@inline _rebundle(lc::LoopContext, persistent_context::ProcessContext, runtime_patch::NamedTuple) =
-    @inline withcontexts(lc, persistent_context, (@inline merge_runtime_returns(getruntime(lc), runtime_patch)))
-@inline _rebundle(ic::InitContext, persistent_context::ProcessContext, ::NamedTuple{()}) = withpersistent(ic, persistent_context)
 
 """
     enter_scope(lc, wiring)
