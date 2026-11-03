@@ -78,7 +78,6 @@ Run a single function in a loop for a given number of times.
     loop(session, algo, lc, r, resume, sys_looptype)
 
 Base.@constprop :aggressive @inline function loop(session::S, algo::F, lc::LC, lifetime::R, ::Resuming{isresuming}, ::NonGenerated) where {S<:ProcessSession,F<:AbstractLoopAlgorithm,LC<:LoopContext,R<:RepeatLifetime,isresuming}
-    @DebugMode "Running the loop for $repeats times from thread $(Threads.threadid())"
     @assert isresolved(algo) "Algo must be resolved before running the loop. Got algo $(algo) which is not resolved."
     @inline before_while(session)
     

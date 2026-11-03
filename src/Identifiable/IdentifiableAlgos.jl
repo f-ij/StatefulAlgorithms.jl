@@ -68,7 +68,4 @@ IdentifiableAlgo_label(sa::IdentifiableAlgo) = string((isnothing(algoname(sa)) ?
 function Base.show(io::IO, sa::IdentifiableAlgo)
     algo_repr = sprint(show, getalgo(sa))
     print(io, IdentifiableAlgo_label(sa), ": ", algo_repr)
-    @static if debug_mode()
-        print(io, " [match_by=", match_by(sa), "]")
-    end
 end

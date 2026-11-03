@@ -24,11 +24,8 @@ Make a context from an algo and empty context
 """
 function initcontext(algo::F, c::ProcessContext; lifetime = Indefinite()) where {F <: LoopSpec}
     algo = resolve(algo)
-    @DebugMode "Preparing context for algo $(algo) with input context $c"
-    @DebugMode "Overrides are ()"
 
     prepared_context = init(algo, InitContext(c, algo, lifetime))
-    @DebugMode "Prepared in initcontext context is $prepared_context"
 
     state_context = @inline _init_state_context(prepared_context, c)
     return @inline apply_redirect_specs(state_context, algo)
@@ -39,11 +36,8 @@ function initcontext(algo::F, c::ProcessContext = ProcessContext(algo), override
     resolved = _resolve_lifecycle_specs(getregistry(c), overrides_and_inputs)
     inputs, overrides, interactives = _split_lifecycle_specs(resolved)
     input_state_context = merge_resolved_inputs(c, inputs)
-    @DebugMode "Preparing context for algo $(algo) with input context $input_state_context"
-    @DebugMode "Overrides are $overrides"
 
     prepared_context = init(algo, InitContext(input_state_context, algo, lifetime))
-    @DebugMode "Prepared in initcontext context is $prepared_context"
 
     prepared_state_context = @inline _init_state_context(prepared_context, input_state_context)
     overridden_context = merge_resolved_inputs(prepared_state_context, overrides)

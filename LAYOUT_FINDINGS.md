@@ -209,7 +209,6 @@ matching its name.
 | `Unroll.jl:399` | `inner_typefilter = _inner_typefilter` | e | — |
 | `Functions.jl:613/625` | `deletekey` twice; the `Pairs` method shadows the Union one's branch | f | keep one |
 | `Functions.jl` | grab-bag: accessor macros (157-286) → Utils; `idx2coords` & co (576-583) are InteractiveIsing code; dead `@tryLockPause`, `@ForwardDeclare`, `getstruct`, `find_struct_in`; commented `IndentIO` copy; tuple helpers overlap `Utils.jl` | f | — |
-| `Debugging.jl` | dead (undefined `getcontextð`, `getlifetime`, `preparedata!`); `@DebugMode` lives in `Functions.jl:14-143` | f | — |
 | `TriggerList.jl` | marked unused; its `inc!(::CompositeTriggers)` adds to the session `inc!` | f | delete |
 | `TotalInc.jl` | `total_incs` plan methods; `leafs` undefined | c, f | `LoopAlgorithms/` |
 | `Widgets/Apply.jl`, `Utils/MTuple.jl` | empty | f | delete |

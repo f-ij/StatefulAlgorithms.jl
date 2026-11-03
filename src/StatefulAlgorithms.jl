@@ -3,7 +3,7 @@ module StatefulAlgorithms
 
     export getcontext, setcontext!, Process, start, quit
 
-    using UUIDs, Preferences, MacroTools, PrecompileTools
+    using UUIDs, MacroTools, PrecompileTools
     using Base: setindex # previously re-exported by StaticArrays
 
     import Base: Threads.SpinLock, lock, unlock
@@ -12,12 +12,6 @@ module StatefulAlgorithms
     import DataStructures: Queue, dequeue!, enqueue!
 
     export StepAlgorithm, ProcessAlgorithm, AlgoState, ParserOption, IfWrapped, AbstractPlan, AbstractLoopAlgorithm, AbstractLoopCursor, LoopSpec, filter_by_type
-
-    const DEBUG_MODE = @load_preference("debug", false)
-    debug_mode() = @load_preference("debug", false)
-    function debug_mode(bool)
-        @set_preferences!("debug" => bool)
-    end
 
     include("AbstractTypeDefs.jl")
 
@@ -68,7 +62,6 @@ module StatefulAlgorithms
     # include("Running.jl")
     include("TriggerList.jl")
     include("Benchmark.jl")
-    include("Debugging.jl")
 
     include("Processes/Construction.jl")
     include("Processes/Context.jl")

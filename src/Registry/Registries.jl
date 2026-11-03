@@ -121,7 +121,6 @@ end
 """The algorithm `val` as `reg` stores it, or `nothing`, found by its matcher only."""
 @inline function static_get_match(reg::NameSpaceRegistry, val)
     entry = get_type_entries(reg, val)
-    @DebugMode "Static get match for value: $val in entry: $entry"
     idx = static_findfirst_match(entry, val)
     if isnothing(idx)
         return nothing

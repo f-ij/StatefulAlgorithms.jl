@@ -39,7 +39,6 @@ function _construct_process(algo::F, lifetime::LT, timeout) where {F<:AbstractLo
 
     register_process!(p)
     schedule_loop_precompile!(p, lifetime)
-    @DebugMode "Created process with id $(p.id), now preparing data"
     
     finalizer(remove_process!, p)
     return p

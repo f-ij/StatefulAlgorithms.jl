@@ -16,7 +16,6 @@ options it collected).
 """
 function update_keys(cla::LA, base_registry::NameSpaceRegistry) where {LA<:LoopSpec}
     oldsfuncs = getalgos(cla)
-    @DebugMode "Updating names for LoopAlgorithm: $cla using base registry: $base_registry"
     newfuncs = update_keys.(oldsfuncs, Ref(base_registry)) #Recursive replace LoopAlgorithm
     oldwiring = collect_scoped_wiring(getplan(cla))
     newwiring = update_keys.(oldwiring, Ref(base_registry))

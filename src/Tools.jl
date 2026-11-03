@@ -38,7 +38,6 @@ give the array a size hint based on the lifetime and the number of updates per s
     sizehint = startsize + recommended_extra
     # println("Recommended sizehint: $sizehint")
     # @show sizehint
-    @DebugMode "Sizehint is $sizehint"
     if print_hint
         println("Recommended sizehint for $(@inline sizing_instance(contextview)) is: $sizehint")
     end
