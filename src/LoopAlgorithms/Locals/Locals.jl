@@ -7,11 +7,11 @@ Julia loop. A declaration lives on the plan that makes it (in its `PlanWiring`);
 in the runtime context's `_declared_locals` subcontext, one slot per declaration.
 
 1. Declaring     `Local`, how declarations are collected and named
-2. Storage       `Maybe`, for locals that may not hold a value yet, and the field types declared values are stored with
+2. Storage       the field types declared values are stored with (a `Maybe` for a local that may not hold a value yet)
 3. Reading and writing during a run; a local declared without a type takes the type of its first value
 
-How a `Maybe` and a local that was never written (`undef`) read, and how a `Maybe` shows (their hook methods), is in
-HookExtensions.jl.
+`Maybe` itself, how it and a local that was never written (`undef`) read, and how a `Maybe` shows (their hook
+methods), are in Context/View/StorageWrappers/Maybe.jl.
 =#
 
 ############################################################################################
@@ -100,23 +100,6 @@ end
 # 2. Storage
 ############################################################################################
 
-"""
-Flag-plus-value storage for a local that may not hold a value yet; `value` is undefined while
-unset. `Empty` is what an unset local reads as: `Nothing` (reads give `nothing`) or
-`UndefInitializer` (reads throw `UndefRefError`).
-"""
-struct Maybe{T, F<:Unsigned, Empty}
-    isset::F      # as wide as T's alignment: a 1-byte Bool would leave padding that gets copied every step
-    value::T
-    Maybe{T, F, Empty}() where {T, F, Empty} = new{T, F, Empty}(zero(F))
-    Maybe{T, F, Empty}(x) where {T, F, Empty} = new{T, F, Empty}(one(F), x)
-end
-make_maybe_type(::Type{T}, ::Type{Empty}) where {T, Empty} = Maybe{T, _choose_flag_type(T), Empty}
-_choose_flag_type(::Type{T}) where {T} = isconcretetype(T) ? (a = Base.datatype_alignment(T); a >= 8 ? UInt64 : a == 4 ? UInt32 : a == 2 ? UInt16 : UInt8) : UInt8
-Base.convert(::Type{Maybe{T, F, Empty}}, ::Empty) where {T, F, Empty} = Maybe{T, F, Empty}()
-Base.convert(::Type{Maybe{T, F, Empty}}, x) where {T, F, Empty} = Maybe{T, F, Empty}(convert(T, x))
-Base.convert(::Type{Maybe{T, F, Empty}}, m::Maybe{T, F, Empty}) where {T, F, Empty} = m   # resolves the method above against Base's `convert(::Type{T}, ::T)`
-
 # Declared values are stored with the field types the run will carry: a `Union{Nothing,T}`
 # becomes a `Maybe` (a Julia `Union` field in the carried context costs copies every step).
 _to_storage_type(::Type{T}) where {T} = (T isa Union && Nothing <: T && T !== Nothing) ? make_maybe_type(Base.typesplit(T, Nothing), Nothing) : T
@@ -154,5 +137,3 @@ _build_first_write_expr(::Type{Nothing}, ::Type{V}, value) where {V} = V === Not
     end
     return :(NamedTuple{$(fieldnames(NT))}(($(values...),)))
 end
-
-include("HookExtensions.jl")

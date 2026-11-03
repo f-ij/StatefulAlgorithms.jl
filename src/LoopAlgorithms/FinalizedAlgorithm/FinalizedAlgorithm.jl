@@ -11,7 +11,7 @@ export FinalizedAlgorithm, finalstep
 # `Setup.jl`: only the outer process has a single final result, while inner loop
 # algorithms must continue to behave like ordinary algorithms.
 #
-# The hook it extends (`loop_final_result`) is in HookExtensions.jl.
+# Its method of the hook it extends (`loop_final_result`, Hooks.jl) is in the hook-extensions section at the end.
 
 """
 Root-only loop-algorithm wrapper that post-processes the cleaned final context.
@@ -139,4 +139,23 @@ end
 
 function Base.summary(io::IO, fa::FinalizedAlgorithm)
     print(io, "FinalizedAlgorithm(", sprint(summary, inneralgorithm(fa)), ")")
+end
+
+##########################################
+########## Hook extensions ###############
+##########################################
+# The result of a run is its final function applied to the context after cleanup (LoopAlgorithms/Hooks.jl).
+
+"""The result of a run: the final function applied to the context after cleanup."""
+@inline function loop_final_result(fa::FA, cleaned_context::C) where {FA<:FinalizedAlgorithm, C}
+    return finalfunction(fa)(cleaned_context)
+end
+
+"""
+The result of a run: the final function applied to the context after cleanup, and to the run's runtime context when the
+final function takes two arguments.
+"""
+@inline function loop_final_result(fa::FA, cleaned_context::C, runtime_context::RC) where {FA<:FinalizedAlgorithm, C, RC}
+    final = finalfunction(fa)
+    return applicable(final, cleaned_context, runtime_context) ? final(cleaned_context, runtime_context) : final(cleaned_context)
 end

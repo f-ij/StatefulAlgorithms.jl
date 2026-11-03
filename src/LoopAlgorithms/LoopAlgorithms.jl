@@ -1,4 +1,5 @@
 include("Interface.jl")         # what every plan type provides
+include("Hooks.jl")             # defaults the plan types and schedule entries extend, in their own files
 include("Matching.jl")
 include("WithWiring.jl")          # before the plan code, which takes `WithWiring` children
 include("Callable/Callable.jl")   # before the plan code, which takes `Callable` children
@@ -16,15 +17,11 @@ include("Setup.jl")
 include("Resolving/Resolving.jl")
 include("Init.jl")
 include("Keys.jl")
-include("Hooks.jl")
-include("HookExtensions.jl")
-include("FinalizedAlgorithm/HookExtensions.jl")
 include("Accessors.jl")
 include("Locals/Locals.jl")
 include("Outputs.jl")
 include("Redirect/Materialization.jl")
 include("Redirect/Checking.jl")
-include("Redirect/HookExtensions.jl")
 include("RuntimeInputs.jl")
 include("DirectRuns.jl")           # init, partialinit and run on a plan, with no process around it
 include("Step.jl")

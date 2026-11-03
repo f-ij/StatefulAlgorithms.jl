@@ -4,9 +4,9 @@ what a write to a stored value does (`write_value`), and what the context after 
 (`shown_value`). The hooks only answer with an action; the machinery that follows the answers is in ReadingWriting.jl
 (`_follow_reads`, `_follow_writes`).
 
-Each function here has the default every stored value gets. A storage wrapper extends the hooks in a
-`HookExtensions.jl` next to it: LoopAlgorithms/Redirect (`RedirectedVar`), LoopAlgorithms/Locals (`Maybe`),
-InputInterface (`InteractiveVar`).
+Each function here has the default every stored value gets. Each storage wrapper has its own file in StorageWrappers/
+next to this file, with its struct and, in a section of its own at the end, its methods of these hooks:
+`RedirectedVar.jl`, `Maybe.jl`, `InteractiveVar.jl`.
 =#
 
 ##########################################

@@ -1,25 +1,4 @@
-export Interactive, InteractiveVar
-
-"""
-    InteractiveVar(x)
-
-Mutable storage for an init-time interactive context variable.
-
-Algorithms read the stored value through `SubContextView`, while external code
-can mutate the value with `ref[] = value` without changing context shape.
-"""
-mutable struct InteractiveVar{T}
-    x::T
-end
-
-"""Return the current value stored in an `InteractiveVar`."""
-@inline Base.getindex(ref::InteractiveVar{T}) where {T} = getfield(ref, :x)::T
-
-"""Update an `InteractiveVar`, preserving its original value type."""
-@inline function Base.setindex!(ref::InteractiveVar{T}, value) where {T}
-    setfield!(ref, :x, convert(T, value))
-    return ref[]
-end
+export Interactive
 
 """
     Interactive(target, varnames...)

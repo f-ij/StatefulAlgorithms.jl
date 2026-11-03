@@ -8,16 +8,6 @@ struct VarLocation{Type, subcontextname, originalname, func, reversefunc} end
 VarLocation{Type}(subcontextname::Symbol, originalname::Union{Tuple, Symbol}, func = nothing, reversefunc = nothing) where {Type} = VarLocation{Type, subcontextname, originalname, func, reversefunc}()
 VarLocation(type, subcontextname::Symbol, originalname::Union{Tuple, Symbol}, func = nothing, reversefunc = nothing) = VarLocation{type, subcontextname, originalname, func, reversefunc}()
 
-"""
-    RedirectedVar(varlocation)
-
-Persistent context marker for a state field whose algorithm-facing value is
-backed by another `VarLocation`.
-"""
-struct RedirectedVar{T<:VarLocation}
-    varlocation::T
-end
-
 @inline getfunc(vl::Union{VarLocation{T, subcontextname, originalname, func}, Type{<:VarLocation{T, subcontextname, originalname, func}}}) where {T, subcontextname, originalname, func} = func
 
 """Return the writeback transform carried by a `VarLocation`."""

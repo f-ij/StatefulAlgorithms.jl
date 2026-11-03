@@ -2,7 +2,7 @@
 # TODO.md). `init(la, Init(...), Override(...))` builds the plan's state context, `partialinit` re-initializes only the
 # named targets, and `run(la; inputs...)` runs the plan once on its context. Today all three store the context and the
 # Init/Override specs in the returned `LoopAlgorithm`; the Init/Override merging below exists to replay those stored
-# specs. The `prepare_for_loop` method for a plan is in `HookExtensions.jl`.
+# specs. The `prepare_for_loop` method for a plan is in the hook-extensions section at the end.
 
 export partialinit
 
@@ -145,3 +145,16 @@ function Base.run(la::LA; repeats = 1, lifetime = nothing, kwargs...) where {LA<
     persistent_context, _ = run_session_loop(session, plan, lc, lt)
     return _with_lifecycle(initialized, persistent_context, getstoredinits(initialized), getstoredoverrides(initialized))
 end
+
+##########################################
+########## Hook extensions ###############
+##########################################
+
+"""
+    prepare_for_loop(plan, context, inputs, lifetime, resume)
+
+A plan run directly (`run(plan)`): a new `InlineSession` for the run (the loop needs a counter; nothing can pause or
+close a direct run), the plan, and the `LoopContext` from `context` and the run's inputs (Processes/Hooks.jl).
+"""
+@inline prepare_for_loop(plan::LA, context::C, inputs::I, lt::LT, resume::Resuming{false}) where {LA<:LoopSpec, C<:ProcessContext, I<:NamedTuple, LT} =
+    InlineSession(), plan, (@inline with_inputs((@inline LoopContext(plan, context)), plan, inputs))
