@@ -134,22 +134,20 @@ end
         @test (@allocated step_once(initialized, stepped_context)) == 0
     end
 
-    @testset "A Redirect cycle is an error when the redirects are applied" begin
-        cycle = resolve(CompositeAlgorithm(
+    @testset "A Redirect cycle is an error when the plan is resolved" begin
+        @test_throws "Redirect makes a cycle" resolve(CompositeAlgorithm(
             :target => RedirectReadTargetAlgo(),
             (1,),
             :source => RedirectSourceState(),
             Redirect(:source => :target, :value),
             Redirect(:target => :source, :value),
         ))
-        @test_throws "Redirect makes a cycle" init(cycle; lifetime = Repeat(1))
 
-        to_itself = resolve(CompositeAlgorithm(
+        @test_throws "Redirect makes a cycle" resolve(CompositeAlgorithm(
             :target => RedirectReadTargetAlgo(),
             (1,),
             Redirect(:target => :target, :value),
         ))
-        @test_throws "Redirect makes a cycle" init(to_itself; lifetime = Repeat(1))
     end
 
     @testset "Applying redirects needs a resolved algorithm" begin

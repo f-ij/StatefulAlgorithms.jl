@@ -216,6 +216,8 @@ Checked 2026-10-18 against the refactor stack tip (`perf/julia-scoping` 4a816ac,
 
 - [ ] **Where the lifetime lives (owner, 2026-11-04).** Today a process holds a lifetime (`p.lifetime`, set at construction and replaced by `run(p; lifetime/repeats)`) and its session's type includes the lifetime's type (`InteractiveSession{C, LT}`), so a run with a lifetime of another type needs a new session (`set_session_lifetime!`, a stopgap). Consider taking the lifetime out of the process: a property of a run (passed to `run`, kept by the session or only by the loop), with at most a default on the process. Check what reads the session's `LT` (`perf/cases.jl`: `NoStopRepeat`) and what reads `lifetime(p)` (init sizing, `reinit`, the manager).
 
+- [x] **Redirect cycles are checked from the redirects, at resolve (owner, 2026-11-04).** `check_redirect_cycles(registry, options)` (`src/LoopAlgorithms/Redirect/Checking.jl`, one function) follows target field → source field over the plan's resolved `Redirect`s and runs at the end of resolving (`_resolve_keyed_plan`, `_resolve_plan_typed`). It used to walk the `RedirectedVar` markers in an initialized context, so a cycle was only found at init. `apply_redirect_specs` keeps only the endpoint checks, which need the context.
+
 ## Process bookkeeping (touches the `Process` constructor)
 - [ ] `src/Processes/Process/ProcessList.jl:8`: the global `processlist` Dict is mutated without a lock, so concurrent `Process` construction (e.g. OnDemandWorkers under threaded execution) corrupts it.
 - [ ] `src/Processes/Process/ProcessList.jl:8`: bookkeeping never works: wrong key, `quit` and the finalizer never remove entries, `quitall` throws, and the Dict grows without bound.

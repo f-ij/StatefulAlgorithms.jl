@@ -48,7 +48,6 @@ function apply_redirect_specs(context::C, registry::R, redirects::Redirects) whe
     for redirect in redirects
         context = @inline _apply_resolved_redirect(context, resolve_redirect(registry, redirect))
     end
-    isempty(redirects) || check_redirect_cycles(context)
     return context
 end
 
