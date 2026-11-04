@@ -392,8 +392,7 @@ function bespoke_route_transparency_loop(steps::I) where {I<:Integer}
 end
 
 """Extract a compact comparable summary from a routed run result."""
-function route_transparency_summary(result::A) where {A<:StatefulAlgorithms.AbstractLoopAlgorithm}
-    ctx = StatefulAlgorithms.getcontext(result)
+function route_transparency_summary(ctx::StatefulAlgorithms.ProcessContext)
     state = ctx[:_state_1]
     plant = ctx[:plant]
     controller = ctx[:controller]
@@ -448,9 +447,9 @@ function run_route_transparency_diagnostic(;
     steps::I = ROUTE_TRANSPARENCY_STEPS,
     runs::J = ROUTE_TRANSPARENCY_RUNS,
 ) where {I<:Integer, J<:Integer}
-    routed = init(resolve(route_transparency_algorithm()))
+    routed_context, routed = setup(route_transparency_algorithm())
 
-    route_summary = route_transparency_summary(run(routed; repeats = steps))
+    route_summary = route_transparency_summary(first(run(routed, routed_context; repeats = steps)))
     bespoke_summary = bespoke_route_transparency_loop(steps)
 
     @testset "route transparency diagnostic" begin
@@ -472,7 +471,7 @@ function run_route_transparency_diagnostic(;
         @test isapprox(route_summary.merge_buffer, bespoke_summary.merge_buffer; rtol = 0.0, atol = 1e-12)
     end
 
-    route_measure = diagnostic_measure(() -> route_transparency_summary(run(routed; repeats = steps)), runs)
+    route_measure = diagnostic_measure(() -> route_transparency_summary(first(run(routed, routed_context; repeats = steps))), runs)
     bespoke_measure = diagnostic_measure(() -> bespoke_route_transparency_loop(steps), runs)
 
     println("route_transparency_steps=", steps)

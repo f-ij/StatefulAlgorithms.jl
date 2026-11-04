@@ -65,8 +65,8 @@ For selector syntax used in `Until`, see [Vars (`Var` Selectors)](@ref vars_user
 - `run(p)`: start a new task or resume after pause.
 - `close(p)`: stop the process, wait for it, run cleanup when needed, and commit
   the final persistent context.
-- `reinit(p)`: compatibility helper that pauses, reruns lifecycle `init`, and runs again.
-- `partialinit(la, specs...)`: rebuild only the targeted algorithms or states on an initialized loop algorithm.
+- `reinit(p)`: pauses, sets the context up again from the specs the process was built with, and runs again.
+- `reinit(p, target; inputs, overrides)`: the same for one algorithm or state only.
 
 ## Waiting and Fetching
 

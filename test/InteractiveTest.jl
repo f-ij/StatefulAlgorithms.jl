@@ -13,13 +13,12 @@ using StatefulAlgorithms
         (1,),
     ))
 
-    initialized = init(
+    context, initialized = setup(
         algo,
         Override(:target; value = 3.0),
         Interactive(:target, :value);
         lifetime = Repeat(1),
     )
-    context = StatefulAlgorithms.getcontext(initialized)
 
     @test context.target.value isa InteractiveVar{Float64}
     @test context.target.value[] == 3.0
@@ -34,7 +33,10 @@ using StatefulAlgorithms
     @test stepped_context.target.value[] == 11.0
     @test stepped_context.target.seen == 12.0
 
-    replayed = init(initialized; lifetime = Repeat(1))
-    @test StatefulAlgorithms.getcontext(replayed).target.value isa InteractiveVar{Float64}
-    @test StatefulAlgorithms.getcontext(replayed).target.value[] == 3.0
+    # A process keeps the specs it was built with and sets up from them again.
+    process = Process(algo, Override(:target; value = 3.0), Interactive(:target, :value); repeats = 1)
+    replayed = StatefulAlgorithms.makecontext(process)
+    @test replayed.target.value isa InteractiveVar{Float64}
+    @test replayed.target.value[] == 3.0
+    close(process)
 end

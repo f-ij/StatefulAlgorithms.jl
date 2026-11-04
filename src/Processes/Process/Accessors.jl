@@ -32,29 +32,15 @@ getalgo(p::P) where {P<:InteractiveProcess} = p.algo
 The process's state context: the user's handle on the process's state, with the registry. Never a run's runtime
 context: a paused run keeps that apart (`p.runtime_context`).
 """
-function getcontext(p::P) where {P<:InteractiveProcess}
-    state_context = p.state_context
-    return isnothing(state_context) ? getpersistentcontext(getalgo(p)) : state_context
-end
+getcontext(p::P) where {P<:InteractiveProcess} = p.state_context
 
 """
     setcontext!(p::InteractiveProcess, c) -> c
 
-Store `c` as the process's state context. When `c` has the type of the context stored in the plan, the plan's lifecycle
-wrapper in `p.algo` is rebuilt with it, so later runs keep the typed path; otherwise it goes to `p.state_context`.
-Does not look at whether `p` runs: a caller that may race a running loop pauses it first.
+Store `c` as the process's state context. Does not look at whether `p` runs: a caller that may race a running loop
+pauses it first.
 """
-function setcontext!(p::P, c::C) where {P<:InteractiveProcess, C<:ProcessContext}
-    algo = getalgo(p)
-    persistent_context = getpersistentcontext(algo)
-    if !isnothing(persistent_context) && typeof(c) === typeof(persistent_context)
-        p.algo = _with_lifecycle(algo, c, getstoredinits(algo), getstoredoverrides(algo))
-        p.state_context = nothing
-    else
-        p.state_context = c
-    end
-    return c
-end
+setcontext!(p::P, c::C) where {P<:InteractiveProcess, C<:ProcessContext} = (p.state_context = c)
 
 """
     set_session_lifetime!(p, lifetime)
@@ -82,8 +68,8 @@ user's handle (the registry), and the result is stored with `setcontext!`. Leave
 @inline _sync_state_context!(p::P, c::C) where {P<:InteractiveProcess, C<:ProcessContext} =
     setcontext!(p, withsubcontexts(getcontext(p), get_subcontexts(c)))
 
-@inline _has_typed_state_context(p::P) where {P<:InteractiveProcess} = isnothing(p.state_context)
-@inline _typed_state_context(p::P) where {P<:InteractiveProcess} = getpersistentcontext(getalgo(p))
+"""The `Init`/`Override`/`Interactive` specs the process was built with."""
+getspecs(p::P) where {P<:InteractiveProcess} = p.specs
 
 """
     getruntimecontext(p::InteractiveProcess)

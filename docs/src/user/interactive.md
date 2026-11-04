@@ -51,10 +51,10 @@ algo = resolve(CompositeAlgorithm(
     (1, 20),
 ))
 
-context = StatefulAlgorithms.getcontext(init(
+context, plan = setup(
     algo,
     Init(:_exchange; vars = (Var(:target, :value), Var(:target, :seen))),
-))
+)
 ```
 
 Selectors are resolved during lifecycle initialization, when the registry and
@@ -117,10 +117,10 @@ algo = resolve(CompositeAlgorithm(
     :_exchange => ContextExchange(),
     (1, 20),
 ))
-context = StatefulAlgorithms.getcontext(init(
+context, plan = setup(
     algo,
     Init(:_exchange; vars = (Var(:target, :value),)),
-))
+)
 ```
 
 The exchange also supports a wall-clock gate:

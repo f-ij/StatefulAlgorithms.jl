@@ -8,14 +8,13 @@ export step!, init, getmultiplier, getoptions, setoptions, get_shares, get_route
 """
 Build or rebuild a concrete `LoopAlgorithm` runtime wrapper.
 
-This constructor keeps the plan type stable and swaps only runtime/lifecycle
-fields such as states, registry, context, inputs, and overrides.
+This constructor keeps the plan type stable and swaps only the options, registry or id.
 """
-LoopAlgorithm(plan::LoopAlgorithm; options = getoptions(plan), registry = getregistry(plan), context = getpersistentcontext(plan), inits = getstoredinits(plan), overrides = getstoredoverrides(plan), id = getid(plan)) =
-    LoopAlgorithm{typeof(getplan(plan)), typeof(options), typeof(registry), typeof(context), typeof(inits), typeof(overrides), id}(getplan(plan), options, registry, context, inits, overrides)
+LoopAlgorithm(plan::LoopAlgorithm; options = getoptions(plan), registry = getregistry(plan), id = getid(plan)) =
+    LoopAlgorithm{typeof(getplan(plan)), typeof(options), typeof(registry), id}(getplan(plan), options, registry)
 
-LoopAlgorithm(plan::AbstractPlan; options = (), registry = nothing, context = nothing, inits = (), overrides = (), id = getid(plan)) =
-    LoopAlgorithm{typeof(plan), typeof(options), typeof(registry), typeof(context), typeof(inits), typeof(overrides), id}(plan, options, registry, context, inits, overrides)
+LoopAlgorithm(plan::AbstractPlan; options = (), registry = nothing, id = getid(plan)) =
+    LoopAlgorithm{typeof(plan), typeof(options), typeof(registry), id}(plan, options, registry)
 
 ##########################################
 ############## Plan access ###############
@@ -88,19 +87,8 @@ get_routes(cla::LA) where {LA<:LoopSpec} = @inline filter_by_type(Route, collect
 """The `RootOption`s of the whole plan tree, collected once by `resolve` (`_collect_root_options`)."""
 @inline getoptions(cla::LoopAlgorithm) = getfield(cla, :options)
 @inline getregistry(cla::LoopAlgorithm) = getfield(cla, :reg)
-@inline getpersistentcontext(cla::LoopAlgorithm) = getfield(cla, :context)
-@inline getstoredinits(cla::LoopAlgorithm) = getfield(cla, :inits)
-@inline getstoredoverrides(cla::LoopAlgorithm) = getfield(cla, :overrides)
-@inline getcontext(cla::LoopAlgorithm) = getpersistentcontext(cla)
 
 @inline getoptions(la::LA, T::Type{O}) where {LA<:LoopSpec, O} = filter_by_type(O, getoptions(la))
-
-# Lifecycle accessors keep `LoopAlgorithm`, plain plan nodes, and wrappers on a
-# shared path. Plain plans report no stored lifecycle data.
-@inline getstoredinits(la::LA) where {LA<:LoopSpec} = hasfield(LA, :inits) ? getfield(la, :inits) : ()
-@inline getstoredoverrides(la::LA) where {LA<:LoopSpec} = hasfield(LA, :overrides) ? getfield(la, :overrides) : ()
-@inline getpersistentcontext(la::LA) where {LA<:LoopSpec} = hasfield(LA, :context) ? getfield(la, :context) : nothing
-@inline getcontext(la::LA) where {LA<:LoopSpec} = getpersistentcontext(la)
 
 ##########################################
 ################ Setters #################
@@ -110,18 +98,12 @@ setoptions(la::LA, options) where {LA<:LoopSpec} = error("setoptions not impleme
 setwiring(la::LoopAlgorithm, wiring) = setfield(la, :plan, setwiring(getplan(la), wiring))
 setstates(la::LoopAlgorithm, states) = setfield(la, :plan, setstates(getplan(la), states))
 
-function setoptions(la::LoopAlgorithm{Plan, O, R, C, Inits, Overrides, id}, options) where {Plan, O, R, C, Inits, Overrides, id}
-    LoopAlgorithm{Plan, typeof(options), R, C, Inits, Overrides, id}(getplan(la), options, getregistry(la), getpersistentcontext(la), getstoredinits(la), getstoredoverrides(la))
+function setoptions(la::LoopAlgorithm{Plan, O, R, id}, options) where {Plan, O, R, id}
+    LoopAlgorithm{Plan, typeof(options), R, id}(getplan(la), options, getregistry(la))
 end
 
-function _with_lifecycle(la::LoopAlgorithm{Plan, O, R, OldC, OldI, OldOv, id}, context::C, inits::I, overrides::Ov) where {Plan, O, R, OldC, OldI, OldOv, id, C, I, Ov}
-    LoopAlgorithm{Plan, O, R, C, I, Ov, id}(getplan(la), getoptions(la), getregistry(la), context, inits, overrides)
-end
-
-@inline _without_lifecycle(la::LA) where {LA<:LoopSpec} = _with_lifecycle(la, nothing, (), ())
-
-@inline _attach_registry(la::LoopAlgorithm{Plan, O, OldR, C, Inits, Overrides, id}, registry::R) where {Plan, O, OldR, C, Inits, Overrides, id, R<:NameSpaceRegistry} =
-    LoopAlgorithm{Plan, O, R, C, Inits, Overrides, id}(getplan(la), getoptions(la), registry, getpersistentcontext(la), getstoredinits(la), getstoredoverrides(la))
+@inline _attach_registry(la::LoopAlgorithm{Plan, O, OldR, id}, registry::R) where {Plan, O, OldR, id, R<:NameSpaceRegistry} =
+    LoopAlgorithm{Plan, O, R, id}(getplan(la), getoptions(la), registry)
 
 ##########################################
 ########### Resolution and id ############
@@ -135,9 +117,9 @@ Decided by the type alone, so it folds to a constant.
 """
 @inline isresolved(::Union{LoopAlgorithm{Plan, O, R}, Type{<:LoopAlgorithm{Plan, O, R}}}) where {Plan, O, R} = !(R <: Nothing)
 @inline isresolved(::Union{LA, Type{LA}}) where {LA<:LoopSpec} = false
-@inline getid(la::Union{LoopAlgorithm{Plan,O,R,C,I,Ov,id}, Type{<:LoopAlgorithm{Plan,O,R,C,I,Ov,id}}}) where {Plan,O,R,C,I,Ov,id} = id
-@inline hasid(la::Union{LoopAlgorithm{Plan,O,R,C,I,Ov,id}, Type{<:LoopAlgorithm{Plan,O,R,C,I,Ov,id}}}) where {Plan,O,R,C,I,Ov,id} = !isnothing(id)
-@inline id(la::Union{LoopAlgorithm{Plan,O,R,C,I,Ov,id}, Type{<:LoopAlgorithm{Plan,O,R,C,I,Ov,id}}}) where {Plan,O,R,C,I,Ov,id} = id
+@inline getid(la::Union{LoopAlgorithm{Plan,O,R,id}, Type{<:LoopAlgorithm{Plan,O,R,id}}}) where {Plan,O,R,id} = id
+@inline hasid(la::Union{LoopAlgorithm{Plan,O,R,id}, Type{<:LoopAlgorithm{Plan,O,R,id}}}) where {Plan,O,R,id} = !isnothing(id)
+@inline id(la::Union{LoopAlgorithm{Plan,O,R,id}, Type{<:LoopAlgorithm{Plan,O,R,id}}}) where {Plan,O,R,id} = id
 
 ##########################################
 ########### Type-level queries ###########

@@ -317,8 +317,7 @@ function compat_bespoke_loop(steps::I) where {I<:Integer}
 end
 
 """Extract comparable output from a routed run."""
-function compat_route_buffer_summary(result::A) where {A<:StatefulAlgorithms.AbstractLoopAlgorithm}
-    ctx = StatefulAlgorithms.getcontext(result)
+function compat_route_buffer_summary(ctx::StatefulAlgorithms.ProcessContext)
     plant = ctx[:plant]
     controller = ctx[:controller]
     observer = ctx[:observer]
@@ -371,8 +370,8 @@ function run_route_buffer_compat_benchmark(;
     steps::I = ROUTE_BUFFER_COMPAT_STEPS,
     runs::J = ROUTE_BUFFER_COMPAT_RUNS,
 ) where {I<:Integer, J<:Integer}
-    routed = init(resolve(compat_route_buffer_algorithm()))
-    route_summary = compat_route_buffer_summary(run(routed; repeats = steps))
+    routed_context, routed = setup(compat_route_buffer_algorithm())
+    route_summary = compat_route_buffer_summary(first(run(routed, routed_context; repeats = steps)))
     bespoke_summary = compat_bespoke_loop(steps)
 
     @testset "route buffer compatibility benchmark" begin
@@ -389,7 +388,7 @@ function run_route_buffer_compat_benchmark(;
         @test route_summary.mirror_samples == bespoke_summary.mirror_samples
     end
 
-    route_measure = compat_measure(() -> compat_route_buffer_summary(run(routed; repeats = steps)), runs)
+    route_measure = compat_measure(() -> compat_route_buffer_summary(first(run(routed, routed_context; repeats = steps))), runs)
     bespoke_measure = compat_measure(() -> compat_bespoke_loop(steps), runs)
 
     println("route_buffer_compat_steps=", steps)

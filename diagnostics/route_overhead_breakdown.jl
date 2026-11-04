@@ -115,8 +115,7 @@ function context_state_buffer_no_merge_algorithm()
 end
 
 """Return a compact checksum from the macro route-buffer run."""
-function macro_route_buffers_summary(result::A) where {A<:StatefulAlgorithms.AbstractLoopAlgorithm}
-    ctx = StatefulAlgorithms.getcontext(result)
+function macro_route_buffers_summary(ctx::StatefulAlgorithms.ProcessContext)
     plant = ctx[:plant]
     controller = ctx[:controller]
     observer = ctx[:observer]
@@ -124,14 +123,12 @@ function macro_route_buffers_summary(result::A) where {A<:StatefulAlgorithms.Abs
 end
 
 """Return a compact checksum from the shared state-buffer run."""
-function merge_state_buffer_summary(result::A) where {A<:StatefulAlgorithms.AbstractLoopAlgorithm}
-    ctx = StatefulAlgorithms.getcontext(result)
+function merge_state_buffer_summary(ctx::StatefulAlgorithms.ProcessContext)
     return sum(ctx[:_state_1].merge_buffer)
 end
 
 """Return a compact checksum from the nested non-merged state-buffer run."""
-function context_state_buffer_summary(result::A) where {A<:StatefulAlgorithms.AbstractLoopAlgorithm}
-    ctx = StatefulAlgorithms.getcontext(result)
+function context_state_buffer_summary(ctx::StatefulAlgorithms.ProcessContext)
     return sum(ctx[:_state_1].left_buffer) + sum(ctx[:_state_2].right_buffer) + sum(ctx[:_state_3].third_buffer)
 end
 
@@ -164,31 +161,31 @@ function run_route_overhead_breakdown(;
     steps::I = ROUTE_BREAKDOWN_STEPS,
     runs::J = ROUTE_BREAKDOWN_RUNS,
 ) where {I<:Integer, J<:Integer}
-    compat = init(resolve(compat_route_buffer_algorithm()))
-    macro_no_merge = init(resolve(macro_route_buffers_no_merge_algorithm()))
-    merge_only = init(resolve(merge_state_buffer_only_algorithm()))
-    context_only = init(resolve(context_state_buffer_no_merge_algorithm()))
-    full = init(resolve(route_transparency_algorithm()))
+    compat_context, compat = setup(compat_route_buffer_algorithm())
+    macro_no_merge_context, macro_no_merge = setup(macro_route_buffers_no_merge_algorithm())
+    merge_only_context, merge_only = setup(merge_state_buffer_only_algorithm())
+    context_only_context, context_only = setup(context_state_buffer_no_merge_algorithm())
+    full_context, full = setup(route_transparency_algorithm())
 
     measurements = (;
         compat_manual_routes = breakdown_measure(
-            () -> compat_route_buffer_summary(run(compat; repeats = steps)).checksum,
+            () -> compat_route_buffer_summary(first(run(compat, compat_context; repeats = steps))).checksum,
             runs,
         ),
         macro_routes_no_merge = breakdown_measure(
-            () -> macro_route_buffers_summary(run(macro_no_merge; repeats = steps)),
+            () -> macro_route_buffers_summary(first(run(macro_no_merge, macro_no_merge_context; repeats = steps))),
             runs,
         ),
         merge_state_buffer_only = breakdown_measure(
-            () -> merge_state_buffer_summary(run(merge_only; repeats = steps)),
+            () -> merge_state_buffer_summary(first(run(merge_only, merge_only_context; repeats = steps))),
             runs,
         ),
         context_state_buffer_no_merge = breakdown_measure(
-            () -> context_state_buffer_summary(run(context_only; repeats = steps)),
+            () -> context_state_buffer_summary(first(run(context_only, context_only_context; repeats = steps))),
             runs,
         ),
         full_route_transparency = breakdown_measure(
-            () -> route_transparency_summary(run(full; repeats = steps)).checksum,
+            () -> route_transparency_summary(first(run(full, full_context; repeats = steps))).checksum,
             runs,
         ),
         bespoke_buffers = breakdown_measure(

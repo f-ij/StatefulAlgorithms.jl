@@ -223,8 +223,9 @@ end
             @merge f, n
         end))
         name = only(keys(states(merged)))
-        @test_throws ErrorException init(merged)    # `buffers` is required by both
-        @test state_data(StatefulAlgorithms.getcontext(run(init(merged, Init(name; buffers = Symbol[])); repeats = 1))) ==
+        @test_throws ErrorException setup(merged)    # `buffers` is required by both
+        merged_context, merged_plan = setup(merged, Init(name; buffers = Symbol[]))
+        @test state_data(first(run(merged_plan, merged_context; repeats = 1))) ==
             Dict(name => (; buffers = [:writer, :reader]))
 
         # `@merge` takes whole states; one field is shared with `@bind` or `@redirect`
@@ -260,7 +261,8 @@ end
             @context f = forward()
             @context b = backward()
         end))
-        ctx = StatefulAlgorithms.getcontext(run(init(both, Init(:ps; x = [1.0, 2.0, 3.0])); repeats = 2))
+        both_context, both_plan = setup(both, Init(:ps; x = [1.0, 2.0, 3.0]))
+        ctx, _ = run(both_plan, both_context; repeats = 2)
         @test ctx[:ps].total == [4.0, 8.0, 12.0]    # 2 steps of 2 blocks
 
         # `@redirect` is an option of its block, also when that block is nested

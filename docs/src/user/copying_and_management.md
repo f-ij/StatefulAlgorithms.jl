@@ -19,15 +19,12 @@ threads, see [Threaded Process Managers](@ref threaded_process_managers_user).
 buffers, or data views. A raw `deepcopy` of the live context can therefore copy the wrong
 thing or preserve sharing that should be rebuilt per process.
 
-The copying helpers work from the initialized loop algorithm and the normal
-lifecycle init pipeline instead:
+The copying helpers work from the process's plan and the specs it was built with, and set up
+a fresh context for each copy with `setup`:
 
-- copy the stored loop algorithm recipe,
+- take the process's resolved plan and its `Init`/`Override` specs (`getspecs(p)`),
 - replace selected inputs and overrides,
-- initialize a fresh context for each copy.
-
-The saved recipe is the initialized loop algorithm: it stores the resolved
-algorithm, persistent context, and replayable `Init`/`Override` specs.
+- set up a fresh context for each copy.
 
 ## Copy APIs
 

@@ -72,8 +72,7 @@ run(p; temperature = 2.0)
 ```
 
 They are validated once before the loop starts and are read-only inputs
-(`_inputs`) of the run. They are not stored in the initialized loop algorithm or
-finished process context after the run.
+(`_inputs`) of the run. They are not stored in the context after the run.
 
 Forms:
 
@@ -508,7 +507,7 @@ default for is required at init, under the merged state's name:
 ```julia
 resolved = resolve(algo)
 name = only(keys(states(resolved)))
-initialized = init(resolved, Init(name; buffers = make_buffers()))
+context, plan = setup(resolved, Init(name; buffers = make_buffers()))
 ```
 
 `@merge` only takes whole states. To make one field of a block another field,

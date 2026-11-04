@@ -1,6 +1,12 @@
 using Test
 using StatefulAlgorithms
 
+# The context after `setup` and one `run` of `plan_spec`.
+function setup_and_run(plan_spec, specs...; kwargs...)
+    context, plan = setup(plan_spec, specs...)
+    return first(run(plan, context; kwargs...))
+end
+
 # NestLin1..NestLin4 add 1..4 to `x` each step.
 for k in 1:4
     @eval @StepAlgorithm function $(Symbol(:NestLin, k))(@managed(x = 0.0))
@@ -40,9 +46,8 @@ end
     @test StatefulAlgorithms.isresolved(resolved)
     @test !StatefulAlgorithms.isresolved(composite)
 
-    initialized = init(composite)
-    p1 = Process(initialized; repeats = 1)
-    p2 = Process(initialized; repeats = 1)
+    p1 = Process(composite; repeats = 1)
+    p2 = Process(composite; repeats = 1)
     run(p1); wait(p1)
     run(p2); wait(p2)
     @test getcontext(p1)[LoopCursorIntervalCounter].count == 0
@@ -57,7 +62,7 @@ end
     @test pausable_cursor isa StatefulAlgorithms.PausableRoutineCursor
     @test StatefulAlgorithms.resume_idxs(pausable_cursor) isa StatefulAlgorithms.TupleBox{1, Int}
 
-    long_routine = init(Routine(LoopCursorYieldCounter, (10^8,)))
+    long_routine = Routine(LoopCursorYieldCounter, (10^8,))
     paused = Process(long_routine; lifetime = Indefinite())
     run(paused)
     sleep(0.01)
@@ -83,36 +88,35 @@ end
         (RunIf(x -> x, Var(LoopRunIfFlag, :enabled)),),
         LoopRunIfFlag,
     )
-    false_result = run(init(false_plan); repeats = 3)
-    @test getcontext(false_result)[LoopRunIfCounter].count == 0
+    false_result = setup_and_run(false_plan; repeats = 3)
+    @test false_result[LoopRunIfCounter].count == 0
 
-    true_initialized = init(false_plan, Override(LoopRunIfFlag; enabled = true))
-    true_result = run(true_initialized; repeats = 3)
-    @test getcontext(true_result)[LoopRunIfCounter].count == 3
+    true_result = setup_and_run(false_plan, Override(LoopRunIfFlag; enabled = true); repeats = 3)
+    @test true_result[LoopRunIfCounter].count == 3
 
     interval_plan = CompositeAlgorithm(
         LoopRunIfCounter,
         (RunIf(Interval(2), x -> x, Var(LoopRunIfFlag, :enabled)),),
         LoopRunIfFlag,
     )
-    interval_result = run(init(interval_plan, Override(LoopRunIfFlag; enabled = true)); repeats = 3)
-    @test getcontext(interval_result)[LoopRunIfCounter].count == 1
+    interval_result = setup_and_run(interval_plan, Override(LoopRunIfFlag; enabled = true); repeats = 3)
+    @test interval_result[LoopRunIfCounter].count == 1
 
     # `Interval(1)` with an offset skips the first `offset` ticks, so it is not stepped without a branch (`always_runs`).
     @test StatefulAlgorithms.always_runs(typeof(Interval(1)))
     @test !StatefulAlgorithms.always_runs(typeof(Interval(1, :end, 3)))
     # The composite's tick restarts past the largest offset (`counter_cycle`), so the offset skips ticks 1..3 once:
     # ticks 4 and 5 run.
-    offset_result = run(init(CompositeAlgorithm(LoopRunIfCounter, (Interval(1, :end, 3),))); repeats = 5)
-    @test getcontext(offset_result)[LoopRunIfCounter].count == 2
+    offset_result = setup_and_run(CompositeAlgorithm(LoopRunIfCounter, (Interval(1, :end, 3),)); repeats = 5)
+    @test offset_result[LoopRunIfCounter].count == 2
 
     nested_plan = CompositeAlgorithm(
         CompositeAlgorithm(LoopRunIfCounter, (RunIf(x -> x, Var(LoopRunIfFlag, :enabled)),)),
         (1,),
         LoopRunIfFlag,
     )
-    nested_result = run(init(nested_plan, Override(LoopRunIfFlag; enabled = true)); repeats = 2)
-    @test getcontext(nested_result)[LoopRunIfCounter].count == 2
+    nested_result = setup_and_run(nested_plan, Override(LoopRunIfFlag; enabled = true); repeats = 2)
+    @test nested_result[LoopRunIfCounter].count == 2
 end
 
 # Defined at top level: defined inside a `@testset`, the plan allocates per step.

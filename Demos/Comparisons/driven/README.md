@@ -140,8 +140,8 @@ experiment = @CompositeAlgorithm begin
     integ(F = @state(SineDrive).F)
     Checkpointer(u = integ.u, t = integ.t, dt = integ.dt, nacc = integ.nacc)
 end
-la = init(resolve(experiment), Init(integ; u0 = U0, par = PARAMS, rtol = RTOL))
-run(la; lifetime = Until(t -> t >= TEND, Var(integ, :t)))
+context, la = setup(experiment, Init(integ; u0 = U0, par = PARAMS, rtol = RTOL))
+run(la, context; lifetime = Until(t -> t >= TEND, Var(integ, :t)))
 ```
 
 Size is counted in source tokens (identifiers, literals, operators, keywords, brackets; whitespace and comments ignored; `code_size.jl`),

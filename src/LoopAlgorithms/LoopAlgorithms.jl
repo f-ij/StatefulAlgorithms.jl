@@ -23,7 +23,7 @@ include("Outputs.jl")
 include("Redirect/Materialization.jl")
 include("Redirect/Checking.jl")
 include("RuntimeInputs.jl")
-include("DirectRuns.jl")           # init, partialinit and run on a plan, with no process around it
+include("DirectRuns.jl")           # setup, run and reinit on a plan, with no process around it
 include("Step.jl")
 include("ProcessAlgorithmStep.jl")
 include("Fusing/Fusing.jl")

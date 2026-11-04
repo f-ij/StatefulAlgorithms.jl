@@ -51,23 +51,22 @@ function route_heavy_algorithm()
     end
 end
 
-function sink_total(result)
-    ctx = StatefulAlgorithms.getcontext(result)
+function sink_total(ctx)
     return ctx[RouteHeavySink{1}].total
 end
 
 function benchmark_route_heavy(; steps::Int = ROUTE_HEAVY_STEPS, runs::Int = ROUTE_HEAVY_RUNS)
-    algo = init(resolve(route_heavy_algorithm()))
+    algo_context, algo = setup(route_heavy_algorithm())
 
     # Warm compilation before timing or allocation measurement.
-    warm = run(algo; repeats = steps)
+    warm = first(run(algo, algo_context; repeats = steps))
     checksum = sink_total(warm)
 
     GC.gc()
     elapsed = @elapsed begin
         local total = checksum
         for _ in 1:runs
-            total += sink_total(run(algo; repeats = steps))
+            total += sink_total(first(run(algo, algo_context; repeats = steps)))
         end
         checksum = total
     end
@@ -76,7 +75,7 @@ function benchmark_route_heavy(; steps::Int = ROUTE_HEAVY_STEPS, runs::Int = ROU
     allocated = @allocated begin
         local total = checksum
         for _ in 1:runs
-            total += sink_total(run(algo; repeats = steps))
+            total += sink_total(first(run(algo, algo_context; repeats = steps)))
         end
         checksum = total
     end

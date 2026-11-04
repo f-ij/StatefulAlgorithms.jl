@@ -60,12 +60,8 @@ function one_trial()
         StatefulAlgorithms.resolve_process_inputs_overrides(resolved_algo, inputs_overrides...)
     end
 
-    initialized_algo = timed_stage!(rows, "lifecycle init") do
-        StatefulAlgorithms.init(algo, inputs_overrides...; lifetime = Repeat(1))
-    end
-
-    context = timed_stage!(rows, "stored context") do
-        StatefulAlgorithms.getstoredcontext(initialized_algo)
+    context, initialized_algo = timed_stage!(rows, "setup") do
+        setup(algo, inputs_overrides...; lifetime = Repeat(1))
     end
 
     process = timed_stage!(rows, "Process constructor") do
@@ -77,7 +73,7 @@ function one_trial()
     end
 
     initialized_process = timed_stage!(rows, "Process from initialized") do
-        Process(initialized_algo; repeats = 1)
+        Process(initialized_algo; context, repeats = 1)
     end
 
     timed_stage!(rows, "initialized first run") do

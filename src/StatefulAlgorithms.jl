@@ -77,7 +77,6 @@ module StatefulAlgorithms
     include("Widgets/Widgets.jl")
 
 
-    include("Copy.jl")
     include("Manager/Manager.jl")
     include("PrecompileInterface.jl")
 

@@ -1,30 +1,44 @@
 #=
-Copying a `Process`: its stored `Init`/`Override` specs (`copyinputs`, `copyoverrides`) and a new process from its
-initialized plan, or from a plan (`copyprocess`); making a process run another's plan and context (`createfrom!`).
+Copying a `Process`: the `Init`/`Override` specs it was built with (`copyinputs`, `copyoverrides`) and a new process
+from its plan and specs, or from a plan (`copyprocess`); making a process run another's plan and context (`createfrom!`).
 =#
 
-export copyprocess
+export copyprocess, copyinputs, copyoverrides
 
-@inline copyinputs(p::Process) = copyinputs(getalgo(p))
-@inline copyoverrides(p::Process) = copyoverrides(getalgo(p))
+"""
+    copyinputs(p)
+
+The `Init` specs `p` was built with.
+"""
+@inline copyinputs(p::Process) = filter_by_type(Input, getspecs(p))
+
+"""
+    copyoverrides(p)
+
+The `Override` and `Interactive` specs `p` was built with.
+"""
+@inline copyoverrides(p::Process) = (filter_by_type(Override, getspecs(p))..., filter_by_type(Interactive, getspecs(p))...)
 
 """
     copyprocess(p::Process, Init(...), Override(...); kwargs...)
 
-Build a new process from the stored initialized loop algorithm recipe. Extra
-init/override specs are merged by `init`.
+A new process with `p`'s plan, set up from the specs `p` was built with and the new ones (later specs win per target).
+With `context`, the new process starts from it and keeps `p`'s specs.
 """
 function copyprocess(p::Process, specs...; lifetime = StatefulAlgorithms.lifetime(p), timeout = p.timeout, context = nothing, func = getalgo(p), kwargs...)
-    algo = isnothing(context) ? init(func, specs...) : _with_lifecycle(resolve(func), context, copyinputs(func), copyoverrides(func))
-    return Process(algo; lifetime, timeout)
+    isnothing(context) && return Process(func, getspecs(p)..., specs...; lifetime, timeout)
+    q = Process(func; context, lifetime, timeout)
+    q.specs = getspecs(p)
+    return q
 end
 
 copyprocess(la::ALA, specs...; lifetime = Indefinite(), timeout = 1.0, context = nothing, kwargs...) where {ALA<:AbstractLoopAlgorithm} =
-    Process(isnothing(context) ? init(la, specs...) : _with_lifecycle(resolve(la), context, copyinputs(la), copyoverrides(la)); lifetime, timeout)
+    isnothing(context) ? Process(la, specs...; lifetime, timeout) : Process(la; context, lifetime, timeout)
 
-"""Make `p1` run `p2`'s plan, state context and timeout, from the start."""
+"""Make `p1` run `p2`'s plan, specs, state context and timeout, from the start."""
 function createfrom!(p1::Process, p2::Process)
     p1.algo = p2.algo
+    p1.specs = getspecs(p2)
     _sync_state_context!(p1, getcontext(p2))
     p1.runtime_context = nothing
     getsession(p1).loop_cursor = nothing

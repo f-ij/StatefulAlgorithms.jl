@@ -32,8 +32,7 @@ end
 
 @inline function reset!(p::InlineProcess, inputs_overrides...)
     reset_loopidx!(getsession(p))
-    initialized = init(getalgo(p), inputs_overrides...; lifetime = lifetime(p))
-    p.context = StatefulAlgorithms.getcontext(initialized)
+    p.context = first(setup(getalgo(p), getspecs(p)..., inputs_overrides...; lifetime = lifetime(p)))
     # TODO: Probably remove consumed flag
     p.consumed = false
     return true

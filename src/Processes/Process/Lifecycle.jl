@@ -69,7 +69,7 @@ function Base.close(p::Process)
         Base.showerror(stderr, err)
         p.task = nothing
         p.runtime_context = nothing
-        _sync_state_context!(p, getcontext(init(getalgo(p); lifetime = lifetime(p))))
+        _sync_state_context!(p, first(setup(getalgo(p), getspecs(p)...; lifetime = lifetime(p))))
 
     end
 
@@ -143,7 +143,7 @@ function reinit(p::Process)
     pause(p)
     wait(p)
     # A paused run keeps its runtime context: it resumes with the new state.
-    _sync_state_context!(p, getcontext(init(getalgo(p); lifetime = lifetime(p))))
+    _sync_state_context!(p, first(setup(getalgo(p), getspecs(p)...; lifetime = lifetime(p))))
     run(p)
     return true
 end

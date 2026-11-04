@@ -8,8 +8,10 @@ export TimedProcess
 mutable struct TimedProcess{F,C} <: InteractiveProcess{F,C}
     algo::F
     lifetime::Lifetime
-    # As in `Process`: the state when its type is not the one stored in the plan; written only by `setcontext!`.
-    state_context::Union{Nothing, ProcessContext}
+    # As in `Process`: the process's state; written only by `setcontext!`.
+    state_context::ProcessContext
+    # As in `Process`: the specs the process was built with.
+    specs::Tuple
     # The run's runtime context (its inputs and declared locals) between two ticks and while paused, read and written by
     # every tick. `nothing` when no run is going on.
     runtime_context::Union{Nothing, ProcessContext}

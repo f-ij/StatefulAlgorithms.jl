@@ -35,7 +35,7 @@ function rl_phase_types(plan)
     return (; plan = typeof(plan),
               resolving = typeof(first(StatefulAlgorithms.normalize_ids(plan))),
               resolved = typeof(resolved),
-              initialized = typeof(StatefulAlgorithms.init(resolved)))
+              initialized = typeof(Base.first(setup(resolved))))
 end
 
 @testset "Re-layout with other values reuses every phase" begin

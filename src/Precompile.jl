@@ -574,15 +574,14 @@ Unique: −0.05 s per scenario (`CompositeAlgorithm(...) + Route` −0.02 s, Inl
     )
     resolved_managed_algo = resolve(managed_algo)
     resolve_process_inputs_overrides(resolved_managed_algo, managed_specs)
-    initialized_managed_algo = StatefulAlgorithms.init(managed_algo, managed_specs...; lifetime = Repeat(1))
-    getpersistentcontext(initialized_managed_algo)
+    managed_context, managed_plan = setup(managed_algo, managed_specs...; lifetime = Repeat(1))
 
     managed_process = Process(managed_algo, managed_specs...; repeats = 1)
     run(managed_process)
     wait(managed_process)
     close(managed_process)
 
-    initialized_managed_process = Process(initialized_managed_algo; repeats = 1)
+    initialized_managed_process = Process(managed_plan; context = managed_context, repeats = 1)
     run(initialized_managed_process)
     wait(initialized_managed_process)
     close(initialized_managed_process)

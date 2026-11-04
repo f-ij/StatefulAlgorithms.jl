@@ -204,7 +204,7 @@ function Base.summary(io::IO, la::LA) where {LA<:LoopAlgorithm}
 end
 
 """
-Print a compact label for a `LoopAlgorithm` type: `LoopAlgorithm{plan type}`, eliding the lifecycle type parameters
+Print a compact label for a `LoopAlgorithm` type: `LoopAlgorithm{plan type}`, eliding the other type parameters
 that are not useful in user-facing output, or `LoopAlgorithm` when the plan type is not known (`LoopAlgorithm` itself,
 or a type in a method signature whose plan is a type variable).
 """

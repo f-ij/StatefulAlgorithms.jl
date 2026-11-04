@@ -420,11 +420,10 @@ end
         end,
         makecontext = (idx, manager, template) -> begin
             context_count[] += 1
-            initialized = init(
+            first(setup(
                 getalgo(template),
                 Input(ManagerProcessAccumulator, :start => idx),
-            )
-            StatefulAlgorithms.getcontext(initialized)
+            ))
         end,
     )
 

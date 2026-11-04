@@ -46,30 +46,29 @@ runtime_input_bucket(ctx) = getproperty(StatefulAlgorithms.get_subcontexts(ctx),
     @test StatefulAlgorithms.isresolved(typeof(Init(:LifecycleInitA_1; x = 1)))
 
     la = CompositeAlgorithm(LifecycleInitA, LifecycleInitB, (1, 1))
-    initialized = init(la, Init(LifecycleInitA; x = 1), Init(LifecycleInitB; y = 2))
-    replayed = init(initialized)
-    overridden = init(replayed, Init(LifecycleInitA; x = 5))
+    initialized, la_plan = setup(la, Init(LifecycleInitA; x = 1), Init(LifecycleInitB; y = 2))
+    overridden, _ = setup(la, Init(LifecycleInitA; x = 1), Init(LifecycleInitB; y = 2), Init(LifecycleInitA; x = 5))
 
-    @test StatefulAlgorithms.getcontext(replayed)[LifecycleInitA].x[] == 1
-    @test StatefulAlgorithms.getcontext(replayed)[LifecycleInitB].y[] == 2
-    @test StatefulAlgorithms.getcontext(overridden)[LifecycleInitA].x[] == 5
-    @test StatefulAlgorithms.getcontext(overridden)[LifecycleInitB].y[] == 2
+    @test initialized[LifecycleInitA].x[] == 1
+    @test initialized[LifecycleInitB].y[] == 2
+    @test overridden[LifecycleInitA].x[] == 5
+    @test overridden[LifecycleInitB].y[] == 2
 
-    general_init = init(la, Init(; x = 3, y = 4, z = 5))
-    @test StatefulAlgorithms.getcontext(general_init)[LifecycleInitA].x[] == 3
-    @test StatefulAlgorithms.getcontext(general_init)[LifecycleInitA].z == 5
-    @test StatefulAlgorithms.getcontext(general_init)[LifecycleInitB].y[] == 4
+    general_init, _ = setup(la, Init(; x = 3, y = 4, z = 5))
+    @test general_init[LifecycleInitA].x[] == 3
+    @test general_init[LifecycleInitA].z == 5
+    @test general_init[LifecycleInitB].y[] == 4
 
-    targeted_after_general = init(la, Init(; x = 3, y = 4), Init(LifecycleInitA; x = 8))
-    @test StatefulAlgorithms.getcontext(targeted_after_general)[LifecycleInitA].x[] == 8
-    @test StatefulAlgorithms.getcontext(targeted_after_general)[LifecycleInitB].y[] == 4
+    targeted_after_general, _ = setup(la, Init(; x = 3, y = 4), Init(LifecycleInitA; x = 8))
+    @test targeted_after_general[LifecycleInitA].x[] == 8
+    @test targeted_after_general[LifecycleInitB].y[] == 4
 
-    b_ref = StatefulAlgorithms.getcontext(overridden)[LifecycleInitB].y
-    partial = partialinit(overridden, Init(LifecycleInitA; x = 9, z = 4))
+    b_ref = overridden[LifecycleInitB].y
+    partial = reinit(la_plan, overridden, Init(LifecycleInitA; x = 9, z = 4))
 
-    @test StatefulAlgorithms.getcontext(partial)[LifecycleInitA].x[] == 9
-    @test StatefulAlgorithms.getcontext(partial)[LifecycleInitA].z == 4
-    @test StatefulAlgorithms.getcontext(partial)[LifecycleInitB].y === b_ref
+    @test partial[LifecycleInitA].x[] == 9
+    @test partial[LifecycleInitA].z == 4
+    @test partial[LifecycleInitB].y === b_ref
 
     resolved_la = resolve(la)
     resolved_target = getkey(only(findall(LifecycleInitA, StatefulAlgorithms.getregistry(resolved_la))))
@@ -80,8 +79,8 @@ runtime_input_bucket(ctx) = getproperty(StatefulAlgorithms.get_subcontexts(ctx),
     resolved_general_inputs = StatefulAlgorithms.resolve(StatefulAlgorithms.getregistry(resolved_la), Init(; x = 11))
     @test length(resolved_general_inputs) == length(keys(StatefulAlgorithms.getregistry(resolved_la)))
     @test all(StatefulAlgorithms.isresolved, resolved_general_inputs)
-    initialized_by_symbol = init(resolved_la, Init(resolved_target; x = 7))
-    @test StatefulAlgorithms.getcontext(initialized_by_symbol)[LifecycleInitA].x[] == 7
+    initialized_by_symbol, _ = setup(resolved_la, Init(resolved_target; x = 7))
+    @test initialized_by_symbol[LifecycleInitA].x[] == 7
 
     runtime_algo = @CompositeAlgorithm begin
         @state seed = 1
@@ -90,26 +89,23 @@ runtime_input_bucket(ctx) = getproperty(StatefulAlgorithms.get_subcontexts(ctx),
         @input bias = 2.0
         value = runtime_inputs_lifecycle_value(seed, temp, scale; bias = bias)
     end
-    initialized_runtime = init(resolve(runtime_algo))
+    runtime_start, runtime_plan = setup(runtime_algo)
 
-    @test_throws ErrorException run(initialized_runtime)
-    @test_throws ErrorException run(initialized_runtime; temp = 1.0, scale = 2, extra = 1)
-    @test_throws ErrorException run(initialized_runtime; temp = 1, scale = 2)
+    @test_throws ErrorException run(runtime_plan, runtime_start)
+    @test_throws ErrorException run(runtime_plan, runtime_start; temp = 1.0, scale = 2, extra = 1)
+    @test_throws ErrorException run(runtime_plan, runtime_start; temp = 1, scale = 2)
 
-    runtime_result = run(initialized_runtime; temp = 1.5, scale = 2)
-    runtime_context = StatefulAlgorithms.getcontext(runtime_result)
+    runtime_context, _ = run(runtime_plan, runtime_start; temp = 1.5, scale = 2)
     @test !haskey(StatefulAlgorithms.get_subcontexts(runtime_context), :Callable_1)   # function calls have no persistent state
     @test !haskey(StatefulAlgorithms.get_captured_returns(runtime_context), :value)
     @test isempty(StatefulAlgorithms.get_inputs(runtime_context))
     @test isempty(runtime_input_bucket(runtime_context))
     @test !haskey(StatefulAlgorithms.get_captured_returns(runtime_context), :process)
 
-    for entry in (runtime_algo, resolve(runtime_algo), initialized_runtime)
+    for entry in (runtime_algo, resolve(runtime_algo))
         process = Process(entry; repeats = 1)
         run(process; temp = 2.0, scale = 3)
         wait(process)
-        @test StatefulAlgorithms._has_typed_state_context(process)
-        @test isnothing(process.state_context)
         @test isnothing(process.runtime_context)
         fetched_context = fetch(process)
         @test !haskey(StatefulAlgorithms.get_captured_returns(fetched_context), :value)
@@ -123,8 +119,6 @@ runtime_input_bucket(ctx) = getproperty(StatefulAlgorithms.get_subcontexts(ctx),
 
     inline_worker = Process(runtime_algo; repeats = 1)
     StatefulAlgorithms.runprocessinline!(inline_worker; temp = 2.0, scale = 3)
-    @test StatefulAlgorithms._has_typed_state_context(inline_worker)
-    @test isnothing(inline_worker.state_context)
     @test isnothing(inline_worker.runtime_context)
     @test !haskey(StatefulAlgorithms.get_captured_returns(fetch(inline_worker)), :value)
     @test !haskey(StatefulAlgorithms.get_subcontexts(StatefulAlgorithms.getcontext(inline_worker)), :Callable_1)   # function calls have no persistent state
@@ -166,10 +160,12 @@ runtime_input_bucket(ctx) = getproperty(StatefulAlgorithms.get_subcontexts(ctx),
     @test_throws ErrorException run(inline_process; temp = 1, scale = 2)
     @test_throws ErrorException run(inline_process, Input(; seed = 2); temp = 1.0, scale = 2)
 
-    shape_result = run(init(CompositeAlgorithm(RuntimeShapeChanger(0))); lifetime = Repeat(0))
-    @test isempty(runtime_shape_context(StatefulAlgorithms.getcontext(shape_result)))
-    widened_shape_result = run(init(CompositeAlgorithm(RuntimeShapeChanger(0))); lifetime = Repeat(2))
-    @test isempty(runtime_shape_context(StatefulAlgorithms.getcontext(widened_shape_result)))
+    shape_context, shape_plan = setup(CompositeAlgorithm(RuntimeShapeChanger(0)))
+    shape_result, _ = run(shape_plan, shape_context; lifetime = Repeat(0))
+    @test isempty(runtime_shape_context(shape_result))
+    widened_context, widened_plan = setup(CompositeAlgorithm(RuntimeShapeChanger(0)))
+    widened_shape_result, _ = run(widened_plan, widened_context; lifetime = Repeat(2))
+    @test isempty(runtime_shape_context(widened_shape_result))
 
     pause_algo = @CompositeAlgorithm begin
         @input delta::Int
@@ -204,8 +200,6 @@ runtime_input_bucket(ctx) = getproperty(StatefulAlgorithms.get_subcontexts(ctx),
 
     @test getcontext(process)[PauseRuntimeInputConsumer].total > paused_total
     close(process)
-    @test StatefulAlgorithms._has_typed_state_context(process)
-    @test isnothing(process.state_context)
     @test isnothing(process.runtime_context)
     @test isempty(StatefulAlgorithms.get_inputs(getcontext(process)))
     @test isempty(runtime_input_bucket(getcontext(process)))

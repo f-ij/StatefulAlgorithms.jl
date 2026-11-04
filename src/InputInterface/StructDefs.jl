@@ -29,8 +29,8 @@ end
     Init(target, :name => value, ...; kwargs...)
 
 Initialization-time values for one process algorithm or state. These values are
-merged before `init` runs and are replayed by `init(la)` when stored on an
-initialized loop algorithm.
+merged before `init` runs (`setup`, process construction); a process keeps them
+for a full `reinit`.
 """
 function Init(target, pairs::Pair{Symbol,<:Any}...; kwargs...)
     nt = (;pairs..., kwargs...)

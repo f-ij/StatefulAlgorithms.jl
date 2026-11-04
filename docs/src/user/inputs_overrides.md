@@ -35,7 +35,7 @@ kept as `ref` for display and inspection.
 
 ## When They Apply
 
-`init(la, specs...)` applies persistent setup in this order:
+`setup(plan_spec, specs...)` (and process construction, which runs it) applies persistent setup in this order:
 
 1. `Init` specs are merged into target subcontexts.
 2. `init(...)` executes.
@@ -48,25 +48,22 @@ So:
 
 ## Stored Lifecycle Specs
 
-Initialized loop algorithms store their `Init` and `Override` specs. Calling
-`init(la)` again replays the stored specs and rebuilds the full persistent
-context.
-
-Passed specs override stored specs per target:
+A plan holds no specs and no context. `setup` returns the context, and the user keeps
+it; a process keeps the specs it was built with and sets up from them again on a
+full `reinit(p)`. Several specs for one target in one call are merged, later ones win:
 
 ```julia
-initialized = init(algo, Init(Walker; dt = 0.01))
-updated = init(initialized, Init(Walker; dt = 0.02))
+context, plan = setup(algo, Init(Walker; dt = 0.01), Init(Walker; dt = 0.02))   # dt == 0.02
 ```
 
-`partialinit(la, specs...)` rebuilds only the targeted algorithms or states:
+`reinit(plan, context, specs...)` rebuilds only the targeted algorithms or states
+and keeps the rest of the context:
 
 ```julia
-la = partialinit(la, Init(Walker; dt = 0.02))
+context = reinit(plan, context, Init(Walker; dt = 0.02))
 ```
 
-Both `init` and `partialinit` return a loop algorithm. Callers should use the
-returned value because the concrete context type may change.
+See [The Pipeline: Setup, Run, Cleanup](@ref pipeline_user).
 
 ## Example
 
@@ -105,12 +102,12 @@ algo = @CompositeAlgorithm begin
     step = metropolis(energy, temperature; sweep = sweep)
 end
 
-la = init(resolve(algo))
-la = run(la; temperature = 2.0)
+context, plan = setup(algo)
+context, _ = run(plan, context; temperature = 2.0)
 ```
 
-Runtime inputs are not stored in the loop algorithm. After the run finishes,
-the stored persistent context excludes runtime `_inputs` values.
+Runtime inputs are not stored in the context. After the run finishes, the
+returned context excludes runtime `_inputs` values.
 
 Input declarations support:
 

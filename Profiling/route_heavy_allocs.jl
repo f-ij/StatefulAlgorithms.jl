@@ -1,7 +1,6 @@
 # Allocations per call of each piece of one run of the route-heavy algorithm (route_heavy_benchmark.jl), as today's
-# `run(la)` (src/LoopAlgorithms/DirectRuns.jl) does them: the run's session and starting `LoopContext`
-# (`prepare_for_loop`), steps (`_step!`, the call `loop` makes, src/Loops.jl), the run's end (`finalizer!`) and the
-# plan rebuilt with its lifecycle (`_with_lifecycle`).
+# `run(plan, context)` (src/LoopAlgorithms/DirectRuns.jl) does them: the run's session and starting `LoopContext`
+# (`prepare_for_loop`), steps (`_step!`, the call `loop` makes, src/Loops.jl) and the run's end (`finalizer!`).
 #
 # Old labels -> new labels (the old API, `LoopRunProcess`, `_merge_into_globals`, `_strip_runtime_inputs` and the
 # `Unstable()`/`Stable()` step modes, no longer exists):
@@ -11,7 +10,7 @@
 #   stable_step      -> later_step        one `_step!` on the `LoopContext` after the first step (no step modes any more)
 #   stable_100_steps -> later_100_steps   100 such `_step!` calls
 #   strip_runtime    -> finalizer         the run's end: cleanup + final result, back to the persistent context (`finalizer!`)
-#   with_lifecycle   -> with_lifecycle    unchanged
+#   with_lifecycle   -> (removed)         the plan holds no context since 2026-11-04, so nothing is rebuilt after a run
 #   base_run         -> base_run          unchanged
 include(joinpath(@__DIR__, "route_heavy_benchmark.jl"))
 
@@ -19,13 +18,11 @@ const ALLOC_STEPS = parse(Int, get(ENV, "ROUTE_HEAVY_ALLOC_STEPS", "2000"))
 const ALLOC_RUNS = parse(Int, get(ENV, "ROUTE_HEAVY_ALLOC_RUNS", "1000"))
 const ALLOC_SINK = Ref{Any}(nothing)
 
-function route_heavy_prepared()
-    return init(resolve(route_heavy_algorithm()))
-end
+"""The starting context and the resolved plan of the route-heavy algorithm (`setup`)."""
+route_heavy_prepared() = setup(route_heavy_algorithm())
 
-"""The session, plan and starting `LoopContext` of a direct run of `algo`, as `run(algo)` gets them."""
-function route_heavy_run_start(algo::A, lifetime::LT) where {A<:StatefulAlgorithms.AbstractLoopAlgorithm, LT<:StatefulAlgorithms.Lifetime}
-    persistent_context = StatefulAlgorithms.getpersistentcontext(algo)
+"""The session, plan and starting `LoopContext` of a direct run of `algo` on `persistent_context`, as `run(algo, context)` gets them."""
+function route_heavy_run_start(algo::A, persistent_context::C, lifetime::LT) where {A<:StatefulAlgorithms.AbstractLoopAlgorithm, C<:StatefulAlgorithms.ProcessContext, LT<:StatefulAlgorithms.Lifetime}
     return StatefulAlgorithms.prepare_for_loop(algo, persistent_context, (;), lifetime, StatefulAlgorithms.Resuming{false}())
 end
 
@@ -37,8 +34,8 @@ function route_heavy_step(algo::A, lc::LC, session::S, lifetime::LT) where {A<:S
     return StatefulAlgorithms._step!(plan, cursor, lc, wiring, StatefulAlgorithms.Namespace{nothing}(), session, lifetime)
 end
 
-function route_heavy_after_first_step(algo::A, lifetime::LT) where {A<:StatefulAlgorithms.AbstractLoopAlgorithm, LT<:StatefulAlgorithms.Lifetime}
-    session, plan, lc = route_heavy_run_start(algo, lifetime)
+function route_heavy_after_first_step(algo::A, persistent_context::C, lifetime::LT) where {A<:StatefulAlgorithms.AbstractLoopAlgorithm, C<:StatefulAlgorithms.ProcessContext, LT<:StatefulAlgorithms.Lifetime}
+    session, plan, lc = route_heavy_run_start(algo, persistent_context, lifetime)
     lc = route_heavy_step(plan, lc, session, lifetime)
     StatefulAlgorithms.tick!(session)
     StatefulAlgorithms.inc!(session)
@@ -69,18 +66,16 @@ function allocation_per_call(f, label::AbstractString, runs::Int)
 end
 
 function main()
-    algo = route_heavy_prepared()
+    persistent_context, algo = route_heavy_prepared()
     lifetime = Repeat(ALLOC_STEPS)
-    persistent_context = StatefulAlgorithms.getpersistentcontext(algo)
 
     # Warm all measured paths before recording allocations.
-    warm_result = run(algo; repeats = ALLOC_STEPS)
-    session, plan, start_lc = route_heavy_run_start(algo, lifetime)
+    warm_result = run(algo, persistent_context; repeats = ALLOC_STEPS)
+    session, plan, start_lc = route_heavy_run_start(algo, persistent_context, lifetime)
     step_wiring = StatefulAlgorithms.getwiring(StatefulAlgorithms.getplan(plan))
-    session2, plan2, first_lc = route_heavy_after_first_step(algo, lifetime)
+    session2, plan2, first_lc = route_heavy_after_first_step(algo, persistent_context, lifetime)
     later_lc = route_heavy_later_steps!(plan2, first_lc, 16)
-    finished_context, _ = StatefulAlgorithms.finalizer!(algo, StatefulAlgorithms.getpersistent(later_lc), StatefulAlgorithms.getruntime(later_lc), session2, lifetime)
-    ALLOC_SINK[] = StatefulAlgorithms._with_lifecycle(algo, finished_context, StatefulAlgorithms.getstoredinits(algo), StatefulAlgorithms.getstoredoverrides(algo))
+    ALLOC_SINK[] = StatefulAlgorithms.finalizer!(algo, StatefulAlgorithms.getpersistent(later_lc), StatefulAlgorithms.getruntime(later_lc), session2, lifetime)
 
     println("route_heavy_alloc_steps=", ALLOC_STEPS)
     println("route_heavy_alloc_runs=", ALLOC_RUNS)
@@ -93,11 +88,11 @@ function main()
     end
 
     allocation_per_call("prepare_for_loop", ALLOC_RUNS) do
-        route_heavy_run_start(algo, lifetime)
+        route_heavy_run_start(algo, persistent_context, lifetime)
     end
 
     allocation_per_call("first_step", ALLOC_RUNS) do
-        s, p, lc = route_heavy_run_start(algo, lifetime)
+        s, p, lc = route_heavy_run_start(algo, persistent_context, lifetime)
         route_heavy_step(p, lc, s, lifetime)
     end
 
@@ -113,12 +108,8 @@ function main()
         StatefulAlgorithms.finalizer!(algo, StatefulAlgorithms.getpersistent(later_lc), StatefulAlgorithms.getruntime(later_lc), session2, lifetime)
     end
 
-    allocation_per_call("with_lifecycle", ALLOC_RUNS) do
-        StatefulAlgorithms._with_lifecycle(algo, finished_context, StatefulAlgorithms.getstoredinits(algo), StatefulAlgorithms.getstoredoverrides(algo))
-    end
-
     allocation_per_call("base_run", ALLOC_RUNS) do
-        run(algo; repeats = ALLOC_STEPS)
+        run(algo, persistent_context; repeats = ALLOC_STEPS)
     end
 end
 

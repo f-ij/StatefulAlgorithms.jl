@@ -47,8 +47,8 @@ using StatefulAlgorithms
     @test length(sharedvars[other_name]) == 1
     @test StatefulAlgorithms.source_namespace(only(sharedvars[other_name])) == source_name
 
-    initialized = StatefulAlgorithms.init(algo)
-    reinitialized = StatefulAlgorithms.init(initialized)
+    _, initialized = setup(algo)
+    _, reinitialized = setup(initialized)
     @test typeof(StatefulAlgorithms.getplan(initialized)) === typeof(StatefulAlgorithms.getplan(reinitialized))
     @test StatefulAlgorithms.getplan(initialized) === StatefulAlgorithms.getplan(reinitialized)
 

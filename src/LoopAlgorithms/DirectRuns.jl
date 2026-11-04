@@ -1,15 +1,13 @@
 # Direct runs: a plan run from the user's own code, with no process around it (mode 1, "Modes of operation" in
 # TODO.md). The user pipeline is `setup` (plan spec and `Init(...)` specs -> context and resolved plan), `run(plan,
-# context)`, `reinit(plan, context, Init(...))` (partial re-init) and `cleanup(plan, context)` (docs/src/user/pipeline.md). The older calls `init(la, Init(...), Override(...))`
-# (builds the plan's state context), `partialinit` (re-initializes only the named targets) and `run(la; inputs...)`
-# store the context and the Init/Override specs in the returned `LoopAlgorithm`; the Init/Override merging below exists
-# to replay those stored specs. The `prepare_for_loop` method for a plan is in the hook-extensions section at the end.
+# context)`, `reinit(plan, context, Init(...))` (partial re-init) and `cleanup(plan, context)` (docs/src/user/pipeline.md).
+# A plan holds no data: the user keeps the context. Processes build their context with `setup` too. The
+# `prepare_for_loop` method for a plan is in the hook-extensions section at the end.
 
-export setup, partialinit
+export setup
 
-# Merge newly passed `Init`/`Override` specs over previously stored specs by
-# target. This lets `init(initialized, Init(Target; ...))` replay the old
-# lifecycle while replacing only the named target.
+# Merge `Init`/`Override` specs by target, later ones winning: several specs for one target in one `setup` call, or a
+# process's stored specs and new ones (`copyprocess`).
 @inline _merge_specs_by_target(base::B, ::Tuple{}) where {B<:Tuple} = base
 @inline _merge_specs_by_target(::Tuple{}, updates::Tuple{}) = ()
 @inline _merge_specs_by_target(::Tuple{}, updates::Tuple{T}) where {T} = updates
@@ -69,11 +67,8 @@ to perform matcher lookup again.
     return resolved
 end
 
-@inline _resolve_lifecycle_specs(la::LA, specs) where {LA<:AbstractLoopAlgorithm} =
-    _resolve_lifecycle_specs(getregistry(resolve(la)), specs)
-
 """
-Build the persistent context for an initialized loop algorithm.
+Build the starting context of the resolved plan `la` from resolved `Init`/`Override`/`Interactive` specs.
 
 Init runs on an `InitContext`, which also carries `algo` and `lifetime`. In order: the empty context, the `Init` values
 merged in, every registered algorithm's `init`, the `Override` values, the `Interactive` specs, the redirects.
@@ -97,69 +92,12 @@ and builds its starting context. The `Init(...)` specs say which values go to wh
 resolved plan; the plan holds no context, the user keeps the context and passes it to `run(plan, context)`.
 """
 function setup(plan_spec::LA, specs::InputInterface...; lifetime = Indefinite()) where {LA<:LoopSpec}
-    plan = _without_lifecycle(resolve(plan_spec))
+    plan = resolve(plan_spec)
     inits, overrides, interactives = _split_lifecycle_specs(_resolve_lifecycle_specs(getregistry(plan), specs))
+    inits = _merge_specs_by_target((), inits)
+    overrides = _merge_specs_by_target((), overrides)
+    interactives = _merge_interactives_by_target((), interactives)
     return _init_context_for(plan, inits, overrides, interactives, lifetime), plan
-end
-
-"""
-    init(la::LoopAlgorithm, Init(...), Override(...))
-
-Fully initialize `la`, replaying stored init/override specs and letting passed
-specs override stored specs per target.
-"""
-@inline function init(la::LA, specs::InputInterface...; lifetime = Indefinite()) where {LA<:LoopSpec}
-    resolved = _without_lifecycle(resolve(la))
-    new_specs = _resolve_lifecycle_specs(getregistry(resolved), specs)
-    new_inits, new_overrides, new_interactives = _split_lifecycle_specs(new_specs)
-    stored_overrides, stored_interactives = _split_override_interactive(getstoredoverrides(la))
-    inits = _merge_specs_by_target(getstoredinits(la), new_inits)
-    overrides = _merge_specs_by_target(stored_overrides, new_overrides)
-    interactives = _merge_interactives_by_target(stored_interactives, new_interactives)
-    context = _init_context_for(resolved, inits, overrides, interactives, lifetime)
-    return _with_lifecycle(resolved, context, inits, (overrides..., interactives...))
-end
-
-"""
-    partialinit(la, Init(...), Override(...))
-
-Re-initialize only the targets named by the passed specs.
-"""
-function partialinit(la::LA, specs::InputInterface...) where {LA<:AbstractLoopAlgorithm}
-    context = getpersistentcontext(la)
-    isnothing(context) && error("partialinit requires an initialized LoopAlgorithm.")
-    resolved_specs = _resolve_lifecycle_specs(la, specs)
-    inits, overrides, interactives = _split_lifecycle_specs(resolved_specs)
-    stored_overrides, stored_interactives = _split_override_interactive(getstoredoverrides(la))
-    merged_overrides = _merge_specs_by_target(stored_overrides, overrides)
-    merged_interactives = _merge_interactives_by_target(stored_interactives, interactives)
-    new_context = context
-    for input in inits
-        key = get_target_name(input)
-        ov = filter(o -> get_target_name(o) == key, merged_overrides)
-        new_context = initcontext(new_context, key; inputs = get_vars(input), overrides = isempty(ov) ? (;) : get_vars(first(ov)))
-    end
-    new_context = @inline apply_interactive_specs(new_context, merged_interactives)
-    new_context = @inline apply_redirect_specs(new_context, la)
-    return _with_lifecycle(la, new_context, _merge_specs_by_target(getstoredinits(la), inits), (merged_overrides..., merged_interactives...))
-end
-
-"""
-    run(la; repeats = 1, lifetime = nothing, inputs...)
-
-Runs `la` once with no process around it and returns `la` with the run's final state context stored in it; the stored
-`Init`/`Override` specs are kept. An uninitialized `la` is first initialized (`init(la)`). The run lasts `lifetime`, or
-`repeats` repeats when no lifetime is given. The keyword `inputs` are the run's `@input` values: `prepare_for_loop`
-checks them against the plan's declarations and adds them to the run's runtime context (`with_inputs`). The runtime
-context (inputs, declared locals, returns) is dropped when the run ends; only the state context is kept.
-"""
-function Base.run(la::LA; repeats = 1, lifetime = nothing, kwargs...) where {LA<:LoopSpec}
-    initialized = isnothing(getpersistentcontext(la)) ? init(la) : la
-    persistent_context = getpersistentcontext(initialized)
-    lt = parse_lifetime(nothing, lifetime, isnothing(lifetime) ? repeats : nothing)
-    session, plan, lc = prepare_for_loop(initialized, persistent_context, (; kwargs...), lt, Resuming{false}())
-    persistent_context, _ = run_session_loop(session, plan, lc, lt)
-    return _with_lifecycle(initialized, persistent_context, getstoredinits(initialized), getstoredoverrides(initialized))
 end
 
 """
@@ -207,7 +145,7 @@ end
 """
     prepare_for_loop(plan, context, inputs, lifetime, resume)
 
-A plan run directly (`run(plan)`): a new `InlineSession` for the run (the loop needs a counter; nothing can pause or
+A plan run directly (`run(plan, context)`): a new `InlineSession` for the run (the loop needs a counter; nothing can pause or
 close a direct run), the plan, and the `LoopContext` from `context` and the run's inputs (Processes/Hooks.jl).
 """
 @inline prepare_for_loop(plan::LA, context::C, inputs::I, lt::LT, resume::Resuming{false}) where {LA<:LoopSpec, C<:ProcessContext, I<:NamedTuple, LT} =

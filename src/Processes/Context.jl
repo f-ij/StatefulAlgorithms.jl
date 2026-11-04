@@ -1,13 +1,13 @@
 #=
-Calls on a process's context that work for every process type: making a new context from the plan's init
-(`makecontext`, `makecontext!`), cleanup, and sending a value to a `ContextExchange` (`interact!`, inactive).
+Calls on a process's context that work for every process type: making a new context with `setup` from the plan and
+the process's specs (`makecontext`, `makecontext!`), cleanup, and sending a value to a `ContextExchange` (`interact!`, inactive).
 =#
 
 function makecontext(p::AbstractProcess, inputs_overrides...; lifetime=nothing)
     lt = isnothing(lifetime) ? StatefulAlgorithms.lifetime(p) : lifetime
-    getcontext(init(getalgo(p), inputs_overrides...; lifetime = lt))
+    first(setup(getalgo(p), getspecs(p)..., inputs_overrides...; lifetime = lt))
 end
-"""Build a fresh context for a process by replaying lifecycle init on its LA."""
+"""Build a fresh context for a process with `setup`, from its plan, the specs it was built with and `inputs_overrides`."""
 function makecontext!(p::AbstractProcess, inputs_overrides...; lifetime=nothing)
     c = makecontext(p, inputs_overrides...; lifetime)
     setcontext!(p, c)

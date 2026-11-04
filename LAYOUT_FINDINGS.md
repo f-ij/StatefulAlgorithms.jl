@@ -118,7 +118,7 @@ matching its name.
 | `LoopAlgorithms/LoopCursor.jl:16` | `loop_cursor(::Any, ::Val)` default extended per plan type | a | `Hooks.jl` |
 | `LoopAlgorithms/Setup.jl:37-38` | `parse_parser_option(::ParserOption)`: abstract contract in parsing machinery | a | `Interface.jl` |
 | `LoopAlgorithms/PlanOptions.jl:101-102` | `setstates`/`setoptions(::AbstractPlan)` fallbacks | a | `Interface.jl` |
-| `LoopAlgorithms/Accessors.jl:83,97-100,113` | `LoopSpec` fallbacks (`setoptions`, `getstoredinits`, `getstoredoverrides`, `getpersistentcontext`, `getcontext`, `isresolved`) | a | `Interface.jl` |
+| `LoopAlgorithms/Accessors.jl:83,97-100,113` | `LoopSpec` fallbacks (`setoptions`, `isresolved`; `getstoredinits`, `getstoredoverrides`, `getpersistentcontext`, `getcontext` removed 2026-11-04, the plan holds no data) | a | `Interface.jl` |
 | `LoopAlgorithms/Flatten.jl:66` | `states(::LoopSpec) = error(...)` | a | `Interface.jl` |
 | `LoopAlgorithms/Redirect/Materialization.jl:6` | `getstoredredirects` getter | d | `Accessors.jl` |
 | `LoopAlgorithms/Interface.jl:94` | `replace_fields`: generic machinery in the contract file | f | `Utils.jl` / `GeneratedCode/` |

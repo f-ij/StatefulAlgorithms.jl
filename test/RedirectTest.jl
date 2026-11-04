@@ -38,8 +38,8 @@ end
             (1,),
         ))
 
-        initialized = init(algo, Override(:target; value = RecursiveViewWrapper(RecursiveViewWrapper(5))); lifetime = Repeat(1))
-        stepped_context = StatefulAlgorithms._step!(initialized, StatefulAlgorithms.getcontext(initialized))
+        initialized_context, initialized = setup(algo, Override(:target; value = RecursiveViewWrapper(RecursiveViewWrapper(5))); lifetime = Repeat(1))
+        stepped_context = StatefulAlgorithms._step!(initialized, initialized_context)
 
         @test stepped_context.target.seen == 5
         @test stepped_context.target.value isa RecursiveViewWrapper
@@ -53,8 +53,7 @@ end
             Redirect(:source => :target, :value),
         ))
 
-        initialized = init(algo; lifetime = Repeat(1))
-        context = StatefulAlgorithms.getcontext(initialized)
+        context, initialized = setup(algo; lifetime = Repeat(1))
 
         @test context[Var(:target, :value)] == 3
         @test context.source.value == 3
@@ -74,8 +73,8 @@ end
             Redirect(:source => :target, :value),
         ))
 
-        initialized = init(algo, Override(:source; value = RecursiveViewWrapper(RecursiveViewWrapper(8))); lifetime = Repeat(1))
-        stepped_context = StatefulAlgorithms._step!(initialized, StatefulAlgorithms.getcontext(initialized))
+        initialized_context, initialized = setup(algo, Override(:source; value = RecursiveViewWrapper(RecursiveViewWrapper(8))); lifetime = Repeat(1))
+        stepped_context = StatefulAlgorithms._step!(initialized, initialized_context)
 
         @test stepped_context.target.seen == 8
         # `context[Var]` reads like a view: through the redirect and both wrappers; `context.source.value` is the stored value.
@@ -94,8 +93,7 @@ end
             Redirect(:source => :middle, :value),
         ))
 
-        initialized = init(algo; lifetime = Repeat(1))
-        context = StatefulAlgorithms.getcontext(initialized)
+        context, initialized = setup(algo; lifetime = Repeat(1))
         @test context.target.value isa RedirectedVar
         @test context.middle.value isa RedirectedVar
 
@@ -118,8 +116,8 @@ end
             Redirect(:source => :middle, :value),
         ))
 
-        initialized = init(algo; lifetime = Repeat(1))
-        stepped_context = StatefulAlgorithms._step!(initialized, StatefulAlgorithms.getcontext(initialized))
+        initialized_context, initialized = setup(algo; lifetime = Repeat(1))
+        stepped_context = StatefulAlgorithms._step!(initialized, initialized_context)
         @test stepped_context.source.value == 4
         @test stepped_context.middle.value isa RedirectedVar
         @test stepped_context.target.value isa RedirectedVar
@@ -164,7 +162,7 @@ end
         @test StatefulAlgorithms.isresolved(typeof(resolved))
         @test @inferred(StatefulAlgorithms.isresolved(resolved))
 
-        context = StatefulAlgorithms.getcontext(init(resolved; lifetime = Repeat(1)))
+        context = first(setup(resolved; lifetime = Repeat(1)))
         @test_throws "requires a resolved LoopAlgorithm" StatefulAlgorithms.apply_redirect_specs(context, plan)
     end
 
@@ -180,8 +178,7 @@ end
         resolved = resolve(algo)
         @test only(getoptions(resolved, Redirect)) isa Redirect
 
-        initialized = init(resolved; lifetime = Repeat(1))
-        context = StatefulAlgorithms.getcontext(initialized)
+        context, initialized = setup(resolved; lifetime = Repeat(1))
         @test context[Var(:target, :value)] == 3
 
         stepped_context = StatefulAlgorithms._step!(initialized, context)

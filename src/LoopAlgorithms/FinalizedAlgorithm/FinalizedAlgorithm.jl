@@ -74,12 +74,6 @@ end
 @inline setstates(fa::FinalizedAlgorithm, states) = finalstep(setstates(inneralgorithm(fa), states), finalfunction(fa))
 @inline _attach_registry(fa::FinalizedAlgorithm, registry::NameSpaceRegistry) = finalstep(_attach_registry(inneralgorithm(fa), registry), finalfunction(fa))
 
-@inline _with_lifecycle(fa::FinalizedAlgorithm, context, inits, overrides) =
-    finalstep(_with_lifecycle(inneralgorithm(fa), context, inits, overrides), finalfunction(fa))
-@inline getpersistentcontext(fa::FinalizedAlgorithm) = getpersistentcontext(inneralgorithm(fa))
-@inline getstoredinits(fa::FinalizedAlgorithm) = getstoredinits(inneralgorithm(fa))
-@inline getstoredoverrides(fa::FinalizedAlgorithm) = getstoredoverrides(inneralgorithm(fa))
-
 function update_keys(fa::FinalizedAlgorithm, registry::NameSpaceRegistry)
     return finalstep(update_keys(inneralgorithm(fa), registry), finalfunction(fa))
 end

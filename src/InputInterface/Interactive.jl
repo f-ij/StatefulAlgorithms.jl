@@ -115,8 +115,6 @@ function _merge_interactives_by_target(base::B, updates::U) where {B<:Tuple, U<:
     return Tuple(merged)
 end
 
-@inline _split_override_interactive(specs) = filter_by_type(Override, specs), filter_by_type(Interactive, specs)
-
 """Split lifecycle specs into init, override, and interactive phases."""
 function _split_lifecycle_specs(specs)
     inits, overrides = _split_init_override(specs)

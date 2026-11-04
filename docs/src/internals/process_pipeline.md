@@ -9,30 +9,26 @@ execution.
 
 1. Wrap a bare `StepAlgorithm` as a one-child `CompositeAlgorithm` plan.
 2. Normalize stop behavior: `repeats = n` becomes `Repeat(n)`, `lifetime` accepts `Lifetime` objects, and `Routine` defaults to `Repeat(1)` when no lifetime is provided.
-3. Resolve the plan into a `LoopAlgorithm` wrapper when needed.
-4. Run lifecycle `init(algo, specs...; lifetime)` unless an initialized context is already provided.
-5. Store the initialized algorithm wrapper on the process. Its typed lifecycle
-   context is the normal state context; `Process.state_context` holds it instead
-   when its type changed, and `Process.runtime_context` holds a paused run's
-   runtime context.
+3. Run `setup(algo, specs...; lifetime)` (resolves the plan and builds its context), or only resolve the plan when a
+   `context` is given.
+4. Store the resolved plan, the context (`Process.state_context`) and the specs (`Process.specs`) on the process.
+   `Process.runtime_context` holds a paused run's runtime context.
 
 Construction goes `Process(...)` -> `_build_process` -> `_prepare_process` (the
 plan, its context and the lifetime) -> `_construct_process` (the process and its
 `InteractiveSession`); `InlineProcess` has the same three steps.
 
-There is no `TaskData` layer. The initialized `LoopAlgorithm` carries the
-persistent context plus stored init/override specs. A `Process` normally reads
-its current state context from that wrapper (`getcontext(p)`). Its separate
-`state_context` slot is used only for shape-divergent state, its `runtime_context`
-slot only while a run is paused, and its session (`InteractiveSession`) keeps the
-counters, times, flags and the loop cursor across pause/resume.
+There is no `TaskData` layer. A resolved `LoopAlgorithm` holds no data: the process keeps its state context
+(`getcontext(p)` reads `state_context`), the specs it was built with (`getspecs(p)`, read by a full `reinit(p)`), a
+paused run's runtime context, and its session (`InteractiveSession`), which keeps the counters, times, flags and the
+loop cursor across pause/resume.
 
 ## 2. Init Phase
 
-`init(la::LoopAlgorithm, specs...)` (`src/LoopAlgorithms/RuntimeInputs.jl`) applies:
+`setup(plan_spec, specs...)` (`src/LoopAlgorithms/DirectRuns.jl`, building the context in `_init_context_for`) applies:
 
 1. Resolve `Init`/`Override` specs through the registry.
-2. Merge passed specs over stored specs per target.
+2. Merge specs for the same target, later ones winning.
 3. Build a fresh persistent `ProcessContext` from the resolved registry.
 4. Merge `Init` values into target subcontexts.
 5. Build a separate init-only runtime context carrying `algo` and `lifetime`.
@@ -40,12 +36,11 @@ counters, times, flags and the loop cursor across pause/resume.
    separate.
 7. Merge `Override` values after init, then apply `Interactive` wrappers.
 8. Materialize the `Redirect` options collected from the plan tree into target context fields.
-9. Return a loop algorithm with the persistent context and replayable lifecycle
-   specs stored on it.
+9. Return the context and the resolved plan.
 
 For loop algorithms, `init(::LoopAlgorithm, ::ProcessContext)` iterates all registry entities in order (`src/LoopAlgorithms/Init.jl`).
 
-`partialinit(la, specs...)` uses the same target resolution but only rebuilds
+`reinit(plan, context, specs...)` uses the same target resolution but only rebuilds
 the targeted subcontexts.
 
 ## 3. Running
@@ -68,9 +63,8 @@ with `resume = true` when `p` is paused. `_start_run!`:
 The entered `loop` method then builds or restores the per-run
 `AbstractLoopCursor` from the resolved plan.
 
-`run(la::LoopAlgorithm; kwargs...)` runs an initialized loop algorithm directly
-with a fresh non-pausable loop cursor and returns a loop algorithm with the next
-persistent context.
+`run(plan, context; kwargs...)` runs a resolved plan directly on a user-held context
+with a fresh non-pausable loop cursor and returns the next persistent context and the run's result.
 
 ## 4. Loop Bootstrap and Runtime Inputs
 
@@ -117,8 +111,8 @@ The completion paths distinguish stored state from the task result:
    visible. Mapped cleanup writes update persistent state; cleanup-only outputs
    remain available to final projection.
 3. A finished `Process` or `InlineProcess` stores only the cleaned persistent
-   context. Direct `run(la)` likewise returns a loop algorithm containing only
-   that persistent state.
+   context. Direct `run(plan, context)` likewise returns only
+   that persistent state (with the run's result).
 4. The task result for an ordinary process is a temporary final-visible context:
    cleaned persistent state plus the runtime subcontexts still present at the end
    (inputs and declared locals; returns have ended with their blocks).

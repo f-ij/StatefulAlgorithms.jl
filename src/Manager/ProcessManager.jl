@@ -215,13 +215,13 @@ Replace the whole context of `slot.worker` by running the normal process init
 pipeline, then return `slot`.
 
 This is different from `resetworker!`: it rebuilds context values by calling
-`init(getalgo(slot.worker), inputs_overrides...; lifetime = lifetime(slot.worker))`
+`setup(getalgo(slot.worker), inputs_overrides...; lifetime = lifetime(slot.worker))`
 and then committing the resulting persistent context back onto the worker. Use
 it from `prepare!` when a job needs freshly initialized context state instead
 of reusing the previous context object.
 """
 function reinitworker!(slot::WorkerSlot{<:Process}, inputs_overrides...; kwargs...)
-    _sync_state_context!(slot.worker, getcontext(init(getalgo(slot.worker), inputs_overrides...; lifetime = lifetime(slot.worker))))
+    _sync_state_context!(slot.worker, first(setup(getalgo(slot.worker), inputs_overrides...; lifetime = lifetime(slot.worker))))
     return slot
 end
 
@@ -231,21 +231,13 @@ end
 Reinitialize only the context targets named by `inputs_overrides`, then return
 `slot`.
 
-This keeps the existing process context as the starting point and runs
-`partialinit` for the affected algorithm or state entries. Use it when one part
-of the context should be rebuilt through its `init` method while the rest of the
-context should keep its current values. Concretely, it builds a lifecycle-wrapped
-algorithm from the current process context, runs `partialinit(algo, inputs_overrides...)`,
-and assigns the returned context back to `slot.worker`.
+This keeps the existing process context as the starting point and re-initializes
+only the affected algorithm or state entries (`reinit(plan, context, inputs_overrides...)`).
+Use it when one part of the context should be rebuilt through its `init` method while
+the rest of the context should keep its current values.
 """
 function partialinitworker!(slot::WorkerSlot{<:Process}, inputs_overrides...)
-    algo = _with_lifecycle(
-        getalgo(slot.worker),
-        getcontext(slot.worker),
-        getstoredinits(getalgo(slot.worker)),
-        getstoredoverrides(getalgo(slot.worker)),
-    )
-    _sync_state_context!(slot.worker, getcontext(partialinit(algo, inputs_overrides...)))
+    _sync_state_context!(slot.worker, reinit(getalgo(slot.worker), getcontext(slot.worker), inputs_overrides...))
     return slot
 end
 
@@ -294,7 +286,7 @@ function runprocessinline!(worker::P; lifetime = nothing, repeats = nothing, kwa
 
     # Build the same runtime context as the asynchronous Process path, but call
     # the loop directly so no scheduler task is created for short manager jobs.
-    base_context = _has_typed_state_context(worker) ? _typed_state_context(worker) : getcontext(worker)
+    base_context = getcontext(worker)
     lt = StatefulAlgorithms.lifetime(worker)
     session, plan, lc = prepare_for_loop(worker, base_context, (; kwargs...), lt, Resuming{false}())
     @atomic session.paused = false
