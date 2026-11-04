@@ -34,6 +34,7 @@ const TEST_FILES = [
     "ReLayoutTest.jl",
     "RegistryBuildTest.jl",
     "TimedProcessTest.jl",
+    "SetupRunCleanupTest.jl",
 ]
 
 #=

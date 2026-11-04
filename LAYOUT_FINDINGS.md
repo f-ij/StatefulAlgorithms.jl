@@ -214,4 +214,4 @@ matching its name.
 | `Widgets/Apply.jl`, `Utils/MTuple.jl` | empty | f | delete |
 | `Widgets/IsBitsStorage.jl`, `ContextWrite.jl:38-46`, `RunFuncs.jl:19`, `Logger.jl:14` | not widget code (`context_broadcast!`, `unroll_apply`, `pushderef!`) | f | Utils / Unroll |
 | `Trackers/PrepareHelpers.jl`, `Arena.jl` | commented out of the build | f | — |
-| `Init.jl` (export line) | exports undefined `preparedata!` | f | — |
+| ~~`Init.jl` (export line)~~ | ~~exports undefined `preparedata!`~~ removed 2026-11-04 | f | — |

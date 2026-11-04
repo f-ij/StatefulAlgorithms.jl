@@ -11,6 +11,7 @@ makedocs(
     pages = [
         "Home" => "index.md",
         "User Documentation" => [
+            "The Pipeline: Setup, Run, Cleanup" => "user/pipeline.md",
             "Algorithms and States" => "user/algorithms_states.md",
             "Composite DSL" => "user/composite_dsl.md",
             "Migrating to Returns and Updates" => "user/migrating_dsl.md",

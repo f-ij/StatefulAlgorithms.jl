@@ -20,12 +20,13 @@ The internals section is for understanding how registries, contexts, routing, an
 
 If you are new to the package, read these first:
 
-1. [Algorithms and States](@ref algorithms_states_user)
-2. [Running, Wait, Fetch](@ref running_user)
-3. [Contexts and Indexing](@ref contexts_user)
-4. [Init, Overrides, and Runtime Inputs](@ref inputs_overrides_user)
-5. [Routes, Shares, and Redirects](@ref routes_shares_user)
-6. [Composite DSL](@ref composite_dsl_user)
+1. [The Pipeline: Setup, Run, Cleanup](@ref pipeline_user)
+2. [Algorithms and States](@ref algorithms_states_user)
+3. [Running, Wait, Fetch](@ref running_user)
+4. [Contexts and Indexing](@ref contexts_user)
+5. [Init, Overrides, and Runtime Inputs](@ref inputs_overrides_user)
+6. [Routes, Shares, and Redirects](@ref routes_shares_user)
+7. [Composite DSL](@ref composite_dsl_user)
 
 ## User Documentation
 

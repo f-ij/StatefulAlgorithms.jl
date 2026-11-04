@@ -20,6 +20,12 @@ function init(algos::LA, ic::I) where {LA<:LoopSpec,I<:InitContext}
     return @inline getpersistent(initialized)
 end
 
+"""
+    cleanup(plan, context) -> context
+
+The last step of the user pipeline (`setup`, `run`, cleanup): runs every registered algorithm's `cleanup` on `context`
+and returns the cleaned context.
+"""
 function cleanup(algos::LA, persistent_context) where {LA<:LoopSpec}
     return @inline getpersistent(cleanup(algos, LoopContext(persistent_context, _empty_context())))
 end

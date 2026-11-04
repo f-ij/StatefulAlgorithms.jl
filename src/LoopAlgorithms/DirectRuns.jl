@@ -1,10 +1,11 @@
 # Direct runs: a plan run from the user's own code, with no process around it (mode 1, "Modes of operation" in
-# TODO.md). `init(la, Init(...), Override(...))` builds the plan's state context, `partialinit` re-initializes only the
-# named targets, and `run(la; inputs...)` runs the plan once on its context. Today all three store the context and the
-# Init/Override specs in the returned `LoopAlgorithm`; the Init/Override merging below exists to replay those stored
-# specs. The `prepare_for_loop` method for a plan is in the hook-extensions section at the end.
+# TODO.md). The user pipeline is `setup` (plan spec and `Init(...)` specs -> context and resolved plan), `run(plan,
+# context)` and `cleanup(plan, context)` (docs/src/user/pipeline.md). The older calls `init(la, Init(...), Override(...))`
+# (builds the plan's state context), `partialinit` (re-initializes only the named targets) and `run(la; inputs...)`
+# store the context and the Init/Override specs in the returned `LoopAlgorithm`; the Init/Override merging below exists
+# to replay those stored specs. The `prepare_for_loop` method for a plan is in the hook-extensions section at the end.
 
-export partialinit
+export setup, partialinit
 
 # Merge newly passed `Init`/`Override` specs over previously stored specs by
 # target. This lets `init(initialized, Init(Target; ...))` replay the old
@@ -74,15 +75,31 @@ end
 """
 Build the persistent context for an initialized loop algorithm.
 
-Init runs on an `InitContext`, which also carries `algo` and `lifetime`.
-Only the persistent state is stored on the initialized algorithm.
+Init runs on an `InitContext`, which also carries `algo` and `lifetime`. In order: the empty context, the `Init` values
+merged in, every registered algorithm's `init`, the `Override` values, the `Interactive` specs, the redirects.
 """
-@inline function _init_context_for(la::LA, inits::I, overrides::O, lifetime::LT) where {LA<:AbstractLoopAlgorithm, I<:Tuple, O<:Tuple, LT}
+@inline function _init_context_for(la::LA, inits::I, overrides::O, interactives::IA, lifetime::LT) where {LA<:AbstractLoopAlgorithm, I<:Tuple, O<:Tuple, IA<:Tuple, LT}
     empty_context = ProcessContext(getregistry(la))
     input_context = isempty(inits) ? empty_context : merge_into_subcontexts(empty_context, construct_context_merge_tuples(inits))
     prepared = init(la, InitContext(input_context, la, lifetime))
     prepared_context = @inline _init_state_context(prepared, input_context)
-    return isempty(overrides) ? prepared_context : merge_into_subcontexts(prepared_context, construct_context_merge_tuples(overrides))
+    overridden_context = isempty(overrides) ? prepared_context : merge_into_subcontexts(prepared_context, construct_context_merge_tuples(overrides))
+    interactive_context = @inline apply_interactive_specs(overridden_context, interactives)
+    return @inline apply_redirect_specs(interactive_context, la)
+end
+
+"""
+    setup(plan_spec, Init(...), Override(...); lifetime = Indefinite()) -> (context, plan)
+
+The first step of the user pipeline (setup, `run`, `cleanup`) for a plan run without a process: resolves `plan_spec`
+and builds its starting context. The `Init(...)` specs say which values go to which algorithm before its `init` runs,
+`Override(...)` values are set after it. `lifetime` is what init may size buffers by. Returns the context and the
+resolved plan; the plan holds no context, the user keeps the context and passes it to `run(plan, context)`.
+"""
+function setup(plan_spec::LA, specs::InputInterface...; lifetime = Indefinite()) where {LA<:LoopSpec}
+    plan = _without_lifecycle(resolve(plan_spec))
+    inits, overrides, interactives = _split_lifecycle_specs(_resolve_lifecycle_specs(getregistry(plan), specs))
+    return _init_context_for(plan, inits, overrides, interactives, lifetime), plan
 end
 
 """
@@ -99,8 +116,7 @@ specs override stored specs per target.
     inits = _merge_specs_by_target(getstoredinits(la), new_inits)
     overrides = _merge_specs_by_target(stored_overrides, new_overrides)
     interactives = _merge_interactives_by_target(stored_interactives, new_interactives)
-    context = @inline apply_interactive_specs(_init_context_for(resolved, inits, overrides, lifetime), interactives)
-    context = @inline apply_redirect_specs(context, resolved)
+    context = _init_context_for(resolved, inits, overrides, interactives, lifetime)
     return _with_lifecycle(resolved, context, inits, (overrides..., interactives...))
 end
 
@@ -144,6 +160,21 @@ function Base.run(la::LA; repeats = 1, lifetime = nothing, kwargs...) where {LA<
     session, plan, lc = prepare_for_loop(initialized, persistent_context, (; kwargs...), lt, Resuming{false}())
     persistent_context, _ = run_session_loop(session, plan, lc, lt)
     return _with_lifecycle(initialized, persistent_context, getstoredinits(initialized), getstoredoverrides(initialized))
+end
+
+"""
+    run(plan, context; repeats = 1, lifetime = nothing, inputs...) -> (context, result)
+
+Runs the resolved `plan` (from `setup`) on `context` with no process around it and returns the run's final context and
+its result (what the plan's finalizer returns). The run lasts `lifetime`, or `repeats` repeats when no lifetime is
+given. The keyword `inputs` are the run's `@input` values, checked against the plan's declarations. The runtime
+context (inputs, declared locals, returns) is dropped when the run ends; only the state context comes back.
+"""
+function Base.run(plan::LA, context::C; repeats = 1, lifetime = nothing, kwargs...) where {LA<:LoopSpec, C<:ProcessContext}
+    isresolved(plan) || throw(ArgumentError("run(plan, context) needs the resolved plan that `setup` returns."))
+    lt = parse_lifetime(nothing, lifetime, isnothing(lifetime) ? repeats : nothing)
+    session, plan, lc = prepare_for_loop(plan, context, (; kwargs...), lt, Resuming{false}())
+    return run_session_loop(session, plan, lc, lt)
 end
 
 ##########################################

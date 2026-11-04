@@ -39,16 +39,13 @@ persistent context. A paused process keeps the run's runtime context (its inputs
 declared locals) and loop cursor internally, apart from its context, so it can resume;
 `getcontext(p)` is the process's state context, paused or not.
 
-Initialized loop algorithms can also be run directly:
+A plan can also be run without a process, with `setup`, `run` and `cleanup`
+(see [The Pipeline: Setup, Run, Cleanup](@ref pipeline_user)):
 
 ```julia
-la = init(resolve(algo), Init(MyAlgo; buffer = Float64[]))
-la = run(la; temperature = 2.0)
+context, plan = setup(algo, Init(MyAlgo; buffer = Float64[]))
+context, result = run(plan, context; temperature = 2.0)
 ```
-
-The returned loop algorithm contains the next persistent context. Use the
-returned value; runtime inputs are stripped before the context is stored back
-on the returned algorithm.
 
 ## Lifetime
 

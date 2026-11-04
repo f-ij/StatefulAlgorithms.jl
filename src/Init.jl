@@ -46,4 +46,4 @@ function initcontext(algo::F, c::ProcessContext = ProcessContext(resolve(algo)),
     return @inline apply_redirect_specs(interactive_context, algo)
 end
 
-export preparedata!, cleanup
+export cleanup
