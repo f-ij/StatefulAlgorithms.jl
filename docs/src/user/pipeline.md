@@ -8,6 +8,9 @@ Every plan goes through the same three steps:
 | 2 | `run(plan, context; inputs...)` | runs the plan on the context | `(context, result)` |
 | 3 | `cleanup(plan, context)` | ends the context's life | the cleaned context |
 
+Between runs, `reinit(plan, context, Init(...), Override(...))` re-initializes only the algorithms you name and keeps
+the rest of the context.
+
 `plan_spec` is what you define with `@StepAlgorithm`, `@CompositeAlgorithm` or `@Routine`. `plan` is the resolved
 version that `setup` returns. Pass that one to `run` and `cleanup`, not the spec.
 
@@ -45,6 +48,17 @@ The returned plan holds no context. The context is yours.
 - The other keywords are the plan's `@input` values for this run.
 - It returns the final context and the run's result, which is what the plan's finalizer returns.
 - Values that exist only during a run (inputs, locals, returns) are dropped at the end; only the state comes back.
+
+### `reinit`
+
+```julia
+context = reinit(plan, context, Init(Counter; total = 0))
+```
+
+- For each `Init(Target; values...)`: the values go into that algorithm's part of the context and its `init` runs again.
+- An `Override` for the same target is set after that `init`.
+- An `Override` for a target with no `Init` in the same call only sets its values; no `init` runs.
+- Algorithms you don't name keep their values.
 
 ### `cleanup`
 

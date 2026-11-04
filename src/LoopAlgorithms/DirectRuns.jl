@@ -1,6 +1,6 @@
 # Direct runs: a plan run from the user's own code, with no process around it (mode 1, "Modes of operation" in
 # TODO.md). The user pipeline is `setup` (plan spec and `Init(...)` specs -> context and resolved plan), `run(plan,
-# context)` and `cleanup(plan, context)` (docs/src/user/pipeline.md). The older calls `init(la, Init(...), Override(...))`
+# context)`, `reinit(plan, context, Init(...))` (partial re-init) and `cleanup(plan, context)` (docs/src/user/pipeline.md). The older calls `init(la, Init(...), Override(...))`
 # (builds the plan's state context), `partialinit` (re-initializes only the named targets) and `run(la; inputs...)`
 # store the context and the Init/Override specs in the returned `LoopAlgorithm`; the Init/Override merging below exists
 # to replay those stored specs. The `prepare_for_loop` method for a plan is in the hook-extensions section at the end.
@@ -175,6 +175,29 @@ function Base.run(plan::LA, context::C; repeats = 1, lifetime = nothing, kwargs.
     lt = parse_lifetime(nothing, lifetime, isnothing(lifetime) ? repeats : nothing)
     session, plan, lc = prepare_for_loop(plan, context, (; kwargs...), lt, Resuming{false}())
     return run_session_loop(session, plan, lc, lt)
+end
+
+"""
+    reinit(plan, context, Init(...), Override(...)) -> context
+
+Re-initializes only the algorithms the specs name and keeps the rest of `context` (a partial re-init). For each
+`Init(Target; values...)` the values go into that algorithm's part of the context, its `init` runs again, then an
+`Override` for the same target is set. An `Override` whose target has no `Init` here only sets its values. `plan` is
+the resolved plan from `setup`.
+"""
+function reinit(plan::LA, context::C, specs::InputInterface...) where {LA<:LoopSpec, C<:ProcessContext}
+    isresolved(plan) || throw(ArgumentError("reinit(plan, context, ...) needs the resolved plan that `setup` returns."))
+    inits, overrides, interactives = _split_lifecycle_specs(_resolve_lifecycle_specs(getregistry(plan), specs))
+    for input in inits
+        key = get_target_name(input)
+        ov = filter(o -> get_target_name(o) == key, overrides)
+        context = initcontext(context, key; inputs = get_vars(input), overrides = isempty(ov) ? (;) : get_vars(first(ov)))
+    end
+    init_keys = map(get_target_name, inits)
+    lone_overrides = filter(o -> !(get_target_name(o) in init_keys), overrides)
+    context = isempty(lone_overrides) ? context : merge_into_subcontexts(context, construct_context_merge_tuples(lone_overrides))
+    context = @inline apply_interactive_specs(context, interactives)
+    return @inline apply_redirect_specs(context, plan)
 end
 
 ##########################################

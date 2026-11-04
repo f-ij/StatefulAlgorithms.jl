@@ -31,8 +31,9 @@ function initcontext(algo::F, c::ProcessContext; lifetime = Indefinite()) where 
     return @inline apply_redirect_specs(state_context, algo)
 end
 
-function initcontext(algo::F, c::ProcessContext = ProcessContext(resolve(algo)), overrides_and_inputs::InputInterface...; lifetime = Indefinite()) where {F <: LoopSpec}
+function initcontext(algo::F, c::Union{Nothing, ProcessContext} = nothing, overrides_and_inputs::InputInterface...; lifetime = Indefinite()) where {F <: LoopSpec}
     algo = resolve(algo)
+    c = something(c, ProcessContext(algo))
     resolved = _resolve_lifecycle_specs(getregistry(c), overrides_and_inputs)
     inputs, overrides, interactives = _split_lifecycle_specs(resolved)
     input_state_context = merge_resolved_inputs(c, inputs)
