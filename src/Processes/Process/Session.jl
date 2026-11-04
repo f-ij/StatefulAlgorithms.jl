@@ -3,7 +3,7 @@
 
 The session of a `Process` run: a run on its own task that the user can pause, resume and close while it runs. Made
 with the process and kept on it after a run ends, so its counters and times stay readable. A run whose lifetime has
-another type still runs in it; a resumed run goes on in the same one.
+another type gets a new session with the same counters (`set_session_lifetime!`); a resumed run goes on in the same one.
 
 - `shouldrun`, `paused`: set by the user (`pause(p)`, `close(p)`), read by the loop after every step and every routine
   repeat (`session_breakcondition`). Atomic, read without an ordering barrier.

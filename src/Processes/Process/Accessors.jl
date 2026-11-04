@@ -57,6 +57,20 @@ function setcontext!(p::P, c::C) where {P<:InteractiveProcess, C<:ProcessContext
 end
 
 """
+    set_session_lifetime!(p, lifetime)
+
+Run when a run gets a lifetime of another type than the process was built with: the session's type includes the
+lifetime's type, so the process gets a session of the new type with the same counters. Until it is decided where the
+lifetime lives (TODO.md, "Where the lifetime lives").
+"""
+function set_session_lifetime!(p::InteractiveProcess{F, C}, lt::LT) where {F, C, LT}
+    session = getsession(p)
+    session isa InteractiveSession{C, LT} && return session
+    p.session = InteractiveSession{C, LT}(@atomic(session.shouldrun), @atomic(session.paused), session.loopidx,
+        session.tickidx, session.starttime, session.endtime, session.loop_cursor, session.threadid)
+end
+
+"""
     _sync_state_context!(p, c)
 
 Makes the values of `c` the process's state: a run's persistent context when it ends or pauses, or a context made by

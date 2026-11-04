@@ -21,6 +21,7 @@ function Base.run(p::Process, run_lifetime = nothing, inputs_and_overrides...; r
     lt = parse_lifetime(run_lifetime, lifetime, repeats)
     if !isnothing(lt)
         p.lifetime = lt
+        set_session_lifetime!(p, lt)
     end
 
     _launch_run!(p, (; kwargs...))

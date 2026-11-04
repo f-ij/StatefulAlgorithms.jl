@@ -289,6 +289,7 @@ function runprocessinline!(worker::P; lifetime = nothing, repeats = nothing, kwa
     launch_lifetime = _manager_launch_lifetime(worker, launch_kwargs)
     if !isnothing(launch_lifetime)
         worker.lifetime = launch_lifetime
+        set_session_lifetime!(worker, launch_lifetime)
     end
 
     # Build the same runtime context as the asynchronous Process path, but call
