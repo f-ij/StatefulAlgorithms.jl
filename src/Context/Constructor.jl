@@ -1,25 +1,17 @@
 """
-Set up an empty `ProcessContext` from a resolved registry.
+    ProcessContext(registry)
 
-Route/share metadata is intentionally not embedded in `SubContext`; plan wiring
-is supplied to `SubContextView` during `step!`.
+Construct an empty context based on the registry spec: one empty `SubContext` per registered name. No init runs.
 """
-function _build_process_context(registry::R) where {R<:NameSpaceRegistry}
-
-    # Create Subcontexts from registry
+function ProcessContext(registry::R) where {R<:NameSpaceRegistry}
     registered_keys = all_keys(registry)
-    subcontexts = ntuple(length(registered_keys)) do i
-        algo_name = registered_keys[i]
-        SubContext(algo_name, (;))
-    end
-
-    named_subcontexts = NamedTuple{registered_keys}(subcontexts)
-
-
-    return ProcessContext(named_subcontexts, registry)
+    subcontexts = ntuple(i -> SubContext(registered_keys[i], (;)), length(registered_keys))
+    return ProcessContext(NamedTuple{registered_keys}(subcontexts), registry)
 end
 
-function ProcessContext(la::LA) where {LA<:LoopSpec}
-    la = resolve(la)
-    return _build_process_context(getregistry(la))
-end
+"""
+    ProcessContext(plan)
+
+Construct an empty context for `plan` (see `ProcessContext(registry)`). Resolving an already resolved plan is a no-op.
+"""
+ProcessContext(la::LA) where {LA<:LoopSpec} = ProcessContext(getregistry(resolve(la)))
