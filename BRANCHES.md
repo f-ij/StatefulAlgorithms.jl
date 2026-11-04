@@ -5,7 +5,7 @@ into `main` or deleted; add a line when a branch is made. Each active branch has
 checkout, `StatefulAlgorithms.jl-<name>` (listed when it has one). `backup/*` and `archive/*` branches are not listed:
 they are snapshots, not work.
 
-Updated 2026-11-03.
+Updated 2026-11-04.
 
 ## Refactor stack
 
@@ -44,6 +44,7 @@ Updated 2026-11-03.
 |---|---|---|
 | `refactor/plans` | `-plans` | One plan type: `CompositeAlgorithm` and `Routine` build a `Plan` with an interval or repeat entry per child; a step paused in the middle resumes where it stopped. |
 | `feat/on-change` | `-onchange` | On-change handlers; a handler's return is its own value, routable like a captured return. Design doc. |
+| `feature/cleanup-releasable` | `-cleanup-releasable` | Design only (TODO.md, "Cleanup and releasable state"), on top of `refactor/contexts-processes-pausing`; to implement later. Cleanup per algorithm releases what it holds at the plan's end of life and never changes the state's shape; releasable slots (a reference that can be released, marked by the algorithm or the user, allocated by the init); the finalizer (`@finally`) is the plan's one exit. |
 
 ## Older, status to check
 
