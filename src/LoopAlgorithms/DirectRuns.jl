@@ -140,7 +140,7 @@ context (inputs, declared locals, returns) is dropped when the run ends; only th
 function Base.run(la::LA; repeats = 1, lifetime = nothing, kwargs...) where {LA<:LoopSpec}
     initialized = isnothing(getpersistentcontext(la)) ? init(la) : la
     persistent_context = getpersistentcontext(initialized)
-    lt = isnothing(lifetime) ? normalize_process_lifetime(initialized, repeats) : normalize_process_lifetime(initialized, lifetime)
+    lt = parse_lifetime(nothing, lifetime, isnothing(lifetime) ? repeats : nothing)
     session, plan, lc = prepare_for_loop(initialized, persistent_context, (; kwargs...), lt, Resuming{false}())
     persistent_context, _ = run_session_loop(session, plan, lc, lt)
     return _with_lifecycle(initialized, persistent_context, getstoredinits(initialized), getstoredoverrides(initialized))

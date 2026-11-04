@@ -18,13 +18,13 @@ function Core.kwcall(kw::NamedTuple, ::Type{Process}, func, inputs_overrides...)
     return _build_process(func, inputs_overrides, get(kw, :context, nothing), get(kw, :lifetime, nothing), rest)
 end
 function _build_process(func::Func, inputs_overrides::Tuple, context::C, lifetime::LT, kwargs::NamedTuple) where {Func, C, LT}
-    algo, lifetime, timeout = _prepare_process(normalize_process_algo(func), inputs_overrides...; context, lifetime, kwargs...)
+    algo, lifetime, timeout = _prepare_process(parse_plan(func), inputs_overrides...; context, lifetime, kwargs...)
     return _construct_process(algo, lifetime, timeout)
 end
 
 """The plan, initialized or with the given `context`, the lifetime and the timeout a new `Process` gets."""
 function _prepare_process(algo::A, inputs_overrides::Vararg{Any,N}; context::C = nothing, repeats = nothing, lifetime = nothing, timeout = 1.0) where {A,N,C}
-    lifetime = normalize_process_lifetime(algo, normalize_lifetime_arguments(algo, nothing, lifetime, repeats))
+    lifetime = something(parse_lifetime(nothing, lifetime, repeats), default_lifetime(algo))
     algo = _process_constructor_algo(algo, context, inputs_overrides, lifetime)
     prepared_context = isnothing(context) ? getpersistentcontext(algo) : context
     algo = _with_lifecycle(algo, prepared_context, getstoredinits(algo), getstoredoverrides(algo))

@@ -18,14 +18,13 @@ function Core.kwcall(kw::NamedTuple, ::Type{InlineProcess}, func, inputs_overrid
     return _build_inline_process(func, inputs_overrides, get(kw, :context, nothing), get(kw, :lifetime, nothing), rest)
 end
 function _build_inline_process(func::Func, inputs_overrides::Tuple, context::C, lifetime::LT, kwargs::NamedTuple) where {Func, C, LT}
-    algo, prepared_context, lifetime = _prepare_inline_process(normalize_process_algo(func), inputs_overrides...; context, lifetime, kwargs...)
+    algo, prepared_context, lifetime = _prepare_inline_process(parse_plan(func), inputs_overrides...; context, lifetime, kwargs...)
     return _construct_inline_process(algo, prepared_context, lifetime)
 end
 
 """The plan, initialized or with the given `context`, its context and the lifetime a new `InlineProcess` gets."""
 @inline function _prepare_inline_process(algo, inputs_overrides...; repeats=nothing, lifetime=nothing, context=nothing)
-    given = normalize_lifetime_arguments(algo, nothing, lifetime, repeats)
-    lifetime = isnothing(given) ? Repeat(1) : given
+    lifetime = something(parse_lifetime(nothing, lifetime, repeats), Repeat(1))
     algo = isnothing(context) ? init(algo, inputs_overrides...; lifetime) : _with_lifecycle(resolve(algo), context, (), ())
     return algo, getpersistentcontext(algo), lifetime
 end

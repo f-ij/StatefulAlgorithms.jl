@@ -10,7 +10,7 @@ A process running one step of `func` every `interval` seconds once `run`. The pl
 `context`) and the lifetime made from `repeats` or `lifetime` as for a `Process` (`_prepare_process`).
 """
 function TimedProcess(func::Func, inputs_overrides::Vararg{Any,N}; interval::Real, kwargs...) where {Func,N}
-    algo, lifetime, _ = _prepare_process(normalize_process_algo(func), inputs_overrides...; kwargs...)
+    algo, lifetime, _ = _prepare_process(parse_plan(func), inputs_overrides...; kwargs...)
     C = typeof(loop_cursor(getplan(algo), Val(true)))
     session = InteractiveSession{C, typeof(lifetime)}()
     tp = TimedProcess{typeof(algo), C}(algo, lifetime, nothing, nothing, Float64(interval), nothing, ReentrantLock(), nothing, session)

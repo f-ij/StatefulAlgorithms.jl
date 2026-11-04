@@ -18,7 +18,7 @@ function Base.run(p::Process, run_lifetime = nothing, inputs_and_overrides...; r
     end
     isempty(inputs_and_overrides) || error("Process run accepts runtime inputs as keywords only. Reinitialize the Process context before running to apply init/override specs.")
 
-    lt = normalize_lifetime_arguments(getalgo(p), run_lifetime, lifetime, repeats)
+    lt = parse_lifetime(run_lifetime, lifetime, repeats)
     if !isnothing(lt)
         p.lifetime = lt
     end

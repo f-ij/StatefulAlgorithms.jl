@@ -14,7 +14,7 @@ function Base.run(tp::TimedProcess; repeats = nothing, lifetime = nothing, kwarg
     if ispaused(tp)
         (isnothing(repeats) && isnothing(lifetime) && isempty(kwargs)) || error("Cannot change the lifetime or the inputs while resuming a paused TimedProcess.")
     else
-        lt = normalize_lifetime_arguments(getalgo(tp), nothing, lifetime, repeats)
+        lt = parse_lifetime(nothing, lifetime, repeats)
         isnothing(lt) || (tp.lifetime = lt)
         session, algo, lc = prepare_for_loop(tp, getcontext(tp), (; kwargs...), StatefulAlgorithms.lifetime(tp), Resuming{false}())
         session.loop_cursor = starting_cursor(session, getplan(algo), Resuming{false}())

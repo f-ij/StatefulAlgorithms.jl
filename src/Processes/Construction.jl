@@ -1,49 +1,39 @@
 #=
-What every process constructor shares: the plan a function becomes (`normalize_process_algo`), the lifetime a
-`repeats`/`lifetime` argument becomes (`normalize_lifetime_arguments`, `normalize_process_lifetime`), and the inputs and overrides given to a
-constructor resolved against the plan's registry (`resolve_process_inputs_overrides`).
+What every process constructor shares: turning what the user passes into a plan (`parse_plan`) and into a lifetime
+(`parse_lifetime`, `default_lifetime`), and resolving the inputs and overrides given to a constructor against the
+plan's registry (`resolve_process_inputs_overrides`).
 =#
 
-@inline normalize_process_algo(func::F) where {F<:LoopSpec} = func
-@inline normalize_process_algo(func::Type{F}) where {F<:LoopSpec} = func
-@inline normalize_process_algo(func::F) where {F} = CompositeAlgorithm(func)
-
-@inline normalize_process_lifetime(func, lifetime::Integer) = Repeat(lifetime)
-@inline _is_routine_plan(func) = func isa Routine || func isa Type{<:Routine}
-@inline _is_routine_plan(func::LoopAlgorithm) = _is_routine_plan(getplan(func))
-@inline function normalize_process_lifetime(@nospecialize(func), ::Nothing)
-    if _is_routine_plan(func)
-        return Repeat(1)
-    else
-        return Indefinite()
-    end
-end
-@inline normalize_process_lifetime(func, lifetime::LT) where {LT<:Lifetime} = lifetime
-normalize_process_lifetime(func, lifetime) =
-    construction_error("Unsupported process lifetime `", lifetime, "` for `", func, "`.")
+"""The plan a process runs for `func`: a plan (or plan type) as it is, anything else wrapped in a `CompositeAlgorithm`."""
+@inline parse_plan(func::F) where {F} = (func isa LoopSpec || func isa Type{<:LoopSpec}) ? func : CompositeAlgorithm(func)
 
 """
-    normalize_lifetime_arguments(algo, positional, lifetime, repeats) -> Union{Nothing, Lifetime}
+    parse_lifetime(positional, lifetime, repeats) -> Union{Nothing, Lifetime}
 
-The lifetime the lifetime arguments of a process call give: a positional lifetime (`run(p, lt)`) or the `lifetime`
-keyword, which take a `Lifetime` (a number there is an error), or a repeat count (`repeats`; `Inf` is `Indefinite()`). At most one may be given. `nothing` when none is, so the caller picks its default. Used by the `Process` and `InlineProcess` constructors and runs, and by the
-manager's launches.
+The lifetime a process call's arguments give: a positional lifetime (`run(p, lt)`) or the `lifetime` keyword, which
+take a `Lifetime`, or a repeat count `repeats` (`Inf` is `Indefinite()`). At most one may be given; `nothing` when none
+is, so the caller keeps its own default (`default_lifetime` for a new `Process`). Used by every process constructor and
+run, `run(plan)` and the manager's launches.
 """
-@inline function normalize_lifetime_arguments(algo::A, positional::P, lifetime::L, repeats::R) where {A, P, L, R}
+function parse_lifetime(positional::P, lifetime::L, repeats::R) where {P, L, R}
     count(!isnothing, (positional, lifetime, repeats)) > 1 &&
         throw(ArgumentError("Pass only one of a positional lifetime, `lifetime` or `repeats`."))
-    (positional isa Union{Nothing, Lifetime} && lifetime isa Union{Nothing, Lifetime}) ||
-        throw(ArgumentError("`lifetime` takes a `Lifetime` (`Repeat(n)`, `Until(...)`, ...); pass a repeat count as `repeats = n`."))
-    value = something(positional, lifetime, repeats, Some(nothing))
-    isnothing(value) && return nothing
-    value isa AbstractFloat && isinf(value) && return Indefinite()
-    return normalize_process_lifetime(algo, value)
+    given = something(positional, lifetime, Some(nothing))
+    if !isnothing(given)
+        given isa Lifetime || throw(ArgumentError("`lifetime` takes a `Lifetime` (`Repeat(n)`, `Until(...)`, ...), got `$given`; pass a repeat count as `repeats = n`."))
+        return given
+    end
+    isnothing(repeats) && return nothing
+    repeats isa Integer && return Repeat(repeats)
+    repeats isa AbstractFloat && isinf(repeats) && return Indefinite()
+    throw(ArgumentError("`repeats` takes a whole number or `Inf`, got `$repeats`."))
 end
 
-@inline instantiate_process_algo(func::F) where {F<:LoopSpec} = func
-@inline instantiate_process_algo(func::Type{F}) where {F<:LoopSpec} = func()
-
-@inline resolve_process_inputs_overrides(func) = resolve_process_inputs_overrides(func, ())
+"""The lifetime of a new `Process` given none: one repeat for a `Routine` (a fixed sequence), otherwise until it is closed."""
+function default_lifetime(plan::P) where {P}
+    inner = plan isa LoopAlgorithm ? getplan(plan) : plan
+    return (inner isa Routine || inner isa Type{<:Routine}) ? Repeat(1) : Indefinite()
+end
 
 function resolve_process_inputs_overrides(func, inputs_overrides)
     inputs_overrides isa Tuple || throw(ArgumentError("`resolve_process_inputs_overrides` expects inputs/overrides as a tuple."))
