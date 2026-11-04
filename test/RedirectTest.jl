@@ -1,6 +1,12 @@
 using Test
 using StatefulAlgorithms
 
+# The context after `setup` and one `run` of `plan_spec`, with no process around it.
+function setup_and_run(plan_spec, specs...; kwargs...)
+    context, plan = setup(plan_spec, specs...)
+    return first(run(plan, context; kwargs...))
+end
+
 struct RedirectSourceState <: AlgoState end
 
 struct RecursiveViewWrapper{T}
@@ -226,6 +232,6 @@ end
     # A nested plan given a name (`insert` allows it) is a wrapper, not a plan, until `resolve` unwraps it.
     named = insert(CompositeAlgorithm(NROther, (1,)), 2, StatefulAlgorithms.IdentifiableAlgo(inner, :named))
     @test only(getoptions(resolve(named))) isa Redirect
-    c = StatefulAlgorithms.getcontext(run(outer; repeats = 3))
+    c = setup_and_run(outer; repeats = 3)
     @test c[NRSink].seen == c[NRSource].x == 4.0         # the sink's `y` is the source's `x`
 end

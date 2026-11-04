@@ -1,5 +1,11 @@
 using Test
 using StatefulAlgorithms
+
+# The context after `setup` and one `run` of `plan_spec`, with no process around it.
+function setup_and_run(plan_spec, specs...; kwargs...)
+    context, plan = setup(plan_spec, specs...)
+    return first(run(plan, context; kwargs...))
+end
 const SAru = StatefulAlgorithms
 
 # A step's return is a value; `@update` writes an argument back (see docs/src/user/migrating_dsl.md).
@@ -62,7 +68,7 @@ ru_true() = true
             a, b = RUTuple()
             ru_record!(seen, y, E, a, b)
         end
-        run(c; repeats = 2)
+        setup_and_run(c; repeats = 2)
         @test seen == [(2.0, 1.0, 1, 10), (4.0, 2.0, 2, 20)]
     end
 
@@ -82,7 +88,7 @@ ru_true() = true
         @test SAru.getcontext(p)[:_state_1].s == 3.0
 
         seen = Float64[]
-        @test_logs (:warn, r"`RUAddOne!` updates its argument `val`, so it changes `x` here") run(@CompositeAlgorithm(begin
+        @test_logs (:warn, r"`RUAddOne!` updates its argument `val`, so it changes `x` here") setup_and_run(@CompositeAlgorithm(begin
             local x
             x = 0.0
             RUAddOne!(x)
@@ -91,7 +97,7 @@ ru_true() = true
         @test seen == [1.0, 1.0, 1.0]
 
         seen = Float64[]
-        @test_logs (:warn, r"so it changes `y` here") run(@CompositeAlgorithm(begin
+        @test_logs (:warn, r"so it changes `y` here") setup_and_run(@CompositeAlgorithm(begin
             y = RUCounter()
             RUAddOne!(y)
             ru_record!(seen, y)
@@ -101,7 +107,7 @@ ru_true() = true
 
     @testset "`@mutable` says an update is intended: no warning, same result" begin
         seen = Float64[]
-        @test_logs run(@CompositeAlgorithm(begin
+        @test_logs setup_and_run(@CompositeAlgorithm(begin
             @mutable y = RUCounter()
             @mutable local x
             x = 0.0
@@ -130,7 +136,7 @@ ru_true() = true
 
     @testset "`@bind` rewires each position's own arguments" begin
         seen = Any[]
-        run(@CompositeAlgorithm(begin
+        setup_and_run(@CompositeAlgorithm(begin
             @state src = 5.0
             @state t = 1.0
             @state u = 2.0
@@ -151,7 +157,7 @@ ru_true() = true
         end
         blk = inner()
         empty!(seen)
-        run(@CompositeAlgorithm(begin
+        setup_and_run(@CompositeAlgorithm(begin
             @state src = 7.0
             @context n = blk()
             @bind src => n.t
@@ -191,17 +197,17 @@ ru_true() = true
 
     @testset "`x = Algo()` captures the return even when Algo has a state field `x`" begin
         seen = Any[]
-        result = run(@CompositeAlgorithm(begin
+        result = setup_and_run(@CompositeAlgorithm(begin
             x = RUFieldX()
             ru_record!(seen, x)
         end); repeats = 2)
         @test seen == [-101, -102]                          # the return, not the field
-        @test SAru.getcontext(result)[RUFieldX].x == 102       # the field changes only through `@update`
+        @test result[RUFieldX].x == 102       # the field changes only through `@update`
     end
 
     @testset "`(; a) = @state(X)` and `@state(X).a` read an algorithm's state" begin
         seen = Any[]
-        run(@CompositeAlgorithm(begin
+        setup_and_run(@CompositeAlgorithm(begin
             RUCounter()
             (; count) = @state(RUCounter)
             ru_record!(seen, count)
@@ -209,7 +215,7 @@ ru_true() = true
         @test seen == [1, 2, 3]
 
         seen = Any[]
-        run(@CompositeAlgorithm(begin
+        setup_and_run(@CompositeAlgorithm(begin
             @alias c = RUCounter()
             c()
             ru_record!(seen, @state(c).count)
@@ -298,7 +304,7 @@ end
     @eval ru_legacy_routine = @Routine_legacy begin
         count = @repeat Until(x -> x >= 3, count) RULegacyCounter()
     end
-    @test SAru.getcontext(run(ru_legacy_routine; repeats = 1))[RULegacyCounter].count == 3
+    @test setup_and_run(ru_legacy_routine; repeats = 1)[RULegacyCounter].count == 3
 
     # `x = @repeat spec Algo()` keeps its legacy meaning (an error with `@Routine`): `x` binds the returned field `x`
     # of the last repeat.
@@ -307,6 +313,6 @@ end
         doubled = @repeat 2 RULegacyCounter()
         ru_record!(ru_legacy_repeat_seen, doubled)
     end
-    run(ru_legacy_repeat; repeats = 2)
+    setup_and_run(ru_legacy_repeat; repeats = 2)
     @test ru_legacy_repeat_seen == [4, 8]
 end

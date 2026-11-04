@@ -2,6 +2,12 @@ using Test
 using StatefulAlgorithms
 using StatefulAlgorithms: Callable   # internal: tests build calls directly
 
+# The context after `setup` and one `run` of `plan_spec`, with no process around it.
+function setup_and_run(plan_spec, specs...; kwargs...)
+    context, plan = setup(plan_spec, specs...)
+    return first(run(plan, context; kwargs...))
+end
+
 # Returns `(; produced = 2, passthrough = seed)`; no state.
 @StepAlgorithm function DSLSourceAlgo(seed)
     return (; produced = 2, passthrough = seed)
@@ -173,7 +179,7 @@ end
         # Every state namespace => its fields
         state_data(ctx) = (subcontexts = getfield(ctx, :subcontexts);
             Dict(k => getfield(getfield(subcontexts, k), :data) for k in keys(subcontexts) if startswith(string(k), "_state_")))
-        steps(plan, n = 1) = StatefulAlgorithms.getcontext(run(plan; repeats = n))
+        steps(plan, n = 1) = setup_and_run(plan; repeats = n)
 
         # Without any of them, two blocks' fields named `buffers` are two fields
         separate = resolve(@CompositeAlgorithm(begin
@@ -566,7 +572,7 @@ end
         @test sprint(show, StatefulAlgorithms.getplan(resolve(assigned_routine))) == sprint(show, StatefulAlgorithms.getplan(resolve(block_routine)))
 
         seen = Int[]
-        run(@Routine(begin
+        setup_and_run(@Routine(begin
             @state produced = 5
             tripled = @repeat 3 scaled_double_dsl_test(produced; scale = 3)
             push!(seen, tripled)
@@ -578,10 +584,10 @@ end
         @info "Composite DSL: Routine repeat supports lifetime syntax with DSL selectors"
         # The condition reads the counter's state explicitly (`Var(Algo, :field)`); `n = …` inside the repeated block
         # captures the return of the last repeat into the local `n`, which `seen` records.
-        counter_state(result) = StatefulAlgorithms.getcontext(result)[DSLRepeatLifetimeCounter].count
+        counter_state(result) = result[DSLRepeatLifetimeCounter].count
 
         seen = Int[]
-        until_result = run(@Routine(begin
+        until_result = setup_and_run(@Routine(begin
             local n
             @repeat Until(x -> x >= 3, Var(DSLRepeatLifetimeCounter, :count)) begin
                 n = DSLRepeatLifetimeCounter()
@@ -592,7 +598,7 @@ end
         @test seen == [3]
 
         seen = Int[]
-        until_ten_result = run(@Routine(begin
+        until_ten_result = setup_and_run(@Routine(begin
             local n
             @repeat Until(x -> x >= 10, Var(DSLRepeatLifetimeCounter, :count)) begin
                 n = DSLRepeatLifetimeCounter()
@@ -603,7 +609,7 @@ end
         @test seen == [10]
 
         seen = Int[]
-        capped_result = run(@Routine(begin
+        capped_result = setup_and_run(@Routine(begin
             local n
             @repeat RepeatOrUntil(x -> x >= 10, 4, Var(DSLRepeatLifetimeCounter, :count)) begin
                 n = DSLRepeatLifetimeCounter()
@@ -614,7 +620,7 @@ end
         @test seen == [4]
 
         seen = Int[]
-        repeat_result = run(@Routine(begin
+        repeat_result = setup_and_run(@Routine(begin
             local n
             @repeat Repeat(2) begin
                 n = DSLRepeatLifetimeCounter()
@@ -625,7 +631,7 @@ end
         @test seen == [2]
 
         seen = Int[]
-        atleast_result = run(@Routine(begin
+        atleast_result = setup_and_run(@Routine(begin
             local n
             @repeat AtLeast(x -> x >= 1, 4, Var(DSLRepeatLifetimeCounter, :count)) begin
                 n = DSLRepeatLifetimeCounter()
@@ -636,7 +642,7 @@ end
         @test seen == [4]
 
         seen = Int[]
-        atleast_atmost_result = run(@Routine(begin
+        atleast_atmost_result = setup_and_run(@Routine(begin
             local n
             @repeat AtLeastAtMost(x -> x >= 10, 2, 5, Var(DSLRepeatLifetimeCounter, :count)) begin
                 n = DSLRepeatLifetimeCounter()
@@ -658,7 +664,7 @@ end
         @test !isnothing(err) && occursin("Lifetime selector `count` is not a block value", sprint(showerror, err))
 
         # The condition is checked before every repeat, as a `while` loop's: when it already holds, the child does not run.
-        already_met = run(@Routine(begin
+        already_met = setup_and_run(@Routine(begin
             @repeat Until(x -> x >= 0, Var(DSLRepeatLifetimeCounter, :count)) DSLRepeatLifetimeCounter()
         end); repeats = 1)
         @test counter_state(already_met) == 0
@@ -701,7 +707,7 @@ end
             end
             error("no state field $name")
         end
-        steps(plan, n) = StatefulAlgorithms.getcontext(run(plan; repeats = n))
+        steps(plan, n) = setup_and_run(plan; repeats = n)
 
         by_hand = steps(CompositeAlgorithm(make_a(), make_b(), (1, 1)), 3)
         @test state_value(by_hand, :a) == 4
@@ -726,7 +732,7 @@ end
         # Every state namespace (`_state_1`, `_state_2`, ...) => its field `a`
         state_values(ctx) = (subcontexts = getfield(ctx, :subcontexts);
             Dict(k => getfield(getfield(subcontexts, k), :data).a for k in keys(subcontexts) if startswith(string(k), "_state_")))
-        steps(plan, n) = StatefulAlgorithms.getcontext(run(plan; repeats = n))
+        steps(plan, n) = setup_and_run(plan; repeats = n)
 
         b1, b2 = make(), make()
         # Two constructions: two states, each stepped 3 times
@@ -1556,7 +1562,7 @@ end
 
         # The explicit form: a local declared before the plan, assigned inside it.
         seen = Int[]
-        run(@CompositeAlgorithm(begin
+        setup_and_run(@CompositeAlgorithm(begin
             local result
             @repeat 2 begin
                 result = plan_value_test()
@@ -1567,7 +1573,7 @@ end
 
         # A plan written elsewhere: read its state.
         seen = Int[]
-        run(@CompositeAlgorithm(begin
+        setup_and_run(@CompositeAlgorithm(begin
             @context c = nested_plan()
             push!(seen, c.s)
         end); repeats = 2)
@@ -1594,7 +1600,7 @@ end
                 end
             end
         end
-        run(r; repeats = 1)
+        setup_and_run(r; repeats = 1)
         @test seen == repeat([2.0, 1.0], 4)
     end
 
@@ -1609,8 +1615,8 @@ end
             record_copy_test!(seen, bumped)
         end
         a = resolve(c)
-        run(a; repeats = 2)
-        run(a; repeats = 2)
+        setup_and_run(a; repeats = 2)
+        setup_and_run(a; repeats = 2)
         @test seen == fill([1.0], 4)
 
         seen_local = Vector{Float64}[]
@@ -1620,7 +1626,7 @@ end
             acc = bump_literal_test!(acc)
             record_copy_test!(seen_local, acc)
         end
-        run(c; repeats = 3)
+        setup_and_run(c; repeats = 3)
         @test seen_local == fill([1.0], 3)
     end
 

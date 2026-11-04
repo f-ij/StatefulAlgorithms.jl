@@ -1,6 +1,12 @@
 using Test
 using StatefulAlgorithms
 
+# The context after `setup` and one `run` of `plan_spec`, with no process around it.
+function setup_and_run(plan_spec, specs...; kwargs...)
+    context, plan = setup(plan_spec, specs...)
+    return first(run(plan, context; kwargs...))
+end
+
 @testset "Routing wiring types" begin
     struct WiringSource <: ProcessAlgorithm end
     struct WiringTarget <: ProcessAlgorithm end
@@ -102,7 +108,7 @@ end
         (1, 1),
         Route(RoutePrecedenceSource => RoutePrecedenceTarget, :level),
     )
-    c = StatefulAlgorithms.getcontext(run(plan; repeats = 3))
+    c = setup_and_run(plan; repeats = 3)
     # The target reads the routed `level` (the source's: 6, 7, 8), not its own (100)
     @test c[RoutePrecedenceTarget].seen == 8
     @test c[RoutePrecedenceTarget].level == 100
