@@ -209,7 +209,7 @@ function scalar_dependency_plain(steps::I) where {I<:Integer}
         shared = muladd(0.955, shared, 0.045 * (z + y))
         dependency_touch_buffer!(scratch, z - y + shared, 6)
 
-        # Top-level state is merged into the composite `_state` and read by the next stage.
+        # Top-level state is merged into the composite's `@state` subcontext (`_state_1`) and read by the next stage.
         top_term = dependency_touch_buffer!(top_buffer, z + y + shared, 1)
         top_signal = muladd(0.81, top_signal, 0.11 * feedback + 0.06 * z + 0.02 * top_term + 0.0001)
         top_metric = muladd(0.94, top_metric, 0.04 * top_signal + 0.0001 * checksum + 0.0001 * (sum(top_buffer) + sum(sink_buffer)))
@@ -248,75 +248,62 @@ function scalar_dependency_plain(steps::I) where {I<:Integer}
     )
 end
 
-"""Run the dependency workload through the direct plan entrypoint."""
+"""Run the dependency workload by stepping the resolved plan by hand, in the shape of the loop's `_repeat_steps`."""
 function scalar_dependency_direct_plan_loop(process::IP) where {IP<:StatefulAlgorithms.InlineProcess}
     algo = @inline StatefulAlgorithms.getalgo(process)
     lifetime = @inline StatefulAlgorithms.lifetime(process)
+    session = @inline StatefulAlgorithms.getsession(process)
     plan = @inline StatefulAlgorithms.getplan(algo)
+    cursor = @inline StatefulAlgorithms.loop_cursor(plan, Val(false))
     wiring = @inline StatefulAlgorithms._root_wiring_view(algo, plan)
-    context = @inline StatefulAlgorithms.getcontext(process)
-    runtimecontext = @inline StatefulAlgorithms._merge_into_globals(StatefulAlgorithms._empty_context(), (; process, lifetime))
+    lc = @inline StatefulAlgorithms.LoopContext(algo, StatefulAlgorithms.getcontext(process))
+    persistent_context = @inline StatefulAlgorithms.getpersistent(lc)
+    runtime_context = @inline StatefulAlgorithms.getruntime(lc)
 
-    context, runtimecontext = @inline StatefulAlgorithms._step!(
-        plan,
-        context,
-        runtimecontext,
-        wiring,
-        StatefulAlgorithms.Namespace{nothing}(),
-        process,
-        lifetime,
-    )
-    @inline StatefulAlgorithms.inc!(process)
-
-    for _ in (@inline StatefulAlgorithms.loopidx(process)):(@inline StatefulAlgorithms.repeats(lifetime))
-        context, runtimecontext = @inline StatefulAlgorithms._step!(
+    # Carry only the fields the steps write, as `loop` does (src/Context/Carried/Carry.jl).
+    carried = @inline StatefulAlgorithms.create_carried(plan, cursor, lc, wiring, StatefulAlgorithms.Namespace{nothing}(), session, lifetime)
+    for _ in (@inline StatefulAlgorithms.loopidx(session)):(@inline StatefulAlgorithms.repeats(lifetime))
+        (@inline StatefulAlgorithms.lifetime_breakcondition(
+            lifetime,
+            (@inline StatefulAlgorithms.final_context(StatefulAlgorithms.LoopContext((@inline StatefulAlgorithms.with_carried(persistent_context, carried)), runtime_context))),
+            (@inline StatefulAlgorithms.loopint(session)) - 1,
+        )) && break
+        stepped_lc = @inline StatefulAlgorithms._step!(
             plan,
-            context,
-            runtimecontext,
+            cursor,
+            StatefulAlgorithms.LoopContext((@inline StatefulAlgorithms.with_carried(persistent_context, carried)), runtime_context),
             wiring,
             StatefulAlgorithms.Namespace{nothing}(),
-            process,
+            session,
             lifetime,
         )
-        @inline StatefulAlgorithms.inc!(process)
-        (@inline StatefulAlgorithms.process_breakcondition(process)) && break
+        carried = @inline StatefulAlgorithms.next_carried(carried, (@inline StatefulAlgorithms.getpersistent(stepped_lc)))
+        runtime_context = @inline StatefulAlgorithms.getruntime(stepped_lc)
+        @inline StatefulAlgorithms.tick!(session)
+        @inline StatefulAlgorithms.inc!(session)
+        (@inline StatefulAlgorithms.session_breakcondition(session)) && break
     end
 
-    return context
+    return @inline StatefulAlgorithms.with_carried(persistent_context, carried)
 end
 
 """Run the dependency workload through `StatefulAlgorithms.loop` for an already reset inline process."""
 function scalar_dependency_direct_loop(process::IP) where {IP<:StatefulAlgorithms.InlineProcess}
-    algo = StatefulAlgorithms.getalgo(process)
-    context = StatefulAlgorithms.getcontext(process)
     lifetime = StatefulAlgorithms.lifetime(process)
-    runtime_inputs = (;)
-    return StatefulAlgorithms.loop(process, algo, context, lifetime, runtime_inputs)
+    session, algo, lc = StatefulAlgorithms.prepare_for_loop(process, StatefulAlgorithms.getcontext(process), (;), lifetime, StatefulAlgorithms.Resuming{false}())
+    persistent_context, _ = StatefulAlgorithms.loop(session, algo, lc, lifetime)
+    return persistent_context
 end
 
-"""Run the dependency workload through the generated process-loop entrypoint."""
-function scalar_dependency_generated_processloop(process::IP) where {IP<:StatefulAlgorithms.InlineProcess}
-    algo = StatefulAlgorithms.getalgo(process)
-    context = StatefulAlgorithms.getcontext(process)
-    lifetime = StatefulAlgorithms.lifetime(process)
-    runtime_inputs = (;)
-    return StatefulAlgorithms.loop(
-        process,
-        algo,
-        context,
-        lifetime,
-        runtime_inputs,
-        StatefulAlgorithms.Resuming{false}(),
-        StatefulAlgorithms.Generated(),
-    )
-end
+# The generated process-loop entrypoint (`loop(..., Generated())`) is gone: only the `NonGenerated` loop is loaded
+# (src/Legacy/GeneratedStep.jl), so its variant was removed.
 
 """Extract comparable scalar values from the process result."""
 function scalar_dependency_summary(context::C) where {C<:StatefulAlgorithms.ProcessContext}
     source = context[:source]
     mid = context[:mid]
     sink = context[:sink]
-    topstate = context[:_state]
+    topstate = context[:_state_1]
     feedbacker = context[:feedbacker]
     return (;
         x = source.x,
@@ -371,7 +358,7 @@ function run_scalar_dependency_probe(;
     for key in keys(run_summary)
         @test isapprox(getproperty(run_summary, key), getproperty(plain_summary, key); rtol = 0.0, atol = 1e-11)
     end
-    for entrypoint in (scalar_dependency_direct_loop, scalar_dependency_generated_processloop, scalar_dependency_direct_plan_loop)
+    for entrypoint in (scalar_dependency_direct_loop, scalar_dependency_direct_plan_loop)
         reset!(process)
         entry_summary = scalar_dependency_summary(entrypoint(process))
         @test keys(entry_summary) == keys(plain_summary)
@@ -385,8 +372,6 @@ function run_scalar_dependency_probe(;
     reset!(process)
     scalar_dependency_direct_loop(process)
     reset!(process)
-    scalar_dependency_generated_processloop(process)
-    reset!(process)
     scalar_dependency_direct_plan_loop(process)
 
     reset_alloc = @allocated reset!(process)
@@ -395,13 +380,10 @@ function run_scalar_dependency_probe(;
     reset!(process)
     direct_loop_alloc = @allocated scalar_dependency_direct_loop(process)
     reset!(process)
-    generated_processloop_alloc = @allocated scalar_dependency_generated_processloop(process)
-    reset!(process)
     direct_plan_alloc = @allocated scalar_dependency_direct_plan_loop(process)
 
     run_seconds = scalar_dependency_best_seconds(() -> reset!(process), () -> run(process), trials)
     direct_loop_seconds = scalar_dependency_best_seconds(() -> reset!(process), () -> scalar_dependency_direct_loop(process), trials)
-    generated_processloop_seconds = scalar_dependency_best_seconds(() -> reset!(process), () -> scalar_dependency_generated_processloop(process), trials)
     direct_plan_seconds = scalar_dependency_best_seconds(() -> reset!(process), () -> scalar_dependency_direct_plan_loop(process), trials)
     plain_seconds = scalar_dependency_best_seconds(() -> nothing, () -> scalar_dependency_plain(steps), trials)
 
@@ -410,16 +392,13 @@ function run_scalar_dependency_probe(;
     println("reset_alloc=", reset_alloc)
     println("run_alloc=", run_alloc)
     println("direct_loop_alloc=", direct_loop_alloc)
-    println("generated_processloop_alloc=", generated_processloop_alloc)
     println("direct_plan_alloc=", direct_plan_alloc)
     @printf("run_seconds=%.9f\n", run_seconds)
     @printf("direct_loop_seconds=%.9f\n", direct_loop_seconds)
-    @printf("generated_processloop_seconds=%.9f\n", generated_processloop_seconds)
     @printf("direct_plan_seconds=%.9f\n", direct_plan_seconds)
     @printf("plain_seconds=%.9f\n", plain_seconds)
     @printf("run_ratio=%.3f\n", run_seconds / plain_seconds)
     @printf("direct_loop_ratio=%.3f\n", direct_loop_seconds / plain_seconds)
-    @printf("generated_processloop_ratio=%.3f\n", generated_processloop_seconds / plain_seconds)
     @printf("direct_plan_ratio=%.3f\n", direct_plan_seconds / plain_seconds)
     @printf("final_checksum=%.12f\n", run_summary.checksum)
     @printf("final_shared=%.12f\n", run_summary.shared)
@@ -433,11 +412,9 @@ function run_scalar_dependency_probe(;
         reset_alloc,
         run_alloc,
         direct_loop_alloc,
-        generated_processloop_alloc,
         direct_plan_alloc,
         run_seconds,
         direct_loop_seconds,
-        generated_processloop_seconds,
         direct_plan_seconds,
         plain_seconds,
     )

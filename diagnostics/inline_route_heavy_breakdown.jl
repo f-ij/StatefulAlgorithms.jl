@@ -10,29 +10,14 @@ const INLINE_ROUTE_BREAKDOWN_SINK = Ref{Any}(nothing)
 
 """Return the direct loop entrypoint result for an already reset inline process."""
 function inline_route_direct_loop(process::IP) where {IP<:StatefulAlgorithms.InlineProcess}
-    algo = StatefulAlgorithms.getalgo(process)
-    context = StatefulAlgorithms.getcontext(process)
     lifetime = StatefulAlgorithms.lifetime(process)
-    runtime_inputs = (;)
-    return StatefulAlgorithms.loop(process, algo, context, lifetime, runtime_inputs)
+    session, algo, lc = StatefulAlgorithms.prepare_for_loop(process, StatefulAlgorithms.getcontext(process), (;), lifetime, StatefulAlgorithms.Resuming{false}())
+    persistent_context, _ = StatefulAlgorithms.loop(session, algo, lc, lifetime)
+    return persistent_context
 end
 
-"""Return the generated process-loop entrypoint result for an already reset inline process."""
-function inline_route_generated_processloop(process::IP) where {IP<:StatefulAlgorithms.InlineProcess}
-    algo = StatefulAlgorithms.getalgo(process)
-    context = StatefulAlgorithms.getcontext(process)
-    lifetime = StatefulAlgorithms.lifetime(process)
-    runtime_inputs = (;)
-    return StatefulAlgorithms.loop(
-        process,
-        algo,
-        context,
-        lifetime,
-        runtime_inputs,
-        StatefulAlgorithms.Resuming{false}(),
-        StatefulAlgorithms.Generated(),
-    )
-end
+# The generated process-loop entrypoint (`loop(..., Generated())`) is gone: only the `NonGenerated` loop is loaded
+# (src/Legacy/GeneratedStep.jl), so its variant was removed.
 
 """Run the workload through `ProcessContext` directly, bypassing routes and views."""
 function inline_route_manual_context_loop(process::IP) where {IP<:StatefulAlgorithms.InlineProcess}
@@ -264,43 +249,47 @@ end
 function inline_route_direct_plan_loop(process::IP) where {IP<:StatefulAlgorithms.InlineProcess}
     algo = @inline StatefulAlgorithms.getalgo(process)
     lifetime = @inline StatefulAlgorithms.lifetime(process)
+    session = @inline StatefulAlgorithms.getsession(process)
     step_plan = @inline StatefulAlgorithms.getplan(algo)
+    step_cursor = @inline StatefulAlgorithms.loop_cursor(step_plan, Val(false))
     step_wiring = @inline StatefulAlgorithms._root_wiring_view(algo, step_plan)
-    context = @inline StatefulAlgorithms.getcontext(process)
-    runtimecontext = @inline StatefulAlgorithms._merge_into_globals(StatefulAlgorithms._empty_context(), (; process, lifetime))
+    lc = @inline StatefulAlgorithms.LoopContext(algo, StatefulAlgorithms.getcontext(process))
+    persistent_context = @inline StatefulAlgorithms.getpersistent(lc)
+    runtime_context = @inline StatefulAlgorithms.getruntime(lc)
 
-    # This mirrors the repeat-lifetime `loop` body, minus run entrypoint
-    # validation, runtime-input merge, timing stamps, cleanup, and context store.
-    context, runtimecontext = @inline StatefulAlgorithms._step!(
-        step_plan,
-        context,
-        runtimecontext,
-        step_wiring,
-        StatefulAlgorithms.Namespace{nothing}(),
-        process,
-        lifetime,
-    )
-    @inline StatefulAlgorithms.inc!(process)
-
-    start_idx = @inline StatefulAlgorithms.loopidx(process)
+    # This mirrors the repeat-lifetime `loop` body and its `_repeat_steps`, minus run entrypoint validation,
+    # runtime-input merge (`prepare_for_loop`), timing stamps, cleanup, and context store. Like `loop`, it carries only
+    # the fields the steps write (src/Context/Carried/Carry.jl).
+    carried = @inline StatefulAlgorithms.create_carried(step_plan, step_cursor, lc, step_wiring, StatefulAlgorithms.Namespace{nothing}(), session, lifetime)
+    start_idx = @inline StatefulAlgorithms.loopidx(session)
     end_idx = @inline StatefulAlgorithms.repeats(lifetime)
     for _ in start_idx:end_idx
-        context, runtimecontext = @inline StatefulAlgorithms._step!(
+        if @inline StatefulAlgorithms.lifetime_breakcondition(
+            lifetime,
+            (@inline StatefulAlgorithms.final_context(StatefulAlgorithms.LoopContext((@inline StatefulAlgorithms.with_carried(persistent_context, carried)), runtime_context))),
+            (@inline StatefulAlgorithms.loopint(session)) - 1,
+        )
+            break
+        end
+        stepped_lc = @inline StatefulAlgorithms._step!(
             step_plan,
-            context,
-            runtimecontext,
+            step_cursor,
+            StatefulAlgorithms.LoopContext((@inline StatefulAlgorithms.with_carried(persistent_context, carried)), runtime_context),
             step_wiring,
             StatefulAlgorithms.Namespace{nothing}(),
-            process,
+            session,
             lifetime,
         )
-        @inline StatefulAlgorithms.inc!(process)
-        if @inline StatefulAlgorithms.process_breakcondition(process)
+        carried = @inline StatefulAlgorithms.next_carried(carried, (@inline StatefulAlgorithms.getpersistent(stepped_lc)))
+        runtime_context = @inline StatefulAlgorithms.getruntime(stepped_lc)
+        @inline StatefulAlgorithms.tick!(session)
+        @inline StatefulAlgorithms.inc!(session)
+        if @inline StatefulAlgorithms.session_breakcondition(session)
             break
         end
     end
 
-    return context
+    return @inline StatefulAlgorithms.with_carried(persistent_context, carried)
 end
 
 """Measure one benchmark row while excluding setup from the timed expression."""
@@ -349,9 +338,6 @@ function inline_route_breakdown_check(process::IP, steps::I) where {IP<:Stateful
     loop_summary = inline_route_summary(inline_route_direct_loop(process))
 
     reset!(process)
-    generated_summary = inline_route_summary(inline_route_generated_processloop(process))
-
-    reset!(process)
     manual_context_summary = inline_route_summary(inline_route_manual_context_loop(process))
 
     reset!(process)
@@ -361,7 +347,7 @@ function inline_route_breakdown_check(process::IP, steps::I) where {IP<:Stateful
     plan_summary = inline_route_summary(inline_route_direct_plan_loop(process))
 
     @testset "inline route-heavy breakdown equivalence" begin
-        for route_summary in (run_summary, loop_summary, generated_summary, manual_context_summary, batched_context_summary, plan_summary)
+        for route_summary in (run_summary, loop_summary, manual_context_summary, batched_context_summary, plan_summary)
             @test keys(route_summary) == keys(plain_summary)
             for key in keys(route_summary)
                 @test isapprox(getproperty(route_summary, key), getproperty(plain_summary, key); rtol = 0.0, atol = 1e-12)
@@ -369,7 +355,7 @@ function inline_route_breakdown_check(process::IP, steps::I) where {IP<:Stateful
         end
     end
 
-    return (; plain_summary, run_summary, loop_summary, generated_summary, manual_context_summary, batched_context_summary, plan_summary)
+    return (; plain_summary, run_summary, loop_summary, manual_context_summary, batched_context_summary, plan_summary)
 end
 
 """Print a compact timing table for the inline route-heavy execution layers."""
@@ -398,7 +384,6 @@ function run_inline_route_heavy_breakdown(;
     plain_measure = inline_route_breakdown_measure(no_setup, () -> inline_route_plain_loop(steps), runs)
     run_measure = inline_route_breakdown_measure(reset_process, () -> run(process), runs)
     loop_measure = inline_route_breakdown_measure(reset_process, () -> inline_route_direct_loop(process), runs)
-    generated_measure = inline_route_breakdown_measure(reset_process, () -> inline_route_generated_processloop(process), runs)
     manual_context_measure = inline_route_breakdown_measure(reset_process, () -> inline_route_manual_context_loop(process), runs)
     batched_context_measure = inline_route_breakdown_measure(reset_process, () -> inline_route_batched_context_loop(process), runs)
     plan_measure = inline_route_breakdown_measure(reset_process, () -> inline_route_direct_plan_loop(process), runs)
@@ -409,22 +394,19 @@ function run_inline_route_heavy_breakdown(;
     inline_route_print_breakdown_row("plain_loop", plain_measure, plain_measure.seconds_per_run)
     inline_route_print_breakdown_row("run(process)", run_measure, plain_measure.seconds_per_run)
     inline_route_print_breakdown_row("direct_loop", loop_measure, plain_measure.seconds_per_run)
-    inline_route_print_breakdown_row("generated_processloop", generated_measure, plain_measure.seconds_per_run)
     inline_route_print_breakdown_row("manual_context_loop", manual_context_measure, plain_measure.seconds_per_run)
     inline_route_print_breakdown_row("batched_context_loop", batched_context_measure, plain_measure.seconds_per_run)
     inline_route_print_breakdown_row("direct_plan_steps", plan_measure, plain_measure.seconds_per_run)
     @printf("run_minus_direct_loop_seconds=%.9f\n", run_measure.seconds_per_run - loop_measure.seconds_per_run)
-    @printf("direct_loop_minus_generated_seconds=%.9f\n", loop_measure.seconds_per_run - generated_measure.seconds_per_run)
-    @printf("generated_minus_manual_context_seconds=%.9f\n", generated_measure.seconds_per_run - manual_context_measure.seconds_per_run)
+    @printf("direct_loop_minus_manual_context_seconds=%.9f\n", loop_measure.seconds_per_run - manual_context_measure.seconds_per_run)
     @printf("manual_context_minus_plain_seconds=%.9f\n", manual_context_measure.seconds_per_run - plain_measure.seconds_per_run)
     @printf("batched_context_minus_plain_seconds=%.9f\n", batched_context_measure.seconds_per_run - plain_measure.seconds_per_run)
     @printf("manual_minus_batched_context_seconds=%.9f\n", manual_context_measure.seconds_per_run - batched_context_measure.seconds_per_run)
-    @printf("generated_minus_plan_seconds=%.9f\n", generated_measure.seconds_per_run - plan_measure.seconds_per_run)
     @printf("direct_loop_minus_plan_seconds=%.9f\n", loop_measure.seconds_per_run - plan_measure.seconds_per_run)
     @printf("plan_minus_plain_seconds=%.9f\n", plan_measure.seconds_per_run - plain_measure.seconds_per_run)
     @printf("final_checksum=%.12f\n", summaries.run_summary.checksum)
 
-    return (; summaries, plain_measure, run_measure, loop_measure, generated_measure, manual_context_measure, batched_context_measure, plan_measure)
+    return (; summaries, plain_measure, run_measure, loop_measure, manual_context_measure, batched_context_measure, plan_measure)
 end
 
 if abspath(PROGRAM_FILE) == @__FILE__

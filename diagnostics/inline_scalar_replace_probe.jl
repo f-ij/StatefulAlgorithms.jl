@@ -54,42 +54,44 @@ function scalar_replace_plain(steps::I) where {I<:Integer}
     return (; fib_prev, fib_curr, luc_prev, luc_curr)
 end
 
-"""Run the scalar replace workload through the direct plan entrypoint."""
+"""Run the scalar replace workload by stepping the resolved plan by hand, in the shape of the loop's `_repeat_steps`."""
 function scalar_replace_direct_plan_loop(process::IP) where {IP<:StatefulAlgorithms.InlineProcess}
     isdefined(StatefulAlgorithms, :Namespace) || error("direct plan entrypoint requires StatefulAlgorithms.Namespace")
     algo = StatefulAlgorithms.getalgo(process)
     lifetime = StatefulAlgorithms.lifetime(process)
+    session = StatefulAlgorithms.getsession(process)
     plan = StatefulAlgorithms.getplan(algo)
+    cursor = StatefulAlgorithms.loop_cursor(plan, Val(false))
     wiring = StatefulAlgorithms._root_wiring_view(algo, plan)
-    context = StatefulAlgorithms.getcontext(process)
-    runtimecontext = StatefulAlgorithms._merge_into_globals(StatefulAlgorithms._empty_context(), (; process, lifetime))
+    lc = StatefulAlgorithms.LoopContext(algo, StatefulAlgorithms.getcontext(process))
+    persistent_context = StatefulAlgorithms.getpersistent(lc)
+    runtime_context = StatefulAlgorithms.getruntime(lc)
 
-    context, runtimecontext = StatefulAlgorithms._step!(
-        plan,
-        context,
-        runtimecontext,
-        wiring,
-        StatefulAlgorithms.Namespace{nothing}(),
-        process,
-        lifetime,
-    )
-    StatefulAlgorithms.inc!(process)
-
-    for _ in StatefulAlgorithms.loopidx(process):StatefulAlgorithms.repeats(lifetime)
-        context, runtimecontext = StatefulAlgorithms._step!(
+    # Carry only the fields the steps write, as `loop` does (src/Context/Carried/Carry.jl).
+    carried = StatefulAlgorithms.create_carried(plan, cursor, lc, wiring, StatefulAlgorithms.Namespace{nothing}(), session, lifetime)
+    for _ in StatefulAlgorithms.loopidx(session):StatefulAlgorithms.repeats(lifetime)
+        StatefulAlgorithms.lifetime_breakcondition(
+            lifetime,
+            StatefulAlgorithms.final_context(StatefulAlgorithms.LoopContext(StatefulAlgorithms.with_carried(persistent_context, carried), runtime_context)),
+            StatefulAlgorithms.loopint(session) - 1,
+        ) && break
+        stepped_lc = StatefulAlgorithms._step!(
             plan,
-            context,
-            runtimecontext,
+            cursor,
+            StatefulAlgorithms.LoopContext(StatefulAlgorithms.with_carried(persistent_context, carried), runtime_context),
             wiring,
             StatefulAlgorithms.Namespace{nothing}(),
-            process,
+            session,
             lifetime,
         )
-        StatefulAlgorithms.inc!(process)
-        StatefulAlgorithms.process_breakcondition(process) && break
+        carried = StatefulAlgorithms.next_carried(carried, StatefulAlgorithms.getpersistent(stepped_lc))
+        runtime_context = StatefulAlgorithms.getruntime(stepped_lc)
+        StatefulAlgorithms.tick!(session)
+        StatefulAlgorithms.inc!(session)
+        StatefulAlgorithms.session_breakcondition(session) && break
     end
 
-    return context
+    return StatefulAlgorithms.with_carried(persistent_context, carried)
 end
 
 """Extract comparable values from the scalar replace process result."""
@@ -137,10 +139,12 @@ function run_scalar_replace_probe(;
     if has_direct_plan_api
         algo = StatefulAlgorithms.getalgo(process)
         lifetime = StatefulAlgorithms.lifetime(process)
+        session = StatefulAlgorithms.getsession(process)
         plan = StatefulAlgorithms.getplan(algo)
+        cursor = StatefulAlgorithms.loop_cursor(plan, Val(false))
         wiring = StatefulAlgorithms._root_wiring_view(algo, plan)
         namespace = StatefulAlgorithms.Namespace{nothing}()
-        runtimecontext = StatefulAlgorithms._merge_into_globals(StatefulAlgorithms._empty_context(), (; process, lifetime))
+        step_lc = StatefulAlgorithms.LoopContext(algo, context)
     end
 
     reset!(process)
@@ -151,7 +155,7 @@ function run_scalar_replace_probe(;
     # Warm the exact allocation probes before recording their steady-state value.
     reset!(process)
     StatefulAlgorithms.merge_into_subcontexts(context, (; merge_target => (; prev = Int64(1), curr = Int64(1))))
-    has_direct_plan_api && StatefulAlgorithms._step!(plan, context, runtimecontext, wiring, namespace, process, lifetime)
+    has_direct_plan_api && StatefulAlgorithms._step!(plan, cursor, step_lc, wiring, namespace, session, lifetime)
     reset!(process)
     run(process)
     if has_direct_plan_api
@@ -163,7 +167,7 @@ function run_scalar_replace_probe(;
     reset!(process)
     merge_alloc = @allocated StatefulAlgorithms.merge_into_subcontexts(context, (; merge_target => (; prev = Int64(1), curr = Int64(1))))
     stable_step_alloc = if has_direct_plan_api
-        @allocated StatefulAlgorithms._step!(plan, context, runtimecontext, wiring, namespace, process, lifetime)
+        @allocated StatefulAlgorithms._step!(plan, cursor, step_lc, wiring, namespace, session, lifetime)
     else
         missing
     end

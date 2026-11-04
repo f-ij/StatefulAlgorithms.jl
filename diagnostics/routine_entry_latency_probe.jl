@@ -10,8 +10,9 @@ const ROUTINE_ENTRY_SIZE = parse(Int, get(ENV, "ROUTINE_ENTRY_SIZE", "64"))
 const ROUTINE_ENTRY_REPEATS = parse(Int, get(ENV, "ROUTINE_ENTRY_REPEATS", "16"))
 const ROUTINE_ENTRY_RUNS = parse(Int, get(ENV, "ROUTINE_ENTRY_RUNS", "10"))
 const ROUTINE_ENTRY_WARMUPS = parse(Int, get(ENV, "ROUTINE_ENTRY_WARMUPS", "2"))
-const ROUTINE_ENTRY_MEASURE_GENERATED = lowercase(get(ENV, "ROUTINE_ENTRY_MEASURE_GENERATED", "true")) in ("1", "true", "yes")
 const ROUTINE_ENTRY_EVENTS = Vector{Tuple{Symbol,UInt64}}()
+# The routine's inline `@state` block is registered as the first state of the plan.
+const ROUTINE_ENTRY_STATE_KEY = :_state_1
 
 mutable struct RoutineEntryModel{S,F,B}
     state::S
@@ -100,8 +101,10 @@ function routine_entry_algorithm()
 
         routine_entry_reset!(dynamics.model)
         routine_entry_project!(dynamics.model, input_hidden_w, x, input_pattern)
-        model = @repeat ROUTINE_ENTRY_REPEATS dynamics()
-        routine_entry_copy!(equilibrium_state, @transform(routine_entry_state, model))
+        @repeat ROUTINE_ENTRY_REPEATS dynamics()
+        # `model = dynamics()` would capture the step's whole returned named tuple `(; model)` (a return is one
+        # value); the model itself is read from the dynamics state.
+        routine_entry_copy!(equilibrium_state, @transform(routine_entry_state, dynamics.model))
     end
 end
 
@@ -109,7 +112,7 @@ end
 function routine_entry_process()
     model = routine_entry_model(ROUTINE_ENTRY_SIZE)
     algo = resolve(routine_entry_algorithm())
-    process = Process(algo, Init(:dynamics; model); repeat = 1)
+    process = Process(algo, Init(:dynamics; model); repeats = 1)
     return process, model
 end
 
@@ -173,19 +176,18 @@ end
 function routine_entry_inline_call!(process::P) where {P<:Process}
     reset!(process)
     StatefulAlgorithms.runprocessinline!(process)
-    return getcontext(process)[:_state].equilibrium_state
+    return getcontext(process)[ROUTINE_ENTRY_STATE_KEY].equilibrium_state
 end
 
-"""Run one explicit loop-type pass to compare generated and non-generated entry."""
-function routine_entry_looptype_call!(process::P, looptype::LT) where {P<:Process,LT}
+"""Run one explicit loop-type pass: the run's start (`prepare_for_loop`), `loop` with `looptype`, and the run's end."""
+function routine_entry_looptype_call!(process::P, looptype::LT) where {P<:Process,LT<:StatefulAlgorithms.FunctionType}
     reset!(process)
-    algo = StatefulAlgorithms.getalgo(process)
-    base_context = StatefulAlgorithms.getcontext(process)
     lifetime = StatefulAlgorithms.lifetime(process)
-    result = StatefulAlgorithms.loop(process, algo, base_context, lifetime, (;), StatefulAlgorithms.Resuming{false}(), looptype)
-    result isa StatefulAlgorithms.AbstractContext && StatefulAlgorithms.setcontext!(process, result)
-    process.loopidx = 1
-    return getcontext(process)[:_state].equilibrium_state
+    resume = StatefulAlgorithms.Resuming{false}()
+    session, plan, lc = StatefulAlgorithms.prepare_for_loop(process, getcontext(process), (;), lifetime, resume)
+    persistent_context, returnvalue = StatefulAlgorithms.loop(session, plan, lc, lifetime, resume, looptype)
+    StatefulAlgorithms._finish_run!(process, session, persistent_context, returnvalue)
+    return getcontext(process)[ROUTINE_ENTRY_STATE_KEY].equilibrium_state
 end
 
 """Print one comparable benchmark row for commit-to-commit diagnostics."""
@@ -234,7 +236,7 @@ function run_routine_entry_latency_probe()
     end
     inline_samples = [routine_entry_measure(() -> routine_entry_inline_call!(inline_process)) for _ in 1:ROUTINE_ENTRY_RUNS]
     inline_medians = routine_entry_medians(inline_samples)
-    inline_checksum = routine_entry_checksum(getcontext(inline_process)[:_state].equilibrium_state)
+    inline_checksum = routine_entry_checksum(getcontext(inline_process)[ROUTINE_ENTRY_STATE_KEY].equilibrium_state)
     routine_entry_print_row("runprocessinline", inline_first, inline_medians, inline_checksum)
 
     non_generated_process, _ = routine_entry_process()
@@ -244,21 +246,11 @@ function run_routine_entry_latency_probe()
     end
     non_generated_samples = [routine_entry_measure(() -> routine_entry_looptype_call!(non_generated_process, StatefulAlgorithms.NonGenerated())) for _ in 1:ROUTINE_ENTRY_RUNS]
     non_generated_medians = routine_entry_medians(non_generated_samples)
-    non_generated_checksum = routine_entry_checksum(getcontext(non_generated_process)[:_state].equilibrium_state)
+    non_generated_checksum = routine_entry_checksum(getcontext(non_generated_process)[ROUTINE_ENTRY_STATE_KEY].equilibrium_state)
     routine_entry_print_row("loop_nongenerated", non_generated_first, non_generated_medians, non_generated_checksum)
 
-    if ROUTINE_ENTRY_MEASURE_GENERATED
-        generated_process, _ = routine_entry_process()
-        generated_first = routine_entry_measure(() -> routine_entry_looptype_call!(generated_process, StatefulAlgorithms.Generated()))
-        for _ in 1:ROUTINE_ENTRY_WARMUPS
-            routine_entry_measure(() -> routine_entry_looptype_call!(generated_process, StatefulAlgorithms.Generated()))
-        end
-        generated_samples = [routine_entry_measure(() -> routine_entry_looptype_call!(generated_process, StatefulAlgorithms.Generated())) for _ in 1:ROUTINE_ENTRY_RUNS]
-        generated_medians = routine_entry_medians(generated_samples)
-        generated_checksum = routine_entry_checksum(getcontext(generated_process)[:_state].equilibrium_state)
-        routine_entry_print_row("loop_generated", generated_first, generated_medians, generated_checksum)
-        @test generated_checksum ≈ direct_checksum rtol = 1e-10
-    end
+    # The `Generated` loop type is gone: `loop(..., ::Generated)` only forwarded to `NonGenerated` and now lives in the
+    # unloaded src/Legacy/GeneratedLoops.jl, so the `loop_generated` row was removed.
 
     @test inline_checksum ≈ direct_checksum rtol = 1e-10
     @test non_generated_checksum ≈ direct_checksum rtol = 1e-10

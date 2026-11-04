@@ -26,6 +26,8 @@ function big_dsl_routine_expr(n::Int)
         LineNumberNode(@__LINE__, @__FILE__),
         :(@state seed = 0.125),
         :(@state anchor = 0.75),
+        # `result` is read after the run: a declared local is kept for the run.
+        :(local result),
     ]
 
     previous = :seed
@@ -92,7 +94,7 @@ end
 function big_dsl_runprocessinline!(process::P) where {P<:Process}
     reset!(process)
     StatefulAlgorithms.runprocessinline!(process)
-    return StatefulAlgorithms.getglobals(fetch(process)).result
+    return StatefulAlgorithms.get_declared_locals(fetch(process)).result
 end
 
 """Return elapsed seconds and the value produced by a callable."""
@@ -133,7 +135,7 @@ function run_big_dsl_statement_probe()
     big_dsl_print("resolve_seconds", resolve_elapsed)
     big_dsl_print("resolved_algorithm_count", length(StatefulAlgorithms.getalgos(StatefulAlgorithms.getplan(resolved))))
 
-    construct_elapsed, process = big_dsl_measure(() -> Base.invokelatest(() -> Process(resolved; repeat = 1)))
+    construct_elapsed, process = big_dsl_measure(() -> Base.invokelatest(() -> Process(resolved; repeats = 1)))
     big_dsl_print("process_construct_seconds", construct_elapsed)
 
     cold_elapsed, cold_result = big_dsl_measure(() -> Base.invokelatest(big_dsl_runprocessinline!, process))

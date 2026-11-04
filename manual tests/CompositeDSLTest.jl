@@ -37,10 +37,10 @@ resolved = resolve(algo)
 @assert length(StatefulAlgorithms.getstates(resolved)) == 1
 @assert StatefulAlgorithms.getkey(first(StatefulAlgorithms.getstates(resolved))) == :_state
 
-process_repeat = Process(resolved, repeat = 10)
+process_repeat = Process(resolved, repeats = 10)
 @assert repeats(StatefulAlgorithms.lifetime(process_repeat)) == 10
 
-process_indefinite = Process(resolved, repeat = Inf)
+process_indefinite = Process(resolved, repeats = Inf)
 @assert StatefulAlgorithms.lifetime(process_indefinite) isa Indefinite
 
 opts = StatefulAlgorithms.getoptions(resolved)

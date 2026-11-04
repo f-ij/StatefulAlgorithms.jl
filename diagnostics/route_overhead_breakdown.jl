@@ -8,7 +8,7 @@ const ROUTE_BREAKDOWN_STEPS = parse(Int, get(ENV, "ROUTE_BREAKDOWN_STEPS", "2000
 const ROUTE_BREAKDOWN_RUNS = parse(Int, get(ENV, "ROUTE_BREAKDOWN_RUNS", "40"))
 const ROUTE_BREAKDOWN_SINK = Ref{Any}(nothing)
 
-"""Build the macro-generated routed buffer algorithm without `@context` or `@merge`."""
+"""Build the macro-generated routed buffer algorithm without `@context` or the shared `merge_buffer`."""
 function macro_route_buffers_no_merge_algorithm()
     return @CompositeAlgorithm begin
         @alias plant = RouteDiagnosticPlant()
@@ -61,10 +61,10 @@ function macro_route_buffers_no_merge_algorithm()
     end
 end
 
-"""Build only the explicit merged state-buffer routine section."""
+"""Build only the shared state-buffer routine section: one `merge_buffer`, bound into three ledgers with `@bind`."""
 function merge_state_buffer_only_algorithm()
     ledger_left = @Routine begin
-        @state merge_buffer = zeros(Float64, 3)
+        @state merge_buffer
         merge_buffer = diagnostic_merge_buffer!(merge_buffer, 0.021, 0.7)
     end
 
@@ -79,14 +79,18 @@ function merge_state_buffer_only_algorithm()
     end
 
     return @CompositeAlgorithm begin
+        @state merge_buffer = zeros(Float64, 3)
         @context ledger_left = ledger_left
         @context ledger_right = ledger_right
         @context ledger_third = ledger_third
-        @merge ledger_left.merge_buffer, ledger_right.merge_buffer, ledger_third.merge_buffer
+        # One `merge_buffer` shared by the three ledgers: the parent's, bound into each.
+        @bind merge_buffer => ledger_left.merge_buffer
+        @bind merge_buffer => ledger_right.merge_buffer
+        @bind merge_buffer => ledger_third.merge_buffer
     end
 end
 
-"""Build nested state-buffer routines without explicit `@merge`."""
+"""Build nested state-buffer routines without a shared buffer (each ledger keeps its own)."""
 function context_state_buffer_no_merge_algorithm()
     ledger_left = @Routine begin
         @state left_buffer = zeros(Float64, 3)
@@ -119,16 +123,16 @@ function macro_route_buffers_summary(result::A) where {A<:StatefulAlgorithms.Abs
     return sum(plant.trace) + sum(plant.scratch) + controller.force + observer.checksum
 end
 
-"""Return a compact checksum from the merged state-buffer run."""
+"""Return a compact checksum from the shared state-buffer run."""
 function merge_state_buffer_summary(result::A) where {A<:StatefulAlgorithms.AbstractLoopAlgorithm}
     ctx = StatefulAlgorithms.getcontext(result)
-    return sum(ctx[:_state].merge_buffer)
+    return sum(ctx[:_state_1].merge_buffer)
 end
 
 """Return a compact checksum from the nested non-merged state-buffer run."""
 function context_state_buffer_summary(result::A) where {A<:StatefulAlgorithms.AbstractLoopAlgorithm}
     ctx = StatefulAlgorithms.getcontext(result)
-    return sum(ctx[:_state].left_buffer) + sum(ctx[:_state].right_buffer) + sum(ctx[:_state].third_buffer)
+    return sum(ctx[:_state_1].left_buffer) + sum(ctx[:_state_2].right_buffer) + sum(ctx[:_state_3].third_buffer)
 end
 
 """Measure elapsed time and allocated bytes for a benchmark closure."""

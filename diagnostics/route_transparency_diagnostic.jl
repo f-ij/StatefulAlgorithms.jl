@@ -118,7 +118,7 @@ function diagnostic_mirror_kernel!(
     return new_score, new_samples, trace, scratch, mirror_buffer
 end
 
-"""Mutate one explicitly merged state buffer used to cover `@merge`."""
+"""Mutate the one state buffer the three ledgers share through `@bind`."""
 function diagnostic_merge_buffer!(
     merge_buffer::BV,
     rate::T,
@@ -130,8 +130,8 @@ function diagnostic_merge_buffer!(
     return merge_buffer
 end
 
-# Controller process that returns initialized local fields plus routed buffers.
-@ProcessAlgorithm function RouteDiagnosticController(
+# Controller process that updates its managed fields plus routed buffers.
+@StepAlgorithm function RouteDiagnosticController(
     position,
     velocity,
     energy,
@@ -149,11 +149,11 @@ end
         energy,
         force,
     )
-    return (; force, trace, scratch, control_buffer)
+    @update force, trace, scratch, control_buffer
 end
 
 # Plant process that owns the main dynamics state and routed buffers.
-@ProcessAlgorithm function RouteDiagnosticPlant(
+@StepAlgorithm function RouteDiagnosticPlant(
     force,
     @managed(position = 0.25),
     @managed(velocity = -0.15),
@@ -171,11 +171,11 @@ end
         force,
         dt,
     )
-    return (; position, velocity, energy, trace, scratch, dt)
+    @update position, velocity, energy, trace, scratch, dt
 end
 
-# Observer process that writes a checksum and returns routed buffers.
-@ProcessAlgorithm function RouteDiagnosticObserver(
+# Observer process that updates a checksum and routed buffers.
+@StepAlgorithm function RouteDiagnosticObserver(
     position,
     velocity,
     energy,
@@ -195,12 +195,12 @@ end
         force,
         checksum,
     )
-    return (; checksum, trace, scratch, observer_buffer)
+    @update checksum, trace, scratch, observer_buffer
 end
 
-@doc "Controller process that returns initialized local fields plus routed buffers." RouteDiagnosticController
+@doc "Controller process that updates its managed fields plus routed buffers." RouteDiagnosticController
 @doc "Plant process that owns the main dynamics state and routed buffers." RouteDiagnosticPlant
-@doc "Observer process that writes a checksum and returns routed buffers." RouteDiagnosticObserver
+@doc "Observer process that updates a checksum and routed buffers." RouteDiagnosticObserver
 
 """Mirror process used several times to fan routed buffers into multiple writers."""
 struct RouteDiagnosticMirror{MirrorId} <: StatefulAlgorithms.ProcessAlgorithm end
@@ -231,7 +231,7 @@ end
 """Build the routed algorithm used by the diagnostic."""
 function route_transparency_algorithm()
     ledger_left = @Routine begin
-        @state merge_buffer = zeros(Float64, 3)
+        @state merge_buffer
         merge_buffer = diagnostic_merge_buffer!(merge_buffer, 0.021, 0.7)
     end
 
@@ -246,6 +246,7 @@ function route_transparency_algorithm()
     end
 
     return @CompositeAlgorithm begin
+        @state merge_buffer = zeros(Float64, 3)
         @alias plant = RouteDiagnosticPlant()
         @alias controller = RouteDiagnosticController()
         @alias observer = RouteDiagnosticObserver()
@@ -297,7 +298,10 @@ function route_transparency_algorithm()
         @context ledger_left = ledger_left
         @context ledger_right = ledger_right
         @context ledger_third = ledger_third
-        @merge ledger_left.merge_buffer, ledger_right.merge_buffer, ledger_third.merge_buffer
+        # One `merge_buffer` shared by the three ledgers: the parent's, bound into each.
+        @bind merge_buffer => ledger_left.merge_buffer
+        @bind merge_buffer => ledger_right.merge_buffer
+        @bind merge_buffer => ledger_third.merge_buffer
     end
 end
 
@@ -390,7 +394,7 @@ end
 """Extract a compact comparable summary from a routed run result."""
 function route_transparency_summary(result::A) where {A<:StatefulAlgorithms.AbstractLoopAlgorithm}
     ctx = StatefulAlgorithms.getcontext(result)
-    state = ctx[:_state]
+    state = ctx[:_state_1]
     plant = ctx[:plant]
     controller = ctx[:controller]
     observer = ctx[:observer]
