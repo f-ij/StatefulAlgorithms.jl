@@ -1,6 +1,6 @@
 #=
 Starting and ending a `Process` run. `run(p)` calls `_launch_run!`; the task it starts runs `_run_loop_and_store!`.
-`prepare_for_loop` and `adapt_session` are also used by `TimedProcess`.
+`prepare_for_loop` is also used by `TimedProcess`.
 =#
 
 """
@@ -9,33 +9,20 @@ Starting and ending a `Process` run. `run(p)` calls `_launch_run!`; the task it 
 Run at the start of every run. Gives the session, the plan and the `LoopContext` to start from: the state context
 plus the run's inputs, or, when resuming, plus the runtime context the pause kept.
 """
-function prepare_for_loop(p::InteractiveProcess, context::C, inputs::NamedTuple, lt::LT, resume::Resuming{false}) where {C<:ProcessContext, LT}
-    session = adapt_session(p, lt)
+function prepare_for_loop(p::InteractiveProcess{F, Cur}, context::C, inputs::NamedTuple, lt::LT, resume::Resuming{false}) where {F, Cur, C<:ProcessContext, LT}
+    session = InteractiveSession{Cur, LT}(getsession(p))
     p.session = session
     func = getalgo(p)
     return session, func, with_inputs(LoopContext(func, context), func, inputs)
 end
 
-function prepare_for_loop(p::InteractiveProcess, context::C, inputs::NamedTuple, lt::LT, resume::Resuming{true}) where {C<:ProcessContext, LT}
-    session = adapt_session(p, lt)
+function prepare_for_loop(p::InteractiveProcess{F, Cur}, context::C, inputs::NamedTuple, lt::LT, resume::Resuming{true}) where {F, Cur, C<:ProcessContext, LT}
+    session = InteractiveSession{Cur, LT}(getsession(p))
     p.session = session
     func = getalgo(p)
     runtime_context = p.runtime_context
     p.runtime_context = nothing
     return session, func, LoopContext(context, runtime_context)
-end
-
-"""
-    adapt_session(p, lifetime) -> InteractiveSession
-
-Run at the start of every run. The session's type includes the lifetime's type, so a run with a lifetime of another
-type needs a new session; this makes one with the same counters. Otherwise it returns the process's session.
-"""
-function adapt_session(p::InteractiveProcess{F, C}, lt::LT) where {F, C, LT}
-    session = getsession(p)
-    session isa InteractiveSession{C, LT} && return session
-    return InteractiveSession{C, LT}(@atomic(session.shouldrun), @atomic(session.paused), session.loopidx, session.tickidx,
-        session.starttime, session.endtime, session.loop_cursor, session.threadid)
 end
 
 """
