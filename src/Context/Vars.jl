@@ -1,5 +1,9 @@
 export Var
 
+################################################
+###################   TYPE   ###################
+################################################
+
 """
     Var(subcontext_ref, :name; transform = nothing)
     Var(:name)
@@ -21,6 +25,10 @@ struct Var{SubcontextRef, name, transform} end
 Var(subcontext_ref, name::Symbol; transform = nothing) = Var{scref_match(subcontext_ref), name, transform}()
 Var(name::Symbol) = Var{:_captured_returns, name, nothing}()
 
+################################################
+#################   RESOLVE   ##################
+################################################
+
 """
 Return the subcontext a `Var` refers to: the one named by its SCKey, or the registry entry its
 matcher matches (resolved as a route endpoint, so the key is found at compile time).
@@ -34,6 +42,10 @@ end
 
 @inline _var_transform(::Var{E, N, nothing}, value) where {E, N} = value
 @inline _var_transform(::Var{E, N, transform}, value) where {E, N, transform} = transform(value)
+
+################################################
+###################   READ   ###################
+################################################
 
 @inline function Base.getindex(c::ProcessContext, var::Var{SubcontextRef, name}) where {SubcontextRef, name}
     # A field redirected by `Redirect` reads the value of the field it points to, not its `RedirectedVar` marker.
