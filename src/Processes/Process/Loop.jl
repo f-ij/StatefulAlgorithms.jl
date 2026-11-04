@@ -52,7 +52,6 @@ function _start_run!(p::P, session::S, func::F, lc::LC, lt::LT; threaded::Bool =
     isresuming || @atomic session.paused = false
     @atomic session.shouldrun = true
     p.lastresult = nothing
-    wait_loop_precompile!(p, func, lc, lt, resume; loopfunc)
     task = Task(() -> _run_process_task(p, loopfunc, session, func, lc, lt, resume))
     if threaded
         task.sticky = false

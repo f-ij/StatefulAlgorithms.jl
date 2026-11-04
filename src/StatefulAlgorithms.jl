@@ -77,6 +77,7 @@ module StatefulAlgorithms
 
     include("Copy.jl")
     include("Manager/Manager.jl")
+    include("PrecompileInterface.jl")
 
     include("LoopAlgorithms/LoopAlgorithms.jl")
     include("CompositeDSL/CompositeDSL.jl")

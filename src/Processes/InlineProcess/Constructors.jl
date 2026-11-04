@@ -31,5 +31,8 @@ end
 end
 
 """The `InlineProcess` around a prepared plan, its context and lifetime, with its one session."""
-_construct_inline_process(algo::TD, context::C, lifetime::Lt) where {TD, C, Lt} =
-    InlineProcess{TD, C, Lt}(uuid1(), algo, context, false, lifetime, InlineSession())
+function _construct_inline_process(algo::TD, context::C, lifetime::Lt) where {TD, C, Lt}
+    ip = InlineProcess{TD, C, Lt}(uuid1(), algo, context, false, lifetime, InlineSession())
+    precompile_interface(ip)   # src/PrecompileInterface.jl
+    return ip
+end

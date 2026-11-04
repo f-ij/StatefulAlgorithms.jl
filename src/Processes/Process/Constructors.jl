@@ -38,7 +38,7 @@ function _construct_process(algo::F, lifetime::LT, timeout) where {F<:AbstractLo
     p = Process{F, C}(uuid1(), algo, lifetime, nothing, nothing, timeout, nothing, Threads.ReentrantLock(), nothing, RuntimeListeners(), session)
 
     register_process!(p)
-    schedule_loop_precompile!(p, lifetime)
+    precompile_interface(p)   # src/PrecompileInterface.jl
     
     finalizer(remove_process!, p)
     return p
