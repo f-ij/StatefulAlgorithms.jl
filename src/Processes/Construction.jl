@@ -23,19 +23,18 @@ normalize_process_lifetime(func, lifetime) =
     construction_error("Unsupported process lifetime `", lifetime, "` for `", func, "`.")
 
 """
-    normalize_lifetime_arguments(algo, positional, lifetime, repeats, repeat) -> Union{Nothing, Lifetime}
+    normalize_lifetime_arguments(algo, positional, lifetime, repeats) -> Union{Nothing, Lifetime}
 
 The lifetime the lifetime arguments of a process call give: a positional lifetime (`run(p, lt)`) or the `lifetime`
-keyword, which take a `Lifetime` (a number there is an error), or a repeat count (`repeats`, `repeat`; `Inf` is
-`Indefinite()`). At most one may be given. `nothing` when none is, so the caller picks its default. Used by the `Process` and `InlineProcess` constructors and runs, and by the
+keyword, which take a `Lifetime` (a number there is an error), or a repeat count (`repeats`; `Inf` is `Indefinite()`). At most one may be given. `nothing` when none is, so the caller picks its default. Used by the `Process` and `InlineProcess` constructors and runs, and by the
 manager's launches.
 """
-@inline function normalize_lifetime_arguments(algo::A, positional::P, lifetime::L, repeats::R, repeat::RR) where {A, P, L, R, RR}
-    count(!isnothing, (positional, lifetime, repeats, repeat)) > 1 &&
-        throw(ArgumentError("Pass only one of a positional lifetime, `lifetime`, `repeats` or `repeat`."))
+@inline function normalize_lifetime_arguments(algo::A, positional::P, lifetime::L, repeats::R) where {A, P, L, R}
+    count(!isnothing, (positional, lifetime, repeats)) > 1 &&
+        throw(ArgumentError("Pass only one of a positional lifetime, `lifetime` or `repeats`."))
     (positional isa Union{Nothing, Lifetime} && lifetime isa Union{Nothing, Lifetime}) ||
         throw(ArgumentError("`lifetime` takes a `Lifetime` (`Repeat(n)`, `Until(...)`, ...); pass a repeat count as `repeats = n`."))
-    value = something(positional, lifetime, repeats, repeat, Some(nothing))
+    value = something(positional, lifetime, repeats, Some(nothing))
     isnothing(value) && return nothing
     value isa AbstractFloat && isinf(value) && return Indefinite()
     return normalize_process_lifetime(algo, value)

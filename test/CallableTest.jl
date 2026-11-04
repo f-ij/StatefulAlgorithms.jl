@@ -119,7 +119,7 @@ end
     slot(i) = StatefulAlgorithms.child_wiring(StatefulAlgorithms.getwiring(plan))[i]
     @test length(StatefulAlgorithms.routes(slot(2))) == 1
     @test StatefulAlgorithms.gettransform(only(StatefulAlgorithms.routes(slot(3)))) !== nothing
-    p = Process(resolved, repeat = 2); run(p)
+    p = Process(resolved, repeats = 2); run(p)
     @test fetch(p) == (; y = 4.0, z = 6.0)
 
     # Plain names and values need no wires.
@@ -133,7 +133,7 @@ end
     plan = StatefulAlgorithms.getplan(resolve(algo))
     @test StatefulAlgorithms.getalgo(plan, 2) isa Callable
     @test isempty(StatefulAlgorithms.routes(StatefulAlgorithms.child_wiring(StatefulAlgorithms.getwiring(plan))[2]))
-    p = Process(resolve(algo), repeat = 1); run(p)
+    p = Process(resolve(algo), repeats = 1); run(p)
     @test fetch(p) == (; b = 6.0)
 
 end

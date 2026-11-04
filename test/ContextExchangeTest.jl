@@ -205,7 +205,7 @@ end
         :_exchange => ContextExchange(),
         (1, 1),
     ))
-    process = Process(algo, Init(:_exchange; vars = (Var(:target, :value),)); repeat = Inf)
+    process = Process(algo, Init(:_exchange; vars = (Var(:target, :value),)); repeats = Inf)
 
     run(process)
 

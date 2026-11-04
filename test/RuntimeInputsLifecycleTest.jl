@@ -175,7 +175,7 @@ runtime_input_bucket(ctx) = getproperty(StatefulAlgorithms.get_subcontexts(ctx),
         @input delta::Int
         PauseRuntimeInputConsumer(delta = delta)
     end
-    process = Process(pause_algo; repeat = Inf)
+    process = Process(pause_algo; repeats = Inf)
     run(process; delta = 2)
 
     deadline = time() + 2.0

@@ -253,10 +253,10 @@ end
     _manager_launch_lifetime(worker, kwargs)
 
 Extract a per-run process lifetime from manager launch keyword arguments.
-`lifetime`, `repeats`, and `repeat` are launch controls, not runtime inputs.
+`lifetime` and `repeats` are launch controls, not runtime inputs.
 """
 function _manager_launch_lifetime(worker::P, kwargs::K) where {P<:Process, K<:NamedTuple}
-    return normalize_lifetime_arguments(getalgo(worker), nothing, get(kwargs, :lifetime, nothing), get(kwargs, :repeats, nothing), get(kwargs, :repeat, nothing))
+    return normalize_lifetime_arguments(getalgo(worker), nothing, get(kwargs, :lifetime, nothing), get(kwargs, :repeats, nothing))
 end
 
 """
@@ -275,17 +275,17 @@ end
 # (sets the session flags and calls `prepare_for_loop`, `run_session_loop` and `_finish_run!` itself) next to
 # Processes/Process/Loop.jl.
 """
-    runprocessinline!(worker; lifetime = nothing, repeats = nothing, repeat = nothing, kwargs...)
+    runprocessinline!(worker; lifetime = nothing, repeats = nothing, kwargs...)
 
 Run a `Process` worker synchronously in the current task and store the resulting
 runtime context back on the worker. This avoids per-job `Task` allocation for
 threaded manager jobs.
 """
-function runprocessinline!(worker::P; lifetime = nothing, repeats = nothing, repeat = nothing, kwargs...) where {P<:Process}
+function runprocessinline!(worker::P; lifetime = nothing, repeats = nothing, kwargs...) where {P<:Process}
     @assert isidle(worker) "Process is already in use"
     worker.lastresult = nothing
 
-    launch_kwargs = (; lifetime, repeats, repeat)
+    launch_kwargs = (; lifetime, repeats)
     launch_lifetime = _manager_launch_lifetime(worker, launch_kwargs)
     if !isnothing(launch_lifetime)
         worker.lifetime = launch_lifetime

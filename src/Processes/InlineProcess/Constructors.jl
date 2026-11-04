@@ -24,7 +24,7 @@ end
 
 """The plan, initialized or with the given `context`, its context and the lifetime a new `InlineProcess` gets."""
 @inline function _prepare_inline_process(algo, inputs_overrides...; repeats=nothing, lifetime=nothing, context=nothing)
-    given = normalize_lifetime_arguments(algo, nothing, lifetime, repeats, nothing)
+    given = normalize_lifetime_arguments(algo, nothing, lifetime, repeats)
     lifetime = isnothing(given) ? Repeat(1) : given
     algo = isnothing(context) ? init(algo, inputs_overrides...; lifetime) : _with_lifecycle(resolve(algo), context, (), ())
     return algo, getpersistentcontext(algo), lifetime

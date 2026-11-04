@@ -316,13 +316,13 @@ end
         @test init_ctx[:_state_1].seed == 3
         @test init_ctx[:_state_1].doubled == 10
 
-        process_repeat = Process(resolved, repeat = 10)
+        process_repeat = Process(resolved, repeats = 10)
         @test repeats(StatefulAlgorithms.lifetime(process_repeat)) == 10
 
-        process_indefinite = Process(resolved, repeat = Inf)
+        process_indefinite = Process(resolved, repeats = Inf)
         @test StatefulAlgorithms.lifetime(process_indefinite) isa Indefinite
 
-        p = Process(resolved, repeat = 10)
+        p = Process(resolved, repeats = 10)
         StatefulAlgorithms.run(p)
         ctx = fetch(p)
 
@@ -402,7 +402,7 @@ end
         @test length(sink_routes) == 1
         @test StatefulAlgorithms.getaliases(only(sink_routes)) == (:value,)
 
-        p = Process(resolved, repeat = 1)
+        p = Process(resolved, repeats = 1)
         StatefulAlgorithms.run(p)
         ctx = fetch(p)
         @test isempty(ctx[:sink])
@@ -427,7 +427,7 @@ end
         @test length(sink_routes) == 1
         @test StatefulAlgorithms.source_fieldnames(only(sink_routes)) == (:passthrough,)
 
-        p = Process(resolved, repeat = 1)
+        p = Process(resolved, repeats = 1)
         StatefulAlgorithms.run(p)
         ctx = fetch(p)
         @test isempty(ctx[:sink])
@@ -460,7 +460,7 @@ end
         @test StatefulAlgorithms.gettransform(only(target_routes)) !== nothing
         @test StatefulAlgorithms.getreverse_transform(only(target_routes)) !== nothing
 
-        p = Process(resolved, repeat = 1)
+        p = Process(resolved, repeats = 1)
         StatefulAlgorithms.run(p)
         ctx = fetch(p)
         @test ctx[:source].value == 2.0
@@ -481,7 +481,7 @@ end
         @test length(one_var_routes) == 1
         @test StatefulAlgorithms.gettransform(first(one_var_routes)) !== nothing
 
-        p_one_var = Process(resolved_one_var, repeat = 1)
+        p_one_var = Process(resolved_one_var, repeats = 1)
         StatefulAlgorithms.run(p_one_var)
         ctx_one_var = fetch(p_one_var)
         @test isempty(ctx_one_var[:DSLSinkAlgo_1])
@@ -500,7 +500,7 @@ end
         @test length(two_var_routes) == 1
         @test StatefulAlgorithms.gettransform(first(two_var_routes)) !== nothing
 
-        p_two_var = Process(resolved_two_var, repeat = 1)
+        p_two_var = Process(resolved_two_var, repeats = 1)
         StatefulAlgorithms.run(p_two_var)
         ctx_two_var = fetch(p_two_var)
         @test isempty(ctx_two_var[:DSLValueAlgo_1])
@@ -776,7 +776,7 @@ end
         @test length(routes) == 1
         @test occursin("nested_identity(plus_capture.captured)", sprint(show, StatefulAlgorithms.getplan(resolved)))   # the plan prints a call with its wires as argument sources
 
-        p = Process(resolved, repeat = 1)
+        p = Process(resolved, repeats = 1)
         StatefulAlgorithms.run(p)
         ctx = fetch(p)
         @test !haskey(StatefulAlgorithms.get_captured_returns(ctx), :result)
@@ -803,7 +803,7 @@ end
         @test occursin("@transform", sprint(show, StatefulAlgorithms.getplan(resolved)))
         @test occursin("plus_capture.captured", sprint(show, StatefulAlgorithms.getplan(resolved)))
 
-        p = Process(resolved, repeat = 1)
+        p = Process(resolved, repeats = 1)
         StatefulAlgorithms.run(p)
         ctx = fetch(p)
         @test !haskey(StatefulAlgorithms.get_captured_returns(ctx), :result)
@@ -828,7 +828,7 @@ end
         @test occursin("@transform", sprint(show, StatefulAlgorithms.getplan(resolved)))
         @test occursin("_state_1.clamping_beta", sprint(show, StatefulAlgorithms.getplan(resolved)))
 
-        p = Process(resolved, repeat = 1)
+        p = Process(resolved, repeats = 1)
         StatefulAlgorithms.run(p)
         ctx = fetch(p)
         @test !haskey(StatefulAlgorithms.get_captured_returns(ctx), :result)
@@ -854,7 +854,7 @@ end
         routes = sharedvars[writer_key]
         @test length(routes) == 1
 
-        p = Process(resolved, repeat = 1)
+        p = Process(resolved, repeats = 1)
         StatefulAlgorithms.run(p)
         ctx = fetch(p)
         @test ctx[:_state_1].clamping_beta === 3.0
@@ -872,7 +872,7 @@ end
         end
 
         resolved = resolve(algo)
-        p = Process(resolved, repeat = 1)
+        p = Process(resolved, repeats = 1)
         StatefulAlgorithms.run(p)
         ctx = fetch(p)
         @test ctx[:_state_1].somebuffer == [2, 4, 5]
@@ -891,7 +891,7 @@ end
         end
 
         resolved = resolve(algo)
-        p = Process(resolved, repeat = 1)
+        p = Process(resolved, repeats = 1)
         StatefulAlgorithms.run(p)
         ctx = fetch(p)
         @test ctx[:_state_1].somebuffer == [1, 7, 8]
@@ -910,7 +910,7 @@ end
         end
 
         resolved = resolve(algo)
-        p = Process(resolved, repeat = 1)
+        p = Process(resolved, repeats = 1)
         StatefulAlgorithms.run(p)
         ctx = fetch(p)
         @test ctx[:_state_1].targetbuffer == [2, 2, 4]
@@ -919,7 +919,7 @@ end
 
     @testset "Owned state fields can be assigned from a call, every step" begin
         @info "Composite DSL: Owned state fields can be assigned from a call, every step"
-        run_steps(algo, n) = (p = Process(resolve(algo), repeat = n); run(p); ctx = fetch(p); close(p); ctx)
+        run_steps(algo, n) = (p = Process(resolve(algo), repeats = n); run(p); ctx = fetch(p); close(p); ctx)
 
         # Each step: the counter adds 1 to its managed `x`, then the call writes x + 100 back into it.
         ctx = run_steps(@CompositeAlgorithm(begin
@@ -961,7 +961,7 @@ end
         end
 
         resolved = resolve(algo)
-        p = Process(resolved, repeat = 1)
+        p = Process(resolved, repeats = 1)
         StatefulAlgorithms.run(p)
         ctx = fetch(p)
         @test ctx[:_state_1].clamping_beta[] === 2.0
@@ -985,7 +985,7 @@ end
         wrapper = StatefulAlgorithms.getalgo(resolved, 2)
         @test occursin("value = plus_capture.captured", sprint(show, StatefulAlgorithms.getplan(resolved)))
 
-        p = Process(resolved, repeat = 1)
+        p = Process(resolved, repeats = 1)
         StatefulAlgorithms.run(p)
         ctx = fetch(p)
         @test !haskey(StatefulAlgorithms.get_captured_returns(ctx), :result)
@@ -1009,7 +1009,7 @@ end
         @test occursin("x = _state_1.x", wrapper_summary)
         @test occursin("y = _state_1.y", wrapper_summary)
 
-        p = Process(resolved, repeat = 1)
+        p = Process(resolved, repeats = 1)
         run(p)
         @test fetch(p) == (; result = 321)
         @test !haskey(StatefulAlgorithms.get_captured_returns(getcontext(p)), :result)
@@ -1031,7 +1031,7 @@ end
         routes = sharedvars[sink_key]
         @test length(routes) == 1
 
-        p = Process(resolved, repeat = 1)
+        p = Process(resolved, repeats = 1)
         StatefulAlgorithms.run(p)
         ctx = fetch(p)
         @test isempty(ctx[sink_key])
@@ -1060,7 +1060,7 @@ end
         @test StatefulAlgorithms.gettransform(only(child_routes(3))) !== nothing
         @test length(child_routes(4)) == 1
 
-        p = Process(resolved, repeat = 1)
+        p = Process(resolved, repeats = 1)
         StatefulAlgorithms.run(p)
         ctx = fetch(p)
         @test !haskey(StatefulAlgorithms.get_captured_returns(ctx), :result)
@@ -1087,7 +1087,7 @@ end
         @test length(child_routes(1)) == 1
         @test length(child_routes(2)) == 1
 
-        p = Process(resolved, repeat = 1)
+        p = Process(resolved, repeats = 1)
         StatefulAlgorithms.run(p)
         ctx = fetch(p)
         @test !haskey(StatefulAlgorithms.get_captured_returns(ctx), :result)
@@ -1109,7 +1109,7 @@ end
         routes = sharedvars[sink_key]
         @test length(routes) == 1
 
-        p = Process(resolved, repeat = 1)
+        p = Process(resolved, repeats = 1)
         StatefulAlgorithms.run(p)
         ctx = fetch(p)
         @test isempty(ctx[sink_key])
@@ -1129,7 +1129,7 @@ end
         sink = StatefulAlgorithms.getalgo(resolved, 1)
         sink_key = StatefulAlgorithms.plan_child_namespace(resolved, 1)
 
-        p = Process(resolved, repeat = 1)
+        p = Process(resolved, repeats = 1)
         StatefulAlgorithms.run(p)
         ctx = fetch(p)
         @test isempty(ctx[sink_key])
@@ -1149,7 +1149,7 @@ end
         @test StatefulAlgorithms.intervals(resolved_skipped) == (StatefulAlgorithms.Interval(1),)
         @test isnothing(StatefulAlgorithms.findkeyposition(resolved_skipped, :DSLSourceAlgo_1))
 
-        p_skipped = Process(resolved_skipped, repeat = 1)
+        p_skipped = Process(resolved_skipped, repeats = 1)
         StatefulAlgorithms.run(p_skipped)
         ctx_skipped = fetch(p_skipped)
         @test isempty(ctx_skipped[:DSLValueAlgo_1])
@@ -1165,7 +1165,7 @@ end
         @test length(StatefulAlgorithms.getalgos(resolved_included)) == 3   # with the capture of its return
         @test !isnothing(StatefulAlgorithms.findkeyposition(resolved_included, :DSLSourceAlgo_1))
 
-        p_included = Process(resolved_included, repeat = 1)
+        p_included = Process(resolved_included, repeats = 1)
         StatefulAlgorithms.run(p_included)
         ctx_included = fetch(p_included)
         @test isempty(ctx_included[:DSLValueAlgo_1])
@@ -1224,7 +1224,7 @@ end
         resolved = resolve(algo)
         @test length(StatefulAlgorithms.getalgos(resolved)) == 2
 
-        p = Process(resolved, repeat = 1)
+        p = Process(resolved, repeats = 1)
         StatefulAlgorithms.run(p)
         ctx = fetch(p)
         wrapper = StatefulAlgorithms.getalgo(resolved, 2)
@@ -1264,7 +1264,7 @@ end
 
         @test algo isa StatefulAlgorithms.FinalizedAlgorithm
         resolved = resolve(algo)
-        p = Process(resolved, repeat = 1)
+        p = Process(resolved, repeats = 1)
         run(p)
         @test fetch(p) == (; result = 8)
 
@@ -1308,7 +1308,7 @@ end
             @finally dsl_runtime_final_summary
         end
 
-        p = Process(resolve(algo), repeat = 1)
+        p = Process(resolve(algo), repeats = 1)
         run(p)
         @test fetch(p) == (; result = 4)
         @test !haskey(StatefulAlgorithms.get_subcontexts(getcontext(p)), :Callable_1)   # function calls have no persistent state
@@ -1329,7 +1329,7 @@ end
             @finally dsl_runtime_final_summary
         end
 
-        p = Process(resolve(algo), repeat = 1)
+        p = Process(resolve(algo), repeats = 1)
         run(p)
         @test fetch(p) == (; result = "start4done")
         close(p)
@@ -1373,7 +1373,7 @@ end
             seen = @every 3 push_seen_dsl_test(seen, y)
         end
         produced[] = 0
-        p = Process(resolve(algo), repeat = 7); run(p)
+        p = Process(resolve(algo), repeats = 7); run(p)
         @test fetch(p)[:_state_1].seen == [1.0, 2.0]
         close(p)
 
@@ -1384,7 +1384,7 @@ end
             seen = push_seen_dsl_test(seen, y)
         end
         produced[] = 0
-        p = Process(resolve(algo), repeat = 2); run(p)
+        p = Process(resolve(algo), repeats = 2); run(p)
         @test fetch(p)[:_state_1].seen == [1.0, 2.0]
         close(p)
     end
@@ -1400,7 +1400,7 @@ end
             offset = keep_value_dsl_test(start)
             seen = push_four_dsl_test(seen, count, offset, 2.0f0, 1)
         end
-        p = Process(resolve(algo), repeat = 3); run(p)
+        p = Process(resolve(algo), repeats = 3); run(p)
         @test fetch(p)[:_state_1].seen == [(0, 10.0, 2.0f0, 1), (1, 10.0, 2.0f0, 1), (2, 10.0, 2.0f0, 1)]
         close(p)
 
@@ -1427,7 +1427,7 @@ end
             x = DSLLocalBump(x)
             seen = push_seen_dsl_test(seen, x)
         end
-        p = Process(resolve(algo), repeat = 3); run(p)
+        p = Process(resolve(algo), repeats = 3); run(p)
         @test fetch(p)[:_state_1].seen == [1.0, 1.0, 1.0]
         close(p)
 
@@ -1438,7 +1438,7 @@ end
             total = plus_one_dsl_test(total)
             seen = push_seen_dsl_test(seen, total)
         end
-        p = Process(resolve(algo), repeat = 3); run(p)
+        p = Process(resolve(algo), repeats = 3); run(p)
         @test fetch(p)[:_state_1].seen == [1.0, 1.0, 1.0]
         close(p)
 
@@ -1452,7 +1452,7 @@ end
             end
             seen = push_seen_dsl_test(seen, total)
         end
-        p = Process(resolve(algo), repeat = 2); run(p)
+        p = Process(resolve(algo), repeats = 2); run(p)
         @test fetch(p)[:_state_1].seen == [3.0, 3.0]
         close(p)
 
@@ -1634,7 +1634,7 @@ end
             result = widening_runtime_value()
         end
 
-        p = Process(resolve(algo), repeat = 2)
+        p = Process(resolve(algo), repeats = 2)
         run(p)
         fetched = fetch(p)
 

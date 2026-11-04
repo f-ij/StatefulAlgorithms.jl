@@ -23,8 +23,8 @@ function _build_process(func::Func, inputs_overrides::Tuple, context::C, lifetim
 end
 
 """The plan, initialized or with the given `context`, the lifetime and the timeout a new `Process` gets."""
-function _prepare_process(algo::A, inputs_overrides::Vararg{Any,N}; context::C = nothing, repeats = nothing, lifetime = nothing, repeat = nothing, timeout = 1.0) where {A,N,C}
-    lifetime = normalize_process_lifetime(algo, normalize_lifetime_arguments(algo, nothing, lifetime, repeats, repeat))
+function _prepare_process(algo::A, inputs_overrides::Vararg{Any,N}; context::C = nothing, repeats = nothing, lifetime = nothing, timeout = 1.0) where {A,N,C}
+    lifetime = normalize_process_lifetime(algo, normalize_lifetime_arguments(algo, nothing, lifetime, repeats))
     algo = _process_constructor_algo(algo, context, inputs_overrides, lifetime)
     prepared_context = isnothing(context) ? getpersistentcontext(algo) : context
     algo = _with_lifecycle(algo, prepared_context, getstoredinits(algo), getstoredoverrides(algo))

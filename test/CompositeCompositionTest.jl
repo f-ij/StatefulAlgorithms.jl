@@ -104,7 +104,7 @@ end
     @test StatefulAlgorithms.isresolved(resolved)
     @test length(resolved) == 1
 
-    p = Process(resolved, repeat = 2)
+    p = Process(resolved, repeats = 2)
     run(p)
     result = fetch(p)
     @test result == (; count = 12, cleaned = true)
