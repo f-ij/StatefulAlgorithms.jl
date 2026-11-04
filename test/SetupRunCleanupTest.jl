@@ -17,7 +17,7 @@ end
 
     context, plan = setup(plan_spec, Init(PipelineCounter; total = 10))
     @test StatefulAlgorithms.isresolved(plan)
-    @test isnothing(StatefulAlgorithms.getpersistentcontext(plan))
+    @test !hasfield(typeof(plan), :context)   # the plan holds no data
     @test context[PipelineCounter].total == 10
 
     context, _ = run(plan, context; repeats = 3, step = 2)
