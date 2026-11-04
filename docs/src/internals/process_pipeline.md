@@ -50,8 +50,8 @@ the targeted subcontexts.
 
 ## 3. Running
 
-`run(p; kwargs...)` (`src/Processes/Process/Lifecycle.jl`) calls `_launch_run!` (`src/Processes/Process/Loop.jl`),
-with `resume = true` when `p` is paused. `_launch_run!`:
+`run(p; kwargs...)` (`src/Processes/Process/Lifecycle.jl`) calls `_start_run!` (`src/Processes/Process/Loop.jl`),
+with `resume = true` when `p` is paused. `_start_run!`:
 
 - takes the state context (`getcontext(p)`),
 - calls `prepare_for_loop(p, context, inputs, lifetime, resume)`, the first call

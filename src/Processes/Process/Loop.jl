@@ -1,5 +1,5 @@
 #=
-Starting and ending a `Process` run. `run(p)` calls `_launch_run!`; the task it starts runs `_run_loop_and_store!`.
+Starting and ending a `Process` run. `run(p)` calls `_start_run!`; the task it starts runs `_run_loop_and_store!`.
 `prepare_for_loop` is also used by `TimedProcess`.
 =#
 
@@ -24,12 +24,12 @@ function prepare_for_loop(p::InteractiveProcess, context::C, inputs::NamedTuple,
 end
 
 """
-    _launch_run!(p, inputs; resume, threaded = true, loopfunc = loop)
+    _start_run!(p, inputs; resume, threaded = true, loopfunc = loop)
 
 Called by `run(p)`: starts a new run (`resume = false`) or resumes a paused one on a task of its own. `loopfunc`
 replaces `loop` for tests that look at what the loop gets.
 """
-function _launch_run!(p::Process, inputs::NamedTuple = (;); resume::Bool = false, threaded::Bool = true, loopfunc::LF = loop) where {LF}
+function _start_run!(p::Process, inputs::NamedTuple = (;); resume::Bool = false, threaded::Bool = true, loopfunc::LF = loop) where {LF}
     resume && wait(p)
     lt = lifetime(p)
     resuming = resume ? Resuming{true}() : Resuming{false}()
