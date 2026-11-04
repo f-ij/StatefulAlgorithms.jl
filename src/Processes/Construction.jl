@@ -7,6 +7,13 @@ plan's registry (`resolve_process_inputs_overrides`).
 """The plan a process runs for `func`: a plan (or plan type) as it is, anything else wrapped in a `CompositeAlgorithm`."""
 @inline parse_plan(func::F) where {F} = (func isa LoopSpec || func isa Type{<:LoopSpec}) ? func : CompositeAlgorithm(func)
 
+# Deprecated: the old name, kept only because InteractiveIsing still calls it (`Windows/Panels/PanelUtils.jl`,
+# `Sim/Process.jl`). Remove once it no longer does.
+function normalize_process_algo(func::F) where {F}
+    @warn "`StatefulAlgorithms.normalize_process_algo` is deprecated and internal: use `parse_plan`, or better no internal API at all." maxlog = 1
+    return parse_plan(func)
+end
+
 """
     parse_lifetime(positional, lifetime, repeats) -> Union{Nothing, Lifetime}
 
