@@ -35,6 +35,3 @@ _throw_undef() = throw(UndefRefError())
     !iszero(getfield(m, :isset)) ? DirectRead(getfield(m, :value)) : _throw_undef()
 # A local declared without a value that no step ever writes keeps its `undef`.
 @inline read_value(view::V, ::UndefInitializer) where {V<:SubContextView} = _throw_undef()
-
-# Shown after the run (`final_context`): a `Maybe` shows as its value, or as `nothing` while unset.
-@inline shown_value(m::Maybe) = iszero(getfield(m, :isset)) ? nothing : shown_value(getfield(m, :value))

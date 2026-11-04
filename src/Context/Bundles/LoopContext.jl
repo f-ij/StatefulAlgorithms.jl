@@ -115,8 +115,7 @@ does not change.
 """
 @inline function final_context(lc::LC) where {LC<:LoopContext}
     runtime_context = @inline getruntime(lc)
-    returns = map(r -> map(shown_value, r), (@inline get_subcontext_returns(runtime_context)))
-    shown = @inline merge_into_subcontexts((@inline getpersistent(lc)), returns)
+    shown = @inline merge_into_subcontexts((@inline getpersistent(lc)), (@inline get_subcontext_returns(runtime_context)))
     shown = @inline _show_partition(shown, runtime_context, Inputs())
     shown = @inline _show_partition(shown, runtime_context, DeclaredLocals())
     return @inline _show_partition(shown, runtime_context, CapturedReturns())
@@ -129,13 +128,9 @@ when `runtime_context` does not have that partition.
 @inline function _show_partition(pc::PC, runtime_context::RC, partition::P) where {PC<:ProcessContext, RC<:ProcessContext, P<:RuntimePartition}
     name = runtime_partition_name(partition)
     haskey(get_subcontexts(runtime_context), name) || return pc
-    values = _shown_values(partition, (@inline get_runtime_partition(runtime_context, partition)))
+    values = @inline get_runtime_partition(runtime_context, partition)
     return @inline with_subcontext(pc, Val(name), SubContext{name}(values))
 end
-
-"""Returns a partition's values as the visible context shows them: captured returns unwrapped from their slots, the rest as stored."""
-_shown_values(::P, values::NT) where {P<:RuntimePartition, NT<:NamedTuple} = values
-_shown_values(::CapturedReturns, values::NT) where {NT<:NamedTuple} = map(shown_value, values)
 
 ##########################################
 ########## Interface extensions ##########

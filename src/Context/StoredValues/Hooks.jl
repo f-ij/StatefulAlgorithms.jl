@@ -5,7 +5,7 @@ instead of a plain value: a `RedirectedVar` (the field lives at another location
 local that may not have been assigned yet). A read must see the value behind the wrapper, and a write must reach it.
 
 Instead of a special case per wrapper in the view, each wrapper type adds a method to a hook here: `read_value` for
-reads, `write_value` for writes, `shown_value` for the context after a run. A hook does not read or write itself: it
+reads, `write_value` for writes. A hook does not read or write itself: it
 answers with an action, either "done, here is the value" or "go on there". The code that follows the answers
 (ReadingWriting.jl: `_follow_reads`, `_follow_writes`) does the recursion. That keeps every hook one step, and it is
 what makes chains work, e.g. a redirect pointing to a field that is itself redirected or interactive.
@@ -118,16 +118,3 @@ value into its `Ref` and answers `NoWrite`.
 """
 @inline write_value(view::V, stored::S, request::StoreInto{L}) where {V<:SubContextView, S, L} =
     DirectWrite{L}(getfield(request, :value))
-
-##########################################
-########## Showing a stored value ########
-##########################################
-
-"""
-    shown_value(stored) -> value
-
-The value the context after a run (`final_context`) shows for the value `stored`: `stored` itself by default. Unlike
-`read_value` there is no reader and it never throws: a storage wrapper that may hold no value (a declared local's
-`Maybe`) shows `nothing` then, and otherwise unwraps one layer and calls `shown_value(inner)` again.
-"""
-@inline shown_value(stored::S) where {S} = stored

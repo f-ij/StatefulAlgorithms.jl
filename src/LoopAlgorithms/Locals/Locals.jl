@@ -10,8 +10,8 @@ in the runtime context's `_declared_locals` subcontext, one slot per declaration
 2. Storage       the field types declared values are stored with (a `Maybe` for a local that may not hold a value yet)
 3. Reading and writing during a run; a local declared without a type takes the type of its first value
 
-`Maybe` itself, how it and a local that was never written (`undef`) read, and how a `Maybe` shows (their hook
-methods), are in Context/StoredValues/StorageWrappers/Maybe.jl.
+`Maybe` itself and how it and a local that was never written (`undef`) read (their hook methods) are in
+Context/StoredValues/StorageWrappers/Maybe.jl.
 =#
 
 ############################################################################################
