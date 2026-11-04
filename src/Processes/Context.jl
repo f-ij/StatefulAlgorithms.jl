@@ -1,7 +1,6 @@
 #=
-The context of any process: building a new one by replaying init on its plan (`makecontext`, `makecontext!`), cleanup,
-and the context-exchange calls on a process (`isinteractive`, `interact!`, which go to its context;
-Interactive/ContextExchange.jl). A `Process` stores its state context through its accessors (Process/Accessors.jl).
+Calls on a process's context that work for every process type: making a new context from the plan's init
+(`makecontext`, `makecontext!`), cleanup, and sending a value to a `ContextExchange` (`interact!`, inactive).
 =#
 
 function makecontext(p::AbstractProcess, inputs_overrides...; lifetime=nothing)
@@ -22,5 +21,6 @@ end
 
 @inline isinteractive(process::AbstractProcess) = isinteractive(getcontext(process))
 
+# Inactive: no plan uses a `ContextExchange` (Interactive/ContextExchange.jl; TODO.md, "`ContextExchange`: probably delete it").
 interact!(process::AbstractProcess, pair::Pair{Symbol, <:Any}; exchange::Union{Nothing, Symbol} = nothing) =
     interact!(getcontext(process), pair; exchange)

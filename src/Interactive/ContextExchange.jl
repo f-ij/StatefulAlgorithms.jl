@@ -334,7 +334,7 @@ end
 """
     interact!(context, :name => value; exchange = :_exchange)
 
-Queue an external write to one resolved exchange variable. The next due exchange
+Inactive: no plan uses a `ContextExchange` (see the file header). Queue an external write to one resolved exchange variable. The next due exchange
 step converts it to the current target variable type and writes it directly into
 the resolved subcontext.
 """
