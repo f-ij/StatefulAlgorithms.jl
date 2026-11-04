@@ -11,4 +11,4 @@ view's `getproperty` dispatches on it:
 value back onto the fields.
 """
 struct VarLocation{Type, subcontextname, originalname, func, reversefunc} end
-VarLocation{Type}(subcontextname::Symbol, originalname::Union{Tuple, Symbol}, func = nothing, reversefunc = nothing) where {Type} = VarLocation{Type, subcontextname, originalname, func, reversefunc}()
+VarLocation{Type}(subcontextname::Symbol, originalname::ON, func::F = nothing, reversefunc::R = nothing) where {Type, ON <: Union{Tuple, Symbol}, F, R} = VarLocation{Type, subcontextname, originalname, func, reversefunc}()
