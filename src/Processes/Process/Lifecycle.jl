@@ -14,7 +14,7 @@ function Base.run(p::Process, run_lifetime = nothing, inputs_and_overrides...; r
         isnothing(lifetime) || error("Cannot change lifetime while resuming a paused Process.")
         isempty(inputs_and_overrides) || error("Cannot pass init/override specs while resuming a paused Process.")
         isempty(kwargs) || error("Cannot pass new runtime inputs while resuming a paused Process.")
-        return _resume_paused_loop!(p)
+        return _launch_run!(p; resume = true)
     end
     isempty(inputs_and_overrides) || error("Process run accepts runtime inputs as keywords only. Reinitialize the Process context before running to apply init/override specs.")
 
@@ -23,7 +23,7 @@ function Base.run(p::Process, run_lifetime = nothing, inputs_and_overrides...; r
         p.lifetime = lt
     end
 
-    _start_new_run!(p, (; kwargs...))
+    _launch_run!(p, (; kwargs...))
 end
 
 """

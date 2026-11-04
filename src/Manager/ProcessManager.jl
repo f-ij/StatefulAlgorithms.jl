@@ -272,7 +272,7 @@ function _manager_process_launch_args(worker::P, kwargs::K) where {P<:Process, K
 end
 
 # TODO: check whether this is still used, and whether it should be: a second, synchronous way to run a `Process`
-# (sets the session flags and calls `prepare_for_loop`, `run_session_loop` and `_finish_run!` itself) next to
+# (sets the session flags and calls `prepare_for_loop`, `run_session_loop` and `_store_run_contexts!` itself) next to
 # Processes/Process/Loop.jl.
 """
     runprocessinline!(worker; lifetime = nothing, repeats = nothing, kwargs...)
@@ -299,7 +299,7 @@ function runprocessinline!(worker::P; lifetime = nothing, repeats = nothing, kwa
     @atomic session.paused = false
     @atomic session.shouldrun = true
     persistent_context, returnvalue = run_session_loop(session, plan, lc, lt)
-    result = _finish_run!(worker, session, persistent_context, returnvalue)
+    result = _store_run_contexts!(worker, session, persistent_context, returnvalue)
 
     worker.lastresult = result
     worker.task = nothing

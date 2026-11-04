@@ -20,8 +20,8 @@ precompile_interface(x::X) where {X} = nothing
 
 # How a method is written: `precompile` each call with the tuple of its argument types, which are all known from the
 # built process. For a `Process` run, the function its task calls:
-#     precompile(_run_process_task, (P, typeof(loop), InteractiveSession{C, LT}, F, LC, LT, Resuming{false}))
+#     precompile(_run_loop_and_store!, (P, typeof(loop), InteractiveSession{C, LT}, F, LC, LT, Resuming{false}))
 # with `P` the process type, `F` its plan, `LT` its lifetime, `C` its cursor type (`P.parameters[2]`) and `LC` the
-# `LoopContext` type `prepare_for_loop` builds for a run without inputs. Mark `_run_process_task` `@noinline`, so the
+# `LoopContext` type `prepare_for_loop` builds for a run without inputs. Mark `_run_loop_and_store!` `@noinline`, so the
 # task's closure calls this compiled method instead of compiling the loop again inline. Whether calls are spawned on
 # tasks to run in parallel is decided per process type, inside its one method; no helper functions or job types.

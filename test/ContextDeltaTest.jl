@@ -37,7 +37,7 @@ function written_fields_of(plan)
     p = Process(plan; repeats = 10)
     captured = Ref{Any}(nothing)
     # A loop function gets the run's session and returns `(persistent_context, result)`, as `loop` does.
-    StatefulAlgorithms._start_new_run!(p; threaded = false, loopfunc = (args...) -> (captured[] = args; (StatefulAlgorithms.getpersistent(args[3]), nothing)))
+    StatefulAlgorithms._launch_run!(p; threaded = false, loopfunc = (args...) -> (captured[] = args; (StatefulAlgorithms.getpersistent(args[3]), nothing)))
     wait(p.task)
     session, func, lc, lifetime, resume = captured[]
     step_plan = StatefulAlgorithms.getplan(func)
@@ -123,7 +123,7 @@ end
 @testset "Context delta: the write set is a compile-time constant" begin
     p = Process(CompositeAlgorithm(DeltaReader, DeltaWriter, (1, 10)); repeats = 10)
     captured = Ref{Any}(nothing)
-    StatefulAlgorithms._start_new_run!(p; threaded = false, loopfunc = (args...) -> (captured[] = args; (StatefulAlgorithms.getpersistent(args[3]), nothing)))
+    StatefulAlgorithms._launch_run!(p; threaded = false, loopfunc = (args...) -> (captured[] = args; (StatefulAlgorithms.getpersistent(args[3]), nothing)))
     wait(p.task)
     code, _ = only(Base.code_typed(StatefulAlgorithms.loop, Tuple{map(typeof, captured[])...}; debuginfo = :none))
     typed = sprint(show, code)

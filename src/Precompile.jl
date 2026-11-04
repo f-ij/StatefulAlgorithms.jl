@@ -683,7 +683,7 @@ process_basics. Cost: +0.3 s precompile, +2.5 MB.
 #== section: lifetimes ==#
 @compile_workload begin
     async_process = Process(_ProcessPrecompileScaler; repeats = 1)
-    _start_new_run!(async_process; threaded = false)
+    _launch_run!(async_process; threaded = false)
     wait(async_process)
     close(async_process)
 

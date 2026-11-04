@@ -12,7 +12,7 @@ mutable struct Process{F,C} <: InteractiveProcess{F,C}
     # The process's state when its type is not the one stored in the plan (`algo`), which is in the process's type;
     # `nothing` when the plan holds it. Written only by `setcontext!`.
     state_context::Union{Nothing, ProcessContext}
-    # A paused run's runtime context (its inputs and declared locals), kept by the run's end (`_finish_run!`) and read by
+    # A paused run's runtime context (its inputs and declared locals), kept by the run's end (`_store_run_contexts!`) and read by
     # the resumed run or by `close`, which both clear it. `nothing` when no run is paused.
     runtime_context::Union{Nothing, ProcessContext}
     timeout::Float64

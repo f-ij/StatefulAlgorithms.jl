@@ -17,7 +17,7 @@ end
 
 The loop's exit: records the end time (a session that keeps times) and returns the persistent context and the run's
 result; on a pause, the result is the run's `LoopContext` (its persistent and runtime context). The process that
-started the run keeps them (`Process`: `_finish_run!`, `InlineProcess`: `_run_inline!`).
+started the run keeps them (`Process`: `_store_run_contexts!`, `InlineProcess`: `_run_inline!`).
 """
 @inline function after_while(session::S, persistent_context::C, returnvalue::R) where {S<:ProcessSession, C<:ProcessContext, R}
     @inline set_endtime!(session)
@@ -63,7 +63,7 @@ Run a single function in a loop indefinitely.
 
     if @inline loop_ispaused(session)
         @inline keep_loop_cursor!(session, step_cursor)
-        # The run's contexts, taken apart by the process (`_finish_run!`) and combined again when it resumes.
+        # The run's contexts, taken apart by the process (`_store_run_contexts!`) and combined again when it resumes.
         return @inline after_while(session, persistent_context, LoopContext(persistent_context, runtime_context))
     end
 
@@ -98,7 +98,7 @@ Base.@constprop :aggressive @inline function loop(session::S, algo::F, lc::LC, l
 
     if @inline loop_ispaused(session)
         @inline keep_loop_cursor!(session, step_cursor)
-        # The run's contexts, taken apart by the process (`_finish_run!`) and combined again when it resumes.
+        # The run's contexts, taken apart by the process (`_store_run_contexts!`) and combined again when it resumes.
         return @inline after_while(session, persistent_context, LoopContext(persistent_context, runtime_context))
     end
 

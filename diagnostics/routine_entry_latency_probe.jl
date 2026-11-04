@@ -186,7 +186,7 @@ function routine_entry_looptype_call!(process::P, looptype::LT) where {P<:Proces
     resume = StatefulAlgorithms.Resuming{false}()
     session, plan, lc = StatefulAlgorithms.prepare_for_loop(process, getcontext(process), (;), lifetime, resume)
     persistent_context, returnvalue = StatefulAlgorithms.loop(session, plan, lc, lifetime, resume, looptype)
-    StatefulAlgorithms._finish_run!(process, session, persistent_context, returnvalue)
+    StatefulAlgorithms._store_run_contexts!(process, session, persistent_context, returnvalue)
     return getcontext(process)[ROUTINE_ENTRY_STATE_KEY].equilibrium_state
 end
 

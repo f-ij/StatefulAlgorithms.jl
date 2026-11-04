@@ -50,10 +50,8 @@ the targeted subcontexts.
 
 ## 3. Running
 
-`run(p; kwargs...)` (`src/Processes/Process/Lifecycle.jl`) calls `_start_new_run!` (`src/Processes/Process/Loop.jl`),
-or `_resume_paused_loop!` when `p` is paused.
-
-`_start_new_run!`:
+`run(p; kwargs...)` (`src/Processes/Process/Lifecycle.jl`) calls `_launch_run!` (`src/Processes/Process/Loop.jl`),
+with `resume = true` when `p` is paused. `_launch_run!`:
 
 - takes the state context (`getcontext(p)`),
 - calls `prepare_for_loop(p, context, inputs, lifetime, resume)`, the first call
@@ -61,8 +59,8 @@ or `_resume_paused_loop!` when `p` is paused.
   and the `LoopContext` the run starts from: `LoopContext(plan, context)`
   (the state context and the plan's declared locals), then `with_inputs`, which
   checks the inputs against the plan's `@input` metadata and adds them, and
-- spawns the loop task (`_start_run!`), which calls
-  `run_session_loop(session, plan, loop_context, lifetime, resume)`.
+- spawns the loop task, which runs `_run_loop_and_store!`:
+  `run_session_loop(session, plan, loop_context, lifetime, resume)`, then `_store_run_contexts!`.
 
 `InlineProcess`, the manager's inline run and `run(plan)` start from
 `prepare_for_loop` too.
@@ -110,7 +108,7 @@ array.
 The completion paths distinguish stored state from the task result:
 
 1. Pausing skips cleanup. The process takes the run's `LoopContext` apart
-   (`_finish_run!`): the persistent context's values go into its state context
+   (`_store_run_contexts!`): the persistent context's values go into its state context
    (`_sync_state_context!`), the runtime context (inputs and declared locals) into
    `Process.runtime_context`; the session keeps the loop cursor. A resume combines
    the two again into one `LoopContext` and clears the slot; closing the paused
