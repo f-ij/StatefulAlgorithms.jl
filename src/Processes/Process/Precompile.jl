@@ -50,9 +50,16 @@ function schedule_loop_precompile!(p::Process, lt = lifetime(p); loopfunc = loop
     # Do not asynchronously precompile user-shaped process loops from the
     # constructor. Immediate `run` calls otherwise compile the same large loop
     # in the foreground while the background precompile is still active.
+    #
+    # How to write it: precompile the function the run's task calls with the tuple of its argument types, e.g.
+    #     precompile(_run_process_task, (typeof(p), typeof(loopfunc), InteractiveSession{C, typeof(lt)}, typeof(getalgo(p)), LC, typeof(lt), Resuming{false}))
+    # with LC the type of the `LoopContext` that `prepare_for_loop` builds (without inputs). Mark `_run_process_task`
+    # `@noinline`, so the task's closure calls this compiled method instead of compiling the loop again inline.
     return p
 end
 
 function wait_loop_precompile!(p::Process, func, lc, lt, resume::Resuming; loopfunc = loop)
+    # How to write it: if `schedule_loop_precompile!` compiles on a background task, wait for that task here, so the run
+    # does not compile the same loop in the foreground at the same time.
     return nothing
 end
