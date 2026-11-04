@@ -23,7 +23,7 @@ function Base.run(p::Process, run_lifetime = nothing, inputs_and_overrides...; r
         p.lifetime = lt
     end
 
-    makeloop!(p, (; kwargs...))
+    _start_new_run!(p, (; kwargs...))
 end
 
 """

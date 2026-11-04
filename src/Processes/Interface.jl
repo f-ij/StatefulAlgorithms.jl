@@ -21,7 +21,3 @@ repeats(p::AbstractProcess) = repeats(lifetime(p))
 """The start and close listeners of `p`: none by default; a `Process` has its own (`runtimelisteners(p::Process)`)."""
 runtimelisteners(p::P) where {P<:AbstractProcess} = nothing
 
-function Base.run(p::AP, lifetime = nothing, inputs_and_overrides...; kwargs...) where AP <: AbstractProcess
-    @assert isidle(p) "Process is already in use"
-    makeloop!(p, (; kwargs...))
-end

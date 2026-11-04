@@ -1,37 +1,7 @@
 #=
 Loop setup of a `Process`: what a run hands to the loop (`prepare_for_loop`, `create_session`), the task that runs it,
-what happens on a pause or end (`_finish_run!`), resuming a paused run, and `reset!`.
+what happens on a pause or end (`_finish_run!`), starting a new run or resuming a paused one, and `reset!`.
 =#
-
-"""
-Runs the prepared task of a process on a thread
-"""
-function makeloop!(p::Process, inputs::NamedTuple = (;); threaded = true, loopfunc::LF = loop) where {LF}
-    if _has_typed_state_context(p)
-        return _makeloop!(p, inputs, lifetime(p), _typed_state_context(p); threaded, loopfunc)
-    else
-        return _makeloop_dynamic!(p, inputs; threaded, loopfunc)
-    end
-end
-
-function makeloop!(p::Process, inputs::NamedTuple, lt; threaded = true, loopfunc::LF = loop) where {LF}
-    if _has_typed_state_context(p)
-        return _makeloop!(p, inputs, lt, _typed_state_context(p); threaded, loopfunc)
-    else
-        return _makeloop_dynamic!(p, inputs, lt; threaded, loopfunc)
-    end
-end
-
-@noinline _makeloop_dynamic!(p::Process, inputs::NamedTuple; threaded = true, loopfunc::LF = loop) where {LF} =
-    _makeloop!(p, inputs, lifetime(p), StatefulAlgorithms.getcontext(p); threaded, loopfunc)
-
-@noinline _makeloop_dynamic!(p::Process, inputs::NamedTuple, lt; threaded = true, loopfunc::LF = loop) where {LF} =
-    _makeloop!(p, inputs, lt, StatefulAlgorithms.getcontext(p); threaded, loopfunc)
-
-function _makeloop!(p::Process, inputs::NamedTuple, lt, base_context; threaded = true, loopfunc::LF = loop) where {LF}
-    session, func, lc = prepare_for_loop(p, base_context, inputs, lt, Resuming{false}())
-    return _start_run!(p, session, func, lc, lt; threaded, loopfunc)
-end
 
 """
     prepare_for_loop(p::Process, context, inputs, lifetime, resume)
@@ -83,10 +53,7 @@ function _start_run!(p::P, session::S, func::F, lc::LC, lt::LT; threaded::Bool =
     @atomic session.shouldrun = true
     p.lastresult = nothing
     wait_loop_precompile!(p, func, lc, lt, resume; loopfunc)
-    # The task runs `body` itself (as `Threads.@spawn` and `@async` do with a closure around it): its type is known
-    # before the task exists, so it can be compiled ahead (Processes/Process/Precompile.jl).
-    body = ProcessTaskBody(p, loopfunc, session, func, lc, lt, resume)
-    task = Task(body)
+    task = Task(() -> _run_process_task(p, loopfunc, session, func, lc, lt, resume))
     if threaded
         task.sticky = false
         Threads._spawn_set_thrpool(task, :default)
@@ -94,23 +61,6 @@ function _start_run!(p::P, session::S, func::F, lc::LC, lt::LT; threaded::Bool =
     p.task = schedule(task)
     return p
 end
-
-"""
-    ProcessTaskBody(p, loopfunc, session, func, loop_context, lifetime, resume)
-
-What a `Process` task runs, as a value: calling it runs `_run_process_task` with its fields. A struct, not a closure,
-so its type is known before the task exists.
-"""
-struct ProcessTaskBody{P, LF, S, F, LC, LT, R}
-    p::P
-    loopfunc::LF
-    session::S
-    func::F
-    loop_context::LC
-    lifetime::LT
-    resume::R
-end
-(body::ProcessTaskBody)() = _run_process_task(body.p, body.loopfunc, body.session, body.func, body.loop_context, body.lifetime, body.resume)
 
 """
 What a `Process` task runs: the loop on the session (`run_session_loop`), then the run's end on the process
@@ -140,15 +90,25 @@ function _finish_run!(p::Process, session::InteractiveSession, persistent_contex
     return returnvalue
 end
 
+"""
+    _start_new_run!(p, inputs = (;); threaded, loopfunc)
+
+Starts a new run of `p` (`run(p)` when `p` is not paused) from its state context (`getcontext(p)`) and the run's
+inputs, for its lifetime. `loopfunc` replaces `loop`, for tests that look at what the loop gets.
+"""
+function _start_new_run!(p::Process, inputs::NamedTuple = (;); threaded = true, loopfunc::LF = loop) where {LF}
+    lt = lifetime(p)
+    session, func, lc = prepare_for_loop(p, getcontext(p), inputs, lt, Resuming{false}())
+    return _start_run!(p, session, func, lc, lt; threaded, loopfunc)
+end
+
+"""Resumes the paused run of `p` (`run(p)` when `p` is paused) from its state context and the runtime context its pause kept."""
 function _resume_paused_loop!(p::Process; threaded = true)
     wait(p)
     lt = lifetime(p)
     session, func, lc = prepare_for_loop(p, StatefulAlgorithms.getcontext(p), (;), lt, Resuming{true}())
     return _start_run!(p, session, func, lc, lt; threaded, resume = Resuming{true}())
 end
-
-makeloop!(p::Process, lt::Lifetime; threaded = true, loopfunc::LF = loop) where {LF} =
-    makeloop!(p, (;), lt; threaded, loopfunc)
 
 """
     reset!(process)

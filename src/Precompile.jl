@@ -675,7 +675,7 @@ end
 #== end: inline ==#
 
 #===================================================================================================================
-Section: lifetimes other than a repeat count: Until, RepeatOrUntil, AtLeast, AtLeastAtMost, Indefinite; makeloop!;
+Section: lifetimes other than a repeat count: Until, RepeatOrUntil, AtLeast, AtLeastAtMost, Indefinite; a run not on a thread;
 copying a process.
 Unique: within noise (0.04–0.08 s per scenario, no phase above 0.015 s). Alone: −1.1 to −1.3 s, overlapping with
 process_basics. Cost: +0.3 s precompile, +2.5 MB.
@@ -683,7 +683,7 @@ process_basics. Cost: +0.3 s precompile, +2.5 MB.
 #== section: lifetimes ==#
 @compile_workload begin
     async_process = Process(_ProcessPrecompileScaler; repeats = 1)
-    makeloop!(async_process; threaded = false)
+    _start_new_run!(async_process; threaded = false)
     wait(async_process)
     close(async_process)
 

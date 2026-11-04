@@ -50,11 +50,12 @@ the targeted subcontexts.
 
 ## 3. Running
 
-`run(p; kwargs...)` (`src/Processes/Process/Lifecycle.jl`) calls `makeloop!` (`src/Processes/Process/Loop.jl`).
+`run(p; kwargs...)` (`src/Processes/Process/Lifecycle.jl`) calls `_start_new_run!` (`src/Processes/Process/Loop.jl`),
+or `_resume_paused_loop!` when `p` is paused.
 
-`makeloop!`:
+`_start_new_run!`:
 
-- picks the state context (typed from the plan, or from `state_context`),
+- takes the state context (`getcontext(p)`),
 - calls `prepare_for_loop(p, context, inputs, lifetime, resume)`, the first call
   of every run (Processes/Hooks.jl): the session the run runs in, the plan
   and the `LoopContext` the run starts from: `LoopContext(plan, context)`
