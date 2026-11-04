@@ -10,5 +10,5 @@ view's `getproperty` dispatches on it:
 `originalname` may be a tuple of fields, read together through the read transform `func`; `reversefunc` maps a written
 value back onto the fields.
 """
-struct VarLocation{Type, subcontextname, originalname, func, reversefunc} end
-VarLocation{Type}(subcontextname::Symbol, originalname::ON, func::F = nothing, reversefunc::R = nothing) where {Type, ON <: Union{Tuple, Symbol}, F, R} = VarLocation{Type, subcontextname, originalname, func, reversefunc}()
+struct VarLocation{Kind, subcontextname, originalname, func, reversefunc} end
+VarLocation{Kind}(subcontextname::Symbol, originalname::ON, func::F = nothing, reversefunc::R = nothing) where {Kind, ON <: Union{Tuple, Symbol}, F, R} = VarLocation{Kind, subcontextname, originalname, func, reversefunc}()
