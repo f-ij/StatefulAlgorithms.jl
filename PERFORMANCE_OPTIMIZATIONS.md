@@ -195,16 +195,10 @@ many-small-job scheduling while preserving the current generic fallback.
 Possible API: a recipe trait or constructor that fixes job, scratch, and result
 types.
 
-### 12. Parameterize `TimedProcess.callback`
+### 12. ~~Parameterize `TimedProcess.callback`~~
 
-Relevant file:
-
-- `src/TimedProcess.jl`
-
-`callback::Function` forces dynamic dispatch through the callback field. A
-`TimedProcess{TD,C,CB}` representation can store the closure type concretely.
-This should improve inference around timer setup and callback invocation without
-changing behavior.
+Obsolete since 2026-11-04: the rewritten `TimedProcess` (`src/Processes/TimedProcess/`) has no callback field; its
+`Timer` calls `_tick!(tp)`.
 
 ### 13. Add a persistent worker mode for threaded graphs
 

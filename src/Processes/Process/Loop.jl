@@ -1,6 +1,7 @@
 #=
 Loop setup of a `Process`: what a run hands to the loop (`prepare_for_loop`, `create_session`), the task that runs it,
 what happens on a pause or end (`_finish_run!`), starting a new run or resuming a paused one, and `reset!`.
+`prepare_for_loop` and `create_session` are written for `InteractiveProcess`: a `TimedProcess` starts its runs with them.
 =#
 
 """
@@ -11,14 +12,14 @@ A `Process` run runs in the process's session when it has `lifetime`'s type, els
 and the run's inputs. A resumed run starts from `context` and the runtime context its pause kept, combined again into
 one `LoopContext`; the process no longer keeps that runtime context (Processes/Hooks.jl).
 """
-function prepare_for_loop(p::Process, context::C, inputs::NamedTuple, lt::LT, resume::Resuming{false}) where {C<:ProcessContext, LT}
+function prepare_for_loop(p::InteractiveProcess, context::C, inputs::NamedTuple, lt::LT, resume::Resuming{false}) where {C<:ProcessContext, LT}
     session = create_session(p, lt)
     p.session = session
     func = getalgo(p)
     return session, func, with_inputs(LoopContext(func, context), func, inputs)
 end
 
-function prepare_for_loop(p::Process, context::C, inputs::NamedTuple, lt::LT, resume::Resuming{true}) where {C<:ProcessContext, LT}
+function prepare_for_loop(p::InteractiveProcess, context::C, inputs::NamedTuple, lt::LT, resume::Resuming{true}) where {C<:ProcessContext, LT}
     session = create_session(p, lt)
     p.session = session
     func = getalgo(p)
@@ -34,7 +35,7 @@ The session a run of `p` with `lifetime` runs in: the process's session when it 
 one with the same counters, times and thread. The caller sets it as the process's session, never while a run is going
 on, so the loop and the process always share the one session.
 """
-function create_session(p::Process{F, C}, lt::LT) where {F, C, LT}
+function create_session(p::InteractiveProcess{F, C}, lt::LT) where {F, C, LT}
     session = getsession(p)
     session isa InteractiveSession{C, LT} && return session
     return InteractiveSession{C, LT}(@atomic(session.shouldrun), @atomic(session.paused), session.loopidx, session.tickidx,

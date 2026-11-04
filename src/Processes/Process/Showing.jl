@@ -14,7 +14,7 @@ How a `Process` is shown: the tree of its fields, and `show`/`summary`.
     end
 end
 
-@inline function _process_algo_summary(p::Process)
+@inline function _process_algo_summary(p::InteractiveProcess)
     return sprint(summary, getalgo(p))
 end
 

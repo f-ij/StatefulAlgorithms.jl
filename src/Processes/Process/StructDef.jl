@@ -5,7 +5,7 @@ and session. Two processes are equal when their ids are.
 
 export Process
 
-mutable struct Process{F,C} <: AbstractProcess
+mutable struct Process{F,C} <: InteractiveProcess{F,C}
     id::UUID
     algo::F
     lifetime::Lifetime

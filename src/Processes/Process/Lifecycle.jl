@@ -37,9 +37,10 @@ Finish a paused run when `close` is called on a paused `Process`.
 A paused loop never returns to its end, so this does that work instead: run `cleanup` on the state context and the
 runtime context the pause kept (`getcontext(p)`, `p.runtime_context`), combined again into one `LoopContext` as on a
 resume; store the final result in `p.lastresult`; clear `p.runtime_context`; and sync the cleaned persistent context
-into the state context (`_sync_state_context!`). Returns `p.lastresult`.
+into the state context (`_sync_state_context!`). Returns `p.lastresult`. Also ends a `TimedProcess` run, which keeps
+the same two contexts between its ticks.
 """
-function _cleanup_paused_process!(p::Process)
+function _cleanup_paused_process!(p::InteractiveProcess)
     cleaned = @inline cleanup(getalgo(p), LoopContext(getcontext(p), p.runtime_context))
     p.lastresult = @inline loop_final_result(getalgo(p), (@inline final_context(cleaned)), getruntime(cleaned))
     p.runtime_context = nothing

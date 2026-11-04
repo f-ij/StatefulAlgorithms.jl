@@ -67,6 +67,7 @@ module StatefulAlgorithms
     include("Processes/Context.jl")
     include("Processes/Process/Process.jl")
     include("Processes/InlineProcess/InlineProcess.jl")
+    include("Processes/TimedProcess/TimedProcess.jl")
 
 
 
