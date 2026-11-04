@@ -9,16 +9,14 @@ Starting and ending a `Process` run. `run(p)` calls `_launch_run!`; the task it 
 Run at the start of every run. Gives the session, the plan and the `LoopContext` to start from: the state context
 plus the run's inputs, or, when resuming, plus the runtime context the pause kept.
 """
-function prepare_for_loop(p::InteractiveProcess{F, Cur}, context::C, inputs::NamedTuple, lt::LT, resume::Resuming{false}) where {F, Cur, C<:ProcessContext, LT}
-    session = InteractiveSession{Cur, LT}(getsession(p))
-    p.session = session
+function prepare_for_loop(p::InteractiveProcess, context::C, inputs::NamedTuple, lt::LT, resume::Resuming{false}) where {C<:ProcessContext, LT}
+    session = getsession(p)
     func = getalgo(p)
     return session, func, with_inputs(LoopContext(func, context), func, inputs)
 end
 
-function prepare_for_loop(p::InteractiveProcess{F, Cur}, context::C, inputs::NamedTuple, lt::LT, resume::Resuming{true}) where {F, Cur, C<:ProcessContext, LT}
-    session = InteractiveSession{Cur, LT}(getsession(p))
-    p.session = session
+function prepare_for_loop(p::InteractiveProcess, context::C, inputs::NamedTuple, lt::LT, resume::Resuming{true}) where {C<:ProcessContext, LT}
+    session = getsession(p)
     func = getalgo(p)
     runtime_context = p.runtime_context
     p.runtime_context = nothing

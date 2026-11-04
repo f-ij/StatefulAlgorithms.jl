@@ -3,8 +3,7 @@
 
 The session of a `Process` run: a run on its own task that the user can pause, resume and close while it runs. Made
 with the process and kept on it after a run ends, so its counters and times stay readable. A run whose lifetime has
-another type gets a new session with the same counters (`InteractiveSession{C, LT}(session)`); a resumed run goes on
-in the same one.
+another type still runs in it; a resumed run goes on in the same one.
 
 - `shouldrun`, `paused`: set by the user (`pause(p)`, `close(p)`), read by the loop after every step and every routine
   repeat (`session_breakcondition`). Atomic, read without an ordering barrier.
@@ -27,11 +26,6 @@ end
 
 # As a new process: not running (`shouldrun` off) and not started; `run(p)` sets both flags.
 InteractiveSession{C, LT}() where {C, LT} = InteractiveSession{C, LT}(false, true, UInt(1), UInt(1), nothing, nothing, nothing, 0)
-# For a run with lifetime type `LT`: `session` itself when it has that type, else a copy of it with that type.
-InteractiveSession{C, LT}(session::InteractiveSession{C, LT}) where {C, LT} = session
-InteractiveSession{C, LT}(session::InteractiveSession{C}) where {C, LT} =
-    InteractiveSession{C, LT}(@atomic(session.shouldrun), @atomic(session.paused), session.loopidx, session.tickidx,
-        session.starttime, session.endtime, session.loop_cursor, session.threadid)
 
 @inline shouldrun(s::InteractiveSession) = @atomic :monotonic s.shouldrun
 
