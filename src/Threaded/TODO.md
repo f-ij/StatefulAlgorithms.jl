@@ -1,8 +1,9 @@
-# TODO: can the `ProcessContext` view API be deprecated?
+# TODO: the old `ProcessContext` view API (OldProcessContextView.jl)
 
-`ProcessContextView.jl` holds the views made from a `ProcessContext` (`view(pc, instance)` and friends). Since
+`OldProcessContextView.jl` holds the views made from a `ProcessContext` (`view(pc, instance)` and friends). Since
 d761965 ("views are made from a bundle") the loop makes every view from a context bundle (`LoopContext`,
-`InitContext`); these methods are kept here until we decide whether they can go. Noted 2026-10-15.
+`InitContext`); these methods are kept until we decide whether they can go. Noted 2026-10-15; moved from `src/Context/View/Old/`
+to `src/Threaded/` on 2026-11-04 because Threaded is the only caller.
 
 To think about:
 - A view made from a `ProcessContext` wraps `bundle_of(pc)`: a bundle with no runtime values. It has no inputs,
@@ -12,6 +13,6 @@ To think about:
   returning a `SubContextView` gives `view` a second, unrelated meaning on the same type.
 - `view(pc, scv::SubContextView)` ("regenerate from type") calls `inject(scv)` with one argument; no such method
   exists, so it errors when called.
-- Remaining caller: `src/Threaded/Step.jl` (`view(base_context, sa)` with a `ProcessContext`). Threaded is broken
+- Only caller: `Step.jl` in this folder (`view(base_context, sa)` with a `ProcessContext`). Threaded is broken
   and was never moved to bundles; see the `ThreadedCompositeAlgorithm` items in the top-level `TODO.md`. A fix or
   removal there removes this caller.

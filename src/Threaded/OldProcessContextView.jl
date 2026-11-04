@@ -1,4 +1,6 @@
-# Old API: views made from a `ProcessContext` instead of a context bundle. See TODO.md in this folder.
+# OLD API, kept only for the threaded plans: views made from a `ProcessContext` instead of a context bundle.
+# The only caller is `threaded_step` / `_threaded_run_child` in Step.jl; everything else makes views from a bundle
+# (`LoopContext`, `InitContext`). Goes when threaded plans are fixed or removed. See TODO.md in this folder.
 
 # Views of a persistent context on its own (looking at a context outside a loop): a bundle with no runtime values.
 @inline Base.view(pc::ProcessContext, instance::A, namespace::Namespace; kwargs...) where {A<:ProcessAlgorithm} =
