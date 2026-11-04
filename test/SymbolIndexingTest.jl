@@ -24,9 +24,8 @@ using StatefulAlgorithms
     ctx = initcontext(ctx, resolved[:SymbolInitAlgo_1]; inputs = (; seed = 7), overrides = (; value = 11))
     @test ctx[:SymbolInitAlgo_1].value == 11
 
-    p = Process(resolved, Input(:SymbolInitAlgo_1, :seed => 1); repeats = 1)
-    reinit(p, :SymbolInitAlgo_1; inputs = (; seed = 13))
-    wait(p)
+    p = Process(resolved, InitArgs(:SymbolInitAlgo_1, :seed => 1); repeats = 1)
+    init!(p, Only(:SymbolInitAlgo_1), InitArgs(:SymbolInitAlgo_1; seed = 13))
     @test getcontext(p)[:SymbolInitAlgo_1].value == 13
     @test isempty(getcontext(p)[:SymbolOtherAlgo_1])
 end

@@ -68,7 +68,8 @@ user's handle (the registry), and the result is stored with `setcontext!`. Leave
 @inline _sync_state_context!(p::P, c::C) where {P<:InteractiveProcess, C<:ProcessContext} =
     setcontext!(p, withsubcontexts(getcontext(p), get_subcontexts(c)))
 
-"""The `Init`/`Override`/`Interactive` specs the process was built with."""
+"""The `InitArgs`/`Override`/`Interactive` specs the process's context is set up from: those it was built with, merged
+with those of later `init!` calls (resolved, one per target and kind)."""
 getspecs(p::P) where {P<:InteractiveProcess} = p.specs
 
 """

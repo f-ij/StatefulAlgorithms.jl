@@ -1,9 +1,9 @@
 #=
-What a user calls on a `Process`: `run`, `wait`, `fetch`, `pause`, `close`, `restart`, `reinit`, `quit`, `quitall`
+What a user calls on a `Process`: `run`, `wait`, `fetch`, `pause`, `close`, `restart`, `init!`, `quit`, `quitall`
 (TODO.md, "Rename `src/ProcessInteraction.jl`": still mixes in loop internals and dead code).
 =#
 
-export start, restart, quit, pause, syncclose, reinit, closeprocess
+export start, restart, quit, pause, syncclose, closeprocess
 
 function Base.run(p::Process, run_lifetime = nothing, inputs_and_overrides...; repeats = nothing, lifetime = nothing, kwargs...)
     @assert isidle(p) "Process is already in use"
@@ -16,7 +16,7 @@ function Base.run(p::Process, run_lifetime = nothing, inputs_and_overrides...; r
         isempty(kwargs) || error("Cannot pass new runtime inputs while resuming a paused Process.")
         return _start_run!(p; resume = true)
     end
-    isempty(inputs_and_overrides) || error("Process run accepts runtime inputs as keywords only. Reinitialize the Process context before running to apply init/override specs.")
+    isempty(inputs_and_overrides) || error("Process run accepts runtime inputs as keywords only. Use init!(p, InitArgs(...), ...) before running to apply init/override specs.")
 
     lt = parse_lifetime(run_lifetime, lifetime, repeats)
     if !isnothing(lt)
@@ -69,7 +69,7 @@ function Base.close(p::Process)
         Base.showerror(stderr, err)
         p.task = nothing
         p.runtime_context = nothing
-        _sync_state_context!(p, first(setup(getalgo(p), getspecs(p)...; lifetime = lifetime(p))))
+        _sync_state_context!(p, _setup_from_stored_specs(p))
 
     end
 
@@ -131,36 +131,23 @@ end
 # end
 
 """
-Pause, re-init and unpause a process
-This is useful mostly for processes that run indefinitely,
-where the prepared context is computed from the input context.
+    init!(p, InitArgs(...), Override(...)) -> p
+    init!(p, Only(A, B), InitArgs(...), Override(...)) -> p
 
-This will cause the computed properties to re-compute. 
-This may be used also to levarge the dispatch system, if the types of the data change
-so that the new loop function is newly compiled
+Runs `init` again and makes the result the process's state. Without `Only` every `init` runs, from the process's stored
+specs with the new ones merged over them (later ones win), on an empty context. With `Only(A, B)` only A's and B's
+`init` run, on the current state; the rest is kept. Either way the process keeps the merged specs, so a later full
+`init!(p)` sets up from them. A running process is paused for it and runs on after; a paused one stays paused and
+resumes with the new state.
 """
-function reinit(p::Process)
-    pause(p)
-    wait(p)
-    # A paused run keeps its runtime context: it resumes with the new state.
-    _sync_state_context!(p, first(setup(getalgo(p), getspecs(p)...; lifetime = lifetime(p))))
-    run(p)
-    return true
-end
-
-"""
-Pause a process, re-run `init` for one registered subcontext, and unpause it.
-
-The target can be a registry symbol or registered algorithm reference. `inputs`
-are merged into the target subcontext before `init`, and `overrides` are merged
-afterwards.
-"""
-function reinit(p::Process, target; inputs = (;), overrides = (;))
-    pause(p)
-    wait(p)
-    _sync_state_context!(p, initcontext(getcontext(p), target; inputs, overrides))
-    run(p)
-    return true
+function init!(p::Process, specs::InputInterface...)
+    was_running = isrunning(p)
+    was_running && (pause(p); wait(p))
+    context, stored = _init_process_context(p, specs)
+    _sync_state_context!(p, context)
+    p.specs = stored
+    was_running && run(p)
+    return p
 end
 
 # """

@@ -230,7 +230,7 @@ end
         end))
         name = only(keys(states(merged)))
         @test_throws ErrorException setup(merged)    # `buffers` is required by both
-        merged_context, merged_plan = setup(merged, Init(name; buffers = Symbol[]))
+        merged_context, merged_plan = setup(merged, InitArgs(name; buffers = Symbol[]))
         @test state_data(first(run(merged_plan, merged_context; repeats = 1))) ==
             Dict(name => (; buffers = [:writer, :reader]))
 
@@ -267,7 +267,7 @@ end
             @context f = forward()
             @context b = backward()
         end))
-        both_context, both_plan = setup(both, Init(:ps; x = [1.0, 2.0, 3.0]))
+        both_context, both_plan = setup(both, InitArgs(:ps; x = [1.0, 2.0, 3.0]))
         ctx, _ = run(both_plan, both_context; repeats = 2)
         @test ctx[:ps].total == [4.0, 8.0, 12.0]    # 2 steps of 2 blocks
 

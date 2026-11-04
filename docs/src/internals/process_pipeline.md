@@ -19,7 +19,8 @@ plan, its context and the lifetime) -> `_construct_process` (the process and its
 `InteractiveSession`); `InlineProcess` has the same three steps.
 
 There is no `TaskData` layer. A resolved `LoopAlgorithm` holds no data: the process keeps its state context
-(`getcontext(p)` reads `state_context`), the specs it was built with (`getspecs(p)`, read by a full `reinit(p)`), a
+(`getcontext(p)` reads `state_context`), the specs its context is set up from (`getspecs(p)`: resolved, merged with later `init!` calls, read by a full
+`init!(p)`), a
 paused run's runtime context, and its session (`InteractiveSession`), which keeps the counters, times, flags and the
 loop cursor across pause/resume.
 
@@ -27,10 +28,10 @@ loop cursor across pause/resume.
 
 `setup(plan_spec, specs...)` (`src/LoopAlgorithms/DirectRuns.jl`, building the context in `_init_context_for`) applies:
 
-1. Resolve `Init`/`Override` specs through the registry.
+1. Resolve `InitArgs`/`Override` specs through the registry.
 2. Merge specs for the same target, later ones winning.
 3. Build a fresh persistent `ProcessContext` from the resolved registry.
-4. Merge `Init` values into target subcontexts.
+4. Merge `InitArgs` values into target subcontexts.
 5. Build a separate init-only runtime context carrying `algo` and `lifetime`.
 6. Run registered `init` hooks with persistent and runtime contexts kept
    separate.
@@ -38,10 +39,10 @@ loop cursor across pause/resume.
 8. Materialize the `Redirect` options collected from the plan tree into target context fields.
 9. Return the context and the resolved plan.
 
-For loop algorithms, `init(::LoopAlgorithm, ::ProcessContext)` iterates all registry entities in order (`src/LoopAlgorithms/Init.jl`).
+For loop algorithms, `init(::LoopAlgorithm, ::InitContext)` iterates all registry entities in order (`src/LoopAlgorithms/Init.jl`).
 
-`reinit(plan, context, specs...)` uses the same target resolution but only rebuilds
-the targeted subcontexts.
+`init(plan, context, specs...)` (`src/LoopAlgorithms/DirectRuns.jl`) uses the same target resolution on a given
+context; with `Only(...)` it only rebuilds the subcontexts `Only` names.
 
 ## 3. Running
 

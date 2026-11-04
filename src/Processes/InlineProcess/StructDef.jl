@@ -17,8 +17,9 @@ mutable struct InlineProcess{TD,ContextType, Lt} <: AbstractProcess
     # The process's context: the loop gets it as an argument (`run_session_loop`) and gives the new one back, which
     # `run(ip)` stores here.
     context::ContextType
-    # The `Init`/`Override`/`Interactive` specs the process was built with; `reset!(ip)` sets up from them again.
-    const specs::Tuple
+    # The `InitArgs`/`Override`/`Interactive` specs the context is set up from: the ones the process was built with, with
+    # those of later `init!(ip, ...)` calls merged in. `reset!(ip)` and a full `init!(ip)` set up from them again.
+    specs::Tuple
     consumed::Bool
     lifetime::Lt
     # The run's counter, one session for every run (Processes/InlineProcess/Session.jl): what the loop gets instead of the

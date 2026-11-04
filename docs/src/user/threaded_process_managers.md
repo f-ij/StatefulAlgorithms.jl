@@ -213,7 +213,7 @@ contexts while sharing one worker template:
 recipe = (;
     makeworker = (idx, manager) -> Process(MyAlgo; repeats = 1),
     makecontext = (idx, manager, template) -> begin
-        initialized = init(getalgo(template), Init(MyAlgo; seed = idx))
+        initialized = init(getalgo(template), InitArgs(MyAlgo; seed = idx))
         getcontext(initialized)
     end,
 )
@@ -242,7 +242,7 @@ recipe = (;
     workername = (idx, manager, job) -> job.name,
     makeworker = (idx, manager, job) -> Process(
         job.algo,
-        Init(job.algo; seed = job.seed);
+        InitArgs(job.algo; seed = job.seed);
         repeats = 1,
     ),
     afterjob! = (slot, job, manager) -> push!(
@@ -302,22 +302,23 @@ For `Process` workers, `lifetime`, `repeats`, and `repeat` returned by
 `providearguments` are launch controls. Other keys are passed as runtime
 inputs.
 
-Use `reinitworker!` when the whole worker context should be rebuilt through the
-normal init pipeline:
+Use `initworker!` (`init!` on the worker) when the whole worker context should be rebuilt through the
+normal init pipeline, from the worker's stored specs with the given ones merged over them:
 
 ```julia
-loadjob! = (slot, job, manager) -> reinitworker!(
+loadjob! = (slot, job, manager) -> initworker!(
     slot,
-    Init(MyAlgo; start = job.start),
+    InitArgs(MyAlgo; start = job.start),
 )
 ```
 
-Use `partialinitworker!` when only selected context targets should be rebuilt:
+Pass `Only(...)` when only selected context targets should be rebuilt:
 
 ```julia
-loadjob! = (slot, job, manager) -> partialinitworker!(
+loadjob! = (slot, job, manager) -> initworker!(
     slot,
-    Init(MyStep; base = job.base),
+    Only(MyStep),
+    InitArgs(MyStep; base = job.base),
 )
 ```
 
@@ -380,8 +381,7 @@ StatefulAlgorithms.runchunks!
 StatefulAlgorithms.InlineChunkWorker
 StatefulAlgorithms.OnDemandWorkers
 StatefulAlgorithms.resetworker!
-StatefulAlgorithms.reinitworker!
-StatefulAlgorithms.partialinitworker!
+StatefulAlgorithms.initworker!
 StatefulAlgorithms.slots
 StatefulAlgorithms.workers
 ```

@@ -15,7 +15,7 @@ function build(drive, extras, intervals)
         Route(drive => integ, :F), Route(integ => drive, :t),
         Route(integ => ckpt, :u), Route(integ => ckpt, :t), Route(integ => ckpt, :dt), Route(integ => ckpt, :nacc),
         [Route(integ => e, :u) for e in extras]...)
-    context, la = setup(plan, Init(integ; u0 = U0))
+    context, la = setup(plan, InitArgs(integ; u0 = U0))
     return (; la, context, integ, ckpt, out = Ref{Any}(nothing))
 end
 function loop_per_attempt(mk)

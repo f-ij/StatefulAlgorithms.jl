@@ -13,7 +13,7 @@ export ManagerExecution, PollingWorkers, ThreadedWorkers
 export SyncPolicy, SyncAtEnd, NoSync, SyncEvery
 export FlushPolicy, FlushAtEnd, NoFlush, FlushEvery
 export loadjob!, providearguments, afterjob!, sync_to_state!
-export dispatch!, poll!, drain!, run!, resetworker!, reinitworker!, partialinitworker!, slots, workers, copyworker, runprocessinline!
+export dispatch!, poll!, drain!, run!, resetworker!, initworker!, slots, workers, copyworker, runprocessinline!
 
 """
 Worker construction mode used when a `ProcessManager` owns its workers.
@@ -203,43 +203,21 @@ were.
 
 Call this from `prepare!` after you have loaded the next job into an existing
 context and want the next run to start from the first repeat/step again. Use
-`reinitworker!` or `partialinitworker!` when context values should be rebuilt
-through `init`.
+`initworker!` when context values should be rebuilt through `init`.
 """
 resetworker!(slot::WorkerSlot) = (reset!(slot.worker); slot)
 
 """
-    reinitworker!(slot, inputs_overrides...; kwargs...)
+    initworker!(slot, InitArgs(...), Override(...)) -> slot
+    initworker!(slot, Only(A, B), InitArgs(...), Override(...)) -> slot
 
-Replace the whole context of `slot.worker` by running the normal process init
-pipeline, then return `slot`.
-
-This is different from `resetworker!`: it rebuilds context values by calling
-`setup(getalgo(slot.worker), inputs_overrides...; lifetime = lifetime(slot.worker))`
-and then committing the resulting persistent context back onto the worker. Use
-it from `prepare!` when a job needs freshly initialized context state instead
-of reusing the previous context object.
+Runs `init` again on `slot.worker` (`init!(slot.worker, ...)`) and returns `slot`. Without `Only` every `init` runs
+and the whole context is rebuilt, from the worker's stored specs with the given ones merged over them; with `Only(A, B)`
+only A's and B's `init` run and the rest of the context keeps its values. This is different from `resetworker!`,
+which keeps the context and only restarts the counters. Use it from `prepare!` when a job needs freshly initialized
+context state.
 """
-function reinitworker!(slot::WorkerSlot{<:Process}, inputs_overrides...; kwargs...)
-    _sync_state_context!(slot.worker, first(setup(getalgo(slot.worker), inputs_overrides...; lifetime = lifetime(slot.worker))))
-    return slot
-end
-
-"""
-    partialinitworker!(slot, inputs_overrides...)
-
-Reinitialize only the context targets named by `inputs_overrides`, then return
-`slot`.
-
-This keeps the existing process context as the starting point and re-initializes
-only the affected algorithm or state entries (`reinit(plan, context, inputs_overrides...)`).
-Use it when one part of the context should be rebuilt through its `init` method while
-the rest of the context should keep its current values.
-"""
-function partialinitworker!(slot::WorkerSlot{<:Process}, inputs_overrides...)
-    _sync_state_context!(slot.worker, reinit(getalgo(slot.worker), getcontext(slot.worker), inputs_overrides...))
-    return slot
-end
+initworker!(slot::WorkerSlot{<:Process}, specs::InputInterface...) = (init!(slot.worker, specs...); slot)
 
 """
     _manager_launch_lifetime(worker, kwargs)

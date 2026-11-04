@@ -29,7 +29,7 @@ using StatefulAlgorithms
         Route(Walker => InsertNoise, :momentum => :targetnum, :dt => :scale),
     )
 
-    p = Process(algo, repeats = 10, Input(Walker, :dt => 0.01))
+    p = Process(algo, repeats = 10, InitArgs(Walker, :dt => 0.01))
     run(p)
     wait(p)
     c = fetch(p)
@@ -73,7 +73,7 @@ using StatefulAlgorithms
         Route(Walker => Logger2, :state => :targetnum, transform = x-> x[end]^2),
     )
 
-    p2 = Process(algo2, repeats = 10, Input(Walker, :dt => 0.01))
+    p2 = Process(algo2, repeats = 10, InitArgs(Walker, :dt => 0.01))
     run(p2)
     c2 = fetch(p2)
 

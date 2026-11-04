@@ -18,7 +18,7 @@ comp = @CompositeAlgorithm begin
 end
 
 
-p = Process(comp, Input(:mystate, x = 1.0), Input(addstate, num = 1.0), repeats = 2)
+p = Process(comp, InitArgs(:mystate, x = 1.0), InitArgs(addstate, num = 1.0), repeats = 2)
 run(p)
 
 c = fetch(p)

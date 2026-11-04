@@ -19,12 +19,12 @@ it) to rarer paths. Their comments give what they save on a user's first calls, 
 (2026-10-18, Julia 1.13.1, M5 Pro under other jobs' load): compile seconds (`Base.cumulative_compile_time_ns`; wall
 time is within 2% of it), min of 3 fresh processes, in three scenarios that use only user-defined types:
   - user: four `@StepAlgorithm`s, a DSL block with `@state`/`@alias`/`local`/`@interval`, resolve, run, `show`, a
-    rebuild with another interval, `@Routine` with `@repeat`, constructors, `Input`/`Override`, `Until`, InlineProcess.
+    rebuild with another interval, `@Routine` with `@repeat`, constructors, `InitArgs`/`Override`, `Until`, InlineProcess.
   - manuscript: InteractiveIsing P1_script/V2.5 routes/00_job_helpers.jl in SA terms: struct algorithms with `init`/
-    `step!`, loggers, `@alias`/`@every`/`@transform`/`@context`/`@repeat`/`@redirect`, `Init` by name and instance,
+    `step!`, loggers, `@alias`/`@every`/`@transform`/`@context`/`@repeat`/`@redirect`, `InitArgs` by name and instance,
     run + fetch, an on-demand threaded ProcessManager.
   - learning: IsingLearning LearningProcessTools.jl: `@config` algorithms, bare `@state` lines, `@context c = @repeat n
-    block()` with six `@bind`s, plain calls on fields, `Init(:_state_1; ...)`, the reset!/run/wait loop.
+    block()` with six `@bind`s, plain calls on fields, `InitArgs(:_state_1; ...)`, the reset!/run/wait loop.
 
 Totals (compile s, first calls only)       precompile   image    user   manuscript   learning   `using`
   no workload                                 2.7 s     10 MB    6.76      5.38        7.33      0.10 s
@@ -59,7 +59,7 @@ mutable struct _ProcessPrecompileFakeWorker
     done::Bool
 end
 
-# `value` and `total` start from the init context when given there (`Input`), else 0.
+# `value` and `total` start from the init context when given there (`InitArgs`), else 0.
 @StepAlgorithm function _ProcessPrecompileCounter(@managed(value = get(context, :value, 0), total = get(context, :total, 0)))
     @update value += 1
     @update total += value
@@ -324,7 +324,7 @@ shared Process/resolve/context machinery; keep at least one section that runs a 
 
     input_process = Process(
         _ProcessPrecompileCounter,
-        Input(_ProcessPrecompileCounter, :value => 3),
+        InitArgs(_ProcessPrecompileCounter, :value => 3),
         Override(_ProcessPrecompileCounter, :total => 5);
         repeats = 1,
     )
@@ -492,7 +492,7 @@ end
 
 #===================================================================================================================
 Section: hand-written struct algorithms in DSL blocks, the InteractiveIsing manuscript shape: @alias, @every,
-@transform, @context, @repeat, `Init` by name and by instance, run, fetch, `context[algo].field`.
+@transform, @context, @repeat, `InitArgs` by name and by instance, run, fetch, `context[algo].field`.
 Unique: −0.13 s (manuscript, ≈0.02 s in each of its phases: blocks, Process, run, manager), −0.05 s (user),
 −0.1 s (learning, mostly noise). Alone: −2.1 to −2.7 s. Cost: +0.6 s precompile, +4.8 MB.
 ===================================================================================================================#
@@ -520,10 +520,10 @@ Unique: −0.13 s (manuscript, ≈0.02 s in each of its phases: blocks, Process,
         @repeat 8 field_step()
         @repeat 4 relax_step()
     end
-    # `Init(dynamics; ...)` by instance. By name (`Init(:dynamics; ...)`, also `Input(:name, ...)` or `haskey(registry,
+    # `InitArgs(dynamics; ...)` by instance. By name (`InitArgs(:dynamics; ...)`, also `InitArgs(:name, ...)` or `haskey(registry,
     # :name)`) the package image fails to load on Julia 1.13.1 (UndefRefError in Compiler/src/reinfer.jl verify_method:
     # a cached CodeInstance without edges), see TODO.md.
-    protocol_process = Process(protocol, Init(dynamics; model = ones(8)), Init(polarization, initialvalue = 8.0); repeats = 1)
+    protocol_process = Process(protocol, InitArgs(dynamics; model = ones(8)), InitArgs(polarization, initialvalue = 8.0); repeats = 1)
     run(protocol_process)
     protocol_context = fetch(protocol_process)
     protocol_context[polarization].log
@@ -569,7 +569,7 @@ Unique: −0.05 s per scenario (`CompositeAlgorithm(...) + Route` −0.02 s, Inl
 @compile_workload begin
     managed_algo = CompositeAlgorithm(_ProcessPrecompileManaged)
     managed_specs = (
-        Input(_ProcessPrecompileManaged, :start => 1.0),
+        InitArgs(_ProcessPrecompileManaged, :start => 1.0),
         Override(_ProcessPrecompileManaged, :x => 2.0, :gain => 3.0),
     )
     resolved_managed_algo = resolve(managed_algo)
@@ -637,7 +637,7 @@ Unique: −0.05 s per scenario (`CompositeAlgorithm(...) + Route` −0.02 s, Inl
     )
     shared_process = Process(
         shared,
-        Input(_ProcessPrecompileVectorPush, :source => 1.0);
+        InitArgs(_ProcessPrecompileVectorPush, :source => 1.0);
         repeats = 2,
     )
     run(shared_process)
@@ -658,7 +658,7 @@ with process_basics. Cost: +0.0 s precompile, +0.3 MB.
 
     inline_process = InlineProcess(
         _ProcessPrecompileManaged,
-        Input(_ProcessPrecompileManaged, :start => 1.0),
+        InitArgs(_ProcessPrecompileManaged, :start => 1.0),
         Override(_ProcessPrecompileManaged, :x => 1.0, :gain => 2.0);
         repeats = 2,
     )
@@ -696,7 +696,7 @@ process_basics. Cost: +0.3 s precompile, +2.5 MB.
 
     until_runtime_process = Process(
         _ProcessPrecompileCounter,
-        Input(_ProcessPrecompileCounter, :value => 0);
+        InitArgs(_ProcessPrecompileCounter, :value => 0);
         lifetime = Until(x -> x >= 2, Var(_ProcessPrecompileCounter, :value)),
     )
     run(until_runtime_process)
@@ -705,7 +705,7 @@ process_basics. Cost: +0.3 s precompile, +2.5 MB.
 
     atleast_process = Process(
         _ProcessPrecompileCounter,
-        Input(_ProcessPrecompileCounter, :value => 0);
+        InitArgs(_ProcessPrecompileCounter, :value => 0);
         lifetime = AtLeast(x -> x >= 2, 1, Var(_ProcessPrecompileCounter, :value)),
     )
     run(atleast_process)
@@ -714,7 +714,7 @@ process_basics. Cost: +0.3 s precompile, +2.5 MB.
 
     atleast_atmost_process = Process(
         _ProcessPrecompileCounter,
-        Input(_ProcessPrecompileCounter, :value => 0);
+        InitArgs(_ProcessPrecompileCounter, :value => 0);
         lifetime = AtLeastAtMost(x -> x >= 2, 1, 3, Var(_ProcessPrecompileCounter, :value)),
     )
     run(atleast_atmost_process)
@@ -728,14 +728,14 @@ process_basics. Cost: +0.3 s precompile, +2.5 MB.
 
     base_process = Process(
         _ProcessPrecompileScaler,
-        Input(_ProcessPrecompileScaler, :factor => 4);
+        InitArgs(_ProcessPrecompileScaler, :factor => 4);
         repeats = 1,
     )
     copyinputs(base_process)
     copyoverrides(base_process)
     copied_process = copyprocess(
         base_process,
-        Input(_ProcessPrecompileScaler, :factor => 6);
+        InitArgs(_ProcessPrecompileScaler, :factor => 6);
     )
     run(copied_process)
     wait(copied_process)
@@ -902,13 +902,13 @@ Unique: the first on-demand threaded ProcessManager −0.16 s (manuscript, −0.
 
         reinit_worker = Process(
             _ProcessPrecompileCounter,
-            Input(_ProcessPrecompileCounter, :value => 0);
+            InitArgs(_ProcessPrecompileCounter, :value => 0);
             repeats = 1,
         )
         reinit_recipe = (;
-            loadjob! = (slot, job, manager) -> reinitworker!(
+            loadjob! = (slot, job, manager) -> initworker!(
                 slot,
-                Input(_ProcessPrecompileCounter, :value => job),
+                InitArgs(_ProcessPrecompileCounter, :value => job),
             ),
             afterjob! = (slot, job, manager) -> getticks(slot.worker),
         )
@@ -925,7 +925,7 @@ Unique: the first on-demand threaded ProcessManager −0.16 s (manuscript, −0.
         # One Process per job, made when the job starts and dropped after it, on threads.
         ondemand_outputs = Vector{Any}(nothing, 2)
         ondemand_recipe = (;
-            makeworker = (idx, manager, job) -> Process(_ProcessPrecompileCounter, Input(_ProcessPrecompileCounter, :value => job); repeats = 2),
+            makeworker = (idx, manager, job) -> Process(_ProcessPrecompileCounter, InitArgs(_ProcessPrecompileCounter, :value => job); repeats = 2),
             afterjob! = (slot, job, manager) -> (ondemand_outputs[job] = fetch(slot.result); slot.worker = nothing),
         )
         ondemand_manager = ProcessManager(

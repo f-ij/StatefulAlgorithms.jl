@@ -287,9 +287,9 @@ end
 function run_once(algo, start_x, start_y, start_z; repeats)
     p = Process(
         algo,
-        Input(SourceXMerge, :start_x => start_x),
-        Input(SourceYMerge, :start_y => start_y),
-        Input(SourceZMerge, :start_z => start_z);
+        InitArgs(SourceXMerge, :start_x => start_x),
+        InitArgs(SourceYMerge, :start_y => start_y),
+        InitArgs(SourceZMerge, :start_z => start_z);
         lifetime = repeats,
     )
 

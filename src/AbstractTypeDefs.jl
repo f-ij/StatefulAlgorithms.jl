@@ -94,7 +94,7 @@ Runtime wrapper for a loop execution plan.
 The `plan` field is the block as written, a `CompositeAlgorithm`, `Routine` or
 `ThreadedCompositeAlgorithm`, holding its children, wiring and states. The remaining
 fields are what `resolve` adds: the options collected from the whole plan tree and the
-registry. A plan holds no data: its context and the `Init`/`Override` specs it was set
+registry. A plan holds no data: its context and the `InitArgs`/`Override` specs it was set
 up with are kept by whoever owns them (the user after `setup`, or the process).
 """
 struct LoopAlgorithm{Plan<:AbstractPlan, O, R, id} <: AbstractLoopAlgorithm

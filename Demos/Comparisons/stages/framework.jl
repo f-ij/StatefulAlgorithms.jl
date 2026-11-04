@@ -95,7 +95,7 @@ function framework_experiment(Emax)
     return experiment, integ
 end
 
-framework_setup(Emax) = (experiment_integ = framework_experiment(Emax); (; ip = InlineProcess(experiment_integ[1], Init(experiment_integ[2]; u0 = U0, par = PARAMS); repeats = 1), integ = experiment_integ[2]))
+framework_setup(Emax) = (experiment_integ = framework_experiment(Emax); (; ip = InlineProcess(experiment_integ[1], InitArgs(experiment_integ[2]; u0 = U0, par = PARAMS); repeats = 1), integ = experiment_integ[2]))
 framework_go!(s) = (run(s.ip); nothing)
 function framework_result(s)
     c = getcontext(s.ip)

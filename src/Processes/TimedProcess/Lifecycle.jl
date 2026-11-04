@@ -1,5 +1,5 @@
 #=
-What a user calls on a `TimedProcess`: `run`, `pause`, `close` and `fetch`.
+What a user calls on a `TimedProcess`: `run`, `pause`, `close`, `fetch` and `init!`.
 =#
 
 """
@@ -51,3 +51,20 @@ end
 
 """The final result of `tp`'s last run that ended, `nothing` before one has."""
 Base.fetch(tp::TimedProcess) = tp.lastresult
+
+"""
+    init!(tp, InitArgs(...), Override(...)) -> tp
+    init!(tp, Only(A, B), InitArgs(...), Override(...)) -> tp
+
+As `init!(p::Process, ...)`: runs `init` again (all of them, or the ones `Only` names) and makes the result the
+process's state. A running timer is paused for it and started again after.
+"""
+function init!(tp::TimedProcess, specs::InputInterface...)
+    was_running = isrunning(tp)
+    was_running && pause(tp)
+    context, stored = _init_process_context(tp, specs)
+    _sync_state_context!(tp, context)
+    tp.specs = stored
+    was_running && run(tp)
+    return tp
+end

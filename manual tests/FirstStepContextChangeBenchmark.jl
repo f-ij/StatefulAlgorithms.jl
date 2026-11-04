@@ -68,7 +68,7 @@ const LateScalarGraph = CompositeAlgorithm(
 function run_once(algo; repeats = 2_000_000, scale = 0.001)
     p = Process(
         algo,
-        Input(ScalarProducer; scale);
+        InitArgs(ScalarProducer; scale);
         lifetime = repeats,
     )
 
@@ -143,7 +143,7 @@ main()
 
 p = Process(
     StableScalarGraph,
-    Input(ScalarProducer; scale = 0.001);
+    InitArgs(ScalarProducer; scale = 0.001);
     repeats = 30,
 )
 c = getcontext(p)

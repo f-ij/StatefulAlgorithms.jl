@@ -29,5 +29,5 @@ end
 SharedOsc = CompositeAlgorithm((Oscillator, DampedFollower), (1, 1),
     Share(Oscillator, DampedFollower))
 
-p = Process(SharedOsc, repeats = 20, Input(Oscillator, :dt => 0.1))
+p = Process(SharedOsc, repeats = 20, InitArgs(Oscillator, :dt => 0.1))
 start(p)

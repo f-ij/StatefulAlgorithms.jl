@@ -30,41 +30,40 @@ runtime_shape_context(ctx) = getproperty(StatefulAlgorithms.get_subcontexts(ctx)
 runtime_input_bucket(ctx) = getproperty(StatefulAlgorithms.get_subcontexts(ctx), :_inputs)
 
 @testset "Runtime inputs and LoopAlgorithm lifecycle" begin
-    @test Input === Init
-    @test Init(LifecycleInitA; x = 1).vars == (; x = 1)
-    @test Init(; x = 1).vars == (; x = 1)
-    @test Input(LifecycleInitA, :x => 2).vars == (; x = 2)
-    @test !StatefulAlgorithms.isresolved(Init(LifecycleInitA; x = 1))
-    @test !StatefulAlgorithms.isresolved(typeof(Init(LifecycleInitA; x = 1)))
-    @test !StatefulAlgorithms.isresolved(Init(; x = 1))
-    @test !StatefulAlgorithms.isresolved(typeof(Init(; x = 1)))
-    @test StatefulAlgorithms.isalltargets(Init(; x = 1))
-    @test StatefulAlgorithms.isalltargets(typeof(Init(; x = 1)))
-    @test !StatefulAlgorithms.isalltargets(Init(LifecycleInitA; x = 1))
+    @test InitArgs(LifecycleInitA; x = 1).vars == (; x = 1)
+    @test InitArgs(; x = 1).vars == (; x = 1)
+    @test InitArgs(LifecycleInitA, :x => 2).vars == (; x = 2)
+    @test !StatefulAlgorithms.isresolved(InitArgs(LifecycleInitA; x = 1))
+    @test !StatefulAlgorithms.isresolved(typeof(InitArgs(LifecycleInitA; x = 1)))
+    @test !StatefulAlgorithms.isresolved(InitArgs(; x = 1))
+    @test !StatefulAlgorithms.isresolved(typeof(InitArgs(; x = 1)))
+    @test StatefulAlgorithms.isalltargets(InitArgs(; x = 1))
+    @test StatefulAlgorithms.isalltargets(typeof(InitArgs(; x = 1)))
+    @test !StatefulAlgorithms.isalltargets(InitArgs(LifecycleInitA; x = 1))
     @test !StatefulAlgorithms.isalltargets(Override(LifecycleInitA; x = 1))
-    @test StatefulAlgorithms.isresolved(Init(:LifecycleInitA_1; x = 1))
-    @test StatefulAlgorithms.isresolved(typeof(Init(:LifecycleInitA_1; x = 1)))
+    @test StatefulAlgorithms.isresolved(InitArgs(:LifecycleInitA_1; x = 1))
+    @test StatefulAlgorithms.isresolved(typeof(InitArgs(:LifecycleInitA_1; x = 1)))
 
     la = CompositeAlgorithm(LifecycleInitA, LifecycleInitB, (1, 1))
-    initialized, la_plan = setup(la, Init(LifecycleInitA; x = 1), Init(LifecycleInitB; y = 2))
-    overridden, _ = setup(la, Init(LifecycleInitA; x = 1), Init(LifecycleInitB; y = 2), Init(LifecycleInitA; x = 5))
+    initialized, la_plan = setup(la, InitArgs(LifecycleInitA; x = 1), InitArgs(LifecycleInitB; y = 2))
+    overridden, _ = setup(la, InitArgs(LifecycleInitA; x = 1), InitArgs(LifecycleInitB; y = 2), InitArgs(LifecycleInitA; x = 5))
 
     @test initialized[LifecycleInitA].x[] == 1
     @test initialized[LifecycleInitB].y[] == 2
     @test overridden[LifecycleInitA].x[] == 5
     @test overridden[LifecycleInitB].y[] == 2
 
-    general_init, _ = setup(la, Init(; x = 3, y = 4, z = 5))
+    general_init, _ = setup(la, InitArgs(; x = 3, y = 4, z = 5))
     @test general_init[LifecycleInitA].x[] == 3
     @test general_init[LifecycleInitA].z == 5
     @test general_init[LifecycleInitB].y[] == 4
 
-    targeted_after_general, _ = setup(la, Init(; x = 3, y = 4), Init(LifecycleInitA; x = 8))
+    targeted_after_general, _ = setup(la, InitArgs(; x = 3, y = 4), InitArgs(LifecycleInitA; x = 8))
     @test targeted_after_general[LifecycleInitA].x[] == 8
     @test targeted_after_general[LifecycleInitB].y[] == 4
 
     b_ref = overridden[LifecycleInitB].y
-    partial = reinit(la_plan, overridden, Init(LifecycleInitA; x = 9, z = 4))
+    partial = init(la_plan, overridden, Only(LifecycleInitA), InitArgs(LifecycleInitA; x = 9, z = 4))
 
     @test partial[LifecycleInitA].x[] == 9
     @test partial[LifecycleInitA].z == 4
@@ -72,14 +71,14 @@ runtime_input_bucket(ctx) = getproperty(StatefulAlgorithms.get_subcontexts(ctx),
 
     resolved_la = resolve(la)
     resolved_target = getkey(only(findall(LifecycleInitA, StatefulAlgorithms.getregistry(resolved_la))))
-    resolved_input = only(StatefulAlgorithms.resolve(StatefulAlgorithms.getregistry(resolved_la), Init(resolved_target; x = 7)))
+    resolved_input = only(StatefulAlgorithms.resolve(StatefulAlgorithms.getregistry(resolved_la), InitArgs(resolved_target; x = 7)))
     @test StatefulAlgorithms.get_ref(resolved_input) === nothing
     @test StatefulAlgorithms.isresolved(resolved_input)
     @test StatefulAlgorithms.isresolved(typeof(resolved_input))
-    resolved_general_inputs = StatefulAlgorithms.resolve(StatefulAlgorithms.getregistry(resolved_la), Init(; x = 11))
+    resolved_general_inputs = StatefulAlgorithms.resolve(StatefulAlgorithms.getregistry(resolved_la), InitArgs(; x = 11))
     @test length(resolved_general_inputs) == length(keys(StatefulAlgorithms.getregistry(resolved_la)))
     @test all(StatefulAlgorithms.isresolved, resolved_general_inputs)
-    initialized_by_symbol, _ = setup(resolved_la, Init(resolved_target; x = 7))
+    initialized_by_symbol, _ = setup(resolved_la, InitArgs(resolved_target; x = 7))
     @test initialized_by_symbol[LifecycleInitA].x[] == 7
 
     runtime_algo = @CompositeAlgorithm begin
@@ -142,7 +141,7 @@ runtime_input_bucket(ctx) = getproperty(StatefulAlgorithms.get_subcontexts(ctx),
     close(per_run_lifetime_process)
 
     positional_specs_process = Process(runtime_algo; repeats = 1)
-    @test_throws ErrorException run(positional_specs_process, nothing, Input(; seed = 2); temp = 1.0, scale = 2)
+    @test_throws ErrorException run(positional_specs_process, nothing, InitArgs(; seed = 2); temp = 1.0, scale = 2)
 
     inline_process = InlineProcess(runtime_algo; repeats = 1)
     inline_result = run(inline_process; temp = 2.0, scale = 3)
@@ -158,7 +157,7 @@ runtime_input_bucket(ctx) = getproperty(StatefulAlgorithms.get_subcontexts(ctx),
     @test isempty(getproperty(StatefulAlgorithms.get_subcontexts(StatefulAlgorithms.getcontext(inline_process)), :_inputs))
     @test_throws ErrorException run(inline_process)
     @test_throws ErrorException run(inline_process; temp = 1, scale = 2)
-    @test_throws ErrorException run(inline_process, Input(; seed = 2); temp = 1.0, scale = 2)
+    @test_throws ErrorException run(inline_process, InitArgs(; seed = 2); temp = 1.0, scale = 2)
 
     shape_context, shape_plan = setup(CompositeAlgorithm(RuntimeShapeChanger(0)))
     shape_result, _ = run(shape_plan, shape_context; lifetime = Repeat(0))

@@ -92,7 +92,7 @@ end
 const RESOLVE_BENCH_CASES = (
     (; name = "simple", make_algo = resolve_bench_simple, runnable = true, inputs = ()),
     (; name = "routed", make_algo = resolve_bench_routed, runnable = true, inputs = ()),
-    (; name = "shared", make_algo = resolve_bench_shared, runnable = true, inputs = (Input(ResolveBenchVectorPush, :source => 1.0),)),
+    (; name = "shared", make_algo = resolve_bench_shared, runnable = true, inputs = (InitArgs(ResolveBenchVectorPush, :source => 1.0),)),
     (; name = "nested", make_algo = resolve_bench_nested, runnable = true, inputs = ()),
 )
 

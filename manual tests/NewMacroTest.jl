@@ -18,6 +18,6 @@ c2 = Unique(CopyArray())
 c = CompositeAlgorithm(ProvideArray, c1, c2, 
     Route(ProvideArray => c1, :array => :a),
     Route(ProvideArray => c2, :array => :a))
-p = InlineProcess(c, Input(ProvideArray, type = Float32), Input(c1, type = Float32))
+p = InlineProcess(c, InitArgs(ProvideArray, type = Float32), InitArgs(c1, type = Float32))
 c = run(p)
 

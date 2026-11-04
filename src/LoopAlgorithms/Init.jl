@@ -7,10 +7,6 @@ end
     return @inline withpersistent(lc, cleaned)
 end
 
-function init(algos::LA, inputcontext::C) where {LA<:LoopSpec,C<:AbstractContext}
-    return @inline init(algos, InitContext(inputcontext, algos, Indefinite()))
-end
-
 """The persistent context that init of every registered algorithm and state builds from `ic`'s persistent context."""
 function init(algos::LA, ic::I) where {LA<:LoopSpec,I<:InitContext}
     named_algos = @inline all_algos(getregistry(ic))

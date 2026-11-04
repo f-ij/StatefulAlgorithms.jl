@@ -138,7 +138,7 @@ end
 function run_process_graph(algo; repeats = REPEATS)
     p = StatefulAlgorithms.Process(
         algo,
-        StatefulAlgorithms.Input(BenchSource; scale = 0.001);
+        StatefulAlgorithms.InitArgs(BenchSource; scale = 0.001);
         repeats,
     )
     StatefulAlgorithms.run(p)
@@ -151,7 +151,7 @@ end
 function construct_and_quit_process(algo)
     p = StatefulAlgorithms.Process(
         algo,
-        StatefulAlgorithms.Input(BenchSource; scale = 0.001);
+        StatefulAlgorithms.InitArgs(BenchSource; scale = 0.001);
         repeats = 1,
     )
     StatefulAlgorithms.quit(p)
@@ -161,7 +161,7 @@ end
 function stable_step_probe(algo)
     ip = StatefulAlgorithms.InlineProcess(
         algo,
-        StatefulAlgorithms.Input(BenchSource; scale = 0.001);
+        StatefulAlgorithms.InitArgs(BenchSource; scale = 0.001);
         repeats = 1,
     )
     runtime_context = StatefulAlgorithms._merge_into_globals(StatefulAlgorithms.getcontext(ip), (; process = ip))

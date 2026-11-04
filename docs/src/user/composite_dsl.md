@@ -83,7 +83,7 @@ Forms:
 ```
 
 Use runtime `@input` for scalar parameters or small values that can change from
-run to run. Use `@state` or `Init(...)` for persistent buffers and setup data.
+run to run. Use `@state` or `InitArgs(...)` for persistent buffers and setup data.
 
 A header names the plan and declares its inputs in one line. Each argument is one
 `@input`, positional and keyword arguments alike:
@@ -507,7 +507,7 @@ default for is required at init, under the merged state's name:
 ```julia
 resolved = resolve(algo)
 name = only(keys(states(resolved)))
-context, plan = setup(resolved, Init(name; buffers = make_buffers()))
+context, plan = setup(resolved, InitArgs(name; buffers = make_buffers()))
 ```
 
 `@merge` only takes whole states. To make one field of a block another field,

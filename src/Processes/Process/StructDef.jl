@@ -11,7 +11,8 @@ mutable struct Process{F,C} <: InteractiveProcess{F,C}
     lifetime::Lifetime
     # The process's state, its user's handle (with the registry). Written only by `setcontext!`.
     state_context::ProcessContext
-    # The `Init`/`Override`/`Interactive` specs the process was built with; a full `reinit(p)` sets up from them again.
+    # The `InitArgs`/`Override`/`Interactive` specs the context is set up from: the ones the process was built with, with
+    # those of later `init!(p, ...)` calls merged in. A full `init!(p)` sets up from them again.
     specs::Tuple
     # A paused run's runtime context (its inputs and declared locals), kept by the run's end (`_store_run_contexts!`) and read by
     # the resumed run or by `close`, which both clear it. `nothing` when no run is paused.

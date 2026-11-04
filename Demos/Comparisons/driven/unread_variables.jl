@@ -31,7 +31,7 @@ function setup_with(Integ)
     integ = Integ(); ckpt = Checkpointer(); drive = SineDrive()
     plan = CompositeAlgorithm(drive, integ, ckpt, (1, 1, 1), Route(drive => integ, :F), Route(integ => drive, :t),
         Route(integ => ckpt, :u), Route(integ => ckpt, :t), Route(integ => ckpt, :dt), Route(integ => ckpt, :nacc))
-    context, la = setup(plan, Init(integ; u0 = U0, par = PARAMS, rtol = RTOL))
+    context, la = setup(plan, InitArgs(integ; u0 = U0, par = PARAMS, rtol = RTOL))
     return (; la, context, integ, ckpt, out = Ref{Any}(nothing))
 end
 

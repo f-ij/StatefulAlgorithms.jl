@@ -52,7 +52,7 @@ function one_trial()
     end
 
     inputs_overrides = (
-        Input(CompileBenchStep, :start => 1.0),
+        InitArgs(CompileBenchStep, :start => 1.0),
         Override(CompileBenchStep, :x => 2.0, :gain => 3.0),
     )
 

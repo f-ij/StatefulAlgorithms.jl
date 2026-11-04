@@ -80,7 +80,7 @@ end
 framework_variant(name, T = DP5Attempt) = Variant(name,
     function (prob, rtol, atol)
         algo = T()
-        return (; algo, ip = InlineProcess(algo, Init(algo; prob, rtol, atol); lifetime = Until(t -> t >= prob.tend, Var(algo, :t))))
+        return (; algo, ip = InlineProcess(algo, InitArgs(algo; prob, rtol, atol); lifetime = Until(t -> t >= prob.tend, Var(algo, :t))))
     end,
     s -> run(s.ip),
     s -> (c = getcontext(s.ip)[s.algo]; (c.u, c.nacc, c.nrej)))
@@ -95,7 +95,7 @@ hosted_variant(name, alg) = Variant(name,
     function (prob, rtol, atol)
         algo = SciMLHost()
         integ = sciml_integrator(prob, alg, rtol, atol)
-        return (; algo, integ, ip = InlineProcess(algo, Init(algo; integ); lifetime = Until(t -> t >= prob.tend, Var(algo, :t))))
+        return (; algo, integ, ip = InlineProcess(algo, InitArgs(algo; integ); lifetime = Until(t -> t >= prob.tend, Var(algo, :t))))
     end,
     s -> run(s.ip), s -> integ_result(s.integ))
 

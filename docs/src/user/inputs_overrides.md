@@ -2,29 +2,29 @@
 
 Initialization specs and runtime inputs solve different problems.
 
-- `Init(...)` provides values used while building persistent context.
+- `InitArgs(...)` provides values used while building persistent context.
 - `Override(...)` force-replaces initialized persistent context values.
 - DSL `@input` declares per-run values supplied as `run(...; kwargs...)`.
 
-`Input(...)` is still accepted as a compatibility alias for `Init(...)`.
+`InitArgs(...)` is still accepted as a compatibility alias for `InitArgs(...)`.
 
 ## Init and Override Specs
 
-`Init` and `Override` target one algorithm or state. Use the same reference
+`InitArgs` and `Override` target one algorithm or state. Use the same reference
 style you used when adding that target to the composition: the type, the saved
 instance, a saved `Unique(...)` value, or an explicit symbol key.
 
 ## API
 
 ```julia
-Init(target; name = value, ...)
+InitArgs(target; name = value, ...)
 Override(target; name = value, ...)
 ```
 
 Pair syntax is also accepted:
 
 ```julia
-Init(target, :name => value)
+InitArgs(target, :name => value)
 Override(target, :name => value)
 ```
 
@@ -37,30 +37,37 @@ kept as `ref` for display and inspection.
 
 `setup(plan_spec, specs...)` (and process construction, which runs it) applies persistent setup in this order:
 
-1. `Init` specs are merged into target subcontexts.
+1. `InitArgs` specs are merged into target subcontexts.
 2. `init(...)` executes.
 3. `Override` specs are merged after init.
 
 So:
 
-- `Init` is for values needed during initialization.
+- `InitArgs` is for values needed during initialization.
 - `Override` force-replaces initialized values.
 
 ## Stored Lifecycle Specs
 
 A plan holds no specs and no context. `setup` returns the context, and the user keeps
-it; a process keeps the specs it was built with and sets up from them again on a
-full `reinit(p)`. Several specs for one target in one call are merged, later ones win:
+it; a process keeps the specs it was built with, merges the specs of later
+`init!(p, ...)` calls into them, and sets up from them again on a full `init!(p)`.
+Several specs for one target in one call are merged, later ones win:
 
 ```julia
-context, plan = setup(algo, Init(Walker; dt = 0.01), Init(Walker; dt = 0.02))   # dt == 0.02
+context, plan = setup(algo, InitArgs(Walker; dt = 0.01), InitArgs(Walker; dt = 0.02))   # dt == 0.02
 ```
 
-`reinit(plan, context, specs...)` rebuilds only the targeted algorithms or states
-and keeps the rest of the context:
+`init(plan, context, Only(...), specs...)` rebuilds only the algorithms or states
+`Only` names and keeps the rest of the context; without `Only` every `init` runs:
 
 ```julia
-context = reinit(plan, context, Init(Walker; dt = 0.02))
+context = init(plan, context, Only(Walker), InitArgs(Walker; dt = 0.02))
+```
+
+The values of several targets fit in one `InitArgs`:
+
+```julia
+context, plan = setup(algo, InitArgs(Walker => (; dt = 0.01), InsertNoise => (; amplitude = 0.1)))
 ```
 
 See [The Pipeline: Setup, Run, Cleanup](@ref pipeline_user).
@@ -72,7 +79,7 @@ algo = CompositeAlgorithm(Walker, InsertNoise, (1, 2))
 
 p = Process(
     algo,
-    Init(Walker; dt = 0.01),
+    InitArgs(Walker; dt = 0.01),
     Override(InsertNoise; seed = 1234),
     repeats = 100,
 )

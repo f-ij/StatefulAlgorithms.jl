@@ -414,7 +414,7 @@ end
             make_count[] += 1
             Process(
                 ManagerProcessAccumulator,
-                Input(ManagerProcessAccumulator, :start => 0);
+                InitArgs(ManagerProcessAccumulator, :start => 0);
                 repeats = 1,
             )
         end,
@@ -422,7 +422,7 @@ end
             context_count[] += 1
             first(setup(
                 getalgo(template),
-                Input(ManagerProcessAccumulator, :start => idx),
+                InitArgs(ManagerProcessAccumulator, :start => idx),
             ))
         end,
     )
@@ -447,7 +447,7 @@ end
             make_count[] += 1
             Process(
                 ManagerProcessAccumulator,
-                Input(ManagerProcessAccumulator, :start => initdata);
+                InitArgs(ManagerProcessAccumulator, :start => initdata);
                 repeats = 1,
             )
         end,
@@ -896,17 +896,17 @@ end
     @test_throws ArgumentError ProcessManager(recipe; nworkers = 1)
 end
 
-@testset "reinitworker! rebuilds Process context through init pipeline" begin
+@testset "initworker! rebuilds Process context through init pipeline" begin
     worker = Process(
         ManagerProcessAccumulator,
-        Input(ManagerProcessAccumulator, :start => 0);
+        InitArgs(ManagerProcessAccumulator, :start => 0);
         repeats = 1,
     )
     external = Int[]
     recipe = (;
-        loadjob! = (slot, job, manager) -> reinitworker!(
+        loadjob! = (slot, job, manager) -> initworker!(
             slot,
-            Input(ManagerProcessAccumulator, :start => job),
+            InitArgs(ManagerProcessAccumulator, :start => job),
         ),
         afterjob! = (slot, job, manager) -> begin
             local_context = manager_process_context(slot.worker)
@@ -933,7 +933,7 @@ end
         @input delta::Int
         ManagerRuntimeJobStep(delta = delta)
     end
-    worker = Process(algo, Init(ManagerRuntimeJobStep; base = 0); repeats = 1)
+    worker = Process(algo, InitArgs(ManagerRuntimeJobStep; base = 0); repeats = 1)
     outputs = Int[]
     before_jobs = Int[]
     jobs = [
@@ -941,9 +941,10 @@ end
         (; base = 20, delta = 2),
     ]
     recipe = (;
-        loadjob! = (slot, job, manager) -> partialinitworker!(
+        loadjob! = (slot, job, manager) -> initworker!(
             slot,
-            Init(ManagerRuntimeJobStep; base = job.base),
+            Only(ManagerRuntimeJobStep),
+            InitArgs(ManagerRuntimeJobStep; base = job.base),
         ),
         providearguments = (slot, job, manager) -> begin
             push!(before_jobs, job.base)

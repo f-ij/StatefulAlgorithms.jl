@@ -57,7 +57,7 @@ function framework_setup(drive)
         drive_routes = drive isa FeedbackDrive ? (Route(integ => drive, :t), Route(integ => drive, :u)) : (Route(integ => drive, :t),)
         CompositeAlgorithm(drive, integ, ckpt, (1, 1, 1), Route(drive => integ, :F), drive_routes..., checkpoint_routes...)
     end
-    context, la = setup(plan, Init(integ; u0 = U0))
+    context, la = setup(plan, InitArgs(integ; u0 = U0))
     return (; la, context, integ, ckpt, out = Ref{Any}(nothing))
 end
 framework_go!(s) = (s.out[] = first(run(s.la, s.context; lifetime = Until(t -> t >= TEND, Var(s.integ, :t)))); nothing)

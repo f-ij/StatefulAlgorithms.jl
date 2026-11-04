@@ -10,11 +10,11 @@
 @inline _target_label(::Type{AllInitTargets}) = "all"
 @inline _target_label(::Nothing) = "nothing"
 
-function Base.summary(io::IO, ov::Input)
-    print(io, "Input(target=", _target_label(get_target(ov)), ", ref=", _target_label(get_ref(ov)), ", vars=", get_vars(ov), ")")
+function Base.summary(io::IO, ov::InitArgs)
+    print(io, "InitArgs(target=", _target_label(get_target(ov)), ", ref=", _target_label(get_ref(ov)), ", vars=", get_vars(ov), ")")
 end
 
-function Base.show(io::IO, ov::Input)
+function Base.show(io::IO, ov::InitArgs)
     summary(io, ov)
 end
 
@@ -33,3 +33,18 @@ end
 function Base.show(io::IO, spec::Interactive)
     summary(io, spec)
 end
+
+function Base.summary(io::IO, list::InitArgsList)
+    print(io, "InitArgsList(")
+    join(io, (sprint(summary, a) for a in list.args), ", ")
+    print(io, ")")
+end
+
+Base.show(io::IO, list::InitArgsList) = summary(io, list)
+
+function Base.summary(io::IO, only::Only)
+    targets = isresolved(only) ? only_targets(only) : only.refs
+    print(io, "Only(", join(map(_target_label, targets), ", "), ")")
+end
+
+Base.show(io::IO, only::Only) = summary(io, only)

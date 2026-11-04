@@ -7,7 +7,7 @@ It is meant for exploratory analysis, not for exact validation.
 When an `init` path eventually errors because a missing value turned into `nothing`,
 analysis stops for that path and only the accesses up to that point are recorded.
 
-Use it when you are not sure which `Input(...)`, `Route(...)`, or `Share(...)`
+Use it when you are not sure which `InitArgs(...)`, `Route(...)`, or `Share(...)`
 values an algorithm needs. The analyzer runs your hooks with a recording context
 instead of a normal runtime context.
 

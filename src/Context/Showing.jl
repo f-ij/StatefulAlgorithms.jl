@@ -4,7 +4,7 @@
 ### DISPLAY ###
 ########################
 
-@inline _is_input_like(x) = x isa Input || x isa Override
+@inline _is_input_like(x) = x isa InitArgs || x isa Override
 @inline _printcontextglobals(io::IO) = get(io, :printcontextglobals, true)
 
 function _format_inputs_tuple(t::Tuple)

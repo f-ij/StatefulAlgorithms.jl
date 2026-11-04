@@ -10,7 +10,7 @@ mutable struct TimedProcess{F,C} <: InteractiveProcess{F,C}
     lifetime::Lifetime
     # As in `Process`: the process's state; written only by `setcontext!`.
     state_context::ProcessContext
-    # As in `Process`: the specs the process was built with.
+    # As in `Process`: the specs the context is set up from (construction, merged with later `init!` calls).
     specs::Tuple
     # The run's runtime context (its inputs and declared locals) between two ticks and while paused, read and written by
     # every tick. `nothing` when no run is going on.

@@ -90,7 +90,7 @@ Selectors are supplied as init values, for example:
 
 ```julia
 ContextExchange()
-Init(:_exchange; vars = (Var(:target, :value), :display_seen => Var(MyAlgo, :seen)))
+InitArgs(:_exchange; vars = (Var(:target, :value), :display_seen => Var(MyAlgo, :seen)))
 ```
 
 Init resolves those selectors against the process registry/context and stores
@@ -149,7 +149,7 @@ namespace is replaced by its resolved store.
 """
 @inline function _exchange_init_selectors(context::ProcessContext, key::Symbol)
     data = getdata(getproperty(context, key))
-    haskey(data, :vars) || error("ContextExchange requires init selectors: Init($(key); vars = (...,)).")
+    haskey(data, :vars) || error("ContextExchange requires init selectors: InitArgs($(key); vars = (...,)).")
     selectors = getfield(data, :vars)
     selectors isa Tuple || error("ContextExchange init field `vars` must be a tuple of Var selectors or name => Var pairs.")
     return selectors

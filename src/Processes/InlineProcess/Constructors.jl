@@ -4,7 +4,7 @@ Building an `InlineProcess`: the plan is set up (`setup`, or given its `context`
 =#
 
 """
-    InlineProcess(func, Init(...), Override(...); repeats, lifetime, context)
+    InlineProcess(func, InitArgs(...), Override(...); repeats, lifetime, context)
 
 An inline process running `func`: the plan is set up with the specs (or given its `context`) and the lifetime made from `repeats`
 or `lifetime` (`_prepare_inline_process`), then the process is built around them (`_construct_inline_process`).
@@ -19,7 +19,7 @@ function Core.kwcall(kw::NamedTuple, ::Type{InlineProcess}, func, inputs_overrid
 end
 function _build_inline_process(func::Func, inputs_overrides::Tuple, context::C, lifetime::LT, kwargs::NamedTuple) where {Func, C, LT}
     algo, prepared_context, lifetime = _prepare_inline_process(parse_plan(func), inputs_overrides...; context, lifetime, kwargs...)
-    return _construct_inline_process(algo, prepared_context, inputs_overrides, lifetime)
+    return _construct_inline_process(algo, prepared_context, _stored_specs(algo, inputs_overrides), lifetime)
 end
 
 """The resolved plan, its starting context (from `setup`, or the given `context`) and the lifetime a new `InlineProcess` gets."""

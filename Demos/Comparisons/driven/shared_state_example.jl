@@ -23,7 +23,7 @@ function package_growing()
         integ(F = @state(SineDrive).F)
         ckpt(u = integ.u, t = integ.t, dt = integ.dt, nacc = integ.nacc)
     end
-    context, la = setup(experiment, Init(integ; u0 = U0, par = PARAMS, rtol = RTOL))
+    context, la = setup(experiment, InitArgs(integ; u0 = U0, par = PARAMS, rtol = RTOL))
     c, _ = run(la, context; lifetime = Until(t -> t >= TEND, Var(integ, :t)))
     return c[integ].u, c[integ].nacc, length(c[ckpt].snaps)
 end

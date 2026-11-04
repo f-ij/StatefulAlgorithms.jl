@@ -112,7 +112,7 @@ end
 function routine_entry_process()
     model = routine_entry_model(ROUTINE_ENTRY_SIZE)
     algo = resolve(routine_entry_algorithm())
-    process = Process(algo, Init(:dynamics; model); repeats = 1)
+    process = Process(algo, InitArgs(:dynamics; model); repeats = 1)
     return process, model
 end
 

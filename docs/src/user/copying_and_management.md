@@ -15,14 +15,14 @@ threads, see [Threaded Process Managers](@ref threaded_process_managers_user).
 
 ## Why Copy Instead of `deepcopy`
 
-`Process` contexts are often built from `Init(...)` values that point at external storage,
+`Process` contexts are often built from `InitArgs(...)` values that point at external storage,
 buffers, or data views. A raw `deepcopy` of the live context can therefore copy the wrong
 thing or preserve sharing that should be rebuilt per process.
 
 The copying helpers work from the process's plan and the specs it was built with, and set up
 a fresh context for each copy with `setup`:
 
-- take the process's resolved plan and its `Init`/`Override` specs (`getspecs(p)`),
+- take the process's resolved plan and its `InitArgs`/`Override` specs (`getspecs(p)`),
 - replace selected inputs and overrides,
 - set up a fresh context for each copy.
 
@@ -39,14 +39,14 @@ StatefulAlgorithms.copyprocess
 ```julia
 template = Process(
     MyAlgo,
-    Init(MyAlgo; start = 0, buffer = Int[]),
+    InitArgs(MyAlgo; start = 0, buffer = Int[]),
     Override(MyAlgo; delta = 2);
     repeats = 10,
 )
 
 p = copyprocess(
     template,
-    Init(MyAlgo; start = 100, buffer = Int[]),
+    InitArgs(MyAlgo; start = 100, buffer = Int[]),
 )
 
 run(p)

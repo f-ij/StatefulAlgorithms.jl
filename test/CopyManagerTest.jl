@@ -11,7 +11,7 @@ end
     template_sink = Int[]
     template = Process(
         CopyManagedAccumulator,
-        Input(CopyManagedAccumulator, :start => 1, :sink => template_sink),
+        InitArgs(CopyManagedAccumulator, :start => 1, :sink => template_sink),
         Override(CopyManagedAccumulator, :delta => 2);
         repeats = 3,
     )
@@ -21,11 +21,11 @@ end
 
     p_a = copyprocess(
         template,
-        Input(CopyManagedAccumulator, :start => 10, :sink => sink_a),
+        InitArgs(CopyManagedAccumulator, :start => 10, :sink => sink_a),
     )
     p_b = copyprocess(
         template,
-        Input(CopyManagedAccumulator, :start => 20, :sink => sink_b),
+        InitArgs(CopyManagedAccumulator, :start => 20, :sink => sink_b),
     )
 
     run(p_a)

@@ -4,7 +4,7 @@ Use this page whenever you need to point to a specific algorithm in:
 
 - `Route(...)`
 - `Share(...)`
-- `Input(...)`
+- `InitArgs(...)`
 - `Override(...)`
 
 ## One Rule

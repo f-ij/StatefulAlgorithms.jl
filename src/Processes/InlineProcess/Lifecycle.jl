@@ -1,6 +1,6 @@
 #=
-What a user calls on an `InlineProcess`: `run` (and `run_nogen`, the same without the `inlined` choice), `reset!` and
-`init_and_run`.
+What a user calls on an `InlineProcess`: `run` (and `run_nogen`, the same without the `inlined` choice), `init!`,
+`reset!` and `init_and_run`.
 =#
 
 export run, reset!
@@ -30,9 +30,23 @@ end
     return @inline _run_inline!(p, run_lifetime, runtime_inputs, Val(false))
 end
 
+"""
+    init!(ip, InitArgs(...), Override(...)) -> ip
+    init!(ip, Only(A, B), InitArgs(...), Override(...)) -> ip
+
+As `init!(p::Process, ...)`: runs `init` again (all of them, or the ones `Only` names) and makes the result the
+process's context; the process keeps the merged specs. The loop counter is left alone (`reset!` restarts it).
+"""
+function init!(ip::InlineProcess, specs::InputInterface...)
+    context, stored = _init_process_context(ip, specs)
+    setcontext!(ip, context)
+    ip.specs = stored
+    return ip
+end
+
 @inline function reset!(p::InlineProcess, inputs_overrides...)
     reset_loopidx!(getsession(p))
-    p.context = first(setup(getalgo(p), getspecs(p)..., inputs_overrides...; lifetime = lifetime(p)))
+    p.context = _setup_from_stored_specs(p, inputs_overrides...)
     # TODO: Probably remove consumed flag
     p.consumed = false
     return true

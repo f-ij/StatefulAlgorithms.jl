@@ -5,13 +5,13 @@ This page covers the normal runtime flow: create a `Process`, run it, wait for i
 ## Create a Process
 
 ```julia
-p = Process(algo, Init(...), Override(...); repeats = 1_000)
+p = Process(algo, InitArgs(...), Override(...); repeats = 1_000)
 ```
 
 `Process(...)` resolves the loop algorithm when needed, runs the lifecycle
 `init` path, and stores the algorithm plus its current context on the process.
 
-Persistent context is built from `Init(...)`, `Override(...)`, `@state`, routes,
+Persistent context is built from `InitArgs(...)`, `Override(...)`, `@state`, routes,
 shares, and managed state. Runtime `@input` values are not stored at
 construction time.
 
@@ -43,7 +43,7 @@ A plan can also be run without a process, with `setup`, `run` and `cleanup`
 (see [The Pipeline: Setup, Run, Cleanup](@ref pipeline_user)):
 
 ```julia
-context, plan = setup(algo, Init(MyAlgo; buffer = Float64[]))
+context, plan = setup(algo, InitArgs(MyAlgo; buffer = Float64[]))
 context, result = run(plan, context; temperature = 2.0)
 ```
 
@@ -65,8 +65,10 @@ For selector syntax used in `Until`, see [Vars (`Var` Selectors)](@ref vars_user
 - `run(p)`: start a new task or resume after pause.
 - `close(p)`: stop the process, wait for it, run cleanup when needed, and commit
   the final persistent context.
-- `reinit(p)`: pauses, sets the context up again from the specs the process was built with, and runs again.
-- `reinit(p, target; inputs, overrides)`: the same for one algorithm or state only.
+- `init!(p, InitArgs(...), Override(...))`: runs every `init` again, from the process's stored specs with the new
+  ones merged over them, and makes the result the process's state. The process keeps the merged specs.
+- `init!(p, Only(A, B), InitArgs(...))`: only A's and B's `init` run, on the current state; the rest is kept.
+- A running process is paused for `init!` and runs on after; a paused one stays paused.
 
 ## Waiting and Fetching
 
@@ -99,11 +101,11 @@ result.
 ## Inline Process
 
 Use `InlineProcess` when you want synchronous execution without a separate process task.
-It accepts the same positional `Init(...)`/`Input(...)` and `Override(...)`
+It accepts the same positional `InitArgs(...)`/`InitArgs(...)` and `Override(...)`
 arguments as `Process(...)`:
 
 ```julia
-ip = InlineProcess(algo, Init(...), Override(...); repeats = 10_000)
+ip = InlineProcess(algo, InitArgs(...), Override(...); repeats = 10_000)
 run(ip)
 ```
 

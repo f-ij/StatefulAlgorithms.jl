@@ -3,18 +3,18 @@ A lifecycle input or override is resolved when its target parameter is the
 context namespace symbol.
 
 It specifies variables with names and values that target a namespace
-The resolver takes an Override or Input that either targets a namespace directly
+The resolver takes an Override or InitArgs that either targets a namespace directly
 or a process entity and returns the same kind of object with the target changed
 to the resolved namespace symbol.
 """
-@inline _retarget_input(::Init{Target,NT,Ref}, name) where {Target,NT,Ref} = Init{name,NT,Nothing}
+@inline _retarget_input(::InitArgs{Target,NT,Ref}, name) where {Target,NT,Ref} = InitArgs{name,NT,Nothing}
 @inline _retarget_input(::Override{Target,NT,Ref}, name) where {Target,NT,Ref} = Override{name,NT,Nothing}
 @inline _retarget_input(::Interactive{Target,Names,Ref}, name) where {Target,Names,Ref} = Interactive{name,Names,Nothing}
-@inline retarget(ov::Union{Init, Override}, name) = _retarget_input(ov, name)(get_vars(ov), nothing)
+@inline retarget(ov::Union{InitArgs, Override}, name) = _retarget_input(ov, name)(get_vars(ov), nothing)
 @inline retarget(spec::Interactive, name) = _retarget_input(spec, name)(nothing)
 
 @inline get_ref(ov::OI) where {OI<:InputInterface} = ov.ref
-@inline get_vars(ov::OI) where {OI<:Union{Override, Input}} = ov.vars
+@inline get_vars(ov::OI) where {OI<:Union{Override, InitArgs}} = ov.vars
 
 @inline get_target_name(ov::InputInterface) = get_target(ov)
 
@@ -52,14 +52,28 @@ end
 end
 
 """
-Resolve a targetless `Init` into one resolved `Init` per registered namespace.
+Resolve a targetless `InitArgs` into one resolved `InitArgs` per registered namespace.
 """
-@inline function resolve(reg::R, init::I) where {R<:NameSpaceRegistry, I<:Init{AllInitTargets}}
+@inline function resolve(reg::R, init::I) where {R<:NameSpaceRegistry, I<:InitArgs{AllInitTargets}}
     vars = get_vars(init)
 
     # After this point the init pipeline can use the ordinary target-specific
     # merge path, so all-target init does not need special cases downstream.
-    return map(name -> Init{name, typeof(vars), Nothing}(vars, nothing), keys(reg))
+    return map(name -> InitArgs{name, typeof(vars), Nothing}(vars, nothing), keys(reg))
+end
+
+"""Resolve the `InitArgs` of an `InitArgsList` (`InitArgs(A => (; ...), ...)`): one resolved `InitArgs` per pair."""
+@inline resolve(reg::R, list::L) where {R<:NameSpaceRegistry, L<:InitArgsList} = resolve(reg, list.args)
+
+"""Resolve the targets of an `Only` to their registry keys."""
+@inline function resolve(reg::R, o::O) where {R<:NameSpaceRegistry, O<:Only}
+    isresolved(o) && return (o,)
+    targetkeys = map(o.refs) do target
+        resolved = resolve(reg, InitArgs(target))
+        length(resolved) == 1 || error("Only takes one algorithm or state per target, got $(target).")
+        get_target(first(resolved))
+    end
+    return (Only{targetkeys, Nothing}(nothing),)
 end
 
 """
@@ -97,6 +111,6 @@ Merge resolved overrides and inputs into a ProcessContext.
     @inline merge_into_subcontexts(context, override_nt)
 end
 
-@inline function Base.merge(context::C, overrides_or_inputs::Vararg{Union{Override, Input},N}; to_all::TA = (;)) where {C<:ProcessContext, N, TA}
+@inline function Base.merge(context::C, overrides_or_inputs::Vararg{Union{Override, InitArgs},N}; to_all::TA = (;)) where {C<:ProcessContext, N, TA}
     return @inline merge_resolved_inputs(context, overrides_or_inputs; to_all = to_all)
 end

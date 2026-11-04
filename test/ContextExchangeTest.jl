@@ -31,7 +31,7 @@ end
         :_exchange => ContextExchange(),
         (1, 2),
     ))
-    context = first(setup(algo, Init(:_exchange; vars = (Var(:target, :value),)); lifetime = Repeat(5)))
+    context = first(setup(algo, InitArgs(:_exchange; vars = (Var(:target, :value),)); lifetime = Repeat(5)))
 
     interact!(context, :value => 2)
     exchange_key = getkey(only(StatefulAlgorithms._context_exchanges(context)))
@@ -63,7 +63,7 @@ end
         :_exchange => ContextExchange(),
         (1, 1),
     ))
-    context = first(setup(algo, Init(:_exchange; vars = (Var(:target, :value),)); lifetime = Repeat(3)))
+    context = first(setup(algo, InitArgs(:_exchange; vars = (Var(:target, :value),)); lifetime = Repeat(3)))
 
     ref = view(context, :value)
     @test ref[] == 1.0
@@ -100,7 +100,7 @@ end
         :_exchange => ContextExchange(),
         (1, 1),
     ))
-    context = first(setup(algo, Init(:_exchange; vars = (Var(:target, :seen),)); lifetime = Repeat(3)))
+    context = first(setup(algo, InitArgs(:_exchange; vars = (Var(:target, :seen),)); lifetime = Repeat(3)))
 
     seen_ref = view(context, :seen)
     @test seen_ref[] == 0
@@ -115,7 +115,7 @@ end
         :_exchange => ContextExchange(),
         (1, 2),
     ))
-    interval_context = first(setup(interval_algo, Init(:_exchange; vars = (Var(:target, :seen),)); lifetime = Repeat(4)))
+    interval_context = first(setup(interval_algo, InitArgs(:_exchange; vars = (Var(:target, :seen),)); lifetime = Repeat(4)))
     interval_ref = view(interval_context, :seen)
 
     step_interval_algo = exchange_stepper(interval_algo, interval_context)
@@ -140,7 +140,7 @@ end
     ))
     context = first(setup(
         algo,
-        Init(:_exchange; vars = (:display => Var(AliasedExchangeTargetForTest, :value),));
+        InitArgs(:_exchange; vars = (:display => Var(AliasedExchangeTargetForTest, :value),));
         lifetime = Repeat(2),
     ))
 
@@ -176,7 +176,7 @@ end
     ))
     context = first(setup(
         algo,
-        Init(:_exchange; vars = (Var(:target, :value), Var(:target, :seen)));
+        InitArgs(:_exchange; vars = (Var(:target, :value), Var(:target, :seen)));
         lifetime = Repeat(3),
     ))
     value_ref = view(context, :value)
@@ -205,7 +205,7 @@ end
         :_exchange => ContextExchange(),
         (1, 1),
     ))
-    process = Process(algo, Init(:_exchange; vars = (Var(:target, :value),)); repeats = Inf)
+    process = Process(algo, InitArgs(:_exchange; vars = (Var(:target, :value),)); repeats = Inf)
 
     run(process)
 

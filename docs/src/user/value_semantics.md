@@ -13,7 +13,7 @@ You usually need `Unique(...)` when you want more than one copy of the same algo
 
 - `Route(...)`
 - `Share(...)`
-- `Input(...)`
+- `InitArgs(...)`
 - `Override(...)`
 - `Var(...)`
 

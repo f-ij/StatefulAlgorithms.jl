@@ -3,9 +3,55 @@ Calls on a process's context that work for every process type: making a new cont
 the process's specs (`makecontext`, `makecontext!`), cleanup, and sending a value to a `ContextExchange` (`interact!`, inactive).
 =#
 
+export init!
+
+"""
+    _init_process_context(p, specs) -> (context, stored_specs)
+
+The work of `init!(p, specs...)` for every process type, without storing anything. The new specs are merged per target
+over the process's stored specs (later ones win), and that merge is what the process keeps. Without an `Only` every
+`init` runs from the merged specs on an empty context (as `setup`, with the process's lifetime); with `Only(A, B)` only
+A's and B's `init` run on the process's current context (`init(plan, context, Only(...), ...)`).
+"""
+function _init_process_context(p::AbstractProcess, specs::S) where {S<:Tuple}
+    plan = getalgo(p)
+    reg = getregistry(plan)
+    only, rest = _split_only(reg, specs)
+    inits, overrides, interactives = _merged_lifecycle_specs(reg, getspecs(p), rest)
+    stored = (inits..., overrides..., interactives...)
+    context = isnothing(only) ? _init_context_for(plan, inits, overrides, interactives, lifetime(p)) : init(plan, getcontext(p), only, rest...)
+    return context, stored
+end
+
+"""
+    _setup_from_stored_specs(p, specs...; lifetime = lifetime(p)) -> context
+
+A new context for `p` from an empty one, every `init` running: from the process's stored specs with `specs` merged over
+them (`makecontext`, `reset!(ip)`, the error path of `close`). The stored specs are already resolved and are not
+looked up by name again (a lookup by name in the precompile workload makes the package image fail to load on Julia
+1.13.1).
+"""
+function _setup_from_stored_specs(p::AbstractProcess, specs...; lifetime = lifetime(p))
+    plan = getalgo(p)
+    inits, overrides, interactives = _merged_lifecycle_specs(getregistry(plan), getspecs(p), specs)
+    return _init_context_for(plan, inits, overrides, interactives, lifetime)
+end
+
+"""
+    _stored_specs(plan, specs) -> Tuple
+
+The specs a new process keeps: `specs` resolved against the plan's registry and merged per target (later ones win), so
+`init!` can merge new ones over them.
+"""
+function _stored_specs(plan::LA, specs::S) where {LA<:AbstractLoopAlgorithm, S<:Tuple}
+    isempty(specs) && return ()
+    inits, overrides, interactives = _merged_lifecycle_specs(getregistry(plan), (), specs)
+    return (inits..., overrides..., interactives...)
+end
+
 function makecontext(p::AbstractProcess, inputs_overrides...; lifetime=nothing)
     lt = isnothing(lifetime) ? StatefulAlgorithms.lifetime(p) : lifetime
-    first(setup(getalgo(p), getspecs(p)..., inputs_overrides...; lifetime = lt))
+    _setup_from_stored_specs(p, inputs_overrides...; lifetime = lt)
 end
 """Build a fresh context for a process with `setup`, from its plan, the specs it was built with and `inputs_overrides`."""
 function makecontext!(p::AbstractProcess, inputs_overrides...; lifetime=nothing)

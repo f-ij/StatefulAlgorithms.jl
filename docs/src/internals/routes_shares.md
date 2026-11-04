@@ -73,7 +73,7 @@ the target persistent field to a `RedirectedVar(VarLocation{:state}(...))`
 marker. The source and target fields must already exist in the initialized
 context, and self-redirect is rejected.
 
-`partialinit` applies redirect materialization again after rebuilding the
+`init(plan, context, Only(...), ...)` applies redirect materialization again after rebuilding the
 targeted subcontexts, so redirect markers are restored when an affected
 field is reinitialized.
 

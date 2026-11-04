@@ -4,7 +4,7 @@ is made with a session for the lifetime's type.
 =#
 
 """
-    TimedProcess(func, Init(...), Override(...); interval, context, repeats, lifetime)
+    TimedProcess(func, InitArgs(...), Override(...); interval, context, repeats, lifetime)
 
 A process running one step of `func` every `interval` seconds once `run`. The plan is set up (or given its `context`)
 and the lifetime made from `repeats` or `lifetime` as for a `Process` (`_prepare_process`).

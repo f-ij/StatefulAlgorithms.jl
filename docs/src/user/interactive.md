@@ -53,7 +53,7 @@ algo = resolve(CompositeAlgorithm(
 
 context, plan = setup(
     algo,
-    Init(:_exchange; vars = (Var(:target, :value), Var(:target, :seen))),
+    InitArgs(:_exchange; vars = (Var(:target, :value), Var(:target, :seen))),
 )
 ```
 
@@ -65,13 +65,13 @@ route/wiring machinery.
 For a different external name, use a pair:
 
 ```julia
-Init(:_exchange; vars = (:display => Var(:target, :value),))
+InitArgs(:_exchange; vars = (:display => Var(:target, :value),))
 ```
 
 Type selectors are also supported when they resolve uniquely:
 
 ```julia
-Init(:_exchange; vars = (:display => Var(MyAlgo, :value),))
+InitArgs(:_exchange; vars = (:display => Var(MyAlgo, :value),))
 ```
 
 ## Polling And Writes
@@ -105,7 +105,7 @@ ref = view(context, :display; exchange = :dashboard_exchange)
 
 The compatibility form `view(context, Var(:dashboard_exchange, :display))`
 means the same thing here. In that overload, the first `Var` argument names the
-exchange, not the target subcontext originally selected during `Init`.
+exchange, not the target subcontext originally selected during `InitArgs`.
 
 ## Scheduling
 
@@ -119,7 +119,7 @@ algo = resolve(CompositeAlgorithm(
 ))
 context, plan = setup(
     algo,
-    Init(:_exchange; vars = (Var(:target, :value),)),
+    InitArgs(:_exchange; vars = (Var(:target, :value),)),
 )
 ```
 
@@ -127,7 +127,7 @@ The exchange also supports a wall-clock gate:
 
 ```julia
 ContextExchange(; period = 0.05)
-Init(:_exchange; vars = (Var(:target, :value),))
+InitArgs(:_exchange; vars = (Var(:target, :value),))
 ```
 
 If the exchange is called before `period` seconds have elapsed, it returns
@@ -150,7 +150,7 @@ algo = resolve(CompositeAlgorithm(
 
 initialized = init(
     algo,
-    Init(:_exchange; vars = (Var(:target, :value),));
+    InitArgs(:_exchange; vars = (Var(:target, :value),));
     lifetime = Repeat(3),
 )
 process = Process(initialized; repeats = 1)

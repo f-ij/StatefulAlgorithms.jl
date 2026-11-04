@@ -4,12 +4,12 @@ Every plan goes through the same three steps:
 
 | Step | Call | What it does | Returns |
 |---|---|---|---|
-| 1 | `setup(plan_spec, Init(...), Override(...))` | resolves the plan and builds its starting context | `(context, plan)` |
+| 1 | `setup(plan_spec, InitArgs(...), Override(...))` | resolves the plan and builds its starting context | `(context, plan)` |
 | 2 | `run(plan, context; inputs...)` | runs the plan on the context | `(context, result)` |
 | 3 | `cleanup(plan, context)` | ends the context's life | the cleaned context |
 
-Between runs, `reinit(plan, context, Init(...), Override(...))` re-initializes only the algorithms you name and keeps
-the rest of the context.
+Between runs, `init(plan, context, InitArgs(...), Override(...))` runs every `init` again on the context, and
+`init(plan, context, Only(A, B), ...)` runs only A's and B's and keeps the rest of the context.
 
 `plan_spec` is what you define with `@StepAlgorithm`, `@CompositeAlgorithm` or `@Routine`. `plan` is the resolved
 version that `setup` returns. Pass that one to `run` and `cleanup`, not the spec.
@@ -28,7 +28,7 @@ plan_spec = @CompositeAlgorithm begin
     Counter(step)
 end
 
-context, plan = setup(plan_spec, Init(Counter; total = 10))   # total == 10
+context, plan = setup(plan_spec, InitArgs(Counter; total = 10))   # total == 10
 context, _ = run(plan, context; repeats = 3, step = 2)        # total == 16
 context, _ = run(plan, context; repeats = 1, step = 4)        # total == 20
 context = cleanup(plan, context)
@@ -36,7 +36,9 @@ context = cleanup(plan, context)
 
 ### `setup`
 
-- `Init(Target; values...)` says which values go to which algorithm. Its `init` sees them.
+- Every algorithm's `init` runs.
+- `InitArgs(Target; values...)` gives the values that algorithm's `init` reads. For several targets at once:
+  `InitArgs(A => (; x = 1, y = 2), B => (; z = 3))`. `InitArgs(; values...)` gives them to every algorithm.
 - `Override(Target; values...)` sets values after `init` has run.
 - `lifetime = ...` (optional) tells `init` how long the run will be, so it can size buffers.
 
@@ -49,16 +51,19 @@ The returned plan holds no context. The context is yours.
 - It returns the final context and the run's result, which is what the plan's finalizer returns.
 - Values that exist only during a run (inputs, locals, returns) are dropped at the end; only the state comes back.
 
-### `reinit`
+### `init`
 
 ```julia
-context = reinit(plan, context, Init(Counter; total = 0))
+context = init(plan, context, InitArgs(Counter; total = 0))                 # every init runs
+context = init(plan, context, Only(Counter), InitArgs(Counter; total = 0))   # only Counter's init runs
 ```
 
-- For each `Init(Target; values...)`: the values go into that algorithm's part of the context and its `init` runs again.
-- An `Override` for the same target is set after that `init`.
-- An `Override` for a target with no `Init` in the same call only sets its values; no `init` runs.
-- Algorithms you don't name keep their values.
+- Without `Only`, every algorithm's `init` runs on the context you pass. To start from an empty context, use `setup`.
+- With `Only(A, B)`, only A's and B's `init` run; the other algorithms keep their values. At most one `Only` per call.
+- Each `init` reads its part of the context with the `InitArgs` values merged in. `InitArgs` for a target that `Only`
+  leaves out is an error.
+- An `Override` is set after its target's `init`. An `Override` for a target whose `init` does not run only sets its
+  values.
 
 ### `cleanup`
 
@@ -74,7 +79,7 @@ next `run`.
 A `Process` does `setup` for you and keeps the context:
 
 ```julia
-p = Process(plan_spec, Init(Counter; total = 10); repeats = 3)
+p = Process(plan_spec, InitArgs(Counter; total = 10); repeats = 3)
 run(p; step = 2)
 wait(p)
 getcontext(p)

@@ -55,7 +55,7 @@ function resolve_process_inputs_overrides(func, inputs_overrides)
     isresolved(func) || throw(ArgumentError("`resolve_process_inputs_overrides` requires a resolved loop algorithm when inputs or overrides are present. Call `resolve` before resolving inputs."))
     reg = getregistry(func)
 
-    inputs = @inline filter_by_type(Input, inputs_overrides)
+    inputs = @inline filter_by_type(InitArgs, inputs_overrides)
     overrides = @inline filter_by_type(Override, inputs_overrides)
 
     named_inputs = resolve(reg, inputs)

@@ -8,7 +8,7 @@ using StatefulAlgorithms
 
     ip = InlineProcess(
         InlineAccumulator,
-        Input(InlineAccumulator, :start => 3),
+        InitArgs(InlineAccumulator, :start => 3),
         Override(InlineAccumulator, :delta => 2);
         repeats = 4,
     )
@@ -27,7 +27,7 @@ end
 
     p = Process(
         TypeInputAccumulator,
-        Input(TypeInputAccumulator, :start => 4);
+        InitArgs(TypeInputAccumulator, :start => 4);
         repeats = 2,
     )
 
@@ -40,11 +40,11 @@ end
     unresolved = CompositeAlgorithm(TypeInputAccumulator)
     @test_throws ArgumentError StatefulAlgorithms.resolve_process_inputs_overrides(
         unresolved,
-        (Input(TypeInputAccumulator, :start => 4),),
+        (InitArgs(TypeInputAccumulator, :start => 4),),
     )
 
     resolved = resolve(unresolved)
-    specs = (Input(TypeInputAccumulator, :start => 4),)
+    specs = (InitArgs(TypeInputAccumulator, :start => 4),)
     named_inputs, named_overrides = StatefulAlgorithms.resolve_process_inputs_overrides(
         resolved,
         specs,

@@ -1,4 +1,4 @@
-export Init, Input, Override
+export InitArgs, Only, Override
 
 abstract type InputInterface end
 
@@ -20,38 +20,76 @@ struct AllInitTargets end
 ########### User Interface #############
 ########################################
 
-struct Init{Target,NT<:NamedTuple,Ref} <: InputInterface
+"""
+    InitArgs(target; name = value, ...)
+    InitArgs(target, :name => value, ...)
+
+Values for one algorithm or state that its `init` reads: they are merged into its part of the context before its
+`init` runs (`setup`, process construction, `init(plan, context, ...)`, `init!(p, ...)`). Which `init` functions run
+is not chosen by `InitArgs`: every one runs, unless an `Only(...)` names the ones that do.
+"""
+struct InitArgs{Target,NT<:NamedTuple,Ref} <: InputInterface
     vars::NT
     ref::Ref
 end
 
-"""
-    Init(target, :name => value, ...; kwargs...)
-
-Initialization-time values for one process algorithm or state. These values are
-merged before `init` runs (`setup`, process construction); a process keeps them
-for a full `reinit`.
-"""
-function Init(target, pairs::Pair{Symbol,<:Any}...; kwargs...)
+function InitArgs(target, pairs::Pair{Symbol,<:Any}...; kwargs...)
     nt = (;pairs..., kwargs...)
-    Init{_input_target_parameter(target), typeof(nt), typeof(target)}(nt, target)
+    InitArgs{_input_target_parameter(target), typeof(nt), typeof(target)}(nt, target)
 end
 
 """
-    Init(; name = value, ...)
+    InitArgs(; name = value, ...)
 
-Initialization-time values for every registered process algorithm or state. Each
-target receives these values in its local init context before `init` runs.
+Values for every registered algorithm and state: each receives them in its part of the context before its `init` runs.
 """
-function Init(; kwargs...)
+function InitArgs(; kwargs...)
     nt = (;kwargs...)
-    Init{AllInitTargets, typeof(nt), Nothing}(nt, nothing)
+    InitArgs{AllInitTargets, typeof(nt), Nothing}(nt, nothing)
 end
 
-Init{Target}(vars::NT) where {Target,NT<:NamedTuple} = Init{Target,NT,Nothing}(vars, nothing)
+InitArgs{Target}(vars::NT) where {Target,NT<:NamedTuple} = InitArgs{Target,NT,Nothing}(vars, nothing)
 
-const Input = Init
+"""
+    InitArgs(A => (; x = 1, y = 2), B => (; z = 3), ...)
 
+The values for several targets in one call: the same as `InitArgs(A; x = 1, y = 2), InitArgs(B; z = 3)`. Returns an
+`InitArgsList`, which is passed wherever `InitArgs` is.
+"""
+InitArgs(first::Pair{<:Any,<:NamedTuple}, rest::Pair{<:Any,<:NamedTuple}...) = _initargs_list((first, rest...))
+# Also matches `InitArgs(target, :name => value, ...)` when the first value is a `NamedTuple`; a pair as the first
+# argument is never a target, so this is the list form.
+InitArgs(first::Pair{<:Any,<:NamedTuple}, rest::Pair{Symbol,<:NamedTuple}...) = _initargs_list((first, rest...))
+
+"""
+The `InitArgs` of several targets, made by `InitArgs(A => (; ...), B => (; ...))`. Resolving gives one resolved
+`InitArgs` per pair.
+"""
+struct InitArgsList{T<:Tuple} <: InputInterface
+    args::T
+end
+
+_initargs_list(pairs::Tuple) = InitArgsList(map(p -> InitArgs(p.first; p.second...), pairs))
+
+"""
+    Only(A, B, ...)
+
+Passed to `init(plan, context, ...)` or `init!(p, ...)`: only the `init` of the named algorithms and states runs, the
+rest of the context is kept. Without an `Only`, every `init` runs. At most one per call; `InitArgs` for a target it
+does not name is an error.
+"""
+struct Only{Targets, Refs} <: InputInterface
+    refs::Refs
+end
+
+# The targets as given are kept in `refs` (a type can not go into a type parameter inside a tuple); `Targets` is
+# `nothing` until resolving puts the registry keys there.
+function Only(targets...)
+    isempty(targets) && throw(ArgumentError("Only needs at least one target."))
+    return Only{nothing, typeof(targets)}(targets)
+end
+
+@inline only_targets(::Union{Only{Targets}, Type{<:Only{Targets}}}) where {Targets} = Targets
 
 """
 Override an internal prepared arg in the context of a target algorithm
@@ -68,10 +106,10 @@ end
 
 Override{Target}(vars::NT) where {Target,NT<:NamedTuple} = Override{Target,NT,Nothing}(vars, nothing)
 
-@inline target_type(::Union{Init{Target}, Override{Target}}) where {Target} = Target
+@inline target_type(::Union{InitArgs{Target}, Override{Target}}) where {Target} = Target
 
-@inline get_target(::Union{Init{Target}, Override{Target}}) where {Target} = Target
-@inline get_target(::Type{<:Union{Init{Target}, Override{Target}}}) where {Target} = Target
+@inline get_target(::Union{InitArgs{Target}, Override{Target}}) where {Target} = Target
+@inline get_target(::Type{<:Union{InitArgs{Target}, Override{Target}}}) where {Target} = Target
 
 @inline _input_target_parameter(target::Symbol) = target
 @inline _input_target_parameter(target::Tuple) = map(_input_target_parameter, target)
@@ -84,6 +122,6 @@ Override{Target}(vars::NT) where {Target,NT<:NamedTuple} = Override{Target,NT,No
 ########################################
 
 """
-Resolved inputs and overrides are represented by `Init{:target, NT}` and
+Resolved inputs and overrides are represented by `InitArgs{:target, NT}` and
 `Override{:target, NT}` directly.
 """

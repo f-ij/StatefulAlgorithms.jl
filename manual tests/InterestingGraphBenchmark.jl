@@ -246,16 +246,16 @@ function run_once(algo, start_x, start_y; repeats)
     n = length(start_x)
     p = Process(
         algo,
-        Input(SourceXBench, :start_x => copy(start_x)),
-        Input(SourceYBench, :start_y => copy(start_y)),
-        Input(StageABench; n),
-        Input(StageBBench; n),
-        Input(StageCBench; n),
-        Input(JoinDBench; n),
-        Input(JoinEBench; n),
-        Input(StageFBench; n),
-        Input(StageGBench; n),
-        Input(StageHBench; n);
+        InitArgs(SourceXBench, :start_x => copy(start_x)),
+        InitArgs(SourceYBench, :start_y => copy(start_y)),
+        InitArgs(StageABench; n),
+        InitArgs(StageBBench; n),
+        InitArgs(StageCBench; n),
+        InitArgs(JoinDBench; n),
+        InitArgs(JoinEBench; n),
+        InitArgs(StageFBench; n),
+        InitArgs(StageGBench; n),
+        InitArgs(StageHBench; n);
         lifetime = repeats,
     )
 

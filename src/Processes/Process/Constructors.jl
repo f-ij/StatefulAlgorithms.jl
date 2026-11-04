@@ -5,11 +5,12 @@ Building a `Process`: the plan is set up (`setup`, or given its `context`) and t
 =#
 
 """
-    Process(func, Init(...), Override(...); context, repeats, lifetime, timeout)
+    Process(func, InitArgs(...), Override(...); context, repeats, lifetime, timeout)
 
 A process running `func`: the plan is set up with the specs (or given its `context`) and the lifetime made from
 `repeats` or `lifetime` (`_prepare_process`), then the process is built around them (`_construct_process`). The process
-keeps the context and the specs; the plan holds neither.
+keeps the context and the specs (resolved and merged per target, `init!` merges new ones over them); the plan holds
+neither.
 """
 Process(func::Func, inputs_overrides::Vararg{Any,N}) where {Func,N} = _build_process(func, inputs_overrides, nothing, nothing, (;))
 # The keyword call, by hand: Julia's own specializes on the keywords' `NamedTuple`, whose type has the handles' uuids
@@ -35,7 +36,7 @@ function _prepare_process(algo::A, inputs_overrides::Vararg{Any,N}; context::C =
         isempty(inputs_overrides) || error("Pass either an initialized `context` or init/override specs to `Process`, not both.")
         algo = resolve(algo)
     end
-    return algo, context, inputs_overrides, lifetime, timeout
+    return algo, context, _stored_specs(algo, inputs_overrides), lifetime, timeout
 end
 
 """The `Process` around a prepared plan and context: its session (made for the lifetime's type) and its place in `processlist`."""

@@ -22,7 +22,7 @@ using StatefulAlgorithms
         Damper(@all(osc...))
     end
 
-    p = Process(shared_algo, repeats = 20, Input(Oscillator, :dt => 0.1))
+    p = Process(shared_algo, repeats = 20, InitArgs(Oscillator, :dt => 0.1))
     run(p)
     wait(p)
 
