@@ -28,7 +28,7 @@ pr = InlineProcess(mockroutine, repeats = 2)
 c1 = run(pc);
 c2 = run(pr);
 
-e_c = context(pr)
+e_c = getcontext(pr)
 e_c = StatefulAlgorithms.makecontext(pr)
 e_c = StatefulAlgorithms._merge_into_globals(e_c, (; process=pr))
 

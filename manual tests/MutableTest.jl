@@ -16,5 +16,5 @@ end
 m = MutableTestAlgo(0)
 m2 = MutableTestAlgo(0)
 c = CompositeAlgorithm(m, m2)
-p = InlineProcess(c, lifetime = 5)
+p = InlineProcess(c, repeats = 5)
 @code_warntype run(p)

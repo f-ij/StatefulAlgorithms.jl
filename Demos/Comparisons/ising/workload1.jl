@@ -70,7 +70,7 @@ end
 function w1_framework(N)
     a = Anneal(N = N)
     ip = InlineProcess(CompositeAlgorithm(a, Metro1, (1, 1), Route(a => Metro1, :T)); repeats = N)
-    run(ip); c = context(ip)
+    run(ip); c = getcontext(ip)
     return (c[Metro1].m, sum(c[Metro1].spins))
 end
 
@@ -81,7 +81,7 @@ end
 function w1_framework_inline(N)
     a = Anneal(N = N)
     ip = InlineProcess(CompositeAlgorithm(a, Metro1i, (1, 1), Route(a => Metro1i, :T)); repeats = N)
-    run(ip); c = context(ip)
+    run(ip); c = getcontext(ip)
     return (c[Metro1i].m, sum(c[Metro1i].spins))
 end
 

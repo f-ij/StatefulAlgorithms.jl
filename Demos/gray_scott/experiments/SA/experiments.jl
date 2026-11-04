@@ -71,10 +71,10 @@ end
 
 function run_experiments(n, niter; seed = 1)
     p = Process(resolve(experiments_algorithm(n, 0.037f0, 0.06f0)); repeats = niter)
-    st = context(p).sim
+    st = getcontext(p).sim
     Random.seed!(seed); seed_blobs!(interior(st.U), interior(st.V))
     run(p); wait(p)
-    ctx = context(p)
+    ctx = getcontext(p)
     return (; V = copy(interior(ctx.sim.V)), feed = ctx.sim.feed, steps = ctx.sim.steps[],
               rec = copy(ctx.Recorder_1.buf), rec_head = ctx.Recorder_1.head, probe = copy(ctx.Probe_1.results),
               integral = ctx.Controller_1.integral)
@@ -118,8 +118,8 @@ end
 
 function run_sweep(n, nrelax; np = 5, seed = 1)
     p = Process(resolve(sweep_algorithm(n, 0.06f0, nrelax)); repeats = 2np)
-    st = context(p).sim
+    st = getcontext(p).sim
     Random.seed!(seed); seed_blobs!(interior(st.U), interior(st.V))
     run(p); wait(p)
-    return copy(context(p).Measure_1.curve)
+    return copy(getcontext(p).Measure_1.curve)
 end

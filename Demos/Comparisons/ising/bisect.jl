@@ -22,7 +22,7 @@ hand_counter(N) = (s = fresh_spins(); r = Xoshiro(1); (hand_counter_loop(s, r, C
 hand(N) = (s = fresh_spins(); r = Xoshiro(1); (hand_loop(s, r, N), sum(s)))
 function viaplan(plan)
     return function (N)
-        ip = InlineProcess(plan; repeats = N); run(ip); c = context(ip)
+        ip = InlineProcess(plan; repeats = N); run(ip); c = getcontext(ip)
         (c[MetroC].m, sum(c[MetroC].spins))
     end
 end

@@ -144,9 +144,9 @@ main()
 p = Process(
     StableScalarGraph,
     Input(ScalarProducer; scale = 0.001);
-    lifetime = 30,
+    repeats = 30,
 )
-c = context(p)
+c = getcontext(p)
 algo = getalgo(p.taskdata)
 @code_warntype StatefulAlgorithms.generated_processloop(p, algo, c, StatefulAlgorithms.lifetime(p))
 nc = StatefulAlgorithms.generated_processloop(p, algo, c, StatefulAlgorithms.lifetime(p))

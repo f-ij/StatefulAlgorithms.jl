@@ -49,7 +49,7 @@ end
 
 function run_process(algo, n, nsub, pairs)
     p = Process(resolve(algo), Interactive(:sim, :feed, :kill, :pairs, :period); repeats = nsub ÷ (2pairs))
-    st = context(p).sim
+    st = getcontext(p).sim
     U0, V0 = seeded(n)
     interior(st.U) .= U0; interior(st.V) .= V0
     st.pairs[] = pairs

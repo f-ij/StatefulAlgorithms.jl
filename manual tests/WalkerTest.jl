@@ -39,6 +39,6 @@ RandomWalker = @CompositeAlgorithm begin
     InsertNoise(130)(scale = dt, targetnum = momentum)
 end
 
-p = Process(RandomWalker, lifetime = 10, Input(Walker, :dt => 0.01))
+p = Process(RandomWalker, repeats = 10, Input(Walker, :dt => 0.01))
 run(p)
 

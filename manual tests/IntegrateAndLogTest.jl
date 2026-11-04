@@ -22,5 +22,5 @@ end
 
 comp = CompositeAlgorithm(generate_values, IntegrateAndLogger, (1,1), Route(generate_values => IntegrateAndLogger, :output => :Δvalue, transform = x -> begin println("x: ", x); x end))
 
-p = StatefulAlgorithms.Process(comp, lifetime = 10, Input(IntegrateAndLogger, initialvalue = 101f0))
+p = StatefulAlgorithms.Process(comp, repeats = 10, Input(IntegrateAndLogger, initialvalue = 101f0))
 run(p)

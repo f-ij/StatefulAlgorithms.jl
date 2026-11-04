@@ -98,6 +98,6 @@ end
 framework_setup(Emax) = (experiment_integ = framework_experiment(Emax); (; ip = InlineProcess(experiment_integ[1], Init(experiment_integ[2]; u0 = U0, par = PARAMS); repeats = 1), integ = experiment_integ[2]))
 framework_go!(s) = (run(s.ip); nothing)
 function framework_result(s)
-    c = context(s.ip)
+    c = getcontext(s.ip)
     return (copy(c[s.integ].u), c[s.integ].t, copy(c[Polarization].trace), copy(c[FieldLoop].pairs))
 end

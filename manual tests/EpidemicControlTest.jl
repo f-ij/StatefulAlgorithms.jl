@@ -122,7 +122,7 @@ EpidemicControl = CompositeAlgorithm(
     Route(WeeklyReporter, EpidemicRecorder, :reported_cases),
 )
 
-p = Process(EpidemicControl, lifetime = 365)
+p = Process(EpidemicControl, repeats = 365)
 run(p)
 context = fetch(p)
 

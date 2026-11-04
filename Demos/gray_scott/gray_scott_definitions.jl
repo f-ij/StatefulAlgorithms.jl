@@ -135,7 +135,7 @@ function gray_scott_process(; n = 256, feed = 0.037, kill = 0.060, speed = SPEED
     return p
 end
 
-state(p::Process) = context(p).sim
+state(p::Process) = getcontext(p).sim
 
 "Change feed / kill / speed (substeps per second) while the process runs."
 function set_params!(p::Process; feed = nothing, kill = nothing, speed = nothing)

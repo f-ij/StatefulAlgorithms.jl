@@ -91,7 +91,7 @@ context only.
   stored algorithm context for the first run and only falls back to
   `runtime_context` after external context replacement or a returned runtime
   context. This removes the `runtime_context::Any` leak from the first-entry
-  loop path without changing the public `context(process)` behavior after a run.
+  loop path without changing the public `getcontext(process)` behavior after a run.
   The runtime field itself is now `Union{Nothing, ProcessContext}` rather than
   `Any`, so resumed contexts are intentionally abstract only at the
   `ProcessContext` level.
@@ -201,11 +201,11 @@ context only.
 - Stripping `:_inputs` and `:process` before storing a finished `Process`
   context.
   This kept the typed first-entry path available after completion, but it changed
-  the public `context(process)` result. Existing runtime-input tests expect those
+  the public `getcontext(process)` result. Existing runtime-input tests expect those
   transient entries to remain visible after `run`/`wait`, so the stripping was
   reverted for `Process`.
 
-- Forcing `context(process)` to always return the stored loop algorithm context.
+- Forcing `getcontext(process)` to always return the stored loop algorithm context.
   This was tested as a temporary diagnostic to check whether the abstract
   `runtime_context` branch explained TTFP. It did not. With 8 Julia threads,
   direct time to first process run stayed at about `546-549 ms`, matching the

@@ -36,5 +36,5 @@ PopDynamics = CompositeAlgorithm((PreyGrowth, Predation, ControlPulse), (1, 1, 1
     Route(PreyGrowth, Predation, :prey => :prey),
     Route(Predation, ControlPulse, :prey => :prey))
 
-p = Process(PopDynamics, lifetime = 50)
+p = Process(PopDynamics, repeats = 50)
 start(p)

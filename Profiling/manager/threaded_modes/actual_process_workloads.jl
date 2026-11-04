@@ -164,7 +164,7 @@ end
 Return the single algorithm subcontext from a benchmark `Process` worker.
 """
 function actual_process_context(worker::P) where {P<:Process}
-    subcontexts = StatefulAlgorithms.get_subcontexts(StatefulAlgorithms.context(worker))
+    subcontexts = StatefulAlgorithms.get_subcontexts(StatefulAlgorithms.getcontext(worker))
     names = filter(!=(:globals), fieldnames(typeof(subcontexts)))
     return getproperty(subcontexts, only(names))
 end
@@ -289,7 +289,7 @@ Create a typed manager with reusable copies of a workload template process.
 """
 function actual_process_manager(workload::W, nworkers::N) where {W<:ActualProcessWorkload, N<:Integer}
     recipe = (;
-        makeworker = (idx, manager) -> copyprocess(workload.template; context = deepcopy(StatefulAlgorithms.context(workload.template))),
+        makeworker = (idx, manager) -> copyprocess(workload.template; context = deepcopy(StatefulAlgorithms.getcontext(workload.template))),
         prepare! = workload.prepare!,
     )
 

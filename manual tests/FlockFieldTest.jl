@@ -35,5 +35,5 @@ end
 FlockField = CompositeAlgorithm((AgentsStep, FieldDiffuse, FieldSense), (1, 1, 1),
     Share(AgentsStep, FieldSense))
 
-p = Process(FlockField, lifetime = 25)
+p = Process(FlockField, repeats = 25)
 start(p)

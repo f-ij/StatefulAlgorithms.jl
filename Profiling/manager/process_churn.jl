@@ -31,7 +31,7 @@ end
 Return the algorithm subcontext from the benchmark `Process` worker.
 """
 function manager_profile_process_context(worker::P) where {P<:Process}
-    subcontexts = StatefulAlgorithms.get_subcontexts(StatefulAlgorithms.context(worker))
+    subcontexts = StatefulAlgorithms.get_subcontexts(StatefulAlgorithms.getcontext(worker))
     names = filter(!=(:globals), fieldnames(typeof(subcontexts)))
     return getproperty(subcontexts, only(names))
 end

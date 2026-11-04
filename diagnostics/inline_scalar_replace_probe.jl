@@ -61,7 +61,7 @@ function scalar_replace_direct_plan_loop(process::IP) where {IP<:StatefulAlgorit
     lifetime = StatefulAlgorithms.lifetime(process)
     plan = StatefulAlgorithms.getplan(algo)
     wiring = StatefulAlgorithms._root_wiring_view(algo, plan)
-    context = StatefulAlgorithms.context(process)
+    context = StatefulAlgorithms.getcontext(process)
     runtimecontext = StatefulAlgorithms._merge_into_globals(StatefulAlgorithms._empty_context(), (; process, lifetime))
 
     context, runtimecontext = StatefulAlgorithms._step!(
@@ -126,7 +126,7 @@ function run_scalar_replace_probe(;
     process = scalar_replace_process(steps)
     reset!(process)
 
-    context = StatefulAlgorithms.context(process)
+    context = StatefulAlgorithms.getcontext(process)
     subcontext_names = filter(!=(:globals), fieldnames(typeof(StatefulAlgorithms.get_subcontexts(context))))
     merge_target = subcontext_names[1]
     has_direct_plan_api = isdefined(StatefulAlgorithms, :Namespace) &&

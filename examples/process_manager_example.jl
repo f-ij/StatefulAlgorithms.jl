@@ -14,7 +14,7 @@ recipe = (;
     makeworker = (idx, manager) -> copyprocess(template),
 
     loadjob! = (slot, job, manager) -> begin
-        ctx = context(slot.worker)[ManagedAccumulator]
+        ctx = getcontext(slot.worker)[ManagedAccumulator]
         ctx.value[] = job.start
         ctx.delta[] = job.delta
         resetworker!(slot)
@@ -22,7 +22,7 @@ recipe = (;
 
     sync_to_state! = manager -> begin
         for slot in slots(manager)
-            ctx = context(slot.worker)[ManagedAccumulator]
+            ctx = getcontext(slot.worker)[ManagedAccumulator]
             append!(external_buffer, ctx.local_buffer)
             empty!(ctx.local_buffer)
         end

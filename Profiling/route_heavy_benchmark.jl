@@ -52,7 +52,7 @@ function route_heavy_algorithm()
 end
 
 function sink_total(result)
-    ctx = StatefulAlgorithms.context(result)
+    ctx = StatefulAlgorithms.getcontext(result)
     return ctx[RouteHeavySink{1}].total
 end
 

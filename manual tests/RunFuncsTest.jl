@@ -7,6 +7,6 @@ function StatefulAlgorithms.init(::StateProvider, context)
 end
 
 c = CompositeAlgorithm( (funcs,), (1,), StateProvider, Route(StateProvider, funcs, :state))
-p= Process(c, lifetime = 1)
+p= Process(c, repeats = 1)
 run(p)
 

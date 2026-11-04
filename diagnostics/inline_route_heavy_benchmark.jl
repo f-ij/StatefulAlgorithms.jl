@@ -437,7 +437,7 @@ end
 
 """Extract comparable scalar outputs from a routed inline process result."""
 function inline_route_summary(result::R) where {R<:Union{StatefulAlgorithms.AbstractLoopAlgorithm, StatefulAlgorithms.ProcessContext}}
-    ctx = result isa StatefulAlgorithms.AbstractLoopAlgorithm ? StatefulAlgorithms.context(result) : result
+    ctx = result isa StatefulAlgorithms.AbstractLoopAlgorithm ? StatefulAlgorithms.getcontext(result) : result
     sensor = ctx[:sensor]
     filter = ctx[:filter]
     controller = ctx[:controller]

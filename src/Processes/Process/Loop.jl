@@ -48,7 +48,7 @@ end
 Starts a run of `p` with what `prepare_for_loop` made: the session is set running, then the task running the loop is
 scheduled.
 """
-function _start_run!(p::P, session::S, func::F, lc::LC, lt::LT; threaded::Bool = true, loopfunc::LF = loop, resume::R = Resuming{false}()) where {P<:Process, S<:InteractiveSession, F, LC<:LoopContext, LT, LF, isresuming, R<:Resuming{isresuming}}
+function _start_run!(p::P, session::S, func::F, lc::LC, lt::LT; threaded::Bool = true, loopfunc::LF = loop, resume::Resuming{isresuming} = Resuming{false}()) where {P<:Process, S<:InteractiveSession, F, LC<:LoopContext, LT, LF, isresuming}
     # A resumed run clears the pause flag in the loop, after reading the cursor the pause kept.
     isresuming || @atomic session.paused = false
     @atomic session.shouldrun = true

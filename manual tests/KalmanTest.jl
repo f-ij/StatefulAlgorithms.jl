@@ -34,5 +34,5 @@ Tracker = Routine((Predict, Observe, Update), (3, 1, 1),
     Route(Predict, Observe, :state => :state),
     Route(Observe, Update, :measurement => :measurement))
 
-p = Process(Tracker, lifetime = 15)
+p = Process(Tracker, repeats = 15)
 start(p)

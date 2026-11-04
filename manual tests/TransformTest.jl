@@ -41,5 +41,5 @@ comp = CompositeAlgorithm(TransformThis, SquareTwoNumbers, SquareOneNumber, (1, 
     Route(TransformThis => SquareOneNumber, (:num1, :num2) => :targetnum, transform = (num1, num2) -> num1 + num2)
     )
 
-p = Process(comp, lifetime = 3)
+p = Process(comp, repeats = 3)
 run(p)

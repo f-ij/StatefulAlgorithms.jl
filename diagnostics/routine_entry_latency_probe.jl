@@ -173,19 +173,19 @@ end
 function routine_entry_inline_call!(process::P) where {P<:Process}
     reset!(process)
     StatefulAlgorithms.runprocessinline!(process)
-    return context(process)[:_state].equilibrium_state
+    return getcontext(process)[:_state].equilibrium_state
 end
 
 """Run one explicit loop-type pass to compare generated and non-generated entry."""
 function routine_entry_looptype_call!(process::P, looptype::LT) where {P<:Process,LT}
     reset!(process)
     algo = StatefulAlgorithms.getalgo(process)
-    base_context = StatefulAlgorithms.context(process)
+    base_context = StatefulAlgorithms.getcontext(process)
     lifetime = StatefulAlgorithms.lifetime(process)
     result = StatefulAlgorithms.loop(process, algo, base_context, lifetime, (;), StatefulAlgorithms.Resuming{false}(), looptype)
-    result isa StatefulAlgorithms.AbstractContext && StatefulAlgorithms.context(process, result)
+    result isa StatefulAlgorithms.AbstractContext && StatefulAlgorithms.setcontext!(process, result)
     process.loopidx = 1
-    return context(process)[:_state].equilibrium_state
+    return getcontext(process)[:_state].equilibrium_state
 end
 
 """Print one comparable benchmark row for commit-to-commit diagnostics."""
@@ -234,7 +234,7 @@ function run_routine_entry_latency_probe()
     end
     inline_samples = [routine_entry_measure(() -> routine_entry_inline_call!(inline_process)) for _ in 1:ROUTINE_ENTRY_RUNS]
     inline_medians = routine_entry_medians(inline_samples)
-    inline_checksum = routine_entry_checksum(context(inline_process)[:_state].equilibrium_state)
+    inline_checksum = routine_entry_checksum(getcontext(inline_process)[:_state].equilibrium_state)
     routine_entry_print_row("runprocessinline", inline_first, inline_medians, inline_checksum)
 
     non_generated_process, _ = routine_entry_process()
@@ -244,7 +244,7 @@ function run_routine_entry_latency_probe()
     end
     non_generated_samples = [routine_entry_measure(() -> routine_entry_looptype_call!(non_generated_process, StatefulAlgorithms.NonGenerated())) for _ in 1:ROUTINE_ENTRY_RUNS]
     non_generated_medians = routine_entry_medians(non_generated_samples)
-    non_generated_checksum = routine_entry_checksum(context(non_generated_process)[:_state].equilibrium_state)
+    non_generated_checksum = routine_entry_checksum(getcontext(non_generated_process)[:_state].equilibrium_state)
     routine_entry_print_row("loop_nongenerated", non_generated_first, non_generated_medians, non_generated_checksum)
 
     if ROUTINE_ENTRY_MEASURE_GENERATED
@@ -255,7 +255,7 @@ function run_routine_entry_latency_probe()
         end
         generated_samples = [routine_entry_measure(() -> routine_entry_looptype_call!(generated_process, StatefulAlgorithms.Generated())) for _ in 1:ROUTINE_ENTRY_RUNS]
         generated_medians = routine_entry_medians(generated_samples)
-        generated_checksum = routine_entry_checksum(context(generated_process)[:_state].equilibrium_state)
+        generated_checksum = routine_entry_checksum(getcontext(generated_process)[:_state].equilibrium_state)
         routine_entry_print_row("loop_generated", generated_first, generated_medians, generated_checksum)
         @test generated_checksum ≈ direct_checksum rtol = 1e-10
     end

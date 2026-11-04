@@ -164,7 +164,7 @@ function stable_step_probe(algo)
         StatefulAlgorithms.Input(BenchSource; scale = 0.001);
         repeats = 1,
     )
-    runtime_context = StatefulAlgorithms._merge_into_globals(StatefulAlgorithms.context(ip), (; process = ip))
+    runtime_context = StatefulAlgorithms._merge_into_globals(StatefulAlgorithms.getcontext(ip), (; process = ip))
     graph = StatefulAlgorithms.getalgo(StatefulAlgorithms.taskdata(ip))
     boot_context = StatefulAlgorithms.step!(graph, runtime_context)
     return graph, boot_context
@@ -188,7 +188,7 @@ end
 function run_inline_generated(ip)
     StatefulAlgorithms.reset!(ip)
     graph = StatefulAlgorithms.getalgo(StatefulAlgorithms.taskdata(ip))
-    runtime_context = StatefulAlgorithms._merge_into_globals(StatefulAlgorithms.context(ip), (; process = ip))
+    runtime_context = StatefulAlgorithms._merge_into_globals(StatefulAlgorithms.getcontext(ip), (; process = ip))
     return StatefulAlgorithms.loop(ip, graph, runtime_context, StatefulAlgorithms.lifetime(ip), StatefulAlgorithms.Generated())
 end
 

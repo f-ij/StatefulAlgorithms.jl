@@ -254,7 +254,7 @@ function scalar_dependency_direct_plan_loop(process::IP) where {IP<:StatefulAlgo
     lifetime = @inline StatefulAlgorithms.lifetime(process)
     plan = @inline StatefulAlgorithms.getplan(algo)
     wiring = @inline StatefulAlgorithms._root_wiring_view(algo, plan)
-    context = @inline StatefulAlgorithms.context(process)
+    context = @inline StatefulAlgorithms.getcontext(process)
     runtimecontext = @inline StatefulAlgorithms._merge_into_globals(StatefulAlgorithms._empty_context(), (; process, lifetime))
 
     context, runtimecontext = @inline StatefulAlgorithms._step!(
@@ -288,7 +288,7 @@ end
 """Run the dependency workload through `StatefulAlgorithms.loop` for an already reset inline process."""
 function scalar_dependency_direct_loop(process::IP) where {IP<:StatefulAlgorithms.InlineProcess}
     algo = StatefulAlgorithms.getalgo(process)
-    context = StatefulAlgorithms.context(process)
+    context = StatefulAlgorithms.getcontext(process)
     lifetime = StatefulAlgorithms.lifetime(process)
     runtime_inputs = (;)
     return StatefulAlgorithms.loop(process, algo, context, lifetime, runtime_inputs)
@@ -297,7 +297,7 @@ end
 """Run the dependency workload through the generated process-loop entrypoint."""
 function scalar_dependency_generated_processloop(process::IP) where {IP<:StatefulAlgorithms.InlineProcess}
     algo = StatefulAlgorithms.getalgo(process)
-    context = StatefulAlgorithms.context(process)
+    context = StatefulAlgorithms.getcontext(process)
     lifetime = StatefulAlgorithms.lifetime(process)
     runtime_inputs = (;)
     return StatefulAlgorithms.loop(

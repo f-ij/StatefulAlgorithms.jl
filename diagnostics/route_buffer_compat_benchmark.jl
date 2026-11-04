@@ -318,7 +318,7 @@ end
 
 """Extract comparable output from a routed run."""
 function compat_route_buffer_summary(result::A) where {A<:StatefulAlgorithms.AbstractLoopAlgorithm}
-    ctx = StatefulAlgorithms.context(result)
+    ctx = StatefulAlgorithms.getcontext(result)
     plant = ctx[:plant]
     controller = ctx[:controller]
     observer = ctx[:observer]

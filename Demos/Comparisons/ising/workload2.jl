@@ -95,7 +95,7 @@ function w2_framework_with(Dyn)
             Route(pr => Dyn, :T), Route(pr => Dyn, :h),
             Route(Dyn => tl, :m),
             Route(Dyn => dl, :spins), Route(pr => dl, :h))
-        ip = InlineProcess(plan; repeats = N); run(ip); c = context(ip)
+        ip = InlineProcess(plan; repeats = N); run(ip); c = getcontext(ip)
         return w2_summary(c[Dyn].m, c[Dyn].spins, c[tl].trace, c[dl].mm, c[dl].top, c[dl].en)
     end
 end

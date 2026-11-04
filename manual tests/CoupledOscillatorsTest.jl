@@ -35,7 +35,7 @@ Coupled = CompositeAlgorithm((OscillatorA, OscillatorB, Coupling), (1, 1, 1),
     Route(OscillatorA, Coupling, :phase => :phase_a),
     Route(OscillatorB, Coupling, :phase => :phase_b))
 
-p = Process(Coupled, lifetime = 40)
+p = Process(Coupled, repeats = 40)
 start(p)
 fetch(p)
 

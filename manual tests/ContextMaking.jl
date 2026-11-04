@@ -4,7 +4,7 @@ include("FibLucDef.jl")
 comp = CompositeAlgorithm( Fib, Luc, (1,1) )
 emptycontext = ProcessContext(comp)
 
-p = Process(comp, lifetime = 100000)
+p = Process(comp, repeats = 100000)
 comp = taskdata(p).func
 
 @code_warntype initcontext(comp, emptycontext)

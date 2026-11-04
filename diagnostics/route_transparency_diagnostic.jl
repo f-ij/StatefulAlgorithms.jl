@@ -389,7 +389,7 @@ end
 
 """Extract a compact comparable summary from a routed run result."""
 function route_transparency_summary(result::A) where {A<:StatefulAlgorithms.AbstractLoopAlgorithm}
-    ctx = StatefulAlgorithms.context(result)
+    ctx = StatefulAlgorithms.getcontext(result)
     state = ctx[:_state]
     plant = ctx[:plant]
     controller = ctx[:controller]

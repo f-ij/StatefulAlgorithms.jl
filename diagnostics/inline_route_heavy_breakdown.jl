@@ -11,7 +11,7 @@ const INLINE_ROUTE_BREAKDOWN_SINK = Ref{Any}(nothing)
 """Return the direct loop entrypoint result for an already reset inline process."""
 function inline_route_direct_loop(process::IP) where {IP<:StatefulAlgorithms.InlineProcess}
     algo = StatefulAlgorithms.getalgo(process)
-    context = StatefulAlgorithms.context(process)
+    context = StatefulAlgorithms.getcontext(process)
     lifetime = StatefulAlgorithms.lifetime(process)
     runtime_inputs = (;)
     return StatefulAlgorithms.loop(process, algo, context, lifetime, runtime_inputs)
@@ -20,7 +20,7 @@ end
 """Return the generated process-loop entrypoint result for an already reset inline process."""
 function inline_route_generated_processloop(process::IP) where {IP<:StatefulAlgorithms.InlineProcess}
     algo = StatefulAlgorithms.getalgo(process)
-    context = StatefulAlgorithms.context(process)
+    context = StatefulAlgorithms.getcontext(process)
     lifetime = StatefulAlgorithms.lifetime(process)
     runtime_inputs = (;)
     return StatefulAlgorithms.loop(
@@ -36,7 +36,7 @@ end
 
 """Run the workload through `ProcessContext` directly, bypassing routes and views."""
 function inline_route_manual_context_loop(process::IP) where {IP<:StatefulAlgorithms.InlineProcess}
-    context = StatefulAlgorithms.context(process)
+    context = StatefulAlgorithms.getcontext(process)
     steps = StatefulAlgorithms.repeats(StatefulAlgorithms.lifetime(process))
 
     # This keeps ProcessContext storage and subcontext writeback, but removes
@@ -141,7 +141,7 @@ end
 
 """Run from `ProcessContext` values but write back only once after the local loop."""
 function inline_route_batched_context_loop(process::IP) where {IP<:StatefulAlgorithms.InlineProcess}
-    context = StatefulAlgorithms.context(process)
+    context = StatefulAlgorithms.getcontext(process)
     steps = StatefulAlgorithms.repeats(StatefulAlgorithms.lifetime(process))
 
     sensor = context[:sensor]
@@ -266,7 +266,7 @@ function inline_route_direct_plan_loop(process::IP) where {IP<:StatefulAlgorithm
     lifetime = @inline StatefulAlgorithms.lifetime(process)
     step_plan = @inline StatefulAlgorithms.getplan(algo)
     step_wiring = @inline StatefulAlgorithms._root_wiring_view(algo, step_plan)
-    context = @inline StatefulAlgorithms.context(process)
+    context = @inline StatefulAlgorithms.getcontext(process)
     runtimecontext = @inline StatefulAlgorithms._merge_into_globals(StatefulAlgorithms._empty_context(), (; process, lifetime))
 
     # This mirrors the repeat-lifetime `loop` body, minus run entrypoint

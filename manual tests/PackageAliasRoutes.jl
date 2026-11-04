@@ -23,7 +23,7 @@ FLMixed = CompositeAlgorithm( (Fib, Luc, FLMixer), (1,1,1),
 
 
 Pack = ps.Package(FLMixed, "FLMixerPack")
-p = Process(Pack, lifetime = 100000)
+p = Process(Pack, repeats = 100000)
 start(p)
 
 benchmark(Pack, 100000, 100; print_outer = true)

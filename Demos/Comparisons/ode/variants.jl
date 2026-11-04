@@ -83,7 +83,7 @@ framework_variant(name, T = DP5Attempt) = Variant(name,
         return (; algo, ip = InlineProcess(algo, Init(algo; prob, rtol, atol); lifetime = Until(t -> t >= prob.tend, Var(algo, :t))))
     end,
     s -> run(s.ip),
-    s -> (c = context(s.ip)[s.algo]; (c.u, c.nacc, c.nrej)))
+    s -> (c = getcontext(s.ip)[s.algo]; (c.u, c.nacc, c.nrej)))
 
 #### W. SciML's integrator hosted inside a StatefulAlgorithms step (wrap, don't rewrite) ####
 @StepAlgorithm function SciMLHost(@managed(integ), @managed(t = 0.0))

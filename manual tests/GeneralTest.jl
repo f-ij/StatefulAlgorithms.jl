@@ -108,7 +108,7 @@ benchmark(FibLuc, 1000000)
 
 # @code_warntype StatefulAlgorithms.unroll_step(FibLucComp, args)
 
-p1 = Process(FibLuc; lifetime = 1000000)
+p1 = Process(FibLuc; repeats = 1000000)
 start(p1)
 runtime_ns(p1)
 
