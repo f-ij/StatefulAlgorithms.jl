@@ -39,9 +39,11 @@ end
 For testing purposes, allow init to be called with a NamedTuple of input arguments instead of a ProcessContext
     This works like a subcontext
 """
+# TODO: check whether this is still used (CompositeCompositionTest.jl:169 may reach the per-algorithm hook instead) and
+# still worth supporting; it skips `InitContext`, so init gets no lifetime here. Noted 2026-11-04.
 function init(algos::LA, input::NamedTuple) where {LA<:LoopSpec}
     # If prepared from a namedtuple, create an empty context first
-    newcontext = ProcessContext(algos)
+    newcontext = ProcessContext(resolve(algos))
     
     registry = getregistry(newcontext)
     named_algos = all_named_algos(registry)
