@@ -107,7 +107,7 @@ end
 @inline iscomposite(::Type{FA}) where {LA, FA<:FinalizedAlgorithm{LA}} = iscomposite(LA)
 @inline iscomposite(fa::FinalizedAlgorithm) = iscomposite(inneralgorithm(fa))
 
-function _strip_nested_finalized_algorithm(algo)
+Base.@nospecializeinfer function _strip_nested_finalized_algorithm(@nospecialize(algo))
     return algo
 end
 
@@ -116,7 +116,7 @@ function _strip_nested_finalized_algorithm(fa::FinalizedAlgorithm)
     return inneralgorithm(fa)
 end
 
-function _strip_nested_finalized_algorithm(pair::Pair)
+Base.@nospecializeinfer function _strip_nested_finalized_algorithm(@nospecialize(pair::Pair))
     stripped = _strip_nested_finalized_algorithm(pair.second)
     return stripped === pair.second ? pair : (pair.first => stripped)
 end

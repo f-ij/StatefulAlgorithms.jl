@@ -37,7 +37,7 @@ end
 @inline parse_parser_option(option::ParserOption) = error("parse_parser_option not implemented for $(typeof(option)).")
 @inline parse_parser_option(option::IfWrapped) = option.cond ? option.algo : nothing
 
-function _parse_loopalgorithm_entity_input(el)
+Base.@nospecializeinfer function _parse_loopalgorithm_entity_input(@nospecialize(el))
     if el isa ParserOption
         return parse_parser_option(el)
     elseif el isa Pair && el.second isa ParserOption
@@ -173,11 +173,15 @@ Base.@nospecializeinfer LoopAlgorithm(PlanType::Type{<:AbstractPlan}, @nospecial
 # handle. Only the final struct creation is compiled per type.
 Base.@nospecializeinfer function _build_plan(PlanType::Type, @nospecialize(funcs::Tuple), @nospecialize(states::Tuple), @nospecialize(options::Tuple), @nospecialize(schedule), id)
     namespaces = Tuple(Any[Namespace{nothing}() for _ in 1:length(funcs)])
-    funcs, child_wiring = _split_children_and_wiring(funcs, options)
-    wiring = PlanWiring(_build_plan_wiring_untyped(options), child_wiring, collect_plan_locals(options))
+    funcs, child_wiring = _split_children_and_wiring_untyped(funcs, options)
+    global_wiring, locals = _build_plan_wiring_untyped(options), collect_plan_locals_untyped(options)
+    # Made with `new_instance`: the constructors of `PlanWiring` and the plan type would compile for each new type.
+    wiring = new_instance(Core.apply_type(PlanWiring, typeof(global_wiring), typeof(child_wiring), typeof(locals), NoScope, (; returns = (), owners = ())),
+                          global_wiring, child_wiring, locals)
     plan_options = _drop_wiring_options_untyped(options)
     schedule = store_single_repeats_as_repeat_once(PlanType, schedule)
-    return PlanType{typeof(funcs), typeof(schedule), typeof(namespaces), typeof(wiring), id, typeof(states), typeof(plan_options)}(funcs, schedule, namespaces, wiring, states, plan_options)
+    return new_instance(Core.apply_type(PlanType, typeof(funcs), typeof(schedule), typeof(namespaces), typeof(wiring), id, typeof(states), typeof(plan_options)),
+                        funcs, schedule, namespaces, wiring, states, plan_options)
 end
 
 

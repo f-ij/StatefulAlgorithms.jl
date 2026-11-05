@@ -185,8 +185,8 @@ Status: `open`, `done <new hash>`, `skip`, `squashed into #n`, `asked` (waiting 
 | 72 | `ef069de0` | matcher_equals: matchers compare through a package function, not Base.:(==) |  |  | done `c66bb751` |
 | 73 | `235b081b` | findfirst_unspecialized(f, items, args...): f(item, args...), any number of extra arguments |  |  | done `386f0019` |
 | 74 | `bd39c32b` | Comment out IndentIO: unused, and its print/println methods invalidated Base's printing on load |  | IndentIO commented out, brought back by #89 (InteractiveIsing uses it); #89's TODO is ported there. | skip |
-| 75 | `4933556b` | A handle's match_by and id compile once; the registry's multipliers are collected untyped |  |  | done |
-| 76 | `40964c41` | Construction compiles nothing per plan type: untyped wrapping, splitting, locals; structs made with new_instance |  |  | open |
+| 75 | `4933556b` | A handle's match_by and id compile once; the registry's multipliers are collected untyped |  |  | done `3d01d2f3` |
+| 76 | `40964c41` | Construction compiles nothing per plan type: untyped wrapping, splitting, locals; structs made with new_instance |  |  | done |
 | 77 | `9aff26b8` | Constructor keeps its kept intervals without a filtered comprehension |  |  | open |
 | 78 | `b3bfa382` | Resolve compiles once: untyped entries, step 3 wiring with vectors, callable names from types as values |  |  | open |
 | 79 | `88d2bf22` | Resolve finds route and share endpoints on values: dynamic_resolve_scref, registry lookups with dynamic_match |  |  | open |

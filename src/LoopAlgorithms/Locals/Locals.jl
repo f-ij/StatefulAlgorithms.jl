@@ -72,6 +72,22 @@ _build_local(values::NT) where {NT<:NamedTuple} = Local{_to_storage_types(NT)}(_
 @inline _extract_locals(l::Local) = getvalues(l)
 @inline _extract_locals(::T) where {T} = (;)
 
+"""`collect_plan_locals` for construction: the same named tuple, from untyped values (a later declaration of a name wins, as in `merge`)."""
+Base.@nospecializeinfer function collect_plan_locals_untyped(@nospecialize(options::Tuple))
+    names = Symbol[]
+    values = Any[]
+    for option in options
+        option isa Local || continue
+        declared = getfield(option, :values)
+        for (j, name) in enumerate(keys(declared))
+            k = findfirst(==(name), names)
+            isnothing(k) ? (push!(names, name); push!(values, getfield(declared, j))) : (values[k] = getfield(declared, j))
+        end
+    end
+    vals = Tuple(values)
+    return new_instance(Core.apply_type(NamedTuple, Tuple(names), typeof(vals)), vals...)
+end
+
 """
 Collect the initial values of every local declared in a plan tree, keyed by storage name: the
 memory for all of them is allocated in `_declared_locals` when a run starts.
