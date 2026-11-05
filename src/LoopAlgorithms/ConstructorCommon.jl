@@ -242,3 +242,32 @@ function setup_registry(las...)
     end
     return registry(builder)
 end
+
+@inline _stored_schedule_spec(la::Union{CompositeAlgorithm, Routine}) = getschedule(la)
+@inline _stored_schedule_spec(la::LoopAlgorithm) = _stored_schedule_spec(getplan(la))
+
+@inline _constructor_type(::CompositeAlgorithm) = CompositeAlgorithm
+@inline _constructor_type(::Routine) = Routine
+@inline _constructor_type(la::LoopAlgorithm) = _constructor_type(getplan(la))
+
+"""
+Return the option tuple needed to rebuild a loop algorithm without changing route scope.
+
+Plan nodes store local route/share wiring in child-aligned buckets. Constructor
+rebuilds need those buckets rehydrated as `LocalPlanOption` values; otherwise an
+edit such as `rename` or `addalgo` would flatten local routes into top-level
+routes and change execution semantics.
+"""
+@inline _stored_constructor_options(la::LA) where {LA<:LoopSpec} = (collect_wiring(la)..., getoptions(la)...)
+@inline _stored_constructor_options(la::Union{CompositeAlgorithm, Routine}) = (collect_scoped_wiring(la)..., getoptions(la)...)
+@inline _stored_constructor_options(la::LoopAlgorithm) = _stored_constructor_options(getplan(la))
+
+@inline function _rebuild_loopalgorithm(
+    la::LA;
+    funcs = getalgos(la),
+    states = getstates(la),
+    options = _stored_constructor_options(la),
+    schedule_spec = _stored_schedule_spec(la),
+) where {LA<:LoopSpec}
+    LoopAlgorithm(_constructor_type(la), funcs, states, options, schedule_spec; id = getid(la))
+end

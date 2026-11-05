@@ -13,7 +13,7 @@ include("Recipes.jl")
 include("FinalizedAlgorithm/FinalizedAlgorithm.jl")
 include("Traits.jl")              # plan-type traits (`iscomposite`, `steps_inline`), before the step generators
 include("LoopCursor.jl")
-include("Setup.jl")
+include("ConstructorCommon.jl")
 include("Resolving/Resolving.jl")
 include("Init.jl")
 include("Keys.jl")

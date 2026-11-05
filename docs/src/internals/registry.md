@@ -112,7 +112,7 @@ repeat count `n` gives `n`), multiplied down the tree. It is used by utilities s
 
 ## 6. Order Guarantees
 
-The registry walk (`build_registry_and_key_plan`, and `setup_registry` in `src/LoopAlgorithms/Setup.jl`) adds:
+The registry walk (`build_registry_and_key_plan`, and `setup_registry` in `src/LoopAlgorithms/ConstructorCommon.jl`) adds:
 
 1. `AlgoState`s first.
 2. Then flattened algorithms.
