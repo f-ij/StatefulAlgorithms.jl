@@ -47,7 +47,7 @@ end
 
 @inline function reset!(p::InlineProcess, inputs_overrides...)
     reset_loopidx!(getsession(p))
-    p.context = _setup_from_stored_specs(p, inputs_overrides...)
+    p.context = first(setup(getalgo(p), getspecs(p)..., inputs_overrides...; lifetime = getlifetime(p)))
     return true
 end
 

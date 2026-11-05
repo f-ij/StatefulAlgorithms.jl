@@ -70,7 +70,7 @@ function Base.close(p::Process)
         Base.showerror(stderr, err)
         p.task = nothing
         p.runtime_context = nothing
-        _sync_state_context!(p, _setup_from_stored_specs(p))
+        _sync_state_context!(p, first(setup(getalgo(p), getspecs(p)...; lifetime = getlifetime(p))))
 
     end
 

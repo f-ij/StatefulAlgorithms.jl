@@ -26,10 +26,11 @@ A new process with `p`'s plan, set up from `p`'s stored specs and the new ones (
 With `context`, the new process starts from it and keeps `p`'s specs.
 """
 function copyprocess(p::Process, specs...; lifetime = StatefulAlgorithms.getlifetime(p), timeout = p.timeout, context = nothing, func = getalgo(p), kwargs...)
-    # Another plan: its registry may name things otherwise, so the stored specs are resolved against it again.
+    # Another plan: a new process from it with the stored specs (resolved, so taken as they are; checking their
+    # names against the plan's registry is open, TODO.md init interface item 6.10).
     func === getalgo(p) || !isnothing(context) || return Process(func, getspecs(p)..., specs...; lifetime, timeout)
-    # The same plan: the stored specs are already resolved, so they are merged without a lookup by name.
-    inits, overrides, interactives = _merged_lifecycle_specs(getregistry(getalgo(p)), getspecs(p), specs)
+    # The same plan: the stored specs are already resolved (resolving them again returns them as they are).
+    inits, overrides, interactives = _merged_lifecycle_specs(getregistry(getalgo(p)), (getspecs(p)..., specs...))
     q = Process(func; context = something(context, _init_context_for(getalgo(p), inits, overrides, interactives, lifetime)), lifetime, timeout)
     q.specs = isnothing(context) ? (inits..., overrides..., interactives...) : getspecs(p)
     return q

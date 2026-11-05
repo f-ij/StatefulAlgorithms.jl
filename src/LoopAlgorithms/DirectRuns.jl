@@ -85,20 +85,19 @@ merged in, every registered algorithm's `init`, the `Override` values, the `Inte
 end
 
 """
-    _merged_lifecycle_specs(reg, base, specs) -> (inits, overrides, interactives)
+    _merged_lifecycle_specs(reg, specs) -> (inits, overrides, interactives)
 
-Resolves `specs` against `reg` and merges them per target over the resolved specs `base` (a process's stored specs, or
-`()`), later ones winning: `InitArgs` with `InitArgs`, `Override` with `Override`, `Interactive` names combined. An
+Resolves `specs` against `reg` (resolved ones, such as a process's stored specs, stay as they are) and merges them per
+target, later ones winning: `InitArgs` with `InitArgs`, `Override` with `Override`, `Interactive` names combined. An
 `Only` is not a spec to keep and is an error here; `_split_only` takes it out first.
 """
-function _merged_lifecycle_specs(reg::R, base::B, specs::S) where {R<:NameSpaceRegistry, B<:Tuple, S<:Tuple}
+function _merged_lifecycle_specs(reg::R, specs::S) where {R<:NameSpaceRegistry, S<:Tuple}
     resolved = _resolve_lifecycle_specs(reg, specs)
     any(spec -> spec isa Only, resolved) && throw(ArgumentError("Only selects which `init` functions run; it is passed to `init(plan, context, ...)` or `init!(p, ...)`, not here."))
-    base_inits, base_overrides, base_interactives = _split_lifecycle_specs(base)
     inits, overrides, interactives = _split_lifecycle_specs(resolved)
-    return (_merge_specs_by_target(_merge_specs_by_target((), base_inits), inits),
-            _merge_specs_by_target(_merge_specs_by_target((), base_overrides), overrides),
-            _merge_interactives_by_target(_merge_interactives_by_target((), base_interactives), interactives))
+    return (_merge_specs_by_target((), inits),
+            _merge_specs_by_target((), overrides),
+            _merge_interactives_by_target((), interactives))
 end
 
 """
@@ -124,11 +123,12 @@ end
 The first step of the user pipeline (setup, `run`, `cleanup`) for a plan run without a process: resolves `plan_spec`
 and builds its starting context. Every algorithm's `init` runs; `InitArgs(...)` gives the values it reads,
 `Override(...)` values are set after it. `lifetime` is what init may size buffers by. Returns the context and the
-resolved plan; the plan holds no context, the user keeps the context and passes it to `run(plan, context)`.
+resolved plan; the plan holds no context, the user keeps the context and passes it to `run(plan, context)`. A process
+sets up a new context with it from its resolved plan and stored specs (`reset!(ip)`, the error path of `close`).
 """
 function setup(plan_spec::LA, specs::InputInterface...; lifetime = Indefinite()) where {LA<:LoopSpec}
     plan = resolve(plan_spec)
-    inits, overrides, interactives = _merged_lifecycle_specs(getregistry(plan), (), specs)
+    inits, overrides, interactives = _merged_lifecycle_specs(getregistry(plan), specs)
     return _init_context_for(plan, inits, overrides, interactives, lifetime), plan
 end
 
@@ -162,7 +162,7 @@ function init(plan::LA, context::C, specs::InputInterface...; lifetime = Indefin
     isresolved(plan) || throw(ArgumentError("init(plan, context, ...) needs the resolved plan that `setup` returns."))
     reg = getregistry(plan)
     only, rest = _split_only(reg, specs)
-    inits, overrides, interactives = _merged_lifecycle_specs(reg, (), rest)
+    inits, overrides, interactives = _merged_lifecycle_specs(reg, rest)
     isnothing(only) && return _init_on_context(plan, context, inits, overrides, interactives, lifetime)
     targets = only_targets(only)
     for spec in inits

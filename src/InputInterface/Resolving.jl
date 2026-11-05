@@ -29,8 +29,10 @@ end
 
 @inline function resolve(reg::R, ov::OI) where {R<:NameSpaceRegistry, OI<:InputInterface}
     target = get_target(ov)
+    # A `Symbol` target is already the registry key (a process's stored specs, or one given so): only the ref is
+    # dropped, with no lookup by name, which in the precompile workload makes the package image fail to load on
+    # Julia 1.13.1. Checking the key is open (TODO.md, init interface item 6.10).
     if target isa Symbol
-        @assert haskey(reg, target) "Target algorithm $(target) not found in registry: $reg \n Cannot resolve lifecycle target."
         return (retarget(ov, target),)
     elseif target isa Tuple #i.e. multiple targets for same variables
         duplicated_ovs = map(t -> retarget(ov, t), target)
