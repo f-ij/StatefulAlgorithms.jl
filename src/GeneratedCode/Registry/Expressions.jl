@@ -45,7 +45,7 @@ constants (`build_known_entry`).
 Base.@nospecializeinfer function write_registry_expr(b::RegistryBuilder)
     entries = Any[build_known_entry(entry) for entry in b.entries]
     all_entries = build_tuple(entries, GeneratedValue(Nothing, nothing))
-    return build_from_parts(NameSpaceRegistry{all_entries.valuetype}, Any[all_entries]).value_expr
+    return build_from_parts(NameSpaceRegistry{all_entries.valuetype, Nothing}, Any[all_entries, GeneratedValue(Nothing, nothing)]).value_expr
 end
 
 """The `GeneratedValue` of the registry entry that `entry` (of a builder filled by the walk on types) holds."""

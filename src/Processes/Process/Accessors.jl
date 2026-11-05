@@ -30,16 +30,17 @@ getalgo(p::P) where {P<:InteractiveProcess} = p.algo
     getcontext(p::InteractiveProcess)
 
 The process's state context: the user's handle on the process's state, with the registry. Never a run's runtime
-context: a paused run keeps that apart (`p.runtime_context`). The `Unique` handles the user holds are keys found from
-types in it (`with_held_ids`): `getcontext(p)[handle]`. SA's own code reads `_getcontext_nokeymap(p)`.
+context: a paused run keeps that apart (`p.runtime_context`). Its registry has the plan's `UniqueKeyMap` back
+(`with_keymap`, from the process's `keymap`), so a `Unique` handle the user holds is a key found from types:
+`getcontext(p)[handle]`. SA's own code reads `_getcontext_nokeymap(p)`.
 """
-Base.@nospecializeinfer getcontext(@nospecialize(p::InteractiveProcess)) = with_held_ids(_getcontext_nokeymap(p))
+Base.@nospecializeinfer getcontext(@nospecialize(p::InteractiveProcess)) = with_keymap(_getcontext_nokeymap(p), getfield(p, :keymap))
 
 """
     _getcontext_nokeymap(p::InteractiveProcess)
 
-The process's state context as SA works with it: its registry stores the `Unique` handles numbered, without the plan's
-`UniqueKeyMap` (what `getcontext` adds for the user).
+The process's state context as SA works with it: its registry without the plan's `UniqueKeyMap` (what `getcontext`
+adds for the user).
 """
 _getcontext_nokeymap(p::P) where {P<:InteractiveProcess} = p.state_context
 
@@ -47,9 +48,9 @@ _getcontext_nokeymap(p::P) where {P<:InteractiveProcess} = p.state_context
     setcontext!(p::InteractiveProcess, c) -> c
 
 Store `c` as the process's state context. Does not look at whether `p` runs: a caller that may race a running loop
-pauses it first. A context from `getcontext` is stored without its `UniqueKeyMap` (`strip_held_ids`).
+pauses it first. A context from `getcontext` is stored without its `UniqueKeyMap` (`strip_keymap`).
 """
-setcontext!(p::P, c::C) where {P<:InteractiveProcess, C<:ProcessContext} = (p.state_context = strip_held_ids(c))
+setcontext!(p::P, c::C) where {P<:InteractiveProcess, C<:ProcessContext} = (p.state_context = strip_keymap(c))
 
 """
     setlifetime!(p, lt) -> p

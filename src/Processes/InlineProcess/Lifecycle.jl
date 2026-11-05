@@ -44,7 +44,7 @@ typed data has no `!` and returns a new process (as `setlifetime(ip, lt)`).
 """
 function init(ip::IP, specs::Vararg{InputInterface}) where {IP<:InlineProcess}
     context, stored = _init_process_context(ip, specs)
-    return _construct_inline_process(getalgo(ip), context, stored, getlifetime(ip))
+    return _construct_inline_process(getalgo(ip), context, stored, getlifetime(ip), getfield(ip, :keymap))
 end
 
 """
@@ -59,7 +59,7 @@ function Base.reset(ip::IP, specs::Vararg{InputInterface}) where {IP<:InlineProc
     plan = getalgo(ip)
     stored = _stored_specs(plan, (getspecs(ip)..., specs...))
     context = first(_setup(plan, stored...; lifetime = getlifetime(ip)))
-    return _construct_inline_process(plan, context, stored, getlifetime(ip))
+    return _construct_inline_process(plan, context, stored, getlifetime(ip), getfield(ip, :keymap))
 end
 
 """

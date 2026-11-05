@@ -26,4 +26,7 @@ mutable struct InlineProcess{TD,ContextType, Lt, S<:Tuple} <: AbstractProcess
     # The run's counter, one session for every run (Processes/InlineProcess/Session.jl): what the loop gets instead of the
     # process.
     const session::InlineSession
+    # The plan's `UniqueKeyMap` (or `nothing`): `algo` and `context` are kept without it, so `run(ip)` has no uuid in its
+    # types; `getcontext(ip)` puts it back. Untyped, so the map's type is not in the `InlineProcess` type.
+    const keymap::Any
 end

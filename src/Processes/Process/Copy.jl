@@ -31,7 +31,7 @@ registry.
 """
 function copyprocess(p::Process; lifetime = StatefulAlgorithms.getlifetime(p), timeout = p.timeout, context = nothing, kwargs...)
     isnothing(context) && return Process(getalgo(p), getspecs(p)...; lifetime, timeout)
-    context = strip_held_ids(context)   # a context from `getcontext` carries the `UniqueKeyMap`
+    context = strip_keymap(context)   # a context from `getcontext` carries the `UniqueKeyMap`
     typeof(context) === typeof(_getcontext_nokeymap(p)) || throw(ArgumentError("copyprocess: `context` must have the shape of the process's context ($(typeof(_getcontext_nokeymap(p)))), got $(typeof(context))."))
     q = Process(getalgo(p); context, lifetime, timeout)
     q.specs = getspecs(p)

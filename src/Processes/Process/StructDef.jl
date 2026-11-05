@@ -27,6 +27,9 @@ mutable struct Process{F,C} <: InteractiveProcess{F,C}
     # The current or last run (Processes/Process/Session.jl): what the loop gets instead of the process. The run's
     # counters, times, cursor and the flags `pause(p)` and `close(p)` set are its fields.
     session::InteractiveSession{C}
+    # The plan's `UniqueKeyMap` (or `nothing`): `algo` and the contexts are kept without it, so the loop's types have no
+    # uuid; `getcontext(p)` and `fetch(p)` put it back. Untyped, so the map's type is not in the `Process` type.
+    keymap::Any
 end
 
 Base.:(==)(p1::Process, p2::Process) = p1.id == p2.id

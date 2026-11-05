@@ -18,22 +18,29 @@ function Core.kwcall(kw::NamedTuple, ::Type{InlineProcess}, func, inputs_overrid
     return _build_inline_process(func, inputs_overrides, get(kw, :context, nothing), get(kw, :lifetime, nothing), rest)
 end
 function _build_inline_process(func::Func, inputs_overrides::Tuple, context::C, lifetime::LT, kwargs::NamedTuple) where {Func, C, LT}
-    algo, prepared_context, lifetime = _prepare_inline_process(parse_plan(func), inputs_overrides...; context, lifetime, kwargs...)
-    return _construct_inline_process(algo, prepared_context, _stored_specs(algo, inputs_overrides), lifetime)
+    algo, prepared_context, lifetime, keymap = _prepare_inline_process(parse_plan(func), inputs_overrides...; context, lifetime, kwargs...)
+    return _construct_inline_process(algo, prepared_context, _stored_specs(algo, inputs_overrides), lifetime, keymap)
 end
 
-"""The resolved plan, its starting context (from `setup`, or the given `context`) and the lifetime a new `InlineProcess` gets."""
+"""
+The resolved plan, its starting context (from `setup`, or the given `context`), the lifetime and the plan's
+`UniqueKeyMap` a new `InlineProcess` gets. As for a `Process`: the plan is resolved first (untyped), and the process
+works on the plan and context without the map (`strip_keymap`) and keeps the map as a value.
+"""
 @inline function _prepare_inline_process(algo, inputs_overrides...; repeats=nothing, lifetime=nothing, context=nothing)
     lifetime = something(parse_lifetime(lifetime, repeats), Repeat(1))
-    # A context the user got from SA carries a `UniqueKeyMap`; the process works with it without (`strip_held_ids`).
-    isnothing(context) || return resolve(algo), strip_held_ids(context), lifetime
+    resolved = resolve(algo)
+    keymap = getkeymap(resolved)
+    algo = strip_keymap(resolved)
+    # A context the user got from SA carries the map; the process works with it without.
+    isnothing(context) || return algo, strip_keymap(context), lifetime, keymap
     context, algo = _setup(algo, inputs_overrides...; lifetime)
-    return algo, context, lifetime
+    return algo, context, lifetime, keymap
 end
 
 """The `InlineProcess` around a prepared plan, its context, specs and lifetime, with its one session."""
-function _construct_inline_process(algo::TD, context::C, specs::S, lifetime::Lt) where {TD, C, S<:Tuple, Lt}
-    ip = InlineProcess{TD, C, Lt, S}(uuid1(), algo, context, specs, lifetime, InlineSession())
+function _construct_inline_process(algo::TD, context::C, specs::S, lifetime::Lt, keymap) where {TD, C, S<:Tuple, Lt}
+    ip = InlineProcess{TD, C, Lt, S}(uuid1(), algo, context, specs, lifetime, InlineSession(), keymap)
     precompile_interface(ip)   # src/PrecompileInterface.jl
     return ip
 end

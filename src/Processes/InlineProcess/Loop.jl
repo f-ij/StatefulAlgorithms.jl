@@ -18,7 +18,7 @@ end
 # A context given to `run(ip)`: the run starts from it, so it becomes the process's context first.
 @inline _set_inline_run_context!(p::InlineProcess, ::Nothing) = nothing
 @inline function _set_inline_run_context!(p::InlineProcess, context)
-    context = strip_held_ids(context)   # a context from `getcontext` carries the `UniqueKeyMap`
+    context = strip_keymap(context)   # a context from `getcontext` carries the `UniqueKeyMap`
     @assert context isa contexttype(p) "Wrong context shape for this process\n Context is of type $(typeof(context)), but expected $(contexttype(p))."
     p.context = context
     return nothing
