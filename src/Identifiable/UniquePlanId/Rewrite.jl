@@ -54,13 +54,19 @@ function _rebuilt_params(@nospecialize(T::DataType), fields::Vector{Any}, rewrit
         params[j] = typeof(fields[i])
         from_field[j] = true
     end
-    for (j, i, derive) in list_field_derived_params(T)
+    _derive_params!(params, from_field, fields, list_field_derived_params(T))
+    for j in eachindex(params)
+        from_field[j] || params[j] isa TypeVar || (params[j] = _rewrite_value(params[j], rewrite, cache))
+    end
+    return params
+end
+
+# Specialized on the hook's answer (a few tuple types), so the loop over it is compiled, not dispatched per element.
+function _derive_params!(params::Vector{Any}, from_field::BitVector, fields::Vector{Any}, derived::Tuple)
+    for (j, i, derive) in derived
         isnothing(fields[i]) && continue
         params[j] = derive(fields[i])
         from_field[j] = true
-    end
-    for j in eachindex(params)
-        from_field[j] || params[j] isa TypeVar || (params[j] = _rewrite_value(params[j], rewrite, cache))
     end
     return params
 end

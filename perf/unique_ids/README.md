@@ -14,7 +14,7 @@ ids to `SimpleId(1..N)` in order of first appearance and then calls the normal c
 ever sees the sequential ids, so it is compiled once. The registry and the loop do not change.
 
 The idea was in the package as `src/LoopAlgorithms/Resolving/NormalizeIds.jl`; on `exp/unique-plan-id` it is replaced by
-numbering `Unique` handles when a plan is built (`src/Identifiable/UniquePlanIds.jl`). This folder keeps the measurements only. The
+numbering `Unique` handles when a plan is built (`src/Identifiable/UniquePlanId/`). This folder keeps the measurements only. The
 scripts named below (and their `Project.toml`) were deleted on 2026-10-18. Their last version is in commit `2c4ddff`, under
 `perf/unique_ids/` (the original ones of 2026-10-04 also at tag `archive/unique-ids`). They no longer run against the current code.
 
