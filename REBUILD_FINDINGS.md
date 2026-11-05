@@ -16,3 +16,9 @@ suspicious while porting; nothing here is acted on yet unless it says so.
    main). It ran on a spawned task, so the error never surfaced and no manager method was precompiled. Replaced in the
    port of #31-#38 by `precompile_interface(::ProcessManager)` (plain `precompile` calls, no global set of seen types),
    as the old branch did in #36.
+3. **Rows held for `refactor/partitions`.** #83 and #84 (`Partition{kind, name}`), #100 (`Var` as an unresolved
+   `VarLocation`), #103 (SCRef -> nsref/partref) and #106 have reworked twins on `refactor/partitions`, which is not in
+   main (26 commits ahead on 2026-11-06). Porting the old forms here would duplicate that work and clash with it, so
+   these rows stay open, together with the rows that build on them (#101 resolved locations without a matcher, #102
+   `resolve_var(s)`, #105 if it needs them). Port them once partitions is in main. The handoff said to ask at the first
+   twin; the owner said to finish without questions and note such things here.
