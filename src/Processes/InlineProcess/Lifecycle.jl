@@ -6,15 +6,16 @@ What a user calls on an `InlineProcess`: `run` (and `run_nogen`, the same withou
 export run, reset
 
 """
-    run(ip; context, repeats, lifetime, inlined = Val(false), inputs...)
+    run(ip; context, repeats, lifetime, async = Val(false), inlined = Val(false), inputs...)
 
 One run of `ip` in the caller's task, from the context it holds (or `context`, which becomes its context), returning
-the run's result. `inlined = Val(true)` pastes the loop into `run(ip)`: the context is not passed into a call and back
+the run's result. `async = Val(true)` runs it on a task (`@async`) and returns the task; as a `Val`, the branch is
+decided while compiling, so `run(ip)` compiles no task code. `inlined = Val(true)` pastes the loop into `run(ip)`: the context is not passed into a call and back
 (57-62 instead of 121-150 ns per `run(ip)` for the 616-byte context of the 3D Ising model with one step per run,
 measured on `refactor/plan-compiles`), but the loop's machine code is then made again for every caller, while the
 default call into the loop (`run_session_loop`) is compiled once. As a `Val`, the branch is decided while compiling.
 """
-@inline function Base.run(p::InlineProcess, inputs_overrides...; context = nothing, repeats=nothing, lifetime=nothing, inlined::Val = Val(false), kwargs...)
+@inline function Base.run(p::InlineProcess, inputs_overrides...; context = nothing, repeats=nothing, lifetime=nothing, async::Val{isasync} = Val(false), inlined::Val = Val(false), kwargs...) where {isasync}
     algo = getalgo(p)
     _set_inline_run_context!(p, context)
     runtime_inputs = _inline_runtime_inputs(algo, inputs_overrides, (; kwargs...))
@@ -22,6 +23,7 @@ default call into the loop (`run_session_loop`) is compiled once. As a `Val`, th
     # (`resolve_var_keys`), while compiling, before the call to the loop. The process's own lifetime has its keys from
     # when the process was built, so it stays as it is.
     run_lifetime = resolve_var_keys(something(parse_lifetime(isnothing(lifetime) ? lifetime : number_by_keymap(lifetime, getfield(getregistry(getalgo(p)), :keymap)), repeats), StatefulAlgorithms.getlifetime(p)), getcontext(p))
+    isasync && return @async _run_inline!(p, run_lifetime, runtime_inputs, inlined)
     return @inline _run_inline!(p, run_lifetime, runtime_inputs, inlined)
 end
 
