@@ -98,7 +98,7 @@ Base.@constprop :aggressive function step!(tca::ThreadedCompositeAlgorithm, cont
     return current
 end
 
-Base.@constprop :aggressive @inline @generated function _step!(tca::TCA, cursor::S, lc::L, wiring::W, namespace::N, session::P, lifetime::LT) where {TCA <: ThreadedCompositeAlgorithm, S<:CompositeLoopCursor, L <: LoopContext, W <: PlanWiringView, N <: Namespace, P <: ProcessSession, LT <: Lifetime}
+@inline @generated function _step!(tca::TCA, cursor::S, lc::L, wiring::W, namespace::N, session::P, lifetime::LT) where {TCA <: ThreadedCompositeAlgorithm, S<:CompositeLoopCursor, L <: LoopContext, W <: PlanWiringView, N <: Namespace, P <: ProcessSession, LT <: Lifetime}
     algo_count = numalgos(TCA)
     child_namespace_tuple_type = TCA.parameters[3]
 
