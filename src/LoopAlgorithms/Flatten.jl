@@ -42,7 +42,7 @@ function flat_comp(ca::CompositeAlgorithm, interval)
 
     intervals = tree_trait_flatten(ca, interval) do func, interval
         if func isa StatefulAlgorithms.CompositeAlgorithm
-            return getalgos(func), interval .* StatefulAlgorithms.intervals(func)
+            return getalgos(func), interval .* StatefulAlgorithms.getschedule(func)
         else 
             return nothing, nothing
         end

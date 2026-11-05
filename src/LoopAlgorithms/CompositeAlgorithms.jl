@@ -25,7 +25,7 @@ const CompositePlan = CompositeAlgorithm
 
 
 # The inputs are stripped of `Unique` uuids first (`strip_unique`), so the typed parsing compiles once for new handles.
-Base.@nospecializeinfer CompositeAlgorithm(@nospecialize(args...)) = parse_la_input(CompositeAlgorithm, strip_uniques(args)...)
+Base.@nospecializeinfer CompositeAlgorithm(@nospecialize(args...)) = parse_la_input(CompositeAlgorithm, strip_unique(args)...)
 
 
 function newfuncs(ca::CompositeAlgorithm, funcs)

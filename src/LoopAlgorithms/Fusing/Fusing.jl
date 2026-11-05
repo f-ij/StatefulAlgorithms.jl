@@ -36,7 +36,7 @@ Base.@nospecializeinfer function _flatten_comp_funcs!(flat_funcs::Vector{Any}, f
         trait = _intervals[i]
         # `el isa LoopSpec` first: `iscomposite(el)` on any other value would compile once per value type.
         if _flattens_into_parent(el, stop_at_options)
-            child_intervals = intervals(el)
+            child_intervals = getschedule(el)
             multiplied = Any[child_intervals[j] * trait for j in eachindex(child_intervals)]
             _flatten_comp_funcs!(flat_funcs, flat_intervals, getalgos(el), Tuple(multiplied), stop_at_options)
         else

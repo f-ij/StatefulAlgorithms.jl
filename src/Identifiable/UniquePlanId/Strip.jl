@@ -8,16 +8,7 @@ stay as they are; anything without a `Unique` handle is returned as it is.
 """
 Base.@nospecializeinfer strip_unique(@nospecialize(x)) = rewrite_unique_ids(x, _StripIds())
 
-"""`strip_unique` on each element of the tuple `xs`."""
-Base.@nospecializeinfer function strip_uniques(@nospecialize(xs::Tuple))
-    out = Vector{Any}(undef, length(xs))
-    for i in eachindex(out)
-        out[i] = strip_unique(xs[i])
-    end
-    return Tuple(out)
-end
-
 struct _StripIds end
 rewrite_id(::_StripIds, @nospecialize(id::UniquePlanId)) = is_held_unique_id(id) ? UniquePlanId{ValueId}(origin(id)) : id
-# An id only a type holds (a handle's type given as an SCRef) keeps its uuid: without a value, it is all there is.
-rewrite_type_id(::_StripIds, @nospecialize(T::Type{<:UniquePlanId})) = T
+# An id only a type holds (a handle's type given as an SCRef) keeps its uuid (the default `rewrite_type_id`): without
+# a value, it is all there is.
