@@ -445,7 +445,7 @@ the scheduling wrapper expected inside the block is `@repeat n expr` instead of
 
 Examples:
 - `x = Algo(input = value)`
-- `@repeat 10 Algo(input = value)` (`x = @repeat …` is an error: a repeated statement's return is not a value of the block)
+- `@repeat 10 Algo(input = value)`
 - `@repeat 5 begin ... end`
 - `@include_if enabled x = Algo(input = value)`
 - `z = f(value; scale = 2)`
