@@ -77,7 +77,7 @@ steps below 4.7–4.8 ms). So the uuid (`origin`) is data and never changes; the
    gets the plan's registry back (`with_plan_registry`). SA's own code that needs a process's context without the map
    outside the loop reads `_getcontext_nokeymap(p)`.
 
-The matching and registry code ask a matcher only general questions (`matches_type`, `is_given_id`, `is_found_by_data`,
+The matching and registry code ask a matcher only general questions (`matches_type`, `is_given_id`,
 `lower_matcher`, `carries_data`); `UniquePlanId` answers them in `src/Identifiable/UniquePlanId/HookExtensions.jl`. A
 holder says which of its type parameters come from its fields with `list_field_derived_params`
 (`src/Identifiable/UniquePlanId/Hooks.jl`). A plan's schedule is changed only through `setschedule`

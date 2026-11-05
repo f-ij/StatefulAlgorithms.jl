@@ -38,7 +38,8 @@ end
 """
 One run of `p`: what `prepare_for_loop` makes (the session, the plan, the `LoopContext`), then the loop with those as
 arguments, the same entry as a `Process` run (`run_session_loop`; with `Val(true)`, the loop pasted in). The values of
-the context it gives back become the process's.
+the context it gives back become the process's; the result comes back with the plan's registry (`with_plan_registry`),
+so `run(ip)[handle]` is found from types.
 """
 @inline function _run_inline!(p::InlineProcess, run_lifetime::LT, runtime_inputs::I, ::Val{inlined}) where {LT, I, inlined}
     session, algo, lc = @inline prepare_for_loop(p, getcontext(p), runtime_inputs, Resuming{false}())
@@ -49,5 +50,16 @@ the context it gives back become the process's.
     end
     # The new values into the process's context, which keeps its registry with the map.
     p.context = withsubcontexts(getcontext(p), get_subcontexts(persistent_context))
-    return result
+    return @inline with_plan_registry(p, result)
 end
+
+"""
+    with_plan_registry(ip::InlineProcess, x)
+
+A context the loop gives back (`x`, its registry without the map) with the registry of `ip`'s context, which has the
+plan's `UniqueKeyMap`: the same registry `Ref`, so this is typed and makes no registry. A value that is not a context
+as it is. (The untyped method for any process is in Processes/Context.jl.)
+"""
+@inline with_plan_registry(ip::InlineProcess, c::ProcessContext{D}) where {D} =
+    ProcessContext{D, typeof(getfield(getcontext(ip), :reg))}(getfield(c, :subcontexts), getfield(getcontext(ip), :reg))
+@inline with_plan_registry(ip::InlineProcess, x) = x

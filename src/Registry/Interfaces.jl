@@ -156,16 +156,3 @@ function merges_into(@nospecialize(E), @nospecialize(N))
     return !(is_given_id(id(E)) && id(E) == id(N))
 end
 
-###############################################################################
-# Finding: a matcher its type does not find
-###############################################################################
-
-"""
-    is_found_by_data(id) -> Bool
-
-Whether the matcher `id`, when the lookup by its type (`static_findfirst_match`) finds nothing, may still be found by its
-data, through an entry's runtime lookup table (`dynamic_lookup`). Default `false`, so a lookup by type stays decided
-while compiling.
-Extended by: `UniquePlanId` (a handle the user holds), Identifiable/UniquePlanId/HookExtensions.jl.
-"""
-is_found_by_data(@nospecialize(id)) = false
