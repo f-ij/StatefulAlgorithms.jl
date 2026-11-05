@@ -7,8 +7,8 @@
 split and moved most of the files the old branch changed (`Process.jl` alone became 12 files). So every old commit
 is ported by hand: make the same kind of change on `main`'s code, in `main`'s files.
 
-`origin/refactor/plan-compiles` on the remote still points to the old tip. Do not push the new branch over it
-without asking the owner.
+On the remote (2026-11-05): the old tip is pushed as `origin/refactor/plan-compiles-old`, and
+`origin/refactor/plan-compiles` holds the new branch (force-pushed with the owner's go). Push new commits normally.
 
 ## 1. Read first
 
