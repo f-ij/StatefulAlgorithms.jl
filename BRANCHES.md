@@ -5,7 +5,7 @@ into `main` or deleted; add a line when a branch is made. Each active branch has
 checkout, `StatefulAlgorithms.jl-<name>` (listed when it has one). `backup/*` and `archive/*` branches are not listed:
 they are snapshots, not work.
 
-Updated 2026-11-04.
+Updated 2026-11-05.
 
 ## Refactor stack
 
@@ -13,7 +13,6 @@ Updated 2026-11-04.
 |---|---|---|---|
 | `refactor/partitions` | `-partitions` | `main` | One partition system: `Partition{kind, name}` (`StatePartition`, `RuntimePartition`), no name turned into a partition; `Var` is an unresolved `VarLocation`; nsref/partref. Under review; plan-compiles and the others rebase onto it. |
 | `refactor/plan-inputs` | `-plan-inputs` | `refactor/partitions` | Plan inputs as ordinary arguments: plans called like functions `(arg1, arg2, ...)`, inputs passed explicitly, header inputs as declared locals, `@input` removed. Design doc, and the registered input state (`IdentifiableAlgo{<:RuntimeInputState}`) already removed. |
-| `refactor/plan-holds-no-data` | `-plan-holds-no-data` | `main` | A plan holds no data (TODO.md, "A plan holds no data"): `LoopAlgorithm` keeps only plan, options and registry; the context and the `InitArgs`/`Override` specs are kept by the user after `setup` or by the process (`state_context`, `specs`); plan-level `init(la, specs...)`, `partialinit` and `run(la)` removed in favour of `setup` / `run(plan, context)` / `init(plan, context, [Only(...)], ...)`; `Init` renamed `InitArgs` (with the list form), `Only(...)` selects which `init` runs, processes get `init!(p, ...)` (TODO.md, construction pipeline item 6). Owner to review. |
 | `refactor/plan-compiles` | `-plan-compiles` | `main` | Resolve and construction compile once per plan type, not per plan: untyped construction, endpoints found on values, the process/session redesign; the old id replacement. Generic work goes here. Rebases onto `refactor/partitions`. |
 | `refactor/monolithic-resolve` | `-monolithic-resolve` | `refactor/plan-compiles` | Only the monolithic `Unique` id replacement (`replace_unique_ids`), no caches. |
 | `exp/replace-ids-cache` | `-replace-ids-cache` | `refactor/monolithic-resolve` | Experiment: `replace_unique_ids` keeps its type walks in global caches. |
