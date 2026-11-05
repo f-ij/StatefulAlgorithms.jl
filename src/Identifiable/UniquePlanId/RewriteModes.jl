@@ -5,11 +5,11 @@ walk, and that struct's `rewrite_id` (and `rewrite_type_id`, where an id only a 
 
 | Mode         | Entry               | Runs when                                   | Id held as a value      | Id only a type holds |
 |:-------------|:--------------------|:--------------------------------------------|:------------------------|:---------------------|
-| `_StripIds`  | `strip_unique`      | a constructor or DSL block takes its inputs | `UniquePlanId{ValueId}` | kept                 |
-| `_NumberIds` | `number_unique_ids` | a plan is built, `resolve(la1, la2, ...)`   | `UniquePlanId{k}`       | `UniquePlanId{k}`    |
+| `_StripIds`  | `strip_unique`      | a constructor or DSL block takes its inputs | `UniquePlanId{:dynamic}` | kept                |
+| `_NumberIds` | `number_unique_ids` | `resolve(la)`, `resolve(la1, la2, ...)`     | `UniquePlanId{k}`       | `UniquePlanId{k}`    |
 | `_MapIds`    | `number_by_keymap_dynamic`, `number_by_keymap` | a lifetime from outside the plan is given to a process or run | `UniquePlanId{k}` of the plan | `UniquePlanId{k}` of the plan |
 
-In that order: a held id (`UniquePlanId{uuid}`) is stripped at the constructor and numbered when its plan is built. A
+In that order: a held id (`UniquePlanId{uuid}`) is stripped at the constructor and numbered when its plan is resolved. A
 value from outside the plan (a process's lifetime) is numbered with the plan's numbers (`_MapIds`) when it is given.
 =#
 
@@ -21,8 +21,8 @@ value from outside the plan (a process's lifetime) is numbered with the plan's n
     strip_unique(x) -> x
 
 `x` with every `Unique` handle the user holds as constructors take it: `UniquePlanId{uuid}(uuid)` becomes
-`UniquePlanId{ValueId}(uuid)`, the uuid left only in the value. Constructors and DSL blocks call it on their inputs, so
-everything they compile sees the same types for every new handle. Ids already stripped or numbered (a nested plan's)
+`UniquePlanId{:dynamic}(uuid)`, the uuid left only in the value. Constructors and DSL blocks call it on their inputs, so
+everything they compile sees the same types for every new handle. Ids already dynamic or numbered (a nested plan's)
 stay as they are; anything without a `Unique` handle is returned as it is.
 """
 Base.@nospecializeinfer strip_unique(@nospecialize(x)) = rewrite_unique_ids(x, _StripIds())
@@ -30,8 +30,8 @@ Base.@nospecializeinfer strip_unique(@nospecialize(x)) = rewrite_unique_ids(x, _
 """Strip mode: no state, every held id is stripped the same way."""
 struct _StripIds end
 
-# Held (`N` is the uuid): move the uuid out of the type. Stripped or numbered already: leave it.
-rewrite_id(::_StripIds, @nospecialize(id::UniquePlanId)) = is_held_unique_id(id) ? UniquePlanId{ValueId}(origin(id)) : id
+# Held (`N` is the uuid): move the uuid out of the type. Dynamic or numbered already: leave it.
+rewrite_id(::_StripIds, @nospecialize(id::UniquePlanId)) = is_held_unique_id(id) ? make_dynamic(id) : id
 # An id only a type holds (a handle's type given as an SCRef) keeps its uuid (the default `rewrite_type_id`): without
 # a value, it is all there is.
 
@@ -55,17 +55,14 @@ struct _NumberIds
     numbers::Dict{UUID, Int}
 end
 
-# Every form (held, stripped, a nested plan's number) is numbered by its uuid: the same handle gets the same `k`
+# Every form (held, dynamic, a nested plan's number) is numbered by its uuid: the same handle gets the same `k`
 # wherever it appears, a new uuid the next free number.
-function rewrite_id(r::_NumberIds, @nospecialize(id::UniquePlanId))
-    u = origin(id)
-    return UniquePlanId{get!(r.numbers, u, length(r.numbers) + 1)}(u)
-end
+rewrite_id(r::_NumberIds, @nospecialize(id::UniquePlanId)) = make_numbered(id, get!(r.numbers, origin(id), length(r.numbers) + 1))
 
-# An id only a type holds is numbered by the uuid in it; a number or `ValueId` alone does not say which handle it is.
+# An id only a type holds is numbered by the uuid in it; a number or `:dynamic` alone does not say which handle it is.
 function rewrite_type_id(r::_NumberIds, @nospecialize(T::Type{<:UniquePlanId}))
     u = plan_number(T)
-    u isa UUID || error("Cannot number `$T`: only a type holds it, without the value that says which handle it is.")
+    is_held_unique_id(T) || error("Cannot number `$T`: only a type holds it, without the value that says which handle it is.")
     return UniquePlanId{get!(r.numbers, u, length(r.numbers) + 1)}
 end
 
@@ -78,7 +75,7 @@ end
 
 `x`, a value from outside a plan that names the plan's `Unique` handles (a lifetime given to `Process`, `InlineProcess`
 or `run`), with every id the plan has numbered as the plan numbered it (`keymap`, the plan's `UniqueKeyMap`): held,
-stripped or numbered elsewhere, it becomes `UniquePlanId{k}`, the form the plan's registry stores. A `Var` in `x` is
+dynamic or numbered elsewhere, it becomes `UniquePlanId{k}`, the form the plan's registry stores. A `Var` in `x` is
 then found while compiling instead of by uuid on every read in the loop, and `x`'s type has no uuid, so the loop
 compiles once. Ids the plan does not have stay as they are; with no map (`nothing`) `x` is returned as it is. Untyped;
 compiles nothing per uuid; used where `x` comes in untyped (the `Process`, `InlineProcess` and plan `run`/`init`
@@ -100,12 +97,11 @@ end
 
 function rewrite_id(r::_MapIds, @nospecialize(id::UniquePlanId))
     k = get(r.numbers, origin(id), nothing)
-    return isnothing(k) ? id : UniquePlanId{k}(origin(id))
+    return isnothing(k) ? id : make_numbered(id, k)
 end
 # A handle's type given as an SCRef holds only the uuid (held form): numbered from the map too.
 function rewrite_type_id(r::_MapIds, @nospecialize(T::Type{<:UniquePlanId}))
-    N = plan_number(T)
-    N isa UUID || return T
-    k = get(r.numbers, N, nothing)
+    is_held_unique_id(T) || return T
+    k = get(r.numbers, plan_number(T), nothing)
     return isnothing(k) ? T : UniquePlanId{k}
 end

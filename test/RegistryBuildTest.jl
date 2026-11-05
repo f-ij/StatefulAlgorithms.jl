@@ -30,8 +30,8 @@ RB.init(::RBDst, c) = (; acc = 0.0)
 RB.step!(::RBDst, c) = (; acc = c.acc + c.u)
 rb_half(x) = 0.5 * x
 
-"""The `LoopAlgorithm` `resolve` sets up the registry of: the plan wrapped, finalized plans unwrapped."""
-rb_loopalgorithm(plan) = plan isa RB.FinalizedAlgorithm ? RB.LoopAlgorithm(RB.inneralgorithm(plan)) : RB.LoopAlgorithm(plan)
+"""The `LoopAlgorithm` `resolve` sets up the registry of: the plan numbered and wrapped, finalized plans unwrapped."""
+rb_loopalgorithm(plan) = RB.number_unique_ids(plan isa RB.FinalizedAlgorithm ? RB.LoopAlgorithm(RB.inneralgorithm(plan)) : RB.LoopAlgorithm(plan))
 
 """Whether the compiled `build_registry_and_key_plan` for `la` sets the registry up at run time."""
 rb_uses_runtime_path(la) =
@@ -181,4 +181,13 @@ end
     @test !rb_uses_runtime_path(deep_la)
     @test isconcretetype(Base.return_types(RB.build_registry_and_key_plan, (typeof(deep_la),))[1])
     @test rb_same_setup(RB.build_registry_and_key_plan(deep_la), RB.build_registry_from_values(deep_la))
+end
+
+@testset "Registry: a Unique handle is found in every form, with or without the plan's map" begin
+    a, b = Unique(RBSrc), Unique(RBSrc)
+    reg = RB.getregistry(resolve(CompositeAlgorithm(a, b, (1, 1))))
+    # Without the map a held handle cannot be numbered from types; it and a stripped one are found by their uuid.
+    for r in (reg, RB.strip_keymap(reg)), (h, key) in ((a, :RBSrc_1), (RB.strip_unique(a), :RBSrc_1), (b, :RBSrc_2))
+        @test getkey(r[h]) == key
+    end
 end

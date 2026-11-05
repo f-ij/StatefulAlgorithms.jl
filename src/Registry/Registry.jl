@@ -1,6 +1,5 @@
 export getregistry, add, find_typeidx, registry_allowmerge
 include("Interfaces.jl")
-include("Findability.jl")
 include("LookupKey.jl")
 
 include("StructDef.jl")

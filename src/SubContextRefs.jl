@@ -46,18 +46,14 @@ scref_match(ref) = ref isa Symbol ? ref : typeof(scref_matcher(ref))
 """
     same_scref(a, b) -> Bool
 
-Whether two SCRefs name the same subcontext before they are in one plan: compared by their matchers' data where they
-carry it (`UniquePlanId`: by uuid, since separately built plans number their handles alike), else by `scref_match`.
-An SCRef can also be a matcher type, as a route keeps an endpoint without its object.
+Whether two SCRefs name the same subcontext before they are in one plan: two SCKeys by name, any other two by `match`
+(an SCKey has no matcher, so it names none of them). An SCRef can also be a matcher type, as a route keeps an endpoint
+without its object: it matches as itself (`match_by`).
 """
-same_scref(a, b) = _scref_identity(a) == _scref_identity(b)
-function _scref_identity(ref)
-    ref isa Symbol && return ref
-    ref isa Type && ref <: AbstractMatcher && return ref
-    m = ref isa Type ? nothing : match_by(ref)
-    carries_data(m) && return m
-    return scref_match(ref)
-end
+same_scref(a::Symbol, b::Symbol) = a === b
+same_scref(a::Symbol, b::B) where {B} = false
+same_scref(a::A, b::Symbol) where {A} = false
+same_scref(a::A, b::B) where {A, B} = match(a, b)
 
 """The object part of an SCRef, kept until the plan is resolved; `nothing` when it is already an SCKey."""
 scref_object(ref) = ref isa Symbol ? nothing : ref

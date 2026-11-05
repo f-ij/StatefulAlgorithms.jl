@@ -120,7 +120,6 @@ ContextExchange(; period::Real = 0.0) = ContextExchange{:_exchange}(Float64(peri
 @inline setvaraliases(exchange::ContextExchange, newaliases) = exchange
 @inline match_by(::Union{ContextExchange, Type{<:ContextExchange}}) = ValMatcher(:ContextExchange)
 @inline registry_entrytype(::Type{<:ContextExchange}) = ContextExchange
-@inline isstaticallyfindable(::ContextExchange) = true
 @inline Autokey(exchange::ContextExchange, i::Int; customname = Symbol(), aliases...) =
     haskey(exchange) ? exchange : setcontextkey(exchange, static_symbol(:ContextExchange_, i))
 

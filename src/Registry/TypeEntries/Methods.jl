@@ -1,7 +1,7 @@
 #=
 Reading one entry of a registry (`RegistryTypeEntry`): its algorithms, multipliers and keys, and finding an algorithm
-in it, by its matcher (`static_findfirst_match`, for `isstaticallyfindable` values) or through its runtime lookup
-table (`dynamic_lookup`, for other values).
+in it with `match` (`static_findfirst_match`: decided while compiling when the types decide it, else by `==` at run time).
+The runtime lookup table (`dynamic_lookup`) is kept but no lookup uses it.
 =#
 
 """The entry's algorithms (keyed handles), as a tuple; for an entry type, the tuple of their types."""
@@ -25,27 +25,30 @@ getentrytype(rte::RegistryTypeEntry) = getentrytype(typeof(rte))
 ###############################################################################
 
 """
-The position of `val` in the entry, found by its matcher (`match_by`), or `nothing`. The type-level part of the matcher
-(`static_id`) is what is matched, so a matcher carrying data (`UniquePlanId`) compiles once per type, not per value.
+The position of `val` in the entry, found with `match` against each of its algorithms, or `nothing`. Decided while
+compiling when the types decide it (a numbered `UniquePlanId`, a matcher without fields, a type); else at run time
+(a dynamic `UniquePlanId`, or a held one when the registry has no map, by its uuid): see `match`.
 """
-@inline static_findfirst_match(rte::RegistryTypeEntry, val) = @inline static_findfirst_match(rte, Val(static_id(@inline match_by(val))))
-# `static_findfirst_match(rte, Val(matcher))` is generated: GeneratedCode/Registry/Lookups.jl.
+@inline static_findfirst_match(rte::RegistryTypeEntry, val) = @inline find_matching_index(@inline(match_by(val)), getalgos(rte), 1)
 
+# One recursion over the entry's algorithms (a tuple of different types), each compared with `match`: unrolled, so each
+# step is typed and a match decided by types is folded while compiling.
+@inline find_matching_index(m, ::Tuple{}, i::Int) = nothing
+@inline function find_matching_index(m, algos::Tuple, i::Int)
+    @inline(match(m, first(algos))) && return i
+    return @inline find_matching_index(m, Base.tail(algos), i + 1)
+end
+
+# The runtime lookup table: kept for now, although no lookup uses it any more (`static_findfirst_match` covers values
+# found at run time). The registry still builds the table (`LookupKey`, `write_lookup_table_expr`).
 """The position of `val` in the entry, found through the runtime lookup table (`LookupKey`), or `nothing`."""
 dynamic_lookup(rte::RegistryTypeEntry{T}, val) where {T} = get(getdynamiclookup(rte), LookupKey(val), nothing)
 
-"""The position of `val` in the entry, or `nothing`: by its matcher when `isstaticallyfindable`, else by lookup."""
-@inline findfirst_match(rte::RegistryTypeEntry, val) = isstaticallyfindable(val) ? static_findfirst_match(rte, val) : dynamic_lookup(rte, val)
+"""The position of `val` in the entry, or `nothing` (`static_findfirst_match`)."""
+@inline findfirst_match(rte::RegistryTypeEntry, val) = static_findfirst_match(rte, val)
 
 """`te[algo]`: the algorithm `algo` as the entry stores it (keyed); errors when it is not there."""
-function Base.getindex(te::RegistryTypeEntry, obj)
-    if isstaticallyfindable(obj)
-        return static_get(te, obj)
-    end
-    algo = dynamic_get(te, obj)
-    isnothing(algo) && throw_not_in_entry(te, obj)
-    return algo
-end
+Base.getindex(te::RegistryTypeEntry, obj) = static_get(te, obj)
 
 """`te[idx]`: the `idx`-th algorithm of the entry."""
 function Base.getindex(te::RegistryTypeEntry, idx::Int)

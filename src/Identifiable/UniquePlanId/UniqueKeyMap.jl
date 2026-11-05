@@ -30,7 +30,7 @@ Base.@nospecializeinfer function unique_key_map(@nospecialize(reg))
     for algo in all_algos(reg)
         algo isa IdentifiableAlgo || continue
         m = getfield(algo, :matcher)
-        m isa UniquePlanId && plan_number(m) isa Int && push!(pairs, plan_number(m) => origin(m))
+        is_numbered_unique_id(m) && push!(pairs, plan_number(m) => origin(m))
     end
     isempty(pairs) && return nothing
     sort!(pairs; by = first)
@@ -44,7 +44,7 @@ The handle the user holds as the plan numbered it: `UniquePlanId{uuid}` becomes 
 map, decided while compiling. Any other value, a handle the map does not have, or no map (`Nothing`), as it is.
 """
 @generated function numbered_handle(obj::IdentifiableAlgo{F, Id, VA, AN, Key, Mt}, ::Type{UniqueKeyMap{P}}) where {F, Id, VA, AN, Key, Mt, P}
-    Id <: UniquePlanId && plan_number(Id) isa UUID || return :(obj)
+    is_held_unique_id(Id) || return :(obj)
     k = nothing
     for pair in P
         pair.second == plan_number(Id) && (k = pair.first; break)
@@ -61,7 +61,7 @@ end
 What `number_by_keymap_dynamic` does, decided while compiling: the numbered value is built by code generated for
 `typeof(x)` and the map's type, so it is inferred and costs no walk at run time. Used by the typed handles
 (`run(ip; lifetime)`, `run(p; lifetime)`), whose plan's type has the map. Compiled once per value type and map, as the handle's
-own methods are. Where the type alone does not say how to number (an id stripped or numbered elsewhere, whose uuid is
+own methods are. Where the type alone does not say how to number (an id dynamic or numbered elsewhere, whose uuid is
 only in the value; a holder whose type parameters are worked out from its fields, `list_field_derived_params`; a
 field of an abstract type), it numbers at run time (`number_by_keymap_dynamic`), not inferred. With no map (`nothing`)
 `x` as it is.
@@ -83,9 +83,8 @@ function _build_numbered_expr(@nospecialize(T), ex, mode::_MapIds, cache::IdDict
     T isa DataType || return nothing
     _may_hold_unique_ids(T, cache) || return (ex, T)
     if T <: UniquePlanId
-        N = plan_number(T)
-        N isa UUID || return nothing
-        k = get(mode.numbers, N, nothing)
+        is_held_unique_id(T) || return nothing
+        k = get(mode.numbers, plan_number(T), nothing)
         isnothing(k) && return (ex, T)
         return (:(UniquePlanId{$k}(origin($ex))), UniquePlanId{k})
     end

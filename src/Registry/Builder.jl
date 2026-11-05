@@ -124,11 +124,13 @@ end
     find_same(entry, algo) -> index or nothing
 
 The index of the algorithm in `entry` that `algo` is the same algorithm as, or `nothing`: by `match`, the two matchers
-compared with `==` (an id that carries data, `UniquePlanId`, by its uuid). In the walk on values on the values, in the
-walk on types on the types (`GeneratedValue`s).
+compared with `==`. In the walk on values on the values, in the walk on types on the types (`GeneratedValue`s). A
+dynamic `UniquePlanId` (a plan not numbered by `resolve`) has the same type for every handle, so only the walk on values
+tells them apart (`NeedsValues`).
 """
 Base.@nospecializeinfer function find_same(entry::TypeEntryBuilder, @nospecialize(algo))
     algo isa GeneratedValue || return findfirst(other -> match(algo, other), entry.algos)
+    is_dynamic_unique_id(match_by(algo.valuetype)) && throw(NeedsValues())
     return findfirst(other -> match(algo.valuetype, read_type(other)), entry.algos)
 end
 

@@ -8,8 +8,8 @@ field 2, whose type is type parameter 2 (`getschedule`, Interface.jl). Every cha
 """
     setschedule(plan, schedule) -> plan
 
-`plan` with `schedule` in its schedule field (and its type as type parameter 2). Every id in `schedule` must be
-numbered already (taken from this plan), as a new `Unique` handle is numbered only when a plan is built.
+`plan` with `schedule` in its schedule field (and its type as type parameter 2). Every id in `schedule` must be in the
+plan's form already (taken from this plan), as a new `Unique` handle is stripped only when a plan is built.
 """
 Base.@nospecializeinfer function setschedule(@nospecialize(plan::AbstractPlan), @nospecialize(schedule))
     T = typeof(plan)

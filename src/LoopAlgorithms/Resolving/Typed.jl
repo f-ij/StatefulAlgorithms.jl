@@ -11,6 +11,7 @@ When an untyped step is changed (e.g. to compile less), its inferred twin here i
 =#
 
 # Inferred: returns the concrete resolved type of `la`, which a caller that knows the plan type gets at compile time.
+# `la` comes numbered (`number_unique_ids`, untyped), as `resolve` gives it to its steps.
 # One method per case: a method that calls itself with a growing type (plan -> `LoopAlgorithm{plan}`) is not inferred.
 @inline _resolve_plan_typed(fa::FA) where {FA<:FinalizedAlgorithm} =
     finalstep(_resolve_plan_typed(inneralgorithm(fa)), finalfunction(fa))

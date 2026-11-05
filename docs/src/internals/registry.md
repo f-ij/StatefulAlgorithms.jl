@@ -54,8 +54,8 @@ steps below 4.7–4.8 ms). So the uuid (`origin`) is data and never changes; the
 | # | `N` | Set by | When |
 |---|---|---|---|
 | 1 | the uuid | `Unique(f)` | the user makes the handle: a key known from its type |
-| 2 | `ValueId` | `strip_unique`; `DynamicUnique(f)` | a constructor or DSL block takes the handle; a DSL block makes its own `@state`: the same type for every handle |
-| 3 | `k` = 1, 2, ... | `number_unique_ids` | a plan is built: each new uuid gets the next number; a nested plan is renumbered by uuid |
+| 2 | `:dynamic` | `strip_unique`; `DynamicUnique(f)` | a constructor or DSL block takes the handle; a DSL block makes its own `@state`: the same type for every handle |
+| 3 | `k` = 1, 2, ... | `number_unique_ids` | a plan is resolved: each new uuid gets the next number |
 
 1. Every holder of an id keeps it as a value next to its type, so both rewrites (strip and number) reach it: a handle in
    its `matcher` field, a route in its endpoint fields, a `Var` in its `matcher` field. A `Var`'s type parameter is
@@ -77,7 +77,7 @@ steps below 4.7–4.8 ms). So the uuid (`origin`) is data and never changes; the
    gets the plan's registry back (`with_plan_registry`). SA's own code that needs a process's context without the map
    outside the loop reads `_getcontext_nokeymap(p)`.
 
-The matching and registry code ask a matcher only general questions (`matches_type`,
+The matching and registry code ask a matcher only general questions (`==`, `matches_type`,
 `lower_to_lookupkey`, `carries_data`); `UniquePlanId` answers them in `src/Identifiable/UniquePlanId/HookExtensions.jl`. A
 holder says which of its type parameters come from its fields with `list_field_derived_params`
 (`src/Identifiable/UniquePlanId/Hooks.jl`). A plan's schedule is changed only through `setschedule`
