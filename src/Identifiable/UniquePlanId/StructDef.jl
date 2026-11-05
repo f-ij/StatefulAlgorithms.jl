@@ -21,7 +21,7 @@ which three functions set as the handle moves:
 
 | `N` | Set by | When | The type then |
 |---|---|---|---|
-| the uuid (`origin`) | `Unique(f)` (`user_unique_id`) | the user makes the handle | is a key known from its type, as `SimpleId{uuid}` |
+| the uuid (`origin`) | `Unique(f)` | the user makes the handle | is a key known from its type, as `SimpleId{uuid}` |
 | `ValueId` | `strip_unique` | a constructor or DSL block takes the handle | is the same for every handle |
 | `k` = 1, 2, ... | `number_unique_ids` | a plan is built: each new `origin` gets the next number | is the same in every rebuild of the same code |
 
@@ -35,9 +35,6 @@ struct UniquePlanId{N} <: AbstractMatcher{N}
     origin::UUID
 end
 UniquePlanId(origin::UUID) = UniquePlanId{origin}(origin)
-
-"""The matcher of the handle the user holds, `UniquePlanId{u}(u)`, made without compiling its constructor."""
-Base.@nospecializeinfer user_unique_id(u::UUID) = new_instance(UniquePlanId{u}, u)
 
 """The `N` of a `UniquePlanId` (value or type): its uuid, `ValueId`, or its number in its plan."""
 plan_number(::Union{UniquePlanId{N}, Type{UniquePlanId{N}}}) where {N} = N

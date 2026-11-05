@@ -83,5 +83,5 @@ function Unique(f; customname = Symbol(), aliases...)
     if !isbits(f)
         f = deepcopy(f) # Mutable types match by identity
     end
-    identifiable_with_id(f, user_unique_id(uuid4()), VarAliases(;aliases...), customname, Symbol())
+    identifiable_with_id(f, UniquePlanId(uuid4()), VarAliases(;aliases...), customname, Symbol())
 end
