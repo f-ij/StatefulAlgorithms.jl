@@ -8,7 +8,7 @@ Initialization specs and runtime inputs solve different problems.
 
 `InitArgs(...)` is still accepted as a compatibility alias for `InitArgs(...)`.
 
-## Init and Override Specs
+## InitArgs and Override Specs
 
 `InitArgs` and `Override` target one algorithm or state. Use the same reference
 style you used when adding that target to the composition: the type, the saved

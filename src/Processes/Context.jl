@@ -53,7 +53,8 @@ function makecontext(p::AbstractProcess, inputs_overrides...; lifetime=nothing)
     lt = isnothing(lifetime) ? StatefulAlgorithms.lifetime(p) : lifetime
     _setup_from_stored_specs(p, inputs_overrides...; lifetime = lt)
 end
-"""Build a fresh context for a process with `setup`, from its plan, the specs it was built with and `inputs_overrides`."""
+"""Build a fresh context for a process, every `init` running, from its plan, its stored specs and `inputs_overrides`
+(merged over them), and store it as the process's context. The stored specs are not changed (`init!` does that)."""
 function makecontext!(p::AbstractProcess, inputs_overrides...; lifetime=nothing)
     c = makecontext(p, inputs_overrides...; lifetime)
     setcontext!(p, c)

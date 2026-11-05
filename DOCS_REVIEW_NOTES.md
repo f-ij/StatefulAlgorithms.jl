@@ -154,7 +154,7 @@ than user-facing pages.
 1. Add a plain-language introduction and glossary to the docs index.
 2. Expand README enough that it stands alone.
 3. Make the main user pages explain `context`, `subcontext`, `view`, `Route`,
-   `Share`, `Input`, `Override`, `Var`, and `Unique` in plain terms before
+   `Share`, `InitArgs`, `Override`, `Var`, and `Unique` in plain terms before
    using them heavily.
 4. Replace or explain internal jargon in user pages.
 5. Verify examples and API claims against source before changing behavior

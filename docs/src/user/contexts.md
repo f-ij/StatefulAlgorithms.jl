@@ -74,7 +74,7 @@ From a context, index by:
 - symbol key: `ctx[:Fib_1]`
 - registered value/type: `ctx[Fib]`, `ctx[Fib()]`, `ctx[my_unique_fib]`
 
-Object and type lookup use the same identity rules as `Input`, `Override`,
+Object and type lookup use the same identity rules as `InitArgs`, `Override`,
 `Route`, and `Share`. See [Referencing Algorithms](@ref referencing_algorithms_user).
 
 Related symbol-based lookup also works on resolved loop algorithms and registries:

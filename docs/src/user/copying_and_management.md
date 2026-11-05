@@ -19,8 +19,8 @@ threads, see [Threaded Process Managers](@ref threaded_process_managers_user).
 buffers, or data views. A raw `deepcopy` of the live context can therefore copy the wrong
 thing or preserve sharing that should be rebuilt per process.
 
-The copying helpers work from the process's plan and the specs it was built with, and set up
-a fresh context for each copy with `setup`:
+The copying helpers work from the process's plan and its stored specs (those it was built with,
+merged with later `init!` calls), and set up a fresh context for each copy:
 
 - take the process's resolved plan and its `InitArgs`/`Override` specs (`getspecs(p)`),
 - replace selected inputs and overrides,

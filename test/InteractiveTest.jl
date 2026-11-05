@@ -33,7 +33,7 @@ using StatefulAlgorithms
     @test stepped_context.target.value[] == 11.0
     @test stepped_context.target.seen == 12.0
 
-    # A process keeps the specs it was built with and sets up from them again.
+    # A process keeps its specs (construction and later `init!` calls) and sets up from them again.
     process = Process(algo, Override(:target; value = 3.0), Interactive(:target, :value); repeats = 1)
     replayed = StatefulAlgorithms.makecontext(process)
     @test replayed.target.value isa InteractiveVar{Float64}

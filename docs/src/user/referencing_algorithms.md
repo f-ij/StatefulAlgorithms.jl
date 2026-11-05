@@ -67,7 +67,7 @@ algo = CompositeAlgorithm(
 
 ## Common Mistake
 
-Do not create a new object in `Route`/`Share`/`Input`/`Override` unless that exact object was inserted in the composition.
+Do not create a new object in `Route`/`Share`/`InitArgs`/`Override` unless that exact object was inserted in the composition.
 
 Some immutable objects can match by equal value, but relying on that makes code
 harder to read. Reusing the original reference is the clearest rule.
