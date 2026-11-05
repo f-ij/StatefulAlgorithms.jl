@@ -114,6 +114,44 @@ function matcher_sckey(reg::NameSpaceRegistry, ::Type{M}, object, role::String) 
 end
 matcher_sckey(reg::NameSpaceRegistry, match, object, role::String) = _scref_not_found_error(reg, object, role)
 
+"""
+    dynamic_resolve_scref(reg, match, object, role) -> SCKey
+
+`resolve_scref` on values, for `resolve`: the same order, with the registry walked by the lookups on values
+(`dynamic_findkey`, `dynamic_findfirst_algotype`, `dynamic_findfirst_matcher_type`). Compiled once, not once per
+registry and matcher.
+"""
+Base.@nospecializeinfer function dynamic_resolve_scref(@nospecialize(reg::NameSpaceRegistry), @nospecialize(match), @nospecialize(object), role::String)
+    match isa Symbol && return match
+    match isa Type || throw(MethodError(resolve_scref, (reg, match, object, role)))
+    # A type SCRef with a `TypeMatcher` is found by the matcher alone (the `object::Type` method of `resolve_scref`).
+    if !(object isa Type && match <: TypeMatcher)
+        key = _dynamic_object_sckey(reg, object)
+        isnothing(key) || return key
+    end
+    if match <: TypeMatcher
+        found = dynamic_findfirst_algotype(_typematcher_target(match), reg)
+        isnothing(found) && _scref_not_found_error(reg, match, role)
+        return getkey(found)
+    elseif match <: AbstractMatcher
+        found = dynamic_findfirst_matcher_type(match, reg)
+        isnothing(found) && _scref_not_found_error(reg, match, role)
+        return getkey(found)
+    end
+    _scref_not_found_error(reg, object, role)
+end
+
+# `object_sckey` on values.
+Base.@nospecializeinfer function _dynamic_object_sckey(@nospecialize(reg::NameSpaceRegistry), @nospecialize(object))
+    (isnothing(object) || object isa AbstractMatcher) && return nothing
+    if object isa AbstractIdentifiableAlgo
+        key = getkey(object)
+        return isnothing(key) || key === Symbol() ? dynamic_findkey(reg, object) : key
+    end
+    fixed = fixed_namespace(object)
+    return isnothing(fixed) ? dynamic_findkey(reg, object) : fixed
+end
+
 """The stored SCRef under a new registry, when resolved child wiring is inherited."""
 @inline update_scref(reg::NameSpaceRegistry, match::Symbol, ::Nothing) = match
 @inline update_scref(reg::NameSpaceRegistry, match, ::Nothing) = reg[resolve_scref(reg, match, nothing, "endpoint")]

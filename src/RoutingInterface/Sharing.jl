@@ -46,6 +46,24 @@ function resolve_wiring_pairs(reg::NameSpaceRegistry, s::S) where {S<:Share}
     return (target_ns => forward, source_ns => backward)
 end
 
+"""
+    dynamic_resolve_wiring_pairs(reg, s::Share) -> ((target_ns, resolved share), ...)
+
+`resolve_wiring_pairs(reg, s)` on values, for `resolve`'s untyped step 3: as `dynamic_resolve_wiring` for a route, one
+resolved share per direction. Compiled once.
+"""
+Base.@nospecializeinfer function dynamic_resolve_wiring_pairs(@nospecialize(reg::NameSpaceRegistry), @nospecialize(s::Share))
+    source_ns = dynamic_resolve_scref(reg, first_match_by(s), get_firstalgo(s), "first share endpoint")
+    target_ns = dynamic_resolve_scref(reg, second_match_by(s), get_secondalgo(s), "second share endpoint")
+    _assert_resolved_endpoint(source_ns, "Share first namespace")
+    _assert_resolved_endpoint(target_ns, "Share second namespace")
+    directional = is_directional(s)
+    forward = new_instance(Core.apply_type(Share, source_ns, target_ns, directional, Nothing, Nothing), nothing, nothing)
+    directional && return ((target_ns, forward),)
+    backward = new_instance(Core.apply_type(Share, target_ns, source_ns, directional, Nothing, Nothing), nothing, nothing)
+    return ((target_ns, forward), (source_ns, backward))
+end
+
 """Update unresolved share endpoints against a parent registry."""
 function update_keys(s::S, reg::NameSpaceRegistry) where {S<:Share}
     isresolved(s) && return s

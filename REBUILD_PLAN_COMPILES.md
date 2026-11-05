@@ -188,8 +188,8 @@ Status: `open`, `done <new hash>`, `skip`, `squashed into #n`, `asked` (waiting 
 | 75 | `4933556b` | A handle's match_by and id compile once; the registry's multipliers are collected untyped |  |  | done `3d01d2f3` |
 | 76 | `40964c41` | Construction compiles nothing per plan type: untyped wrapping, splitting, locals; structs made with new_instance |  |  | done `49f581ea` |
 | 77 | `9aff26b8` | Constructor keeps its kept intervals without a filtered comprehension |  |  | done `68ddc55c` |
-| 78 | `b3bfa382` | Resolve compiles once: untyped entries, step 3 wiring with vectors, callable names from types as values |  | Fitted to main's `LoopAlgorithm{Plan, O, R, id}` (no context/inits/overrides) and its `check_redirect_cycles`; Functions.jl keeps the cache-free `_field_parameter_index` (#69's cache skipped, #80's end state). Full suite run. | done |
-| 79 | `88d2bf22` | Resolve finds route and share endpoints on values: dynamic_resolve_scref, registry lookups with dynamic_match |  |  | open |
+| 78 | `b3bfa382` | Resolve compiles once: untyped entries, step 3 wiring with vectors, callable names from types as values |  | Fitted to main's `LoopAlgorithm{Plan, O, R, id}` (no context/inits/overrides) and its `check_redirect_cycles`; Functions.jl keeps the cache-free `_field_parameter_index` (#69's cache skipped, #80's end state). Full suite run. | done `36bd0268` |
+| 79 | `88d2bf22` | Resolve finds route and share endpoints on values: dynamic_resolve_scref, registry lookups with dynamic_match |  |  | done |
 | 80 | `4ace8b5b` | No caches: the id walk and _field_parameter_index work out their type facts per call |  |  | open |
 | 81 | `865a21ca` | Plain loops instead of closures: parse_la_input's options check, the typed scope generators |  |  | open |
 | 82 | `e2bbfd83` | The UniqueKeyMap lives only in the registry: processes hold no map of their own | `Copy.jl`, `InlineProcess.jl`, `Process.jl`, `ProcessInteraction.jl` |  | open |

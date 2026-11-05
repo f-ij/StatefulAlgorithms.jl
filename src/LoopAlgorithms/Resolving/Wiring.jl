@@ -50,7 +50,7 @@ Base.@nospecializeinfer function _resolve_wiring(@nospecialize(la::AbstractPlan)
         context_partition(Val(target_ns)) isa NamespacePartition && !(target_ns in owners) && push!(owners, target_ns)
         # Wires attached to this child (`WithWiring`) point at the child itself until now;
         # give them its namespace so they resolve like any route into it.
-        bucket = _retarget_owner_routes(getfield(old_children, i), target_ns)
+        bucket = _retarget_owner_routes_untyped(getfield(old_children, i), target_ns)
 
         # Concrete children receive a single resolved `Wiring`: inherited global
         # wiring for their namespace, occluded by child-scoped routes.
@@ -111,8 +111,9 @@ function _merge_global_wiring(left::NamedTuple, right::NamedTuple)
 end
 
 """
-`_resolve_and_group_wiring` compiled once, for step 3: the resolved routes and shares are gathered per target namespace
-in vectors, and made into one named tuple at the end. Same keys in the same order: the shares' targets, then the
+`_resolve_and_group_wiring` compiled once, for step 3: the routes and shares are resolved on values
+(`dynamic_resolve_wiring`, `dynamic_resolve_wiring_pairs`), gathered per target namespace in vectors, and made into
+one named tuple at the end. Same keys in the same order: the shares' targets, then the
 routes' new ones.
 """
 Base.@nospecializeinfer function _group_wiring_untyped(@nospecialize(registry::NameSpaceRegistry), @nospecialize(wiring::Wiring))
@@ -121,16 +122,16 @@ Base.@nospecializeinfer function _group_wiring_untyped(@nospecialize(registry::N
     shares = Vector{Any}[]
     wiring_shares = getfield(wiring, :shares)
     for i in 1:nfields(wiring_shares)
-        pairs = resolve_wiring_pairs(registry, getfield(wiring_shares, i))
+        pairs = dynamic_resolve_wiring_pairs(registry, getfield(wiring_shares, i))
         for k in 1:nfields(pairs)
-            pair = getfield(pairs, k)
-            push!(shares[_target_index!(targets, routes, shares, getfield(pair, :first))], getfield(pair, :second))
+            target, share = getfield(pairs, k)
+            push!(shares[_target_index!(targets, routes, shares, target)], share)
         end
     end
     wiring_routes = getfield(wiring, :routes)
     for i in 1:nfields(wiring_routes)
-        pair = resolve_wiring(registry, getfield(wiring_routes, i))
-        push!(routes[_target_index!(targets, routes, shares, getfield(pair, :first))], getfield(pair, :second))
+        target, route = dynamic_resolve_wiring(registry, getfield(wiring_routes, i))
+        push!(routes[_target_index!(targets, routes, shares, target)], route)
     end
     values = Any[_new_wiring(Tuple(routes[k]), Tuple(shares[k])) for k in eachindex(targets)]
     return new_named_tuple(targets, values)
@@ -181,3 +182,20 @@ end
 # `get(grouped, target, Wiring())` for a named tuple of wiring, compiled once.
 Base.@nospecializeinfer _get_wiring(@nospecialize(grouped::NamedTuple), target::Symbol) =
     _haskey_untyped(grouped, target) ? getfield(grouped, target) : Wiring()
+
+"""`_retarget_owner_routes` compiled once, for step 3: each route that belongs to the child made with `new_instance`."""
+Base.@nospecializeinfer function _retarget_owner_routes_untyped(@nospecialize(bucket::Wiring), target_ns::Symbol)
+    old = getfield(bucket, :routes)
+    nfields(old) == 0 && return bucket
+    new = Vector{Any}(undef, nfields(old))
+    for i in eachindex(new)
+        r = getfield(old, i)
+        if target_match_by(r) === OwnerMatcher
+            source = get_source_ref(r)
+            R = Core.apply_type(Route, source_match_by(r), target_ns, gettransform(r), getreverse_transform(r), source_fieldnames(r), getaliases(r), typeof(source), Nothing)
+            r = new_instance(R, source, nothing)
+        end
+        new[i] = r
+    end
+    return _new_wiring(Tuple(new), getfield(bucket, :shares))
+end
