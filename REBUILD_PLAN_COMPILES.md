@@ -22,6 +22,13 @@ On the remote (2026-11-05): the old tip is pushed as `origin/refactor/plan-compi
 3. `BRANCHES.md`: the refactor stack. `refactor/monolithic-resolve`, `exp/replace-ids-cache` and `exp/resolve-cache`
    still sit on the old branch. They get rebuilt after this one, not now.
 
+## 1b. Skip what the old branch removes again
+
+The owner's rule (2026-11-05): do not port anything the old branch introduces and later deletes or replaces;
+`OLD_BRANCH_REMOVED_LATER.md` lists those items per commit. Check it before porting each row. Also: the
+`UniqueKeyMap` never lives in a process (no `keymap`/`user_context` fields, no typed `K`); and no test is weakened to
+make a port pass.
+
 ## 2. Per commit
 
 For every row of the table in §5, in order:
