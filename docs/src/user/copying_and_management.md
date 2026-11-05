@@ -23,8 +23,8 @@ The copying helpers work from the process's plan and its stored specs (those it 
 merged with later `init!` calls), and set up a fresh context for each copy:
 
 - take the process's resolved plan and its `InitArgs`/`Override` specs (`getspecs(p)`),
-- replace selected inputs and overrides,
-- set up a fresh context for each copy.
+- set up a fresh context for the copy from them,
+- other values for the copy are a separate step: `init!(copy, InitArgs(...), Override(...))`.
 
 ## Copy APIs
 
@@ -44,10 +44,7 @@ template = Process(
     repeats = 10,
 )
 
-p = copyprocess(
-    template,
-    InitArgs(MyAlgo; start = 100, buffer = Int[]),
-)
+p = init!(copyprocess(template), InitArgs(MyAlgo; start = 100, buffer = Int[]))
 
 run(p)
 wait(p)

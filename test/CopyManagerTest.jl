@@ -19,14 +19,9 @@ end
     sink_a = Int[]
     sink_b = Int[]
 
-    p_a = copyprocess(
-        template,
-        InitArgs(CopyManagedAccumulator, :start => 10, :sink => sink_a),
-    )
-    p_b = copyprocess(
-        template,
-        InitArgs(CopyManagedAccumulator, :start => 20, :sink => sink_b),
-    )
+    p_a = init!(copyprocess(template), InitArgs(CopyManagedAccumulator, :start => 10, :sink => sink_a))
+    p_b = init!(copyprocess(template), InitArgs(CopyManagedAccumulator, :start => 20, :sink => sink_b))
+    @test_throws MethodError copyprocess(template, InitArgs(CopyManagedAccumulator, :start => 30))
 
     run(p_a)
     run(p_b)

@@ -20,15 +20,15 @@ The `Override` and `Interactive` specs `p`'s context is set up from.
 @inline copyoverrides(p::Process) = (filter_by_type(Override, getspecs(p))..., filter_by_type(Interactive, getspecs(p))...)
 
 """
-    copyprocess(p::Process, InitArgs(...), Override(...); kwargs...)
+    copyprocess(p::Process; lifetime, timeout, context) -> Process
 
-A new process with `p`'s plan, set up from `p`'s stored specs and the new ones (later specs win per target). With
-`context`, the new process starts from it and keeps `p`'s specs; new specs are then an error, as for `Process`. A
-process with another plan is `copyprocess(plan, specs...)`: `p`'s specs are keyed by its own plan's registry.
+A new process with `p`'s plan and stored specs, set up from them (every `init` runs). It takes no specs: other values
+for the copy are a separate step, `init!(q, InitArgs(...), Override(...))` (or with `Only(...)` for some `init`). With
+`context`, the new process starts from it instead and keeps `p`'s specs. A process with another plan is
+`copyprocess(plan, specs...)`: `p`'s specs are keyed by its own plan's registry.
 """
-function copyprocess(p::Process, specs...; lifetime = StatefulAlgorithms.getlifetime(p), timeout = p.timeout, context = nothing, kwargs...)
-    isnothing(context) && return Process(getalgo(p), getspecs(p)..., specs...; lifetime, timeout)
-    isempty(specs) || error("Pass either an initialized `context` or init/override specs to `copyprocess`, not both.")
+function copyprocess(p::Process; lifetime = StatefulAlgorithms.getlifetime(p), timeout = p.timeout, context = nothing, kwargs...)
+    isnothing(context) && return Process(getalgo(p), getspecs(p)...; lifetime, timeout)
     q = Process(getalgo(p); context, lifetime, timeout)
     q.specs = getspecs(p)
     return q

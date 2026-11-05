@@ -733,10 +733,7 @@ process_basics. Cost: +0.3 s precompile, +2.5 MB.
     )
     copyinputs(base_process)
     copyoverrides(base_process)
-    copied_process = copyprocess(
-        base_process,
-        InitArgs(_ProcessPrecompileScaler, :factor => 6);
-    )
+    copied_process = init!(copyprocess(base_process), InitArgs(_ProcessPrecompileScaler, :factor => 6))
     run(copied_process)
     wait(copied_process)
     close(copied_process)
