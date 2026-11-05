@@ -154,7 +154,11 @@ Base.@nospecializeinfer function parse_la_input(laType::Type{<:AbstractPlan}, @n
         end
     end
 
-    all(x -> x isa Union{AbstractOption, AbstractWiring} || x isa Type{<:Union{AbstractOption, AbstractWiring}}, rest) || construction_assert_error("All arguments after the AlgoStates must be options or wiring, but got: ", Tuple(rest))
+    # A loop, not `all` with a closure: the closure's call would compile for every option type (a route per handle).
+    for x in rest
+        x isa Union{AbstractOption, AbstractWiring} || x isa Type{<:Union{AbstractOption, AbstractWiring}} ||
+            construction_assert_error("All arguments after the AlgoStates must be options or wiring, but got: ", Tuple(rest))
+    end
     return LoopAlgorithm(laType, funcs, Tuple(pstates), Tuple(Any[collected_options..., rest...]), schedule)
 end
 
