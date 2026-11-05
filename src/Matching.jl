@@ -87,6 +87,15 @@ function Base.:(==)(sm1::ValMatcher{V1}, sm2::ValMatcher{V2}) where {V1,V2}
 end
 
 """
+    KeyMatcher(key)
+
+The subcontext with SCKey `key` (`:Sensor_1`, `:_captured_returns`), as a matcher: the key in the type, no bytes. What a
+`Var` of a context key holds; it names a subcontext directly, so it is never looked up in a registry.
+"""
+struct KeyMatcher{key} <: AbstractMatcher{key} end
+KeyMatcher(key::Symbol) = KeyMatcher{key}()
+
+"""
     MatchAnyOf(matchers::Tuple)
 
 Matches what any of `matchers` matches, held as data (a `MatchAny` holds them in its type). Used for a state merged

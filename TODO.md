@@ -414,6 +414,19 @@ Restored 2026-10-09 from `fix/type-stability` (`e1dcbbf`, now tag `archive/type-
   4. **`keeps_matcher_data(T)`** (Identifiable/StructDef.jl) and **`carries_data(m)`** (Matching.jl) say the same thing for a type and a value; express the first through the second.
   5. **`Package` keeps its intervals in its type, as values** (`intervals(comp)`, src/Packaging/Constructor.jl): a `RunIf` on a `Var` of a `Unique` handle puts the uuid in the package's type, and such a package cannot be numbered into another plan. See the `Package` item above.
   6. ~~**`flatten_comp_funcs_typed`** (src/LoopAlgorithms/Fusing/Fusing.jl, unused) still reads the nested schedule from the type~~ Both read the schedule field now (`refactor/schedule-field`).
+  7. **Holders that copy a field's matcher into a separate type parameter** (`list_field_derived_params`, the hook in
+     src/Identifiable/UniquePlanId/Hooks.jl, exists only to keep that copy in step when the uuid rewrite changes the
+     field). `Var` holds only its matcher (`Var{M, name, transform}`, `matcher::M`, a context key as `KeyMatcher{k}`) on
+     `exp/unique-plan-id-cleanup` (2026-10-27); the others still copy. Give each the same shape, then remove the hook,
+     `_derive_params!` and `scref_match`'s use for it:
+     1. `Route`, `Redirect` (`Smatch`/`Tmatch` from `source_ref`/`target_ref`) and `Share` (`FirstMatch`/`SecondMatch`
+        from `a1`/`a2`): hold the endpoint's matcher instead of the object, a `KeyMatcher` once resolved instead of
+        `nothing`. Check first: `getkey(reg, object)` and the matcher lookup (`matcher_sckey`) give the same key; no
+        handle gets its key after the route is built (`Autokey`); the DSL reads of endpoint objects
+        (`fixed_namespace(owner)`, src/CompositeDSL/StateAndRoutes.jl:159, :258).
+     2. `IdentifiableAlgo` (`Id` from `matcher`): always hold the matcher, `Id` = its type. `Id` is parameter 2 of
+        `AbstractIdentifiableAlgo` (28 signatures) and is today an instance for ids without data, a type for `Unique`
+        ones; `id(x)` and the matching code change with it.
 
 - [ ] Hot loop, memory traffic per step: the loop reads and writes `Process.loopidx` and `Process.tickidx` on every step (`inc!`/`tick!` in `src/Loops.jl`) and reads `shouldrun` atomically (`src/Processes/Process/Session.jl`). Keep both counters in local variables during the loop and write them to the `Process` every N steps (the interface reads `tickidx` about 30 times a second), and check `shouldrun` every N steps too; flush the counters when the loop exits. The atomic `shouldrun` read is suspected to cost a few percent on the InteractiveIsing 3D graph example; measure it with the endless `createProcess` test (5 alternating rounds) once main is back to the speed of the June version.
 - [ ] **Hot loop, no GC safepoint: a running `Process` can freeze the whole Julia process (2026-11-03, owner will look later).** A loop whose steps do not allocate never reaches a GC safepoint (Julia puts none on loop back-edges; the atomic `shouldrun` read is not one). When another thread allocates enough to start a collection while the loop runs, the collection waits for every thread, so that thread and then everything else blocks until the loop pauses or ends. Seen while testing `setcontext!`: calling `makecontext(p, ...)` on the main thread while an `Indefinite` `Process` ran hung the test for good, and a time-bounded polling loop never returned. Any user code that allocates while a process runs (a GUI, InteractiveIsing's windows) is exposed. The same register-only loop is why `getlidx(p)` reads 1 during a run (the counter is written only on a pause or at the end). Options to measure: a `GC.safepoint()` every N steps or every repeat, next to `session_breakcondition`; its cost on the InteractiveIsing 3D example must be measured.
