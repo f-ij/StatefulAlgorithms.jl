@@ -19,7 +19,7 @@ default call into the loop (`run_session_loop`) is compiled once. As a `Val`, th
     _set_inline_run_context!(p, context)
     runtime_inputs = _inline_runtime_inputs(algo, inputs_overrides, (; kwargs...))
     # A lifetime from outside the plan gets the plan's numbers (`number_by_keymap`), at run time on every call.
-    run_lifetime = something(parse_lifetime(isnothing(lifetime) ? lifetime : number_by_keymap(lifetime, getkeymap(getalgo(p))), repeats), StatefulAlgorithms.getlifetime(p))
+    run_lifetime = something(parse_lifetime(isnothing(lifetime) ? lifetime : number_by_keymap(lifetime, getfield(getregistry(getalgo(p)), :keymap)), repeats), StatefulAlgorithms.getlifetime(p))
     return @inline _run_inline!(p, run_lifetime, runtime_inputs, inlined)
 end
 
@@ -27,7 +27,7 @@ end
     algo = getalgo(p)
     _set_inline_run_context!(p, context)
     # A lifetime from outside the plan gets the plan's numbers (`number_by_keymap`), at run time on every call.
-    run_lifetime = something(parse_lifetime(isnothing(lifetime) ? lifetime : number_by_keymap(lifetime, getkeymap(getalgo(p))), repeats), StatefulAlgorithms.getlifetime(p))
+    run_lifetime = something(parse_lifetime(isnothing(lifetime) ? lifetime : number_by_keymap(lifetime, getfield(getregistry(getalgo(p)), :keymap)), repeats), StatefulAlgorithms.getlifetime(p))
     runtime_inputs = _inline_runtime_inputs(algo, inputs_overrides, (; kwargs...))
     return @inline _run_inline!(p, run_lifetime, runtime_inputs, Val(false))
 end

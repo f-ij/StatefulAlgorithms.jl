@@ -23,7 +23,7 @@ end
 # handles (`number_by_keymap`) before anything typed on it is called.
 Base.@nospecializeinfer function _build_process(@nospecialize(func), @nospecialize(inputs_overrides::Tuple), @nospecialize(context), @nospecialize(lifetime), @nospecialize(kwargs::NamedTuple))
     resolved = resolve(parse_plan(func))
-    lifetime = number_by_keymap(lifetime, getkeymap(resolved))
+    lifetime = number_by_keymap_dynamic(lifetime, getkeymap(resolved))
     algo, context, specs, lifetime, timeout = _prepare_process(resolved, inputs_overrides...; context, lifetime, kwargs...)
     return _construct_process(algo, context, specs, lifetime, timeout)
 end

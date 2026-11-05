@@ -15,7 +15,7 @@ pause kept, with the lifetime it started with. A new run's lifetime is `repeats`
 function Base.run(p::Process, inputs_and_overrides...; repeats = nothing, lifetime = nothing, kwargs...)
     @assert isidle(p) "Process is already in use"
     # A lifetime from outside the plan gets the plan's numbers for its `Unique` handles (`number_by_keymap`).
-    lt = parse_lifetime(isnothing(lifetime) ? lifetime : number_by_keymap(lifetime, getkeymap(getalgo(p))), repeats)
+    lt = parse_lifetime(isnothing(lifetime) ? lifetime : number_by_keymap(lifetime, getfield(getregistry(getalgo(p)), :keymap)), repeats)
 
     if ispaused(p)
         isempty(inputs_and_overrides) || error("Cannot pass init/override specs while resuming a paused Process.")

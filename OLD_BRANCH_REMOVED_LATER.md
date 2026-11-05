@@ -15,8 +15,8 @@ These came in with #1-#23 and are, or will be, removed by a later row:
 | `HeldRegistry`, `with_held_ids`, `strip_held_ids`, `_KEY_MAPS`/`cached_key_map` | #1 | #14 | gone since #14 |
 | `_var_match` | #1 | #4 | gone since #4 |
 | `strip_uniques`, `user_unique_id` | #1 | #6, #21 | gone |
-| `Process.keymap`, `InlineProcess.keymap`, `TimedProcess.keymap` (fields) | #14 | #82 | to remove: the map lives only in the plan's registry (owner, 2026-11-05) |
-| `user_context` fields, `set_user_context!` | #17 | #82 | to remove, as above |
+| `Process.keymap`, `InlineProcess.keymap`, `TimedProcess.keymap` (fields) | #14 | #82 | removed in `f808cc8d`: the map lives only in registries |
+| `user_context` fields, `set_user_context!` | #17 | #82 | removed in `f808cc8d` |
 | `ValueId` | #4 | #67 | still in; goes with #67 |
 | `is_found_by_data` (hook) | #4 | #41 | still in; goes with #41 |
 | `_is_merged_id`, `is_given_id` | #6, #4 | #48 | still in; go with #48 |

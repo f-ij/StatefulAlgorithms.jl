@@ -20,7 +20,7 @@ end
 # Untyped, as `_build_process`: a lifetime from outside the plan gets the plan's numbers (`number_by_keymap`) first.
 Base.@nospecializeinfer function _build_inline_process(@nospecialize(func), @nospecialize(inputs_overrides::Tuple), @nospecialize(context), @nospecialize(lifetime), @nospecialize(kwargs::NamedTuple))
     resolved = resolve(parse_plan(func))
-    lifetime = number_by_keymap(lifetime, getkeymap(resolved))
+    lifetime = number_by_keymap_dynamic(lifetime, getkeymap(resolved))
     algo, prepared_context, lifetime = _prepare_inline_process(resolved, inputs_overrides...; context, lifetime, kwargs...)
     return _construct_inline_process(algo, prepared_context, _stored_specs(algo, inputs_overrides), lifetime)
 end
