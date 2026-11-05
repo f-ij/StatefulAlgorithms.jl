@@ -157,8 +157,8 @@ Status: `open`, `done <new hash>`, `skip`, `squashed into #n`, `asked` (waiting 
 | 44 | `0b19557a` | TODO (urgent): merge semantics, which states may become one and whether the registry merge should exist |  | docs/TODO only | done `1eb2cff3` |
 | 45 | `c7957f13` | DSL: a block's own @state is its first state; no id check |  |  | done `df2db49f` |
 | 46 | `7b2c5351` | DynamicUnique(f): a Unique with its uuid in the value only, made directly |  |  | done `6bb5a176` |
-| 47 | `9f8670e2` | TODO (merge semantics): is_given_id goes with the registry merge and name matching |  | docs/TODO only | done |
-| 48 | `81c72225` | States match by their id, never by name; the registry merges no states; is_given_id is gone |  |  | open |
+| 47 | `9f8670e2` | TODO (merge semantics): is_given_id goes with the registry merge and name matching |  | docs/TODO only | done `4c033d45` |
+| 48 | `81c72225` | States match by their id, never by name; the registry merges no states; is_given_id is gone |  | RegistryBuildTest: main's merge check on `RB_MERGE_PLAN` replaced by the old commit's clash/rename check, on `setup`. | done |
 | 49 | `0d739b0d` | TODO (merge semantics): record what is done |  | docs/TODO only | open |
 | 50 | `e3779590` | A handle is statically findable when its matcher is; a UniquePlanId only when numbered |  |  | open |
 | 51 | `064238e3` | The lifetime's condition and its read of the context are inlined where they are called | `Lifetimes/HookExtensions.jl` |  | open |

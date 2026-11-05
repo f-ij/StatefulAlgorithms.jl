@@ -126,7 +126,7 @@ end
 
 Whether algorithms of type `T` that are added under the same key are merged into one entry (with `merge`) instead of
 being the same entry. Default `false`.
-Extended by: `GeneralState` (`@state`), `RuntimeInputState`.
+Extended by: `RuntimeInputState` (`@input`).
 """
 registry_allowmerge(::Type) = false
 registry_allowmerge(obj) = registry_allowmerge(obj isa Type ? obj : typeof(obj))
@@ -147,12 +147,7 @@ end
     merges_into(E, N) -> Bool
 
 Whether an added algorithm of type `N`, found to be the same algorithm as the entry of type `E`, is merged into it:
-both are handles that may be merged (`handles_merge`), and they do not have the same given id (`Unique`): two handles
-with one id are the same entry already, also when their values differ (one may come with other diagnostic paths).
+both are handles that may be merged (`handles_merge`).
 """
-function merges_into(@nospecialize(E), @nospecialize(N))
-    E <: IdentifiableAlgo && N <: IdentifiableAlgo || return false
-    handles_merge(E, N) || return false
-    return !(is_given_id(id(E)) && id(E) == id(N))
-end
+merges_into(@nospecialize(E), @nospecialize(N)) = E <: IdentifiableAlgo && N <: IdentifiableAlgo && handles_merge(E, N)
 
