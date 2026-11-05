@@ -117,6 +117,10 @@ and put plan-compiles' map work into it:
 | `reset!(ip::InlineProcess, ...)` | `Base.reset(ip, specs...) -> InlineProcess` (fresh context from the merged specs, which it keeps; no `Only`); `reset!` stays for `Process` (export moved to `Process/Lifecycle.jl`) | `004b5121` |
 | `_initial_runtime_context` (plan-compiles calls it in `Context/ContextBundles.jl`, `Loops.jl`, `ProcessInteraction.jl`) | `LoopContext(plan, context)` (declared locals start there) + `with_inputs(lc, plan, inputs)` for a new run; a pause's runtime context is kept whole (`p.runtime_context`) | `2aba4abe`, `3b0c4969`, `e7cc9fea` |
 | `_resolve_input_target_key` (`src/InputInterface/Resolving.jl`) | `resolve(reg, ::InputInterface)` calls `static_findkey` / `getkey(get_by_matcher(...))` directly | `a489de1f` |
+| `_setup_from_stored_specs`, the `base` argument of `_merged_lifecycle_specs`, the `haskey` check for a `Symbol` target in `resolve(reg, ::InputInterface)` | `setup(getalgo(p), getspecs(p)..., specs...)`; stored specs go through `resolve` (rule 5.4) | `8cd5015f` |
+| `copyprocess(p, ...; func)` (another plan) | `Process(plan, specs...)`: `p`'s specs are keyed by its own plan's registry | `4f6ca2c7` |
+| specs in `copyprocess(p, specs...)` | `init!(copyprocess(p), specs...)` | `ccf28d91` |
+| `copyprocess(plan, specs...)` | `Process(plan, specs...)` | `de284be9` |
 | `_has_typed_state_context`, `_typed_state_context` | manager launches from `getcontext(worker)` | `11e859a7` |
 | `@DebugMode`, `@GenDebugMode`, `DEBUG_MODE`, `debug_mode()`, `Debugging.jl`, the Preferences dependency, `LocalPreferences.toml` | nothing | `1fc7b986` |
 | `shown_value` hook, `_shown_values` | nothing (it returned its argument everywhere) | `763e1a37` |
@@ -161,8 +165,10 @@ plan-compiles still has the old layout. Its changes to these files go into the n
    (`state_context`, `specs`, `getspecs(p)`). Stored specs are resolved once and merged per target. Resolving an
    already resolved spec (a `Symbol` target) does no lookup by name, it only drops the ref (`8cd5015f`), so stored
    specs go through `resolve` like any others: `reset(ip)` and `close`'s error path call
-   `setup(getalgo(p), getspecs(p)..., specs...)`, `init!`/`copyprocess` pass the stored specs in front of the new ones
-   (`_merged_lifecycle_specs`, no `base` argument). Never add a lookup by name on these paths: one in the precompile
+   `setup(getalgo(p), getspecs(p)..., specs...)`, `init!` passes the stored specs in front of the new ones
+   (`_merged_lifecycle_specs`, no `base` argument). `copyprocess(p; lifetime, timeout, context)` takes no specs: the
+   copy is set up from `p`'s stored specs, other values are `init!(copyprocess(p), ...)`; with `context` the copy
+   starts from those values, which must have the shape (type) of `p`'s context (`ccf28d91`, `de284be9`). Never add a lookup by name on these paths: one in the precompile
    workload makes the package image fail to load on Julia 1.13.1.
 5. **Init interface.** `InitArgs` (values) and `Only(...)` (which `init` runs) are separate. `init!(p, ...)` for
    `Process` and `TimedProcess`; `init(ip, ...)` for `InlineProcess` returns a new process (`const specs::S`, typed
@@ -192,6 +198,6 @@ plan-compiles still has the old layout. Its changes to these files go into the n
 5. Where the manager's per-job lifetime goes (TODO.md, "Per-job lifetimes in the manager").
 6. Runtime context as its own type, `ProcessContext` → `StateContext` (TODO.md, "Modes of operation").
 7. A spec with a `Symbol` target is no longer checked against the registry in `resolve` (was `@assert haskey(reg,
-   target)`), and neither are stored specs when `copyprocess` builds a process from another plan. Check the targets
+   target)`). Check the targets
    once at construction (`setup`, process construction, `_stored_specs`), without a lookup by name in the precompile
    workload (TODO.md, construction pipeline item 10, for `refactor/partitions`).
