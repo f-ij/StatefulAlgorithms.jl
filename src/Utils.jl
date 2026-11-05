@@ -27,32 +27,6 @@ From a tuple do a type stable filter by type
 end
 
 """
-Remove an optional parsed argument from the args tuple. If the parsed_idx is nothing, return the original args.
-"""
-function remove_optional_parsed_arg(args, parsed_idx)
-    isnothing(parsed_idx) ? args : args[setdiff(1:length(args), parsed_idx)]
-end
-
-"""
-From a function, filter args..., i.e. return first argument that evaluates to true
-    and return the rest of the args
-"""
-function parse_by_func(func, args...; default = nothing, error = true)
-    t_idx = findfirst(x -> func(x), args)
-    if isnothing(t_idx)
-        if error && isnothing(default)
-            error("Expected argument matching function $func not found in arguments: $args")
-        else
-            return default, args
-        end
-    else
-        el = args[t_idx]
-        args = remove_optional_parsed_arg(args, t_idx)
-        return el, args
-    end
-end
-
-"""
     merge_nested_namedtuples(base, updates)
 
 Merge two nested `NamedTuple`s by field name, assuming at most two layers.

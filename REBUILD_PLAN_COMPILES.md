@@ -178,9 +178,9 @@ Status: `open`, `done <new hash>`, `skip`, `squashed into #n`, `asked` (waiting 
 | 65 | `bc86e552` | Process files TODO: TimedProcess works the same way as Process |  | Process files TODO for the old layout (`src/Process.jl`, `InlineProcess.jl`, TimedProcess): settled by main's `src/Processes/` layout and its TimedProcess on a session (handoff §3.4). | skip |
 | 66 | `918c1c84` | Internals docs: process pipeline from plan to loop and back; why processes run through sessions |  | Docs of the old process pipeline and sessions (`set_user_context!`, `with_process_keymap`, `with_user_registry`, `src/Process.jl`): patterns removed by #82/#85 or never ported; main has its own process_pipeline.md. | skip |
 | 67 | `4ce27656` | UniquePlanId: `:dynamic` form, `==` decides static first; ids stay dynamic until resolve; match without a trait |  | With #60 (its lookup body; `Base.get` keeps main's `find_typeidx` form instead of #60's try/catch) and #50's test (it survives to the tip). Findability.jl deleted. Full suite run. | done `ffb4198a` |
-| 68 | `a423a0ae` | TODO: code that works around the matching system, grouped |  | docs/TODO only | done |
-| 69 | `02a3bdda` | Numbering walk: keep what it works out from types between calls |  |  | open |
-| 70 | `1cf50107` | Plan constructor parses its arguments untyped, in one Vector{Any} |  |  | open |
+| 68 | `a423a0ae` | TODO: code that works around the matching system, grouped |  | docs/TODO only | done `fef9b2e2` |
+| 69 | `02a3bdda` | Numbering walk: keep what it works out from types between calls |  | The whole commit is global caches (`_UNIQUE_IDS_TYPE_CACHE`, `_FIELD_PARAMETER_INDICES`, their locks, `_field_parameter_indices`), removed again by #80 ("No caches"); no caches outside exp/* branches. | skip |
+| 70 | `1cf50107` | Plan constructor parses its arguments untyped, in one Vector{Any} |  |  | done |
 | 71 | `39c66f7e` | dynamic_match: an untyped match for the registry walk, its matchers compared with dynamic_equals |  |  | open |
 | 72 | `ef069de0` | matcher_equals: matchers compare through a package function, not Base.:(==) |  |  | open |
 | 73 | `235b081b` | findfirst_unspecialized(f, items, args...): f(item, args...), any number of extra arguments |  |  | open |
