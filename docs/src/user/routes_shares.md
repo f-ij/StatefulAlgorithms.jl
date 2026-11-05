@@ -128,7 +128,8 @@ Constraints:
 
 - A redirect must name at least one variable mapping.
 - Source and target subcontexts, and their variables, must exist after init.
-- A field cannot redirect to itself.
+- A field cannot redirect to itself, directly or through a chain of redirects
+  (`b.x → a.y → b.x` is an error).
 
 ## Read and Write Semantics
 

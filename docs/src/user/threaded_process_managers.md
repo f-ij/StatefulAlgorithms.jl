@@ -213,8 +213,8 @@ contexts while sharing one worker template:
 recipe = (;
     makeworker = (idx, manager) -> Process(MyAlgo; repeats = 1),
     makecontext = (idx, manager, template) -> begin
-        initialized = init(getalgo(template), InitArgs(MyAlgo; seed = idx))
-        getcontext(initialized)
+        context, _ = setup(getalgo(template), InitArgs(MyAlgo; seed = idx))
+        context
     end,
 )
 ```
@@ -298,7 +298,7 @@ Use `providearguments` for loop-level runtime `@input` values:
 providearguments = (slot, job, manager) -> (; temperature = job.temperature)
 ```
 
-For `Process` workers, `lifetime`, `repeats`, and `repeat` returned by
+For `Process` workers, `lifetime` and `repeats` returned by
 `providearguments` are launch controls. Other keys are passed as runtime
 inputs.
 

@@ -31,10 +31,8 @@ subcontexts are absent, the corresponding accessor returns an empty named tuple.
 
 ## 2. `SubContext`
 
-`SubContext{Name,T}` stores (`src/Context/StructDefs.jl`):
-
-1. `name::Symbol`, also represented by the `Name` type parameter.
-2. `data::T`, the entity-owned `NamedTuple`.
+`SubContext{Name,T}` stores one value (`src/Context/StructDefs.jl`): `data::T`, the entity-owned `NamedTuple`. The
+name is only in the `Name` type parameter.
 
 Initialization first makes an empty subcontext for each registry entry. Each
 entity's `init` result then replaces its subcontext and establishes its
@@ -49,11 +47,12 @@ does not depend on execution-plan wiring.
 `step!`, `init`, and `cleanup` receive a `SubContextView`
 (`src/Context/View/StructDef.jl`). A view carries:
 
-1. the persistent context;
-2. the separate runtime context;
-3. the current identifiable instance or namespace;
-4. explicitly injected values; and
-5. type-specialized aliases, shared contexts, and routed variables.
+1. the context bundle (`src/Context/Bundles/`): a `LoopContext` while stepping (the persistent context, the
+   separate runtime context and the plan node), an `InitContext` while initializing (the persistent context, the
+   algorithm being prepared and the lifetime);
+2. the current identifiable instance or namespace;
+3. explicitly injected values; and
+4. type-specialized aliases, shared contexts, and routed variables.
 
 Property access is compiled to `VarLocation` values. When the same local name is
 available from more than one source, precedence from lowest to highest is:

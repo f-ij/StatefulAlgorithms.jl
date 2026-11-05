@@ -35,7 +35,7 @@ end
 ```
 
 Fields without defaults are required during init. Fields with defaults are
-rebuilt for each process initialization.
+rebuilt at every init (`setup`, `init`, a process's construction or `init!`).
 
 You can also give the inline state an explicit key:
 

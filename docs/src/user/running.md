@@ -8,8 +8,9 @@ This page covers the normal runtime flow: create a `Process`, run it, wait for i
 p = Process(algo, InitArgs(...), Override(...); repeats = 1_000)
 ```
 
-`Process(...)` resolves the loop algorithm when needed, runs the lifecycle
-`init` path, and stores the algorithm plus its current context on the process.
+`Process(...)` runs `setup` (it resolves the plan and runs every `init`) and keeps the
+resolved plan, the context and the specs on the process. `Process(algo; context = ctx)`
+starts from a context you built instead; passing both `context` and specs is an error.
 
 Persistent context is built from `InitArgs(...)`, `Override(...)`, `@state`, routes,
 shares, and managed state. Runtime `@input` values are not stored at
@@ -53,7 +54,8 @@ Stop behavior can be given either as a simple repeat count or as a lifetime
 object:
 
 - `repeats = 1000` -> run a fixed number of iterations.
-- omitted -> default lifetime behavior for that algorithm type.
+- omitted -> one repeat for a `Routine`, otherwise until the process is closed
+  (`Indefinite()`); an `InlineProcess` defaults to one repeat.
 - advanced: `lifetime = Repeat(...)`, `lifetime = Indefinite()`, `lifetime = Until(...)`, `lifetime = RepeatOrUntil(...)`.
 
 See [Lifetime](@ref lifetime_user) for full details.
@@ -102,8 +104,8 @@ result.
 ## Inline Process
 
 Use `InlineProcess` when you want synchronous execution without a separate process task.
-It accepts the same positional `InitArgs(...)`/`InitArgs(...)` and `Override(...)`
-arguments as `Process(...)`:
+It accepts the same positional `InitArgs(...)` and `Override(...)` arguments as
+`Process(...)`:
 
 ```julia
 ip = InlineProcess(algo, InitArgs(...), Override(...); repeats = 10_000)
@@ -112,12 +114,12 @@ run(ip)
 
 Both process types take a repeat count as `repeats = 10_000` and a lifetime as
 `lifetime = Repeat(10_000)`; a number given as `lifetime` is an error.
-Unlike `Process`, `InlineProcess` stores a context that can be absorbed back
-into an algorithm, so the run's runtime values (inputs and declared locals) are
-stripped after the loop. `run(ip)` returns the same final context as `fetch(p)`
-does for a `Process` (or the finalizer's result).
-Like finished `Process` runs, this means the persistent context is the persistent
-context shape rather than the transient loop context.
+`run(ip)` runs the loop in the caller's task and returns the same final context as
+`fetch(p)` does for a `Process` (or the finalizer's result). Like a finished `Process`
+run, the process then stores only the persistent context: the run's runtime values
+(inputs and declared locals) are dropped. An `InlineProcess` cannot be paused.
+`run(ip; context = ctx)` makes `ctx` (of the process's context type) its context
+before the run.
 
 If you need buffered external updates to context variables, see
 [Interactive Contexts](@ref interactive_user).

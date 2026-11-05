@@ -24,14 +24,17 @@ Relevant files:
 - target field names (aliases) in the target view
 - optional transform function
 - optional reverse transform function
-- precomputed `match_by` identities for the source and target namespaces (`source_match_by`, `target_match_by`)
+- precomputed `match_by` identities for the source and target namespaces, in its type parameters (read with
+  `source_match_by`, `target_match_by`)
 
 `resolve_options(reg, routes...)` converts each route into:
 
 - target subcontext name => tuple of resolved `Route` metadata, including
   source names, target aliases, transform, and reverse transform.
 
-`to_sharedvar` resolves endpoints by matcher identity in the registry, then binds concrete source/target keys.
+`resolve_wiring(reg, route)` (`src/RoutingInterface/RouteDef.jl`) resolves each endpoint with `resolve_scref`
+(`src/SubContextRefs.jl`): by the stored object's key, else by matcher identity in the registry; the resolved route
+keeps only the concrete source/target keys, in its type parameters.
 
 Transform details:
 
@@ -61,7 +64,8 @@ read through a `PlanWiringView` while that child executes.
 - target-namespace ref (`target_ref`)
 - source field names
 - target field names (aliases)
-- precomputed matcher identities for the source and target namespaces (`source_match_by`, `target_match_by`)
+- precomputed matcher identities for the source and target namespaces, in its type parameters (read with
+  `source_match_by`, `target_match_by`)
 
 `resolve_redirect(reg, redirect)` resolves endpoints against the
 namespace registry and returns a resolved `Redirect` whose endpoint identities
@@ -104,7 +108,8 @@ field type instead of from runtime routing metadata.
 
 ## 5. Errors and Validation
 
-If route/share endpoints are not present in the registry, resolution throws explicit errors listing available keys (see `to_sharedvar` and `to_sharedcontext`).
+If route/share/redirect endpoints are not present in the registry, resolution throws explicit errors listing the available keys (see `resolve_scref`
+and `matcher_sckey` in `src/SubContextRefs.jl`).
 
 Redirect materialization throws explicit errors when source/target
 subcontexts or variables are absent after init.

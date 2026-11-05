@@ -13,13 +13,12 @@ Pass `Interactive(target, names...)` as a lifecycle option when coordinated
 in-process code should mutate selected fields directly:
 
 ```julia
-initialized = init(
+ctx, plan = setup(
     algo,
     Override(:target; value = 3.0),
     Interactive(:target, :value),
 )
 
-ctx = getcontext(initialized)
 value_ref = ctx.target.value
 value_ref[] = 4.0
 ```
@@ -148,12 +147,11 @@ algo = resolve(CompositeAlgorithm(
     (1, 1),
 ))
 
-initialized = init(
+process = Process(
     algo,
     InitArgs(:_exchange; vars = (Var(:target, :value),));
-    lifetime = Repeat(3),
+    repeats = 1,
 )
-process = Process(initialized; repeats = 1)
 ref = view(getcontext(process), :value)
 
 ref[] == 1.0

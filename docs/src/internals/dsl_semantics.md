@@ -6,7 +6,7 @@ the body of a loop that runs once per step, its statements run top to bottom, an
 `@StepAlgorithm` is covered where it meets the block: what an algorithm reads and what its returns do.
 
 The how-to with more examples is [Composite DSL](@ref composite_dsl_user). This page is the reference: where the two
-disagree, this one describes what the code does (branch `refactor/dsl-locals`).
+disagree, this one describes what the code does.
 
 ## Terms
 
@@ -16,7 +16,7 @@ disagree, this one describes what the code does (branch `refactor/dsl-locals`).
 | statement | One line of a block. Each is a *declaration* (it names something; nothing runs per step), a *step* (it runs in the steps its schedule picks), or *wiring* (it connects names; nothing runs). |
 | step | One run of a block's statements, top to bottom. The root block runs one step per loop iteration; a nested block runs as often as its parent schedules it. |
 | build | Evaluating the macro's output: `algo = @CompositeAlgorithm begin … end`. Values written in the block that are not block names are taken then. Separate from `resolve`, `init` and `run`. |
-| run | One `run(process)`: init, then the steps until the lifetime ends or the process is paused. |
+| run | One `run(process)` or `run(plan, context)`: the steps, from the context set up before (construction of the process, or `setup`), until the lifetime ends or the process is paused. |
 | scope | The names a block's statements see: its own and those of the blocks around it (see [Scopes](#Scopes)). |
 | outside value | A name or expression in a statement that is not a block name: a Julia variable, constant or expression from where the macro is written. It is evaluated once, at build. |
 
@@ -66,7 +66,7 @@ Every bare name a statement reads is one of these. The kind decides where the va
 
 | Kind | Made by | Lives | On pause | Where |
 |---|---|---|---|---|
-| state field | `@state x = v`, `@state x`; an algorithm's `init` (its `@managed` fields) | persistent: the process | kept, and saved | persistent context, under the block's state (`_state_1`, `_state_2`, ...) or the algorithm's namespace |
+| state field | `@state x = v`, `@state x`; an algorithm's `init` (its `@managed` fields) | persistent: the context (kept by the process, or by you after `setup`) | kept, and saved | persistent context, under the block's state (`_state_1`, `_state_2`, ...) or the algorithm's namespace |
 | input | `@input x`, `@input x::T`, `@input x = v` | the run, read-only | kept | runtime context, `_inputs` |
 | declared local | `local x`, `local x::T` | the run | kept | runtime context, `_declared_locals` |
 | captured return | `y = f(…)` or `y = Algo(…)`: what a call or an algorithm returns, and `x = v` | one step of its block | dropped | runtime context, `_captured_returns` |
@@ -92,8 +92,8 @@ A nested block made with `@repeat n begin … end` is its own block. A plan writ
 (`nested()`, `@context c = nested()`) is a block of its own as well; it sees only its own names, its inputs and what
 is wired to it (`@bind`, `@merge`, `@route`, `c.sub.field`).
 
-A nested `CompositeAlgorithm` without options (no `Local`, routes or shares of its own) is flattened into its
-parent when the parent is built, so it shares the parent's scope. That does not change what valid blocks compute:
+A nested `CompositeAlgorithm` that carries nothing of its own (no routes, shares, declared locals, states or other
+options) is flattened into its parent when the parent is built, so it shares the parent's scope. That does not change what valid blocks compute:
 its returns are reset on the same steps its readers run.
 
 ## Statements
@@ -112,9 +112,8 @@ its returns are reset on the same steps its readers run.
 | `@mutable y = …`, `@mutable local x` | The statement, and: an algorithm may update `y` (see [What a step's returns do](#What-a-step's-returns-do)). Changes nothing else; it silences the warning. |
 | `@context c = nested()` | Runs `nested()` like any statement, and names it so later statements can write `c.sub.field`. |
 
-A declared local's starting value is taken from the plan at the start of every run. Starting values are literals
-or outside names, so nothing the block creates is shared between runs; a value kept from the start of the run belongs
-in `@state`.
+A declared local starts every run without a value, so nothing the block creates is shared between runs; a value kept
+from the start of the run belongs in `@state`.
 
 ### Steps
 
@@ -166,7 +165,7 @@ Nothing runs; these decide where values go.
 | `@route a.x => b.y` (`transform = f`, `reverse_transform = g`) | `b` sees `a`'s `x` as `y`; an update of `y` (`@update y = …`) writes back through `g`. |
 | `@redirect a.x => b.y` | `b`'s field `y` is `a`'s field `x` after init. |
 | `@bind x => c.x` | This block's state field `x` and the nested block's `x` are the same field. |
-| `@merge c1.x, c2.x` | Two nested blocks' fields `x` are the same field. |
+| `@merge c1, c2` | The `@state`s of the nested blocks `c1` and `c2` are one state. Only whole states: for one field use `@bind` or `@redirect`. |
 | `Algo(@all(a))` | `Algo` sees every field of `a` (a `Share`). |
 
 ### When the block is built
@@ -231,11 +230,6 @@ Which values of the block an update may change:
   before it and assign `x` inside the plan.
 
 The legacy macros (`@CompositeAlgorithm_legacy`, `@Routine_legacy`) keep their older meaning for the last two.
-
-## Known gaps
-
-- The how-to's "Direct State Writes" shows `target = source` with two state fields. That never worked (it read
-  `source` as an outside value); it is now the `x = y` error. Write `target = copy(source)`.
 
 ## Open
 

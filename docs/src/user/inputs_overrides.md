@@ -6,8 +6,6 @@ Initialization specs and runtime inputs solve different problems.
 - `Override(...)` force-replaces initialized persistent context values.
 - DSL `@input` declares per-run values supplied as `run(...; kwargs...)`.
 
-`InitArgs(...)` is still accepted as a compatibility alias for `InitArgs(...)`.
-
 ## InitArgs and Override Specs
 
 `InitArgs` and `Override` target one algorithm or state. Use the same reference
@@ -27,6 +25,9 @@ Pair syntax is also accepted:
 InitArgs(target, :name => value)
 Override(target, :name => value)
 ```
+
+`InitArgs(; name = value, ...)`, short for `InitArgs(ToAll(); name = value, ...)`, gives the values to every
+registered algorithm and state.
 
 Targets are resolved through the composed algorithm registry: the table of
 registered algorithms and states for the final process. After resolving, the

@@ -30,6 +30,7 @@ If you are new to the package, read these first:
 
 ## User Documentation
 
+- [The Pipeline: Setup, Run, Cleanup](@ref pipeline_user)
 - [Algorithms and States](@ref algorithms_states_user)
 - [Composite DSL](@ref composite_dsl_user)
 - [Referencing Algorithms](@ref referencing_algorithms_user)

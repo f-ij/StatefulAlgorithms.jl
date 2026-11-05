@@ -6,6 +6,7 @@ For current documentation, use the split docs below.
 
 ## User Documentation
 
+- [The Pipeline: Setup, Run, Cleanup](@ref pipeline_user)
 - [Algorithms and States](@ref algorithms_states_user)
 - [Composite DSL](@ref composite_dsl_user)
 - [Referencing Algorithms](@ref referencing_algorithms_user)

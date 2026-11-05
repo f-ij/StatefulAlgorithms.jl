@@ -7,8 +7,11 @@ execution.
 
 `Process(func, inputs_overrides...; repeats, lifetime, timeout)` (`src/Processes/Process/Constructors.jl`):
 
-1. Wrap a bare `StepAlgorithm` as a one-child `CompositeAlgorithm` plan.
-2. Normalize stop behavior: `repeats = n` becomes `Repeat(n)`, `lifetime` accepts `Lifetime` objects, and `Routine` defaults to `Repeat(1)` when no lifetime is provided.
+1. Turn `func` into a plan (`parse_plan`, `src/Processes/Construction.jl`): a plan or plan type as it is, anything
+   else wrapped as a one-child `CompositeAlgorithm`.
+2. Make the lifetime (`parse_lifetime`): `repeats = n` becomes `Repeat(n)` (`repeats = Inf` becomes `Indefinite()`),
+   `lifetime` takes a `Lifetime`, at most one of the two; with neither, `default_lifetime` gives `Repeat(1)` for a
+   `Routine` and `Indefinite()` otherwise.
 3. Run `setup(algo, specs...; lifetime)` (resolves the plan and builds its context), or only resolve the plan when a
    `context` is given.
 4. Store the resolved plan, the context (`Process.state_context`) and the specs (`Process.specs`) on the process.
@@ -58,7 +61,7 @@ with `resume = true` when `p` is paused. `_start_run!`:
 - spawns the loop task, which runs `_run_loop_and_store!`:
   `run_session_loop(session, plan, loop_context, lifetime, resume)`, then `_store_run_contexts!`.
 
-`InlineProcess`, the manager's inline run and `run(plan)` start from
+`InlineProcess`, the manager's inline run and `run(plan, context)` start from
 `prepare_for_loop` too.
 
 The entered `loop` method then builds or restores the per-run
@@ -83,8 +86,8 @@ assigned, and the return is removed when its plan node ends, so every step gets
 and returns a runtime context of the same type. The process and the lifetime are
 not in it. None of these fields are added to the persistent context.
 
-Repeat and indefinite loops are defined in `src/Loops.jl`; generated loops live
-in `src/GeneratedCode/GeneratedLoops.jl`.
+Repeat and indefinite loops are defined in `src/Loops.jl`. The generated loop mode is legacy and not loaded
+(`src/Legacy/GeneratedLoops.jl`); `sys_looptype` is `NonGenerated()`.
 
 High-level structure:
 

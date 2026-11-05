@@ -18,15 +18,17 @@ You can also pass the lifetime object explicitly:
 p = Process(algo; lifetime = Repeat(1_000))
 ```
 
-For `Process`, the `lifetime` keyword is reserved for `Lifetime` objects. Use
-`repeats = ...` for plain integer counts.
+The `lifetime` keyword takes only `Lifetime` objects (for every process type and for
+`run`); a number there is an error. Use `repeats = ...` for plain integer counts, or
+`repeats = Inf` for `Indefinite()`.
 
 ### Default behavior
 
 If you do not pass `lifetime`:
 
-- most processes default to `Indefinite()`
-- `Routine` defaults to one pass (`Repeat(1)`) when `lifetime = nothing`
+- a `Process` or `TimedProcess` defaults to `Indefinite()`, except for a `Routine`,
+  which defaults to one pass (`Repeat(1)`)
+- an `InlineProcess` defaults to one pass (`Repeat(1)`)
 
 ## Explicit Lifetime Types
 
