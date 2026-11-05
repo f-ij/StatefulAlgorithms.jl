@@ -1,12 +1,12 @@
 #=
 The `Process` struct: a plan run on its own task, with its lifetime, state and runtime contexts, task, lock, listeners
-and session. Two processes are equal when their ids are.
+and session. Two processes are equal when their keys in `processlist` (`list_ref`) are.
 =#
 
 export Process
 
 mutable struct Process{F,C} <: InteractiveProcess{F,C}
-    id::UUID
+    list_ref::UUID   # its key in `processlist` (not one of the plan's ids)
     # The plan; its registry holds the plan's `UniqueKeyMap`, the only place the process has the map. A run hands the plan
     # and the context to the loop without it (`prepare_for_loop`).
     algo::F
@@ -31,4 +31,4 @@ mutable struct Process{F,C} <: InteractiveProcess{F,C}
     session::InteractiveSession{C}
 end
 
-Base.:(==)(p1::Process, p2::Process) = p1.id == p2.id
+Base.:(==)(p1::Process, p2::Process) = p1.list_ref == p2.list_ref

@@ -1,15 +1,16 @@
 #=
-The list of live processes (`processlist`), by id, so a process can be found and quit without a reference to it.
+The list of live processes (`processlist`), by their `list_ref`, so a process can be found and quit without a reference
+to it.
 =#
 """
 Module dict for managing alive processes if no active reference is alive
 """
 const processlist = Dict{UUID, WeakRef}()
-register_process!(p) = let id = uuid1(); processlist[id] = WeakRef(p); id end
-function remove_process!(p::Process)
-    close(p)
-    pop!(processlist, p.id, nothing)
-end
+register_process!(p) = (processlist[p.list_ref] = WeakRef(p); p.list_ref)
+# The finalizer: drops the process's entry. No `close`: a process is only collected when nothing holds it, so no task
+# runs it and a paused one can never be resumed. Untyped, so it compiles once (as `close(p)` it compiled for every set
+# of `Unique` handles, 12 ms on the old branch, when the garbage collector ran it).
+Base.@nospecializeinfer remove_process!(@nospecialize(p::Process)) = (pop!(processlist, getfield(p, :list_ref), nothing); nothing)
 
 # function Base.finalizer(p::Process)
 #     quit(p)
