@@ -71,7 +71,7 @@ Base.show(io::IO, state::GeneralState) = print(io, _general_state_signature(stat
 
 This is construction metadata for DSL-created states. It does not add routes and
 does not affect `init`; it only suppresses accidental-sharing warnings for the
-named fields during registry merge.
+named fields when `@merge` merges the states.
 """
 function mark_general_state_fields_explicitly_shared(state::S, fields::Tuple{Vararg{Symbol}}) where {Fields, Required, DefaultValuesBuilder, ExplicitlySharedFields, DiagnosticFieldPaths, S<:GeneralState{Fields, Required, DefaultValuesBuilder, ExplicitlySharedFields, DiagnosticFieldPaths}}
     merged = Symbol[ExplicitlySharedFields...]

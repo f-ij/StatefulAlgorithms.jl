@@ -822,8 +822,9 @@ function _dsl_state_setup_expr(state_fields, state_name::Symbol)
     state_expr = _dsl_expand_state_expr(state_fields)
     outputs_expr = Expr(:tuple, [QuoteNode(field.name) for field in state_fields]...)
     # A block's own state is a `Unique` of it, made once per construction, so two blocks built from the same code keep
-    # separate state (`_state_1`, `_state_2`); a named state is keyed by its name and shared by every state with that
-    # name. Made with its uuid in the value only (`DynamicUnique`): the user never holds it.
+    # separate state (`_state_1`, `_state_2`); a named state's name is only its key (two different states with one name
+    # in one plan are an error, `check_key_unused`). Made with its uuid in the value only (`DynamicUnique`): the user
+    # never holds it.
     state_entry_expr = state_name == :_state ?
         :(StatefulAlgorithms.DynamicUnique($state_expr)) :
         :($(QuoteNode(state_name)) => $state_expr)
