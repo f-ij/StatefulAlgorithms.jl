@@ -18,9 +18,6 @@ to the resolved namespace symbol.
 
 @inline get_target_name(ov::InputInterface) = get_target(ov)
 
-@inline _resolve_input_target_key(reg::NameSpaceRegistry, target) = static_findkey(reg, target)
-@inline _resolve_input_target_key(reg::NameSpaceRegistry, matcher::AbstractMatcher) = getkey(get_by_matcher(reg, matcher))
-
 """Resolve one lifecycle input/override against the loop algorithm registry."""
 @inline function resolve(cla::LA, ov::OI) where {LA<:AbstractLoopAlgorithm, OI<:InputInterface}
     return resolve(getregistry(cla), ov)
@@ -40,7 +37,7 @@ end
         return resolve(reg, duplicated_ovs)
     end
 
-    key = _resolve_input_target_key(reg, target)
+    key = target isa AbstractMatcher ? getkey(get_by_matcher(reg, target)) : static_findkey(reg, target)
     if isnothing(key)
         error("Target algorithm $(target) not found in registry: $reg \n Cannot resolve lifecycle target.")
     end
