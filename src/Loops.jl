@@ -52,6 +52,9 @@ Run a single function in a loop indefinitely.
     step_cursor = @inline starting_cursor(session, step_plan, resume)
     persistent_context = @inline getpersistent(lc)
     runtime_context = @inline getruntime(lc)
+    # The lifetime's `Var`s by key: the stop check before every step does not load the registry. A lifetime whose
+    # `Var`s have their keys already (an `InlineProcess` gives them before the loop) stays as it is.
+    lifetime = @inline resolve_var_keys(lifetime, persistent_context)
 
     isresuming && @inline clear_pause!(session)
 
@@ -87,6 +90,9 @@ Base.@constprop :aggressive @inline function loop(session::S, algo::F, lc::LC, l
     step_cursor = @inline starting_cursor(session, step_plan, resume)
     persistent_context = @inline getpersistent(lc)
     runtime_context = @inline getruntime(lc)
+    # The lifetime's `Var`s by key: the stop check before every step does not load the registry. A lifetime whose
+    # `Var`s have their keys already (an `InlineProcess` gives them before the loop) stays as it is.
+    lifetime = @inline resolve_var_keys(lifetime, persistent_context)
 
     isresuming && @inline clear_pause!(session)
 

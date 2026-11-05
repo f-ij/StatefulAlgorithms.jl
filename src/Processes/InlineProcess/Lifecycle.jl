@@ -18,16 +18,20 @@ default call into the loop (`run_session_loop`) is compiled once. As a `Val`, th
     algo = getalgo(p)
     _set_inline_run_context!(p, context)
     runtime_inputs = _inline_runtime_inputs(algo, inputs_overrides, (; kwargs...))
-    # A lifetime from outside the plan gets the plan's numbers (`number_by_keymap`), at run time on every call.
-    run_lifetime = something(parse_lifetime(isnothing(lifetime) ? lifetime : number_by_keymap(lifetime, getfield(getregistry(getalgo(p)), :keymap)), repeats), StatefulAlgorithms.getlifetime(p))
+    # A lifetime from outside the plan gets the plan's numbers (`number_by_keymap`) and its `Var`s their context keys
+    # (`resolve_var_keys`), while compiling, before the call to the loop. The process's own lifetime has its keys from
+    # when the process was built, so it stays as it is.
+    run_lifetime = resolve_var_keys(something(parse_lifetime(isnothing(lifetime) ? lifetime : number_by_keymap(lifetime, getfield(getregistry(getalgo(p)), :keymap)), repeats), StatefulAlgorithms.getlifetime(p)), getcontext(p))
     return @inline _run_inline!(p, run_lifetime, runtime_inputs, inlined)
 end
 
 @inline function run_nogen(p::InlineProcess, inputs_overrides...; context = nothing, repeats=nothing, lifetime=nothing, kwargs...)
     algo = getalgo(p)
     _set_inline_run_context!(p, context)
-    # A lifetime from outside the plan gets the plan's numbers (`number_by_keymap`), at run time on every call.
-    run_lifetime = something(parse_lifetime(isnothing(lifetime) ? lifetime : number_by_keymap(lifetime, getfield(getregistry(getalgo(p)), :keymap)), repeats), StatefulAlgorithms.getlifetime(p))
+    # A lifetime from outside the plan gets the plan's numbers (`number_by_keymap`) and its `Var`s their context keys
+    # (`resolve_var_keys`), while compiling, before the call to the loop. The process's own lifetime has its keys from
+    # when the process was built, so it stays as it is.
+    run_lifetime = resolve_var_keys(something(parse_lifetime(isnothing(lifetime) ? lifetime : number_by_keymap(lifetime, getfield(getregistry(getalgo(p)), :keymap)), repeats), StatefulAlgorithms.getlifetime(p)), getcontext(p))
     runtime_inputs = _inline_runtime_inputs(algo, inputs_overrides, (; kwargs...))
     return @inline _run_inline!(p, run_lifetime, runtime_inputs, Val(false))
 end

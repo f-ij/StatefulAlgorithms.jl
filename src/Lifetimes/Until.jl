@@ -15,3 +15,9 @@ Base.@nospecializeinfer Until(@nospecialize(cond::Function), @nospecialize(vars.
 
 @inline lifetime_breakcondition(lt::U, context::C, done::D) where {U<:Until, C, D<:Integer} =
     lt.cond(getindex(context, lt.vars...))
+
+# The same lifetime with its `Var`s given their context keys (`resolve_var_keys`, Lifetimes/Hooks.jl).
+@inline function resolve_var_keys(lt::U, context::C) where {V, F, U<:Until{V, F}, C}
+    vars = @inline _resolve_var_keys(lt.vars, context)
+    return Until{typeof(vars), F}(lt.cond, vars)
+end

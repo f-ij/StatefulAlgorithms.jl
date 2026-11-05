@@ -16,3 +16,9 @@ Base.@nospecializeinfer AtLeast(@nospecialize(cond::Function), atleast::Int, @no
 
 @inline lifetime_breakcondition(lt::AL, context::C, done::D) where {AL<:AtLeast, C, D<:Integer} =
     done >= lt.atleast && lt.cond(getindex(context, lt.vars...))
+
+# The same lifetime with its `Var`s given their context keys (`resolve_var_keys`, Lifetimes/Hooks.jl).
+@inline function resolve_var_keys(lt::AL, context::C) where {V, F, AL<:AtLeast{V, F}, C}
+    vars = @inline _resolve_var_keys(lt.vars, context)
+    return AtLeast{typeof(vars), F}(lt.atleast, lt.cond, vars)
+end

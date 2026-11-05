@@ -33,8 +33,9 @@ without it (`_setup`).
 @inline function _prepare_inline_process(algo, inputs_overrides...; repeats=nothing, lifetime=nothing, context=nothing)
     lifetime = something(parse_lifetime(lifetime, repeats), Repeat(1))
     algo = resolve(algo)
-    context = isnothing(context) ? first(_setup(algo, inputs_overrides...; lifetime)) : context
-    return algo, with_keymap(context, getkeymap(algo)), lifetime
+    context = with_keymap(isnothing(context) ? first(_setup(algo, inputs_overrides...; lifetime)) : context, getkeymap(algo))
+    # The lifetime's `Var`s by key (`resolve_var_keys`), once: the loop reads them without the registry.
+    return algo, context, resolve_var_keys(lifetime, context)
 end
 
 """The `InlineProcess` around a prepared plan, its context, specs and lifetime, with its one session."""

@@ -140,7 +140,9 @@ end
     @test numbered(getlifetime(StatefulAlgorithms.getsession(q)))
     @test getcontext(q)[b].x == 7
     ip = InlineProcess(plan; lifetime = RepeatOrUntil(x -> x >= 4, 100, Var(a, :x)))
-    @test numbered(getlifetime(ip))
+    # An `InlineProcess` gives the `Var` its context key when it is built, so the loop reads it without the registry.
+    keyed(lt) = typeof(only(getfield(lt, :vars))).parameters[1] <: StatefulAlgorithms.KeyMatcher
+    @test keyed(getlifetime(ip))
     run(ip)
     @test getcontext(ip)[a].x == 4
     context, resolved = setup(plan)
