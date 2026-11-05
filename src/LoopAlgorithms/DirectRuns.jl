@@ -124,7 +124,7 @@ The first step of the user pipeline (setup, `run`, `cleanup`) for a plan run wit
 and builds its starting context. Every algorithm's `init` runs; `InitArgs(...)` gives the values it reads,
 `Override(...)` values are set after it. `lifetime` is what init may size buffers by. Returns the context and the
 resolved plan; the plan holds no context, the user keeps the context and passes it to `run(plan, context)`. A process
-sets up a new context with it from its resolved plan and stored specs (`reset!(ip)`, the error path of `close`).
+sets up a new context with it from its resolved plan and stored specs (`reset(ip)`, the error path of `close`).
 """
 function setup(plan_spec::LA, specs::InputInterface...; lifetime = Indefinite()) where {LA<:LoopSpec}
     plan = resolve(plan_spec)

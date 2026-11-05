@@ -3,7 +3,7 @@ What a user calls on a `Process`: `run`, `wait`, `fetch`, `pause`, `close`, `res
 (TODO.md, "Rename `src/ProcessInteraction.jl`": still mixes in loop internals and dead code).
 =#
 
-export start, restart, quit, pause, syncclose, closeprocess
+export start, restart, quit, pause, syncclose, closeprocess, reset!
 
 """
     run(p::Process; repeats, lifetime, inputs...)

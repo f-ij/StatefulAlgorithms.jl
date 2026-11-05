@@ -106,4 +106,15 @@ end
         p isa InlineProcess || close(p)
     end
     @test !hasmethod(init!, Tuple{InlineProcess})
+
+    # InlineProcess `reset(ip, specs...)`: a new process with a fresh context from the merged specs, which it keeps.
+    ip = InlineProcess(plan_spec, InitArgs(PipelineCounter; total = 1), InitArgs(PipelineOther; count = 2); repeats = 1)
+    run(ip; step = 1)
+    ip2 = reset(ip, InitArgs(PipelineOther; count = 9))
+    @test ip2 !== ip && ip2 isa InlineProcess
+    @test (getcontext(ip2)[PipelineCounter].total, getcontext(ip2)[PipelineOther].count) == (1, 9)
+    ip3 = reset(ip2)
+    @test (getcontext(ip3)[PipelineCounter].total, getcontext(ip3)[PipelineOther].count) == (1, 9)
+    @test_throws ArgumentError reset(ip, Only(PipelineCounter))
+    @test !hasmethod(reset!, Tuple{InlineProcess})
 end

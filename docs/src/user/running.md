@@ -137,13 +137,15 @@ as it was. The missing `!` tells you to keep the result:
 ```julia
 ip = init(ip, InitArgs(A; x = 5))           # init again, from ip's specs with these merged over them
 ip = init(ip, Only(A), InitArgs(A; x = 5))  # only A's init, on ip's current context
+ip = reset(ip)                              # a fresh context from ip's specs
 ip = setlifetime(ip, Repeat(2_000))
 ```
 
-The new process keeps the merged specs, so a later `reset!(ip)` or `init(ip)`
-starts from `x = 5`. `init_and_run(ip, specs...)` is `run(init(ip, specs...))`.
-A `Process` or `TimedProcess` has the `!` forms (`init!`, `setlifetime!`),
-which change the process and return it.
+Every `InlineProcess` call that changes the process works this way. The new
+process keeps the merged specs, so a later `reset(ip)` or `init(ip)` starts
+from `x = 5`. `init_and_run(ip, specs...)` is `run(init(ip, specs...))`.
+A `Process` or `TimedProcess` has the `!` forms (`init!`, `setlifetime!`, and
+`reset!` for a `Process`), which change the process and return it.
 
 If you need buffered external updates to context variables, see
 [Interactive Contexts](@ref interactive_user).

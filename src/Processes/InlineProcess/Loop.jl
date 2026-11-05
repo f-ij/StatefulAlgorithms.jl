@@ -8,7 +8,7 @@ The runtime inputs for one `InlineProcess` execution; they are checked against t
 `LoopContext` is made (`prepare_for_loop`).
 
 `InlineProcess` has a fixed context type after construction. Per-run data is
-therefore limited to declared `@input` keywords; init values go through `init(ip, ...)` (a new process with the new context) or `reset!`.
+therefore limited to declared `@input` keywords; init values go through `init(ip, ...)` or `reset(ip, ...)`, which return a new process with the new context.
 """
 @inline function _inline_runtime_inputs(algo::A, inputs_overrides::IO, kwargs::K) where {A<:AbstractLoopAlgorithm, IO<:Tuple, K<:NamedTuple}
     isempty(inputs_overrides) || error("InlineProcess run accepts runtime inputs as keywords only. Use init(ip, InitArgs(...), ...), which returns a new InlineProcess, to initialize the context again.")

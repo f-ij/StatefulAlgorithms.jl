@@ -647,7 +647,7 @@ end
 #== end: constructors ==#
 
 #===================================================================================================================
-Section: InlineProcess: run, run_nogen, reset!.
+Section: InlineProcess: run, run_nogen, reset.
 Unique: within noise (≤0.015 s per phase, ≈0.06–0.1 s per scenario spread thin). Alone: −1.0 to −1.3 s, overlapping
 with process_basics. Cost: +0.0 s precompile, +0.3 MB.
 ===================================================================================================================#
@@ -664,12 +664,12 @@ with process_basics. Cost: +0.0 s precompile, +0.3 MB.
     )
     run(inline_process)
     run_nogen(inline_process)
-    reset!(inline_process)
+    reset(inline_process)
 
     composite_inline = InlineProcess(CompositeAlgorithm(_ProcessPrecompileCounter, _ProcessPrecompileScaler, (1, 2)); repeats = 2)
     run(composite_inline)
     run_nogen(composite_inline)
-    reset!(composite_inline)
+    reset(composite_inline)
 end
 #== end: inline ==#
 

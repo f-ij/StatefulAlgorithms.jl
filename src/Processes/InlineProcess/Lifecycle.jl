@@ -1,9 +1,9 @@
 #=
 What a user calls on an `InlineProcess`: `run` (and `run_nogen`, the same without the `inlined` choice), `init`,
-`reset!` and `init_and_run`.
+`reset` and `init_and_run`. Each one that changes the process returns a new `InlineProcess` (no `!`).
 =#
 
-export run, reset!
+export run, reset
 
 """
     run(ip; context, repeats, lifetime, inlined = Val(false), inputs...)
@@ -47,10 +47,19 @@ function init(ip::IP, specs::Vararg{InputInterface}) where {IP<:InlineProcess}
     return _construct_inline_process(getalgo(ip), context, stored, getlifetime(ip))
 end
 
-@inline function reset!(p::InlineProcess, inputs_overrides...)
-    reset_loopidx!(getsession(p))
-    p.context = first(setup(getalgo(p), getspecs(p)..., inputs_overrides...; lifetime = getlifetime(p)))
-    return true
+"""
+    reset(ip, InitArgs(...), Override(...)) -> InlineProcess
+
+A new `InlineProcess` with the same plan and lifetime and a fresh context, set up (`setup`) from `ip`'s specs with
+`specs` merged over them; the new process keeps the merged specs and its loop counter starts at 1. `ip` itself is
+left as it was. No `!`, as for every call that changes an `InlineProcess` (see `init(ip, ...)`). `Only` is not
+accepted: `init(ip, Only(...), ...)` runs a subset of the `init` functions.
+"""
+function Base.reset(ip::IP, specs::Vararg{InputInterface}) where {IP<:InlineProcess}
+    plan = getalgo(ip)
+    stored = _stored_specs(plan, (getspecs(ip)..., specs...))
+    context = first(setup(plan, stored...; lifetime = getlifetime(ip)))
+    return _construct_inline_process(plan, context, stored, getlifetime(ip))
 end
 
 """

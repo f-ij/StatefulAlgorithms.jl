@@ -18,8 +18,8 @@ mutable struct InlineProcess{TD,ContextType, Lt, S<:Tuple} <: AbstractProcess
     # `run(ip)` stores here.
     context::ContextType
     # The `InitArgs`/`Override`/`Interactive` specs the process was built with (resolved, merged per target), the ones
-    # `reset!(ip)` and a full `init(ip)` set up from. Typed and fixed, so code reading them stays type stable:
-    # `init(ip, specs...)` returns a new process with the merged specs.
+    # `reset(ip)` and a full `init(ip)` set up from. Typed and fixed, so code reading them stays type stable:
+    # `init(ip, specs...)` and `reset(ip, specs...)` return a new process with the merged specs.
     const specs::S
     # The lifetime of a run given none (`run(ip; repeats/lifetime)` gives one for that run).
     default_lifetime::Lt

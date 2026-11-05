@@ -29,7 +29,7 @@ end
 function inline_bmark(ip::IP, trials = 5) where IP
     runtimes = Float64[]
     for _ in 1:trials
-        @inline reset!(ip)
+        ip = reset(ip)
         start_ns = time_ns()
         @inline run(ip)
         elapsed = (time_ns() - start_ns) / 1e9
@@ -40,7 +40,7 @@ end
 function inline_bmark_nogen(ip::IP, trials = 5) where IP
     runtimes = Float64[]
     for _ in 1:trials
-        @inline reset!(ip)
+        ip = reset(ip)
         start_ns = time_ns()
         @inline StatefulAlgorithms.run_nogen(ip)
         elapsed = (time_ns() - start_ns) / 1e9
