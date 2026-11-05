@@ -22,17 +22,15 @@ The `Override` and `Interactive` specs `p`'s context is set up from.
 """
     copyprocess(p::Process, InitArgs(...), Override(...); kwargs...)
 
-A new process with `p`'s plan, set up from `p`'s stored specs and the new ones (later specs win per target).
-With `context`, the new process starts from it and keeps `p`'s specs.
+A new process with `p`'s plan, set up from `p`'s stored specs and the new ones (later specs win per target). With
+`context`, the new process starts from it and keeps `p`'s specs; new specs are then an error, as for `Process`. A
+process with another plan is `copyprocess(plan, specs...)`: `p`'s specs are keyed by its own plan's registry.
 """
-function copyprocess(p::Process, specs...; lifetime = StatefulAlgorithms.getlifetime(p), timeout = p.timeout, context = nothing, func = getalgo(p), kwargs...)
-    # Another plan: a new process from it with the stored specs (resolved, so taken as they are; checking their
-    # names against the plan's registry is open, TODO.md init interface item 6.10).
-    func === getalgo(p) || !isnothing(context) || return Process(func, getspecs(p)..., specs...; lifetime, timeout)
-    # The same plan: the stored specs are already resolved (resolving them again returns them as they are).
-    inits, overrides, interactives = _merged_lifecycle_specs(getregistry(getalgo(p)), (getspecs(p)..., specs...))
-    q = Process(func; context = something(context, _init_context_for(getalgo(p), inits, overrides, interactives, lifetime)), lifetime, timeout)
-    q.specs = isnothing(context) ? (inits..., overrides..., interactives...) : getspecs(p)
+function copyprocess(p::Process, specs...; lifetime = StatefulAlgorithms.getlifetime(p), timeout = p.timeout, context = nothing, kwargs...)
+    isnothing(context) && return Process(getalgo(p), getspecs(p)..., specs...; lifetime, timeout)
+    isempty(specs) || error("Pass either an initialized `context` or init/override specs to `copyprocess`, not both.")
+    q = Process(getalgo(p); context, lifetime, timeout)
+    q.specs = getspecs(p)
     return q
 end
 
