@@ -131,7 +131,7 @@ tells them apart (`NeedsValues`).
 Base.@nospecializeinfer function find_same(entry::TypeEntryBuilder, @nospecialize(algo))
     # `dynamic_match`: each new algorithm is compared with every one before it, and `match` compiled for every pair.
     # `findfirst_unspecialized`: a closure over `algo` would compile `findfirst` again for every algorithm type.
-    algo isa GeneratedValue || return findfirst_unspecialized(dynamic_match, algo, entry.algos)
+    algo isa GeneratedValue || return findfirst_unspecialized(dynamic_match, entry.algos, algo)
     is_dynamic_unique_id(match_by(algo.valuetype)) && throw(NeedsValues())
     # This closure captures a `GeneratedValue`, which has no type parameters: one closure type, compiled once.
     return findfirst(other -> dynamic_match(algo.valuetype, read_type(other)), entry.algos)
