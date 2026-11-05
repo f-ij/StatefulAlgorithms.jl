@@ -102,7 +102,7 @@ Status: `open`, `done <new hash>`, `skip`, `squashed into #n`, `asked` (waiting 
 
 | # | Old | Subject | Old-layout files | Notes | Status |
 |---|---|---|---|---|---|
-| 1 | `120bec25` | UniquePlanId: Unique handles numbered per plan, held handles stay keys found from types | `InlineProcess.jl`, `InlineProcessShowing.jl`, `Process.jl`, `ProcessInteraction.jl` |  | open |
+| 1 | `120bec25` | UniquePlanId: Unique handles numbered per plan, held handles stay keys found from types | `InlineProcess.jl`, `InlineProcessShowing.jl`, `Process.jl`, `ProcessInteraction.jl` | Handout fitted to main by the owner's rule (2026-11-05): the user always gets the map (`getcontext(p)`/`getcontext(ip)`, `fetch(p)`, `setup`, `run(plan, context)`, `init(plan, context, ...)` hand out `with_held_ids`); SA's own reads use `_getcontext_nokeymap(p)` (old `_context`), internal `_setup`, `_init_again`, `_fetch`; contexts coming in are `strip_held_ids`'d. Left out: the per-`Process` `_HeldContextCache` field (`getcontext` is one `InteractiveProcess` method on main). Kept: the global `cached_key_map` (removed by #14). The owner asked for one commit per old commit (2026-11-05). | done |
 | 2 | `8e1c19c0` | ProcessContexts: _getindex_by_registry -> _find_subcontext_of (name says what it does) |  |  | open |
 | 3 | `fd9407d5` | Vars.jl: _var_match branches with an if and a comment on the stripped-handle case |  |  | open |
 | 4 | `3338d7cd` | UniquePlanId in its own folder; Var holds its id as data like Route; lifetimes and RunIf keep their Vars in a field | `Lifetimes/HookExtensions.jl`, `LoopAlgorithms/HookExtensions.jl` |  | open |

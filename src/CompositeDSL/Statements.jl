@@ -132,13 +132,13 @@ function _dsl_build_global_route_statement(stmt, alias_map, context_map; include
     end
 
     route = if isnothing(transform) && isnothing(reverse_transform)
-        :(StatefulAlgorithms.Route($(esc(source.owner)) => $(esc(target.owner)), $(QuoteNode(source.field)) => $(QuoteNode(target.field))))
+        :(StatefulAlgorithms.Route($(_dsl_input(source.owner)) => $(_dsl_input(target.owner)), $(QuoteNode(source.field)) => $(QuoteNode(target.field))))
     elseif isnothing(reverse_transform)
-        :(StatefulAlgorithms.Route($(esc(source.owner)) => $(esc(target.owner)), $(QuoteNode(source.field)) => $(QuoteNode(target.field)); transform = $(esc(transform))))
+        :(StatefulAlgorithms.Route($(_dsl_input(source.owner)) => $(_dsl_input(target.owner)), $(QuoteNode(source.field)) => $(QuoteNode(target.field)); transform = $(esc(transform))))
     elseif isnothing(transform)
-        :(StatefulAlgorithms.Route($(esc(source.owner)) => $(esc(target.owner)), $(QuoteNode(source.field)) => $(QuoteNode(target.field)); reverse_transform = $(esc(reverse_transform))))
+        :(StatefulAlgorithms.Route($(_dsl_input(source.owner)) => $(_dsl_input(target.owner)), $(QuoteNode(source.field)) => $(QuoteNode(target.field)); reverse_transform = $(esc(reverse_transform))))
     else
-        :(StatefulAlgorithms.Route($(esc(source.owner)) => $(esc(target.owner)), $(QuoteNode(source.field)) => $(QuoteNode(target.field)); transform = $(esc(transform)), reverse_transform = $(esc(reverse_transform))))
+        :(StatefulAlgorithms.Route($(_dsl_input(source.owner)) => $(_dsl_input(target.owner)), $(QuoteNode(source.field)) => $(QuoteNode(target.field)); transform = $(esc(transform)), reverse_transform = $(esc(reverse_transform))))
     end
     return _dsl_maybe_guard_metadata_expr(:(push!(_dsl_options, $route)), include_condition)
 end
@@ -156,7 +156,7 @@ function _dsl_build_redirect_statement(stmt, alias_map, context_map; include_con
     isnothing(source) && error("@redirect source must be an owned field reference like `source.value` or `c1.inner.value`.")
     isnothing(target) && error("@redirect target must be an owned field reference like `sink.value`.")
 
-    redirect = :(StatefulAlgorithms.Redirect($(esc(source.owner)) => $(esc(target.owner)), $(QuoteNode(source.field)) => $(QuoteNode(target.field))))
+    redirect = :(StatefulAlgorithms.Redirect($(_dsl_input(source.owner)) => $(_dsl_input(target.owner)), $(QuoteNode(source.field)) => $(QuoteNode(target.field))))
     return _dsl_maybe_guard_metadata_expr(:(push!(_dsl_options, $redirect)), include_condition)
 end
 
@@ -208,7 +208,7 @@ function _dsl_bind_endpoint(alias_map, context_map, ex)
     end
     parsed = _dsl_parse_owned_route_expr(alias_map, context_map, ex)
     isnothing(parsed) && error("@bind endpoints are a state field like `x` or an owned field like `a.x`. Got `$ex`.")
-    return (; owner = esc(parsed.owner), field = parsed.field)
+    return (; owner = _dsl_input(parsed.owner), field = parsed.field)
 end
 
 """Split `@bind a.x => b.y c.z => d.z [begin ... end]` into its mappings and the statements of its scope (or `nothing`)."""
@@ -361,7 +361,7 @@ function _dsl_build_owned_write_statement(lhs, rhs, alias_map, context_map, know
 
     return quote
         local _dsl_outputs = ()
-        local _dsl_resolved = StatefulAlgorithms._resolve_composite_dsl_entity($(esc(spec_expr)), $inputs_expr, _dsl_outputs, Val{Symbol()}())
+        local _dsl_resolved = StatefulAlgorithms._resolve_composite_dsl_entity($(_dsl_input(spec_expr)), $inputs_expr, _dsl_outputs, Val{Symbol()}())
         local _dsl_owner = _dsl_resolved.entity
         push!(_dsl_algos, _dsl_resolved.entity)
         push!(_dsl_specification, $schedule_expr)
@@ -478,7 +478,7 @@ function _dsl_build_statement(stmt, alias_map, context_map, known_outputs::Set{S
         output == owned_route.field || error("Owned field aliasing currently requires the output name to match the field name. Use `$(owned_route.field) = ...` for `$(repr(rhs))`.")
         metadata_expr = quote
             local _dsl_output = $(QuoteNode(output))
-            local _dsl_owner = $(esc(owned_route.owner))
+            local _dsl_owner = $(_dsl_input(owned_route.owner))
             if haskey(_dsl_state_owners, _dsl_output)
                 StatefulAlgorithms._composite_dsl_push_local_option!(
                     _dsl_options,
@@ -519,7 +519,7 @@ function _dsl_build_statement(stmt, alias_map, context_map, known_outputs::Set{S
             local _dsl_returns = $returns_expr
             # Resolve the user-facing DSL entity into a normal algorithm/state
             # object plus the routed input metadata the builder needs.
-            local _dsl_resolved = StatefulAlgorithms._resolve_composite_dsl_entity($(esc(parsed.spec_expr)), $inputs_expr, _dsl_returns, Val{$(QuoteNode(customname))}())
+            local _dsl_resolved = StatefulAlgorithms._resolve_composite_dsl_entity($(_dsl_input(parsed.spec_expr)), $inputs_expr, _dsl_returns, Val{$(QuoteNode(customname))}())
             local _dsl_entity = $entity_expr
             local _dsl_owner = $share_target_expr
             if _dsl_resolved isa StatefulAlgorithms._CompositeDSLResolved{:state}
@@ -591,7 +591,7 @@ function _dsl_build_statement(stmt, alias_map, context_map, known_outputs::Set{S
             local _dsl_outputs = $outputs_expr
             local _dsl_returns = $returns_expr
             local _dsl_resolved = StatefulAlgorithms._resolve_composite_dsl_keyword_call(
-                $(esc(parsed.spec_expr)),
+                $(_dsl_input(parsed.spec_expr)),
                 $keyword_args_expr,
                 $keyword_display_expr,
                 $inputs_expr,
@@ -620,7 +620,7 @@ function _dsl_build_statement(stmt, alias_map, context_map, known_outputs::Set{S
         # Function-call syntax stays on a dedicated path so we can recover
         # positional inputs and keyword values for the call's signature.
         local _dsl_resolved = StatefulAlgorithms._resolve_composite_dsl_call(
-            $(esc(parsed.spec_expr)),
+            $(_dsl_input(parsed.spec_expr)),
             $keyword_args_expr,
             $positional_values_expr,
             $positional_display_expr,

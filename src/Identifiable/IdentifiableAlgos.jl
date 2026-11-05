@@ -1,5 +1,5 @@
-function setcontextkey(sa::IdentifiableAlgo{F, Id, VA, AlgoName, Key, R}, newname::Symbol) where {F, Id, VA, AlgoName, Key, R}
-    IdentifiableAlgo{F, Id, VA, AlgoName, newname, R}(sa.func, getfield(sa, :reconstructor))
+function setcontextkey(sa::IdentifiableAlgo{F, Id, VA, AlgoName, Key, M}, newname::Symbol) where {F, Id, VA, AlgoName, Key, M}
+    IdentifiableAlgo{F, Id, VA, AlgoName, newname, M}(sa.func, getfield(sa, :matcher))
 end
 
 ########################################

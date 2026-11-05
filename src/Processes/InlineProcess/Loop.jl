@@ -18,6 +18,7 @@ end
 # A context given to `run(ip)`: the run starts from it, so it becomes the process's context first.
 @inline _set_inline_run_context!(p::InlineProcess, ::Nothing) = nothing
 @inline function _set_inline_run_context!(p::InlineProcess, context)
+    context = strip_held_ids(context)   # a context from `getcontext` carries the `UniqueKeyMap`
     @assert context isa contexttype(p) "Wrong context shape for this process\n Context is of type $(typeof(context)), but expected $(contexttype(p))."
     p.context = context
     return nothing
@@ -38,7 +39,7 @@ arguments, the same entry as a `Process` run (`run_session_loop`; with `Val(true
 gives back becomes the process's.
 """
 @inline function _run_inline!(p::InlineProcess, run_lifetime::LT, runtime_inputs::I, ::Val{inlined}) where {LT, I, inlined}
-    session, algo, lc = @inline prepare_for_loop(p, getcontext(p), runtime_inputs, Resuming{false}())
+    session, algo, lc = @inline prepare_for_loop(p, _getcontext_nokeymap(p), runtime_inputs, Resuming{false}())
     persistent_context, result = if inlined
         @inline loop(session, algo, lc, run_lifetime, Resuming{false}())
     else

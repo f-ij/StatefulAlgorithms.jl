@@ -31,7 +31,8 @@ registry.
 """
 function copyprocess(p::Process; lifetime = StatefulAlgorithms.getlifetime(p), timeout = p.timeout, context = nothing, kwargs...)
     isnothing(context) && return Process(getalgo(p), getspecs(p)...; lifetime, timeout)
-    typeof(context) === typeof(getcontext(p)) || throw(ArgumentError("copyprocess: `context` must have the shape of the process's context ($(typeof(getcontext(p)))), got $(typeof(context))."))
+    context = strip_held_ids(context)   # a context from `getcontext` carries the `UniqueKeyMap`
+    typeof(context) === typeof(_getcontext_nokeymap(p)) || throw(ArgumentError("copyprocess: `context` must have the shape of the process's context ($(typeof(_getcontext_nokeymap(p)))), got $(typeof(context))."))
     q = Process(getalgo(p); context, lifetime, timeout)
     q.specs = getspecs(p)
     return q
@@ -41,7 +42,7 @@ end
 function createfrom!(p1::Process, p2::Process)
     p1.algo = p2.algo
     p1.specs = getspecs(p2)
-    _sync_state_context!(p1, getcontext(p2))
+    _sync_state_context!(p1, _getcontext_nokeymap(p2))
     p1.runtime_context = nothing
     getsession(p1).loop_cursor = nothing
     p1.timeout = p2.timeout

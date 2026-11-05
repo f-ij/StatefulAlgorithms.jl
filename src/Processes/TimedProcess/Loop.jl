@@ -17,7 +17,7 @@ function _tick!(tp::TimedProcess)
         shouldrun(session) || return nothing
         algo, lt = getalgo(tp), getlifetime(session)
         plan = getplan(algo)
-        lc = _step!(plan, getloopcursor(tp), LoopContext(getcontext(tp), getruntimecontext(tp)), _root_wiring_view(algo, plan), Namespace{nothing}(), session, lt)
+        lc = _step!(plan, getloopcursor(tp), LoopContext(_getcontext_nokeymap(tp), getruntimecontext(tp)), _root_wiring_view(algo, plan), Namespace{nothing}(), session, lt)
         tick!(session)
         inc!(session)
         _sync_state_context!(tp, getpersistent(lc))

@@ -32,7 +32,7 @@ lifetime. `loopfunc` replaces `loop` for tests that look at what the loop gets.
 function _start_run!(p::Process, inputs::NamedTuple = (;); resume::Bool = false, threaded::Bool = true, loopfunc::LF = loop) where {LF}
     resume && wait(p)
     resuming = resume ? Resuming{true}() : Resuming{false}()
-    session, func, lc = prepare_for_loop(p, getcontext(p), inputs, resuming)
+    session, func, lc = prepare_for_loop(p, _getcontext_nokeymap(p), inputs, resuming)
     lt = getlifetime(session)
     # A resumed run clears the pause flag in the loop, after reading the cursor the pause kept.
     resume || @atomic session.paused = false
@@ -67,7 +67,7 @@ function _store_run_contexts!(p::Process, session::InteractiveSession, persisten
     if loop_ispaused(session)
         _sync_state_context!(p, getpersistent(returnvalue))
         p.runtime_context = getruntime(returnvalue)
-        return getcontext(p)
+        return _getcontext_nokeymap(p)
     end
     _sync_state_context!(p, persistent_context)
     session.loop_cursor = nothing

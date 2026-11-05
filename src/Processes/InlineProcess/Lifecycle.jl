@@ -58,7 +58,7 @@ accepted: `init(ip, Only(...), ...)` runs a subset of the `init` functions.
 function Base.reset(ip::IP, specs::Vararg{InputInterface}) where {IP<:InlineProcess}
     plan = getalgo(ip)
     stored = _stored_specs(plan, (getspecs(ip)..., specs...))
-    context = first(setup(plan, stored...; lifetime = getlifetime(ip)))
+    context = first(_setup(plan, stored...; lifetime = getlifetime(ip)))
     return _construct_inline_process(plan, context, stored, getlifetime(ip))
 end
 

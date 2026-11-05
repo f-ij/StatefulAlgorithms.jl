@@ -80,13 +80,13 @@ entry_matcher(@nospecialize(T)) = match_by(T)
     same_algorithm(added, entry) -> Bool
 
 Whether the matcher of an added algorithm (`added_matcher`) and that of an entry (`entry_matcher`) say they are the
-same algorithm: `added == entry`, with concrete types (algorithms often match by their type, `Lin{1}`) and normalized
-ids equal only if identical.
+same algorithm: `added == entry`, with concrete types (algorithms often match by their type, `Lin{1}`) equal only if
+identical. Matcher types (the type-level id of a handle whose matcher carries data, `UniquePlanId{1}`) compare with
+`==`: a merged state's `MatchAnyOf` type matches each of its parts.
 """
 function same_algorithm(@nospecialize(added), @nospecialize(entry))
-    # `==` of two `NormalizedId`s is `===`; calling `==` would compile it once per pair of id types.
-    added isa NormalizedId && entry isa NormalizedId && return added === entry
-    if added isa DataType && isconcretetype(added) && entry isa DataType && isconcretetype(entry)
+    if added isa DataType && isconcretetype(added) && entry isa DataType && isconcretetype(entry) &&
+       !(added <: AbstractMatcher && entry <: AbstractMatcher)
         return added === entry
     end
     return added == entry
@@ -153,5 +153,10 @@ with one id are the same entry already, also when their values differ (one may c
 function merges_into(@nospecialize(E), @nospecialize(N))
     E <: IdentifiableAlgo && N <: IdentifiableAlgo || return false
     handles_merge(E, N) || return false
-    return !(id(E) isa Union{SimpleId, NormalizedId} && id(E) == id(N))
+    return !(_is_given_id(id(E)) && id(E) == id(N))
 end
+
+# An id given to a handle (`Unique`, a block's `@state`), as opposed to one it matches by (its type, its key). `id(E)`
+# of a handle type is the type of a `UniquePlanId`.
+_is_given_id(@nospecialize(id)) = id isa SimpleId || id isa UniquePlanId ||
+    (id isa Type && id <: UniquePlanId)

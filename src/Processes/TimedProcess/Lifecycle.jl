@@ -19,7 +19,7 @@ function Base.run(tp::TimedProcess; repeats = nothing, lifetime = nothing, kwarg
         isnothing(lt) || error("Cannot pass `repeats` or `lifetime` while resuming a paused TimedProcess: it keeps the lifetime it started with.")
     else
         setlifetime!(getsession(tp), something(lt, StatefulAlgorithms.getlifetime(tp)))
-        session, algo, lc = prepare_for_loop(tp, getcontext(tp), (; kwargs...), Resuming{false}())
+        session, algo, lc = prepare_for_loop(tp, _getcontext_nokeymap(tp), (; kwargs...), Resuming{false}())
         session.loop_cursor = starting_cursor(session, getplan(algo), Resuming{false}())
         tp.runtime_context = getruntime(lc)
         before_while(session)

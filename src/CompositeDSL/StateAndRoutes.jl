@@ -33,11 +33,11 @@ function _dsl_inputs_expr(input_specs)
             # route code stays easy to inspect at runtime.
             :( (; kind = :simple, source_field = $(QuoteNode(spec.source_field)), target_field = $(QuoteNode(spec.target_field)) ) )
         elseif spec.kind == :context_simple
-            :( (; kind = :context_simple, owner = $(esc(spec.owner)), source_field = $(QuoteNode(spec.source_field)), target_field = $(QuoteNode(spec.target_field)) ) )
+            :( (; kind = :context_simple, owner = $(_dsl_input(spec.owner)), source_field = $(QuoteNode(spec.source_field)), target_field = $(QuoteNode(spec.target_field)) ) )
         elseif spec.kind == :simple_transform
             :( (; kind = :simple_transform, source_field = $(QuoteNode(spec.source_field)), target_field = $(QuoteNode(spec.target_field)), transform = $(esc(spec.transform_expr)) ) )
         elseif spec.kind == :context_transform
-            :( (; kind = :context_transform, owner = $(esc(spec.owner)), source_field = $(QuoteNode(spec.source_field)), target_field = $(QuoteNode(spec.target_field)), transform = $(esc(spec.transform_expr)) ) )
+            :( (; kind = :context_transform, owner = $(_dsl_input(spec.owner)), source_field = $(QuoteNode(spec.source_field)), target_field = $(QuoteNode(spec.target_field)), transform = $(esc(spec.transform_expr)) ) )
         else
             error("Unsupported DSL input spec kind `$(spec.kind)`.")
         end
@@ -309,8 +309,10 @@ runtime expression that wraps the entity in `IdentifiableAlgo` when a stable DSL
 name is known, and leaves it unchanged when no name was declared.
 """
 function _dsl_known_owner_expr(entity_expr, name::Symbol)
-    name == Symbol() && return entity_expr
-    return :(StatefulAlgorithms._composite_dsl_owner($entity_expr, $(QuoteNode(name))))
+    # Stripped of `Unique` uuids (`strip_unique`), as every value the block takes from the user's code.
+    stripped = :(StatefulAlgorithms.strip_unique($entity_expr))
+    name == Symbol() && return stripped
+    return :(StatefulAlgorithms._composite_dsl_owner($stripped, $(QuoteNode(name))))
 end
 
 """Return the key-safe owner value used by `Var` selectors emitted from the DSL."""
@@ -349,7 +351,7 @@ function _composite_dsl_write_owner(entity, name::Symbol)
 end
 
 """Return `true` for a block's own `@state`: a `GeneralState` carrying the id it got when the block was built."""
-_composite_dsl_is_block_state(entry) = entry isa AbstractIdentifiableAlgo && getalgo(entry) isa GeneralState && id(entry) isa Union{SimpleId, NormalizedId}
+_composite_dsl_is_block_state(entry) = entry isa AbstractIdentifiableAlgo && getalgo(entry) isa GeneralState && _is_given_id(id(entry))
 
 """Return the `@state` of the DSL block `entity` (its identified `GeneralState`), the owner of `c.field` references."""
 function _composite_dsl_block_state(entity::LoopSpec)
@@ -543,15 +545,15 @@ end
 
 """
 `@merge c1, c2, ...`: the `@state`s of these nested blocks become one state. It holds the fields of all of them (a field
-they share is one field), and is matched by the id of each (`MatchAny`), so every reference to one of the merged states
-finds it. It is pushed to the current block's states, which are registered before those of the nested blocks.
+they share is one field), and is matched by the id of each (`MatchAnyOf`, the ids as data), so every reference to one
+of the merged states finds it. It is pushed to the current block's states, which are registered before those of the nested blocks.
 """
 function _composite_dsl_merge_states!(states::Vector{Any}, blocks::Tuple)
     merged = map(_composite_dsl_block_state, blocks)
     fields = Tuple(unique(Iterators.flatten(general_state_fields(getalgo(s)) for s in merged)))
     # Same-named fields are meant to be one here, so they are marked as shared and do not warn.
     state = reduce(merge, map(s -> mark_general_state_fields_explicitly_shared(getalgo(s), fields), merged))
-    push!(states, IdentifiableAlgo(state, Symbol(), MatchAny{map(id, merged)}()))
+    push!(states, IdentifiableAlgo(state, Symbol(), MatchAnyOf(map(id, merged))))
     return states
 end
 
@@ -583,11 +585,11 @@ end
 
 _composite_dsl_is_state_owner(owner) = owner isa AbstractIdentifiableAlgo && getalgo(owner) isa AlgoState
 
-"""The bind (source owner, source field) that replaces reading `field` from an endpoint with matcher `endpoint_match`, or `nothing`."""
-function _composite_dsl_bound_source(binds::Tuple, endpoint_match, field::Symbol)
-    endpoint_match isa Symbol && return nothing
+"""The bind (source owner, source field) that replaces reading `field` from the endpoint `endpoint` (an SCRef), or `nothing`."""
+function _composite_dsl_bound_source(binds::Tuple, endpoint, field::Symbol)
+    endpoint isa Symbol && return nothing
     for (source_owner, source_field, target_owner, target_field) in binds
-        target_field == field && scref_match(target_owner) == endpoint_match && return (source_owner, source_field)
+        target_field == field && same_scref(target_owner, endpoint) && return (source_owner, source_field)
     end
     return nothing
 end
@@ -604,7 +606,7 @@ function _composite_dsl_rebind_option(route::Route, binds::Tuple)
     kept = Pair{Symbol, Symbol}[]
     moved = Any[]
     for i in eachindex(varnames)
-        bound = _composite_dsl_bound_source(binds, source_match_by(route), varnames[i])
+        bound = _composite_dsl_bound_source(binds, source_owner, varnames[i])
         if isnothing(bound)
             push!(kept, varnames[i] => aliases[i])
         else
@@ -661,8 +663,7 @@ _composite_dsl_is_empty_state(state) = _composite_dsl_is_block_state(state) && i
 """A block's `@state` without the fields bound to a source elsewhere."""
 function _composite_dsl_unbind_state(state, binds::Tuple)
     _composite_dsl_is_block_state(state) || return state
-    match = scref_match(state)
-    fields = Tuple(target_field for (_, _, target, target_field) in binds if scref_match(target) == match)
+    fields = Tuple(target_field for (_, _, target, target_field) in binds if same_scref(target, state))
     isempty(fields) && return state
     return setfield(state, :func, _general_state_without(getalgo(state), fields))
 end
@@ -821,7 +822,7 @@ function _dsl_state_setup_expr(state_fields, state_name::Symbol)
     # A block's own state gets an id here, once per construction, so two blocks built from the same code keep separate
     # state (`_state_1`, `_state_2`); a named state is keyed by its name and shared by every state with that name.
     state_entry_expr = state_name == :_state ?
-        :(StatefulAlgorithms.IdentifiableAlgo($state_expr, Symbol(), StatefulAlgorithms.uuid4())) :
+        :(StatefulAlgorithms.strip_unique(StatefulAlgorithms.IdentifiableAlgo($state_expr, Symbol(), StatefulAlgorithms.UniquePlanId(StatefulAlgorithms.uuid4())))) :
         :($(QuoteNode(state_name)) => $state_expr)
     state_owner_expr = state_name == :_state ? :(_dsl_state) : _dsl_known_owner_expr(:(_dsl_state.second), state_name)
     return quote

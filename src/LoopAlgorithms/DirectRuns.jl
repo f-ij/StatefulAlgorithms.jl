@@ -123,10 +123,17 @@ end
 The first step of the user pipeline (setup, `run`, `cleanup`) for a plan run without a process: resolves `plan_spec`
 and builds its starting context. Every algorithm's `init` runs; `InitArgs(...)` gives the values it reads,
 `Override(...)` values are set after it. `lifetime` is what init may size buffers by. Returns the context and the
-resolved plan; the plan holds no context, the user keeps the context and passes it to `run(plan, context)`. A process
-sets up a new context with it from its resolved plan and stored specs (`reset(ip)`, the error path of `close`).
+resolved plan; the plan holds no context, the user keeps the context and passes it to `run(plan, context)`. The
+context has the `Unique` handles the user holds as keys found from types (`with_held_ids`): `context[handle]`.
 """
 function setup(plan_spec::LA, specs::InputInterface...; lifetime = Indefinite()) where {LA<:LoopSpec}
+    context, plan = _setup(plan_spec, specs...; lifetime)
+    return with_held_ids(context), plan
+end
+
+"""`setup` as SA works with it: the context without the plan's `UniqueKeyMap`. A process sets up a new context with it
+from its resolved plan and stored specs (`reset(ip)`, the error path of `close`)."""
+function _setup(plan_spec::LA, specs::InputInterface...; lifetime = Indefinite()) where {LA<:LoopSpec}
     plan = resolve(plan_spec)
     inits, overrides, interactives = _merged_lifecycle_specs(getregistry(plan), specs)
     return _init_context_for(plan, inits, overrides, interactives, lifetime), plan
@@ -138,13 +145,15 @@ end
 Runs the resolved `plan` (from `setup`) on `context` with no process around it and returns the run's final context and
 its result (what the plan's finalizer returns). The run lasts `lifetime`, or `repeats` repeats when no lifetime is
 given. The keyword `inputs` are the run's `@input` values, checked against the plan's declarations. The runtime
-context (inputs, declared locals, returns) is dropped when the run ends; only the state context comes back.
+context (inputs, declared locals, returns) is dropped when the run ends; only the state context comes back. A context
+from `setup` is run without its `UniqueKeyMap` (`strip_held_ids`); the one that comes back has it again.
 """
 function Base.run(plan::LA, context::C; repeats = 1, lifetime = nothing, kwargs...) where {LA<:LoopSpec, C<:ProcessContext}
     isresolved(plan) || throw(ArgumentError("run(plan, context) needs the resolved plan that `setup` returns."))
     lt = parse_lifetime(lifetime, isnothing(lifetime) ? repeats : nothing)
-    session, plan, lc = prepare_for_loop(plan, context, (; kwargs...), Resuming{false}())
-    return run_session_loop(session, plan, lc, lt)
+    session, plan, lc = prepare_for_loop(plan, strip_held_ids(context), (; kwargs...), Resuming{false}())
+    final_context, result = run_session_loop(session, plan, lc, lt)
+    return with_held_ids(final_context), result
 end
 
 """
@@ -156,9 +165,14 @@ every algorithm's `init` runs; with `Only(A, B)` only A's and B's run (in regist
 is kept. Each `init` reads its part of `context` with the `InitArgs` values merged in; `Override` values are set after
 it (an `Override` for a target whose `init` does not run only sets its values). `InitArgs` for a target outside the
 `Only` is an error. `lifetime` is what a full init may size buffers by. To start from an empty context instead, use
-`setup`.
+`setup`. A context from `setup` comes back with the `Unique` handles the user holds as keys (`with_held_ids`).
 """
 function init(plan::LA, context::C, specs::InputInterface...; lifetime = Indefinite()) where {LA<:LoopSpec, C<:ProcessContext}
+    return with_held_ids(_init_again(plan, strip_held_ids(context), specs...; lifetime))
+end
+
+"""`init(plan, context, ...)` on a context without the plan's `UniqueKeyMap`."""
+function _init_again(plan::LA, context::C, specs::InputInterface...; lifetime = Indefinite()) where {LA<:LoopSpec, C<:ProcessContext}
     isresolved(plan) || throw(ArgumentError("init(plan, context, ...) needs the resolved plan that `setup` returns."))
     reg = getregistry(plan)
     only, rest = _split_only(reg, specs)

@@ -260,7 +260,7 @@ function runprocessinline!(worker::P; lifetime = nothing, repeats = nothing, kwa
 
     # Build the same runtime context as the asynchronous Process path, but call
     # the loop directly so no scheduler task is created for short manager jobs.
-    base_context = getcontext(worker)
+    base_context = _getcontext_nokeymap(worker)
     setlifetime!(getsession(worker), something(launch_lifetime, StatefulAlgorithms.getlifetime(worker)))
     session, plan, lc = prepare_for_loop(worker, base_context, (; kwargs...), Resuming{false}())
     lt = getlifetime(session)
@@ -1017,7 +1017,7 @@ Default worker-copy rule. `Process` workers keep the same algorithm/lifetime and
 deep-copy context; other worker objects are deep-copied directly.
 """
 function _default_copyworker(template::Process, idx, manager)
-    return Process(getalgo(template); context = deepcopy(getcontext(template)), lifetime = getlifetime(template), timeout = template.timeout)
+    return Process(getalgo(template); context = deepcopy(_getcontext_nokeymap(template)), lifetime = getlifetime(template), timeout = template.timeout)
 end
 _default_copyworker(template, idx, manager) = deepcopy(template)
 

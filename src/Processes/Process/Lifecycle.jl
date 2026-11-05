@@ -43,7 +43,7 @@ into the state context (`_sync_state_context!`). Returns `p.lastresult`. Also en
 the same two contexts between its ticks.
 """
 function _cleanup_paused_process!(p::InteractiveProcess)
-    cleaned = @inline cleanup(getalgo(p), LoopContext(getcontext(p), p.runtime_context))
+    cleaned = @inline cleanup(getalgo(p), LoopContext(_getcontext_nokeymap(p), p.runtime_context))
     p.lastresult = @inline loop_final_result(getalgo(p), (@inline final_context(cleaned)), getruntime(cleaned))
     p.runtime_context = nothing
     _sync_state_context!(p, getpersistent(cleaned))
@@ -62,7 +62,7 @@ function Base.close(p::Process)
 
     try
         wait(p)
-        isnothing(p.task) || (p.lastresult = fetch(p))
+        isnothing(p.task) || (p.lastresult = _fetch(p))
 
         was_paused && _cleanup_paused_process!(p)
     catch(err)
@@ -70,7 +70,7 @@ function Base.close(p::Process)
         Base.showerror(stderr, err)
         p.task = nothing
         p.runtime_context = nothing
-        _sync_state_context!(p, first(setup(getalgo(p), getspecs(p)...; lifetime = getlifetime(p))))
+        _sync_state_context!(p, first(_setup(getalgo(p), getspecs(p)...; lifetime = getlifetime(p))))
 
     end
 
@@ -174,10 +174,10 @@ end
 #     end    
 # end
 
-"""
-Fetch the return value of a process
-"""
-@inline Base.fetch(@nospecialize(p::Process)) = if !isnothing(p.task) fetch(p.task) else p.lastresult end
+"""The run's result as SA works with it (see `fetch`)."""
+@inline _fetch(@nospecialize(p::Process)) = if !isnothing(p.task) fetch(p.task) else p.lastresult end
+"""Fetch the return value of a process; a context comes with the `Unique` handles the user holds as keys found from types (`with_held_ids`)."""
+Base.@nospecializeinfer Base.fetch(@nospecialize(p::Process)) = with_held_ids(_fetch(p))
 
 """
 Quit all processes in the process list

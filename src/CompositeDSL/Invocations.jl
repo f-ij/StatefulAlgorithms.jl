@@ -289,7 +289,7 @@ function _dsl_parse_all_share_arg(alias_map, arg)
     end
 
     resolved_source, source_name = _dsl_rewrite_entry_root(alias_map, source_expr)
-    return _dsl_known_owner_expr(esc(resolved_source), source_name)
+    return _dsl_known_owner_expr(_dsl_input(resolved_source), source_name)
 end
 
 """

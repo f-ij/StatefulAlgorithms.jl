@@ -30,17 +30,26 @@ getalgo(p::P) where {P<:InteractiveProcess} = p.algo
     getcontext(p::InteractiveProcess)
 
 The process's state context: the user's handle on the process's state, with the registry. Never a run's runtime
-context: a paused run keeps that apart (`p.runtime_context`).
+context: a paused run keeps that apart (`p.runtime_context`). The `Unique` handles the user holds are keys found from
+types in it (`with_held_ids`): `getcontext(p)[handle]`. SA's own code reads `_getcontext_nokeymap(p)`.
 """
-getcontext(p::P) where {P<:InteractiveProcess} = p.state_context
+Base.@nospecializeinfer getcontext(@nospecialize(p::InteractiveProcess)) = with_held_ids(_getcontext_nokeymap(p))
+
+"""
+    _getcontext_nokeymap(p::InteractiveProcess)
+
+The process's state context as SA works with it: its registry stores the `Unique` handles numbered, without the plan's
+`UniqueKeyMap` (what `getcontext` adds for the user).
+"""
+_getcontext_nokeymap(p::P) where {P<:InteractiveProcess} = p.state_context
 
 """
     setcontext!(p::InteractiveProcess, c) -> c
 
 Store `c` as the process's state context. Does not look at whether `p` runs: a caller that may race a running loop
-pauses it first.
+pauses it first. A context from `getcontext` is stored without its `UniqueKeyMap` (`strip_held_ids`).
 """
-setcontext!(p::P, c::C) where {P<:InteractiveProcess, C<:ProcessContext} = (p.state_context = c)
+setcontext!(p::P, c::C) where {P<:InteractiveProcess, C<:ProcessContext} = (p.state_context = strip_held_ids(c))
 
 """
     setlifetime!(p, lt) -> p
@@ -59,7 +68,7 @@ end
 
 A new `Process` with `p`'s plan, specs, timeout and context (the same context object, not a copy) and lifetime `lt`.
 """
-setlifetime(p::Process, lt::LT) where {LT<:Lifetime} = copyprocess(p; lifetime = lt, context = getcontext(p))
+setlifetime(p::Process, lt::LT) where {LT<:Lifetime} = copyprocess(p; lifetime = lt, context = _getcontext_nokeymap(p))
 
 """
     _sync_state_context!(p, c)
@@ -71,7 +80,7 @@ user's handle (the registry), and the result is stored with `setcontext!`. Leave
 # TODO: this is the function to extend later so that it puts the data from the `LoopContext` into the user's handle
 # context (the process keeps the handle's type, which matters once the registries are stripped before the loop).
 @inline _sync_state_context!(p::P, c::C) where {P<:InteractiveProcess, C<:ProcessContext} =
-    setcontext!(p, withsubcontexts(getcontext(p), get_subcontexts(c)))
+    setcontext!(p, withsubcontexts(_getcontext_nokeymap(p), get_subcontexts(c)))
 
 """The `InitArgs`/`Override`/`Interactive` specs the process's context is set up from: those it was built with, merged
 with those of later `init!` calls (resolved, one per target and kind)."""

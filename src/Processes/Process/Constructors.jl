@@ -31,10 +31,12 @@ a new `Process` gets.
 function _prepare_process(algo::A, inputs_overrides::Vararg{Any,N}; context::C = nothing, repeats = nothing, lifetime = nothing, timeout = 1.0) where {A,N,C}
     lifetime = something(parse_lifetime(lifetime, repeats), default_lifetime(algo))
     if isnothing(context)
-        context, algo = setup(algo, inputs_overrides...; lifetime)
+        context, algo = _setup(algo, inputs_overrides...; lifetime)
     else
         isempty(inputs_overrides) || error("Pass either an initialized `context` or init/override specs to `Process`, not both.")
         algo = resolve(algo)
+        # A context the user got from SA carries a `UniqueKeyMap`; the process works with it without (`strip_held_ids`).
+        context = strip_held_ids(context)
     end
     return algo, context, _stored_specs(algo, inputs_overrides), lifetime, timeout
 end
