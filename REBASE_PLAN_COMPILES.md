@@ -114,7 +114,7 @@ and put plan-compiles' map work into it:
 | `initcontext(algo, [c], specs...)` (`src/Init.jl`), `initcontext(context, ::Symbol / algo)` | `setup`; `init(plan, context, Only(...), ...)` | `07d5afc4` |
 | `makecontext`, `makecontext!` | `init!(p, ...)` | `07d5afc4` |
 | `init!(ip::InlineProcess, ...)` | `init(ip, ...) -> InlineProcess` (new process with the merged specs); `init_and_run(ip, ...)` = `run(init(ip, ...))` | `d3423980` |
-| `reset!(ip::InlineProcess, ...)` | `Base.reset(ip, specs...) -> InlineProcess` (fresh context from the merged specs, which it keeps; no `Only`); `reset!` stays for `Process` (export moved to `Process/Lifecycle.jl`) | this commit |
+| `reset!(ip::InlineProcess, ...)` | `Base.reset(ip, specs...) -> InlineProcess` (fresh context from the merged specs, which it keeps; no `Only`); `reset!` stays for `Process` (export moved to `Process/Lifecycle.jl`) | `004b5121` |
 | `_initial_runtime_context` (plan-compiles calls it in `Context/ContextBundles.jl`, `Loops.jl`, `ProcessInteraction.jl`) | `LoopContext(plan, context)` (declared locals start there) + `with_inputs(lc, plan, inputs)` for a new run; a pause's runtime context is kept whole (`p.runtime_context`) | `2aba4abe`, `3b0c4969`, `e7cc9fea` |
 | `_resolve_input_target_key` (`src/InputInterface/Resolving.jl`) | `resolve(reg, ::InputInterface)` calls `static_findkey` / `getkey(get_by_matcher(...))` directly | `a489de1f` |
 | `_has_typed_state_context`, `_typed_state_context` | manager launches from `getcontext(worker)` | `11e859a7` |
@@ -160,7 +160,7 @@ plan-compiles still has the old layout. Its changes to these files go into the n
 4. **A plan holds no data.** The context and the specs belong to the user (`setup`) or to the process
    (`state_context`, `specs`, `getspecs(p)`). Stored specs are resolved once and merged per target. Resolving an
    already resolved spec (a `Symbol` target) does no lookup by name, it only drops the ref (`8cd5015f`), so stored
-   specs go through `resolve` like any others: `reset!(ip)` and `close`'s error path call
+   specs go through `resolve` like any others: `reset(ip)` and `close`'s error path call
    `setup(getalgo(p), getspecs(p)..., specs...)`, `init!`/`copyprocess` pass the stored specs in front of the new ones
    (`_merged_lifecycle_specs`, no `base` argument). Never add a lookup by name on these paths: one in the precompile
    workload makes the package image fail to load on Julia 1.13.1.
