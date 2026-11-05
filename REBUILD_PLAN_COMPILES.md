@@ -152,8 +152,8 @@ Status: `open`, `done <new hash>`, `skip`, `squashed into #n`, `asked` (waiting 
 | 39 | `32034e8b` | Process: a paused run's context in its own field; no `context(p, c)`; `makeloop!` is one call | `Process.jl`, `ProcessInteraction.jl` | Main has its own pause split (`state_context` + `runtime_context`, `_store_run_contexts!`), so `paused_context`/`reshaped_context` and the `makeloop!` changes are settled. | skip |
 | 40 | `1f8d93f0` | Keymap getters and setters (getkeymap, with_keymap, strip_keymap, attach/detach_keymap) in UniquePlanId/Accessors.jl |  | `getkeymap`, `_registry_field`, `with_keymap`, `strip_keymap`, `strip_keymap_typed` (its `ProcessContext` method moved from Context/ProcessContexts.jl) in `UniquePlanId/Accessors.jl`, included after Context/. ContextKeymap.jl/`attach_keymap` never came in; the TODO wording change is about the old fields. | done `433c3b6f` |
 | 41 | `b50e2c2e` | run(ip) returns its context with the UniqueKeyMap; is_found_by_data is gone | `InlineProcess.jl` | `is_found_by_data` removed (hook, extension, the fallback in `static_findfirst_match`); `run(ip)` returns its result with the plan's registry through a typed `with_plan_registry(ip, c)` sharing the stored context's `Ref` (the old `user_registry` field and `set_session_context!` are removed later by #82/#85 and not ported). Hot path: end of `run(ip)`. | done `016d6274` |
-| 42 | `32f77cf1` | LookupKey(algo) makes every lookup key; RuntimeLookupKey is gone |  |  | done |
-| 43 | `b9b202bf` | TODO: fast path for a plan with one Unique per type |  | docs/TODO only | open |
+| 42 | `32f77cf1` | LookupKey(algo) makes every lookup key; RuntimeLookupKey is gone |  |  | done `b8a950e8` |
+| 43 | `b9b202bf` | TODO: fast path for a plan with one Unique per type |  | docs/TODO only | done |
 | 44 | `0b19557a` | TODO (urgent): merge semantics, which states may become one and whether the registry merge should exist |  | docs/TODO only | open |
 | 45 | `c7957f13` | DSL: a block's own @state is its first state; no id check |  |  | open |
 | 46 | `7b2c5351` | DynamicUnique(f): a Unique with its uuid in the value only, made directly |  |  | open |
