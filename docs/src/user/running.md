@@ -66,7 +66,8 @@ For selector syntax used in `Until`, see [Vars (`Var` Selectors)](@ref vars_user
 - `close(p)`: stop the process, wait for it, run cleanup when needed, and commit
   the final persistent context.
 - `init!(p, InitArgs(...), Override(...))`: runs every `init` again, from the process's stored specs with the new
-  ones merged over them, and makes the result the process's state. The process keeps the merged specs.
+  ones merged over them, and makes the result the process's state. A `Process` or `TimedProcess` keeps the merged
+  specs; an `InlineProcess` keeps the specs it was built with (they are part of its type: other specs mean a new process).
 - `init!(p, Only(A, B), InitArgs(...))`: only A's and B's `init` run, on the current state; the rest is kept.
 - A running process is paused for `init!` and runs on after; a paused one stays paused.
 

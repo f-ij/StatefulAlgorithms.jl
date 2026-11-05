@@ -11,16 +11,16 @@ Mainly used to compose algorithms in tight loops, plugging into the ProcessLoopA
 This doesn't provide the multitasking features of Process, but is faster to restart. A run runs in the caller's task:
 running on a task of its own is what `Process` is for.
 """
-mutable struct InlineProcess{TD,ContextType, Lt} <: AbstractProcess
+mutable struct InlineProcess{TD,ContextType, Lt, S<:Tuple} <: AbstractProcess
     const id::UUID
     const algo::TD
     # The process's context: the loop gets it as an argument (`run_session_loop`) and gives the new one back, which
     # `run(ip)` stores here.
     context::ContextType
-    # The `InitArgs`/`Override`/`Interactive` specs the context is set up from: the ones the process was built with, with
-    # those of later `init!(ip, ...)` calls merged in. `reset!(ip)` and a full `init!(ip)` set up from them again.
-    specs::Tuple
-    consumed::Bool
+    # The `InitArgs`/`Override`/`Interactive` specs the process was built with (resolved, merged per target), the ones
+    # `reset!(ip)` and a full `init!(ip)` set up from. Typed and fixed, so code reading them stays type stable: other
+    # specs for good mean a new process.
+    const specs::S
     lifetime::Lt
     # The run's counter, one session for every run (Processes/InlineProcess/Session.jl): what the loop gets instead of the
     # process.

@@ -34,21 +34,20 @@ end
     init!(ip, InitArgs(...), Override(...)) -> ip
     init!(ip, Only(A, B), InitArgs(...), Override(...)) -> ip
 
-As `init!(p::Process, ...)`: runs `init` again (all of them, or the ones `Only` names) and makes the result the
-process's context; the process keeps the merged specs. The loop counter is left alone (`reset!` restarts it).
+Runs `init` again (all of them, from the specs the process was built with and `specs` merged over them, or only the
+ones `Only` names, on the current context) and makes the result the process's context. Unlike `init!(p::Process, ...)`
+the process does not keep the merged specs: its specs are typed and fixed, and other specs for good mean a new
+process. The loop counter is left alone (`reset!` restarts it).
 """
 function init!(ip::InlineProcess, specs::InputInterface...)
-    context, stored = _init_process_context(ip, specs)
+    context, _ = _init_process_context(ip, specs)
     setcontext!(ip, context)
-    ip.specs = stored
     return ip
 end
 
 @inline function reset!(p::InlineProcess, inputs_overrides...)
     reset_loopidx!(getsession(p))
     p.context = _setup_from_stored_specs(p, inputs_overrides...)
-    # TODO: Probably remove consumed flag
-    p.consumed = false
     return true
 end
 

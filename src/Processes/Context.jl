@@ -9,9 +9,9 @@ export init!
     _init_process_context(p, specs) -> (context, stored_specs)
 
 The work of `init!(p, specs...)` for every process type, without storing anything. The new specs are merged per target
-over the process's stored specs (later ones win), and that merge is what the process keeps. Without an `Only` every
-`init` runs from the merged specs on an empty context (as `setup`, with the process's lifetime); with `Only(A, B)` only
-A's and B's `init` run on the process's current context (`init(plan, context, Only(...), ...)`).
+over the process's stored specs (later ones win), and that merge is what `Process` and `TimedProcess` keep (an
+`InlineProcess`'s specs are fixed). Without an `Only` every `init` runs from the merged specs on an empty context (as
+`setup`, with the process's lifetime); with `Only(A, B)` only A's and B's `init` run on the process's current context (`init(plan, context, Only(...), ...)`).
 """
 function _init_process_context(p::AbstractProcess, specs::S) where {S<:Tuple}
     plan = getalgo(p)

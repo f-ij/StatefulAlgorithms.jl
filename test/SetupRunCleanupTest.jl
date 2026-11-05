@@ -71,7 +71,7 @@ end
     @test overridden[PipelineCounter].total == 5
 end
 
-@testset "init! on processes: full and Only, the process keeps the merged specs" begin
+@testset "init! on processes: full and Only; Process/TimedProcess keep the merged specs, InlineProcess its own" begin
     plan_spec = @CompositeAlgorithm begin
         @input step
         PipelineCounter(step)
@@ -88,15 +88,20 @@ end
         @test init!(p, Only(PipelineCounter), InitArgs(PipelineCounter; total = 40)) === p
         @test state(p) == (40, 2)
 
-        # Full: every `init` from the stored specs with the new ones merged over them.
+        # Full: every `init` from the stored specs with the new ones merged over them. An InlineProcess's specs are
+        # fixed (a typed const field), so it does not keep the `Only` call's specs nor this one's.
+        keeps_specs = !(p isa InlineProcess)
+        specs_before = StatefulAlgorithms.getspecs(p)
         init!(p, InitArgs(PipelineOther; count = 7))
-        @test state(p) == (40, 7)
+        @test state(p) == (keeps_specs ? 40 : 1, 7)
         init!(p)
-        @test state(p) == (40, 7)
+        @test state(p) == (keeps_specs ? (40, 7) : (1, 2))
         @test length(StatefulAlgorithms.getspecs(p)) == 2
+        keeps_specs || @test StatefulAlgorithms.getspecs(p) === specs_before
 
+        last_state = state(p)
         @test_throws ArgumentError init!(p, Only(PipelineCounter), InitArgs(PipelineOther; count = 1))
-        @test state(p) == (40, 7)
+        @test state(p) == last_state
         p isa InlineProcess || close(p)
     end
 end
