@@ -154,8 +154,8 @@ Status: `open`, `done <new hash>`, `skip`, `squashed into #n`, `asked` (waiting 
 | 41 | `b50e2c2e` | run(ip) returns its context with the UniqueKeyMap; is_found_by_data is gone | `InlineProcess.jl` | `is_found_by_data` removed (hook, extension, the fallback in `static_findfirst_match`); `run(ip)` returns its result with the plan's registry through a typed `with_plan_registry(ip, c)` sharing the stored context's `Ref` (the old `user_registry` field and `set_session_context!` are removed later by #82/#85 and not ported). Hot path: end of `run(ip)`. | done `016d6274` |
 | 42 | `32f77cf1` | LookupKey(algo) makes every lookup key; RuntimeLookupKey is gone |  |  | done `b8a950e8` |
 | 43 | `b9b202bf` | TODO: fast path for a plan with one Unique per type |  | docs/TODO only | done `eec66865` |
-| 44 | `0b19557a` | TODO (urgent): merge semantics, which states may become one and whether the registry merge should exist |  | docs/TODO only | done |
-| 45 | `c7957f13` | DSL: a block's own @state is its first state; no id check |  |  | open |
+| 44 | `0b19557a` | TODO (urgent): merge semantics, which states may become one and whether the registry merge should exist |  | docs/TODO only | done `1eb2cff3` |
+| 45 | `c7957f13` | DSL: a block's own @state is its first state; no id check |  |  | done |
 | 46 | `7b2c5351` | DynamicUnique(f): a Unique with its uuid in the value only, made directly |  |  | open |
 | 47 | `9f8670e2` | TODO (merge semantics): is_given_id goes with the registry merge and name matching |  | docs/TODO only | open |
 | 48 | `81c72225` | States match by their id, never by name; the registry merges no states; is_given_id is gone |  |  | open |

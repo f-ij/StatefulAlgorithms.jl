@@ -350,14 +350,16 @@ function _composite_dsl_write_owner(entity, name::Symbol)
     return IdentifiableAlgo(entity, name)
 end
 
-"""Return `true` for a block's own `@state`: a `GeneralState` carrying the id it got when the block was built."""
-_composite_dsl_is_block_state(entry) = entry isa AbstractIdentifiableAlgo && getalgo(entry) isa GeneralState && is_given_id(id(entry))
+"""Return `true` for a `@state` handle (an identified `GeneralState`)."""
+_composite_dsl_is_general_state(entry) = entry isa AbstractIdentifiableAlgo && getalgo(entry) isa GeneralState
 
-"""Return the `@state` of the DSL block `entity` (its identified `GeneralState`), the owner of `c.field` references."""
+"""
+Return the `@state` of the DSL block `entity`, the owner of `c.field` references: its first state, where the block put
+its own `@state` when it was built (`_dsl_state_setup_expr` runs before the block's statements).
+"""
 function _composite_dsl_block_state(entity::LoopSpec)
-    for state in getstates(entity)
-        _composite_dsl_is_block_state(state) && return state
-    end
+    states = getstates(entity)
+    !isempty(states) && _composite_dsl_is_general_state(first(states)) && return first(states)
     error("The block has no `@state`.")
 end
 
@@ -658,11 +660,11 @@ function _composite_dsl_rebind(plan::AbstractPlan, binds::Tuple)
     return setstates(plan, states)
 end
 
-_composite_dsl_is_empty_state(state) = _composite_dsl_is_block_state(state) && isempty(general_state_fields(getalgo(state)))
+_composite_dsl_is_empty_state(state) = _composite_dsl_is_general_state(state) && isempty(general_state_fields(getalgo(state)))
 
 """A block's `@state` without the fields bound to a source elsewhere."""
 function _composite_dsl_unbind_state(state, binds::Tuple)
-    _composite_dsl_is_block_state(state) || return state
+    _composite_dsl_is_general_state(state) || return state
     fields = Tuple(target_field for (_, _, target, target_field) in binds if same_scref(target, state))
     isempty(fields) && return state
     return setfield(state, :func, _general_state_without(getalgo(state), fields))
