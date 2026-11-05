@@ -64,7 +64,12 @@ alone, so the answer is decided from their types while compiling and the uuid is
 dynamic, or the two are in different forms (a held handle asked of a registry without a map), are their uuids
 compared, at run time.
 """
-@inline function Base.:(==)(a::UniquePlanId{N1}, b::UniquePlanId{N2}) where {N1, N2}
+@inline Base.:(==)(a::UniquePlanId{N1}, b::UniquePlanId{N2}) where {N1, N2} = same_unique_id(N1, N2, a, b)
+# `==` untyped (`dynamic_match`): the same answer, compiled once instead of for every pair of ids.
+Base.@nospecializeinfer dynamic_equals(@nospecialize(a::UniquePlanId), @nospecialize(b::UniquePlanId)) =
+    same_unique_id(typeof(a).parameters[1], typeof(b).parameters[1], a, b)
+# The answer of both, from the ids' forms `N1`, `N2`: constants in `==`, so it folds there; run-time values in `dynamic_equals`.
+@inline function same_unique_id(N1, N2, a::UniquePlanId, b::UniquePlanId)
     N1 isa Int && N2 isa Int && return N1 === N2
     N1 isa UUID && N2 isa UUID && return N1 === N2
     return origin(a) == origin(b)

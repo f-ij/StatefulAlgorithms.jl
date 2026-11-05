@@ -20,6 +20,25 @@ without fields, a numbered `UniquePlanId`), and compares values otherwise (a dyn
 """
 @inline match(obj1::O1, obj2::O2) where {O1,O2} = match_by(obj1) == match_by(obj2)
 
+"""
+    dynamic_match(a, b) -> Bool
+
+`match(a, b)` for code that knows the types only at run time, such as the registry walk comparing every new handle
+with the ones before it: untyped, and its matchers compared with `dynamic_equals`, so it compiles once instead of once
+for every pair of types. It gives the same answer as `match`.
+"""
+Base.@nospecializeinfer dynamic_match(@nospecialize(a), @nospecialize(b)) = dynamic_equals(match_by(a), match_by(b))::Bool
+
+"""
+    dynamic_equals(m1, m2) -> Bool
+
+`m1 == m2` for two matchers, untyped: what `dynamic_match` compares with. A matcher whose `==` reads its type
+parameters, and so compiles for every pair of types, extends it with an untyped method that gives the same answer as
+its `==`. Default: `==`. Extended by: `SimpleId`, `ObjectIDMatcher`, `ValMatcher` (below); `UniquePlanId`
+(Identifiable/UniquePlanId/StructDef.jl).
+"""
+Base.@nospecializeinfer dynamic_equals(@nospecialize(m1), @nospecialize(m2)) = m1 == m2
+
 
 ### MATCHERS
 
@@ -45,11 +64,13 @@ struct SimpleId{id} <: AbstractMatcher{id} end
 SimpleId() = SimpleId{uuid4()}()
 SimpleId(id) = SimpleId{id}()
 Base.:(==)(::SimpleId{id1}, ::SimpleId{id2}) where {id1, id2} = id1 == id2
+Base.@nospecializeinfer dynamic_equals(@nospecialize(a::SimpleId), @nospecialize(b::SimpleId)) = getmatchers(a) == getmatchers(b)
 
 struct ObjectIDMatcher{id} <: AbstractMatcher{id} end
 ObjectIDMatcher(id::UInt64) = ObjectIDMatcher{id}()
 ObjectIDMatcher(obj) = ObjectIDMatcher(objectid(obj))
 Base.:(==)(::ObjectIDMatcher{id1}, ::ObjectIDMatcher{id2}) where {id1, id2} = id1 == id2
+Base.@nospecializeinfer dynamic_equals(@nospecialize(a::ObjectIDMatcher), @nospecialize(b::ObjectIDMatcher)) = getmatchers(a) == getmatchers(b)
 
 """
 Matches BOTH with the object type or the match_by of the object type
@@ -88,6 +109,7 @@ end
 function Base.:(==)(sm1::ValMatcher{V1}, sm2::ValMatcher{V2}) where {V1,V2}
     return V1 == V2
 end
+Base.@nospecializeinfer dynamic_equals(@nospecialize(a::ValMatcher), @nospecialize(b::ValMatcher)) = getmatchers(a) == getmatchers(b)
 
 """
     KeyMatcher(key)
