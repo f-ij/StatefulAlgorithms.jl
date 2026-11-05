@@ -31,7 +31,7 @@ replaces `loop` for tests that look at what the loop gets.
 """
 function _start_run!(p::Process, inputs::NamedTuple = (;); resume::Bool = false, threaded::Bool = true, loopfunc::LF = loop) where {LF}
     resume && wait(p)
-    lt = lifetime(p)
+    lt = getlifetime(p)
     resuming = resume ? Resuming{true}() : Resuming{false}()
     session, func, lc = prepare_for_loop(p, getcontext(p), inputs, lt, resuming)
     # A resumed run clears the pause flag in the loop, after reading the cursor the pause kept.

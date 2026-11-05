@@ -25,7 +25,7 @@ The `Override` and `Interactive` specs `p`'s context is set up from.
 A new process with `p`'s plan, set up from `p`'s stored specs and the new ones (later specs win per target).
 With `context`, the new process starts from it and keeps `p`'s specs.
 """
-function copyprocess(p::Process, specs...; lifetime = StatefulAlgorithms.lifetime(p), timeout = p.timeout, context = nothing, func = getalgo(p), kwargs...)
+function copyprocess(p::Process, specs...; lifetime = StatefulAlgorithms.getlifetime(p), timeout = p.timeout, context = nothing, func = getalgo(p), kwargs...)
     # Another plan: its registry may name things otherwise, so the stored specs are resolved against it again.
     func === getalgo(p) || !isnothing(context) || return Process(func, getspecs(p)..., specs...; lifetime, timeout)
     # The same plan: the stored specs are already resolved, so they are merged without a lookup by name.

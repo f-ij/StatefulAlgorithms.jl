@@ -182,7 +182,7 @@ end
 """Run one explicit loop-type pass: the run's start (`prepare_for_loop`), `loop` with `looptype`, and the run's end."""
 function routine_entry_looptype_call!(process::P, looptype::LT) where {P<:Process,LT<:StatefulAlgorithms.FunctionType}
     reset!(process)
-    lifetime = StatefulAlgorithms.lifetime(process)
+    lifetime = StatefulAlgorithms.getlifetime(process)
     resume = StatefulAlgorithms.Resuming{false}()
     session, plan, lc = StatefulAlgorithms.prepare_for_loop(process, getcontext(process), (;), lifetime, resume)
     persistent_context, returnvalue = StatefulAlgorithms.loop(session, plan, lc, lifetime, resume, looptype)

@@ -10,7 +10,7 @@ const INLINE_ROUTE_BREAKDOWN_SINK = Ref{Any}(nothing)
 
 """Return the direct loop entrypoint result for an already reset inline process."""
 function inline_route_direct_loop(process::IP) where {IP<:StatefulAlgorithms.InlineProcess}
-    lifetime = StatefulAlgorithms.lifetime(process)
+    lifetime = StatefulAlgorithms.getlifetime(process)
     session, algo, lc = StatefulAlgorithms.prepare_for_loop(process, StatefulAlgorithms.getcontext(process), (;), lifetime, StatefulAlgorithms.Resuming{false}())
     persistent_context, _ = StatefulAlgorithms.loop(session, algo, lc, lifetime)
     return persistent_context
@@ -22,7 +22,7 @@ end
 """Run the workload through `ProcessContext` directly, bypassing routes and views."""
 function inline_route_manual_context_loop(process::IP) where {IP<:StatefulAlgorithms.InlineProcess}
     context = StatefulAlgorithms.getcontext(process)
-    steps = StatefulAlgorithms.repeats(StatefulAlgorithms.lifetime(process))
+    steps = StatefulAlgorithms.repeats(StatefulAlgorithms.getlifetime(process))
 
     # This keeps ProcessContext storage and subcontext writeback, but removes
     # SubContextView construction, routed lookup, and stablemerge routing.
@@ -127,7 +127,7 @@ end
 """Run from `ProcessContext` values but write back only once after the local loop."""
 function inline_route_batched_context_loop(process::IP) where {IP<:StatefulAlgorithms.InlineProcess}
     context = StatefulAlgorithms.getcontext(process)
-    steps = StatefulAlgorithms.repeats(StatefulAlgorithms.lifetime(process))
+    steps = StatefulAlgorithms.repeats(StatefulAlgorithms.getlifetime(process))
 
     sensor = context[:sensor]
     filter = context[:filter]
@@ -248,7 +248,7 @@ end
 """Run the repeat loop by calling the resolved step plan directly."""
 function inline_route_direct_plan_loop(process::IP) where {IP<:StatefulAlgorithms.InlineProcess}
     algo = @inline StatefulAlgorithms.getalgo(process)
-    lifetime = @inline StatefulAlgorithms.lifetime(process)
+    lifetime = @inline StatefulAlgorithms.getlifetime(process)
     session = @inline StatefulAlgorithms.getsession(process)
     step_plan = @inline StatefulAlgorithms.getplan(algo)
     step_cursor = @inline StatefulAlgorithms.loop_cursor(step_plan, Val(false))

@@ -15,25 +15,34 @@ function normalize_process_algo(func::F) where {F}
 end
 
 """
-    parse_lifetime(positional, lifetime, repeats) -> Union{Nothing, Lifetime}
+    parse_lifetime(lifetime, repeats) -> Union{Nothing, Lifetime}
 
-The lifetime a process call's arguments give: a positional lifetime (`run(p, lt)`) or the `lifetime` keyword, which
-take a `Lifetime`, or a repeat count `repeats` (`Inf` is `Indefinite()`). At most one may be given; `nothing` when none
-is, so the caller keeps its own default (`default_lifetime` for a new `Process`). Used by every process constructor and
-run, `run(plan)` and the manager's launches.
+The lifetime a call's `lifetime` keyword (a `Lifetime`) or repeat count `repeats` (`Inf` is `Indefinite()`) gives. At
+most one may be given; `nothing` when neither is, so the caller keeps its own default (`default_lifetime` for a new
+`Process`). Used by every process constructor, `run(ip)`, `run(plan, context)` and the manager's launches.
 """
-function parse_lifetime(positional::P, lifetime::L, repeats::R) where {P, L, R}
-    count(!isnothing, (positional, lifetime, repeats)) > 1 &&
-        throw(ArgumentError("Pass only one of a positional lifetime, `lifetime` or `repeats`."))
-    given = something(positional, lifetime, Some(nothing))
-    if !isnothing(given)
-        given isa Lifetime || throw(ArgumentError("`lifetime` takes a `Lifetime` (`Repeat(n)`, `Until(...)`, ...), got `$given`; pass a repeat count as `repeats = n`."))
-        return given
+function parse_lifetime(lifetime::L, repeats::R) where {L, R}
+    isnothing(lifetime) || isnothing(repeats) || throw(ArgumentError("Pass only one of `lifetime` or `repeats`."))
+    if !isnothing(lifetime)
+        lifetime isa Lifetime || throw(ArgumentError("`lifetime` takes a `Lifetime` (`Repeat(n)`, `Until(...)`, ...), got `$lifetime`; pass a repeat count as `repeats = n`."))
+        return lifetime
     end
     isnothing(repeats) && return nothing
     repeats isa Integer && return Repeat(repeats)
     repeats isa AbstractFloat && isinf(repeats) && return Indefinite()
     throw(ArgumentError("`repeats` takes a whole number or `Inf`, got `$repeats`."))
+end
+
+"""
+    _reject_run_lifetime(kwargs)
+
+Throws when a `run` of a `Process` or `TimedProcess` is given `repeats` or `lifetime`: their runs use the process's
+lifetime, set with `setlifetime!`.
+"""
+function _reject_run_lifetime(kwargs::K) where {K}
+    (haskey(kwargs, :repeats) || haskey(kwargs, :lifetime)) &&
+        throw(ArgumentError("`run` on a Process or TimedProcess takes no `repeats` or `lifetime`: set the lifetime with `setlifetime!(p, lt)` before the run."))
+    return nothing
 end
 
 """The lifetime of a new `Process` given none: one repeat for a `Routine` (a fixed sequence), otherwise until it is closed."""

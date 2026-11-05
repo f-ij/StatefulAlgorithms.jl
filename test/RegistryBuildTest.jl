@@ -141,7 +141,7 @@ end
     reg = RB.getregistry(resolve(CompositeAlgorithm(RBCount, Routine(RBCount, RBScale, (2, 1)), (1, 3))))
     # Once per step, plus twice per run of the Routine, which runs every third step.
     @test RB.getmultipliers(RB.getentries(reg)[1]) ≈ [1.0 + 2.0 / 3.0]
-    merged = RB.initcontext(resolve(RB_MERGE_PLAN))
+    merged = first(RB.setup(RB_MERGE_PLAN))
     @test merged[:rbshared].a == 1 && merged[:rbshared].b == 2
 end
 

@@ -28,7 +28,7 @@ end
 
     routine = StatefulAlgorithms.Routine( Fib, Fib(), fibluc , (10, 20, 30))
     @test StatefulAlgorithms.repeats(routine) == (10, 20, 30)
-    @test StatefulAlgorithms.lifetime(Process(resolve(routine))) == Repeat(1)
+    @test StatefulAlgorithms.getlifetime(Process(resolve(routine))) == Repeat(1)
 
     ffluc = CompositeAlgorithm( fibluc, fdup_inst, Fib, ldup , (10, 5, 2, 1))
     @test StatefulAlgorithms.intervals(ffluc) == (

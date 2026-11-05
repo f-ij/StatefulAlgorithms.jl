@@ -13,7 +13,7 @@ getlidx(p::AbstractProcess) = loopint(getsession(p))
 export getlidx
 
 """How many repeats `p` runs: those of its lifetime (`Inf` for an indefinite one)."""
-repeats(p::AbstractProcess) = repeats(lifetime(p))
+repeats(p::AbstractProcess) = repeats(getlifetime(p))
 
 """The start and close listeners of `p`: none by default; a `Process` has its own (`runtimelisteners(p::Process)`)."""
 runtimelisteners(p::P) where {P<:AbstractProcess} = nothing

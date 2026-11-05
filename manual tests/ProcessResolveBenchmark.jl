@@ -139,8 +139,8 @@ function one_trial(case)
         resolve(resolved)
     end
 
-    timed_stage!(rows, "initcontext") do
-        initcontext(resolved)
+    timed_stage!(rows, "setup") do
+        setup(resolved)
     end
 
     if case.runnable

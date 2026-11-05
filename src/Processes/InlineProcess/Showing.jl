@@ -16,7 +16,7 @@ function Base.show(io::IO, ip::InlineProcess)
         "InlineProcess(",
         _inline_process_algo_summary(ip),
         ", lifetime=",
-        lifetime(ip),
+        getlifetime(ip),
         ", loopidx=",
         getlidx(ip),
         ")",
@@ -25,7 +25,7 @@ end
 
 function Base.show(io::IO, ::MIME"text/plain", ip::InlineProcess)
     println(io, "InlineProcess")
-    println(io, "├── lifetime = ", lifetime(ip))
+    println(io, "├── lifetime = ", getlifetime(ip))
     println(io, "├── loopidx = ", getlidx(ip))
 
     algo_lines = _process_nested_show_lines(io, getalgo(ip))

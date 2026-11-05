@@ -84,7 +84,7 @@ function Base.show(io::IO, p::Process)
         print(io, "Error in process")
         return display(p.task)
     end
-    print(io, _process_state_label(p), " Process(", _process_algo_summary(p), ", lifetime=", lifetime(p), ", loopidx=", getlidx(p), ")")
+    print(io, _process_state_label(p), " Process(", _process_algo_summary(p), ", lifetime=", getlifetime(p), ", loopidx=", getlidx(p), ")")
 
     return nothing
 end
@@ -101,7 +101,7 @@ function Base.show(io::IO, ::MIME"text/plain", p::Process)
 
     println(io, "Process")
     println(io, "├── state = ", _process_state_label(p))
-    println(io, "├── lifetime = ", lifetime(p))
+    println(io, "├── lifetime = ", getlifetime(p))
     println(io, "├── loopidx = ", getlidx(p))
     println(io, "├── timeout = ", p.timeout)
 

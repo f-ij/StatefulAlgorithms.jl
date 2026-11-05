@@ -8,9 +8,9 @@ Execution plan that steps child algorithms on fixed intervals.
 `CompositeAlgorithm` stores the block as written: child algorithms (`funcs`),
 schedule metadata, namespaces, its route/share wiring (`getwiring`), its own
 states (`getstates`: `@state`, `@input`) and its other options (`getoptions`,
-such as `RuntimeInputs` and `Redirect`). What `resolve`,
-`init` and `run` add (the registry, persistent context, inits, overrides and the
-interval cursor) belongs to the `LoopAlgorithm`/`AbstractLoopCursor` they create.
+such as `RuntimeInputs` and `Redirect`). `resolve` wraps it in a `LoopAlgorithm`
+that adds the registry; the context is made by `setup` and kept by the user or a
+process, and the interval cursor belongs to the run's `AbstractLoopCursor`.
 """
 struct CompositeAlgorithm{T, Intervals, Namespaces, W, id, S, O} <: AbstractPlan
     funcs::T

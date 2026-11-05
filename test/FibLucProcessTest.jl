@@ -15,7 +15,7 @@ end
     n = 50_000
     fibluc = StatefulAlgorithms.CompositeAlgorithm( RunFib, RunLuc , (1, 2))
     p = StatefulAlgorithms.Process(fibluc; repeats = n)
-    @test repeats(StatefulAlgorithms.lifetime(p)) == n
+    @test repeats(StatefulAlgorithms.getlifetime(p)) == n
     @test_throws ArgumentError StatefulAlgorithms.Process(fibluc; lifetime = n)
 
     @test progress(p) == 0.0

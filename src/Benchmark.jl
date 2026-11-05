@@ -6,7 +6,7 @@ function benchmark(func::Union{ProcessAlgorithm, AbstractLoopAlgorithm}, rt, tri
         if progress
             println("Trial $t_idx")
         end
-        makecontext!(p)
+        init!(p)
         ti = time_ns()
         run(p)
         fetch(p)

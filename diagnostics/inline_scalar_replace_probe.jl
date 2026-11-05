@@ -58,7 +58,7 @@ end
 function scalar_replace_direct_plan_loop(process::IP) where {IP<:StatefulAlgorithms.InlineProcess}
     isdefined(StatefulAlgorithms, :Namespace) || error("direct plan entrypoint requires StatefulAlgorithms.Namespace")
     algo = StatefulAlgorithms.getalgo(process)
-    lifetime = StatefulAlgorithms.lifetime(process)
+    lifetime = StatefulAlgorithms.getlifetime(process)
     session = StatefulAlgorithms.getsession(process)
     plan = StatefulAlgorithms.getplan(algo)
     cursor = StatefulAlgorithms.loop_cursor(plan, Val(false))
@@ -138,7 +138,7 @@ function run_scalar_replace_probe(;
 
     if has_direct_plan_api
         algo = StatefulAlgorithms.getalgo(process)
-        lifetime = StatefulAlgorithms.lifetime(process)
+        lifetime = StatefulAlgorithms.getlifetime(process)
         session = StatefulAlgorithms.getsession(process)
         plan = StatefulAlgorithms.getplan(algo)
         cursor = StatefulAlgorithms.loop_cursor(plan, Val(false))

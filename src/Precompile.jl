@@ -377,7 +377,7 @@ Cost: +0.8 s precompile, +5.7 MB.
         _ProcessPrecompileSink(value = combined)
     end
     resolved_dsl_composite_routed = resolve(dsl_composite_routed)
-    initcontext(resolved_dsl_composite_routed)
+    setup(resolved_dsl_composite_routed)
     dsl_routed_process = Process(resolved_dsl_composite_routed; repeats = 2)
     run(dsl_routed_process)
     wait(dsl_routed_process)
@@ -388,7 +388,7 @@ Cost: +0.8 s precompile, +5.7 MB.
         _ProcessPrecompileScaler()
     end
     resolved_dsl_interval_composite = resolve(dsl_interval_composite)
-    initcontext(resolved_dsl_interval_composite)
+    setup(resolved_dsl_interval_composite)
 
     dsl_routine_with_state = @Routine begin
         @state precompile_routine_state begin
@@ -398,7 +398,7 @@ Cost: +0.8 s precompile, +5.7 MB.
         _ProcessPrecompileSink(value = seed)
     end
     resolved_dsl_routine_with_state = resolve(dsl_routine_with_state)
-    initcontext(resolved_dsl_routine_with_state)
+    setup(resolved_dsl_routine_with_state)
     dsl_routine_state_process = Process(resolved_dsl_routine_with_state; repeats = 1)
     run(dsl_routine_state_process)
     wait(dsl_routine_state_process)
@@ -415,7 +415,7 @@ Cost: +0.8 s precompile, +5.7 MB.
         v6 = _process_precompile_add(@transform(x -> x + 0.11, v5), bias; bias = 0.11)
     end
     resolved_large_dsl_funcwrapper_routine = resolve(large_dsl_funcwrapper_routine)
-    initcontext(resolved_large_dsl_funcwrapper_routine)
+    setup(resolved_large_dsl_funcwrapper_routine)
     large_dsl_process = Process(resolved_large_dsl_funcwrapper_routine; repeats = 1)
     run(large_dsl_process)
     wait(large_dsl_process)
@@ -590,7 +590,7 @@ Unique: −0.05 s per scenario (`CompositeAlgorithm(...) + Route` −0.02 s, Inl
     resolve(routine)
     keys(routine)
     propertynames(routine)
-    initcontext(routine)
+    setup(routine)
     routine_process = Process(routine; repeats = 1)
     run(routine_process)
     wait(routine_process)
@@ -605,8 +605,8 @@ Unique: −0.05 s per scenario (`CompositeAlgorithm(...) + Route` −0.02 s, Inl
     resolved_composite = resolve(composite)
     keys(resolved_composite)
     propertynames(resolved_composite)
-    initcontext(resolved_composite)
-    initcontext(initcontext(resolved_composite), :counter)
+    setup(resolved_composite)
+    init(resolved_composite, first(setup(resolved_composite)), Only(:counter))
     composite_process = Process(composite; repeats = 2)
     run(composite_process)
     wait(composite_process)

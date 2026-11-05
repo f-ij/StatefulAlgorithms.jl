@@ -7,11 +7,11 @@ emptycontext = ProcessContext(comp)
 p = Process(comp, repeats = 100000)
 comp = taskdata(p).func
 
-@code_warntype initcontext(comp, emptycontext)
+@code_warntype init(resolve(comp), emptycontext)
 
 
 withglobals = StatefulAlgorithms._merge_into_globals(emptycontext, (;lifetime = StatefulAlgorithms.Indefinite(), algo = comp))
-# @code_warntype initcontext(comp, emptycontext; lifetime = StatefulAlgorithms.Indefinite())
+# @code_warntype init(resolve(comp), emptycontext; lifetime = StatefulAlgorithms.Indefinite())
 @code_warntype init(comp, withglobals)
 c1 = comp[1]
 @code_warntype init(c1, withglobals)

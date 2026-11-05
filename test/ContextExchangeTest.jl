@@ -159,7 +159,7 @@ end
     end
 
     algo = resolve(CompositeAlgorithm(:target => NoExchangeTargetForTest(), (1,)))
-    context = initcontext(algo; lifetime = Repeat(1))
+    context, _ = setup(algo; lifetime = Repeat(1))
 
     @test_throws ErrorException view(context, :value)
 end

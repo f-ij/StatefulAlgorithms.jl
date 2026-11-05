@@ -3,24 +3,24 @@ What a user calls on a `TimedProcess`: `run`, `pause`, `close`, `fetch` and `ini
 =#
 
 """
-    run(tp::TimedProcess; repeats, lifetime, inputs...)
+    run(tp::TimedProcess; inputs...)
 
 Starts `tp`'s timer, which runs a step every `interval` seconds, the first one now. A new run starts from the state
 context and the run's inputs, as a `Process` run does (`prepare_for_loop`), and keeps the run's runtime context and a
-new cursor on the process; a paused run resumes from what its pause kept.
+new cursor on the process; a paused run resumes from what its pause kept. The run's lifetime is `getlifetime(tp)`
+(change it with `setlifetime!`).
 """
-function Base.run(tp::TimedProcess; repeats = nothing, lifetime = nothing, kwargs...)
+function Base.run(tp::TimedProcess; kwargs...)
     isrunning(tp) && error("TimedProcess is already running.")
+    _reject_run_lifetime(kwargs)
     if ispaused(tp)
-        (isnothing(repeats) && isnothing(lifetime) && isempty(kwargs)) || error("Cannot change the lifetime or the inputs while resuming a paused TimedProcess.")
+        isempty(kwargs) || error("Cannot pass new runtime inputs while resuming a paused TimedProcess.")
     else
-        lt = parse_lifetime(nothing, lifetime, repeats)
-        isnothing(lt) || (tp.lifetime = lt; set_session_lifetime!(tp, lt))
-        session, algo, lc = prepare_for_loop(tp, getcontext(tp), (; kwargs...), StatefulAlgorithms.lifetime(tp), Resuming{false}())
+        session, algo, lc = prepare_for_loop(tp, getcontext(tp), (; kwargs...), StatefulAlgorithms.getlifetime(tp), Resuming{false}())
         session.loop_cursor = starting_cursor(session, getplan(algo), Resuming{false}())
         tp.runtime_context = getruntime(lc)
         before_while(session)
-        if _lifetime_over(StatefulAlgorithms.lifetime(tp), lc, session)
+        if _lifetime_over(StatefulAlgorithms.getlifetime(tp), lc, session)
             _end_timed_run!(tp)
             return tp
         end

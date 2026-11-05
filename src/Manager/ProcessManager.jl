@@ -226,7 +226,7 @@ Extract a per-run process lifetime from manager launch keyword arguments.
 `lifetime` and `repeats` are launch controls, not runtime inputs.
 """
 function _manager_launch_lifetime(worker::P, kwargs::K) where {P<:Process, K<:NamedTuple}
-    return parse_lifetime(nothing, get(kwargs, :lifetime, nothing), get(kwargs, :repeats, nothing))
+    return parse_lifetime(get(kwargs, :lifetime, nothing), get(kwargs, :repeats, nothing))
 end
 
 """
@@ -237,7 +237,7 @@ worker. Runtime keyword arguments are passed to the loop as `@input` values.
 """
 function _manager_process_launch_args(worker::P, kwargs::K) where {P<:Process, K<:NamedTuple}
     lifetime = _manager_launch_lifetime(worker, kwargs)
-    runtime_kwargs = deletekeys(kwargs, :lifetime, :repeats, :repeat)
+    runtime_kwargs = deletekeys(kwargs, :lifetime, :repeats)
     return lifetime, runtime_kwargs
 end
 
@@ -257,15 +257,12 @@ function runprocessinline!(worker::P; lifetime = nothing, repeats = nothing, kwa
 
     launch_kwargs = (; lifetime, repeats)
     launch_lifetime = _manager_launch_lifetime(worker, launch_kwargs)
-    if !isnothing(launch_lifetime)
-        worker.lifetime = launch_lifetime
-        set_session_lifetime!(worker, launch_lifetime)
-    end
+    isnothing(launch_lifetime) || setlifetime!(worker, launch_lifetime)
 
     # Build the same runtime context as the asynchronous Process path, but call
     # the loop directly so no scheduler task is created for short manager jobs.
     base_context = getcontext(worker)
-    lt = StatefulAlgorithms.lifetime(worker)
+    lt = StatefulAlgorithms.getlifetime(worker)
     session, plan, lc = prepare_for_loop(worker, base_context, (; kwargs...), lt, Resuming{false}())
     @atomic session.paused = false
     @atomic session.shouldrun = true
@@ -721,7 +718,7 @@ Build a worker from a template and a slot-specific context. The default
 implementation supports `Process` templates.
 """
 function _process_with_context(template::Process, idx::Integer, prepared_context)
-    return Process(getalgo(template); context = prepared_context, lifetime = lifetime(template), timeout = template.timeout)
+    return Process(getalgo(template); context = prepared_context, lifetime = getlifetime(template), timeout = template.timeout)
 end
 
 """
@@ -1020,7 +1017,7 @@ Default worker-copy rule. `Process` workers keep the same algorithm/lifetime and
 deep-copy context; other worker objects are deep-copied directly.
 """
 function _default_copyworker(template::Process, idx, manager)
-    return Process(getalgo(template); context = deepcopy(getcontext(template)), lifetime = lifetime(template), timeout = template.timeout)
+    return Process(getalgo(template); context = deepcopy(getcontext(template)), lifetime = getlifetime(template), timeout = template.timeout)
 end
 _default_copyworker(template, idx, manager) = deepcopy(template)
 
@@ -1232,7 +1229,8 @@ shape or provide recipe `start!`.
 """
 function _start_worker!(worker::Process, kwargs::NamedTuple)
     lifetime, runtime_kwargs = _manager_process_launch_args(worker, kwargs)
-    run(worker, lifetime; runtime_kwargs...)
+    isnothing(lifetime) || setlifetime!(worker, lifetime)
+    run(worker; runtime_kwargs...)
     return worker
 end
 

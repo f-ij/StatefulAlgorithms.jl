@@ -91,7 +91,7 @@ end
     end
 
     p = Process(SetContextCounter; repeats = 2)
-    setcontext!(p, StatefulAlgorithms.makecontext(p, Override(SetContextCounter, :count => 100)))
+    setcontext!(p, first(setup(getalgo(p), Override(SetContextCounter, :count => 100))))
     @test getcontext(p)[SetContextCounter].count == 100
     run(p); wait(p)
     @test getcontext(p)[SetContextCounter].count == 102
@@ -101,7 +101,7 @@ end
     run(paused)
     sleep(0.2)
     pause(paused); wait(paused)
-    setcontext!(paused, StatefulAlgorithms.makecontext(paused, Override(SetContextCounter, :count => -10^15)))
+    setcontext!(paused, first(setup(getalgo(paused), Override(SetContextCounter, :count => -10^15))))
     @test getcontext(paused)[SetContextCounter].count == -10^15
     run(paused)
     sleep(0.2)

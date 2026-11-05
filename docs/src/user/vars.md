@@ -44,8 +44,7 @@ Var(:name)
 
 This reads the captured return `name` (`_captured_returns`): the value a DSL
 statement `name = f(...)` assigned in the current step. Captured returns are not
-stored in the persistent context, so a process `lifetime` cannot read them; use
-the subcontext form there.
+stored in the persistent context.
 
 ## Common Use in `Until`
 

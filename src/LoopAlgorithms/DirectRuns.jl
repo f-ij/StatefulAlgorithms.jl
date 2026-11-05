@@ -142,7 +142,7 @@ context (inputs, declared locals, returns) is dropped when the run ends; only th
 """
 function Base.run(plan::LA, context::C; repeats = 1, lifetime = nothing, kwargs...) where {LA<:LoopSpec, C<:ProcessContext}
     isresolved(plan) || throw(ArgumentError("run(plan, context) needs the resolved plan that `setup` returns."))
-    lt = parse_lifetime(nothing, lifetime, isnothing(lifetime) ? repeats : nothing)
+    lt = parse_lifetime(lifetime, isnothing(lifetime) ? repeats : nothing)
     session, plan, lc = prepare_for_loop(plan, context, (; kwargs...), lt, Resuming{false}())
     return run_session_loop(session, plan, lc, lt)
 end
@@ -173,8 +173,8 @@ function init(plan::LA, context::C, specs::InputInterface...; lifetime = Indefin
         key in targets || continue
         init_vars = map(get_vars, filter(i -> get_target_name(i) == key, inits))
         override_vars = map(get_vars, filter(o -> get_target_name(o) == key, overrides))
-        context = initcontext(context, named_algo; inputs = isempty(init_vars) ? (;) : first(init_vars),
-                              overrides = isempty(override_vars) ? (;) : first(override_vars))
+        context = init_namespace(context, named_algo; inputs = isempty(init_vars) ? (;) : first(init_vars),
+                                  overrides = isempty(override_vars) ? (;) : first(override_vars))
     end
     lone_overrides = filter(o -> !(get_target_name(o) in targets), overrides)
     context = isempty(lone_overrides) ? context : merge_into_subcontexts(context, construct_context_merge_tuples(lone_overrides))

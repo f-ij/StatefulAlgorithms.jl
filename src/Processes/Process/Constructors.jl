@@ -29,7 +29,7 @@ The resolved plan, its starting context (from `setup`, or the given `context`), 
 a new `Process` gets.
 """
 function _prepare_process(algo::A, inputs_overrides::Vararg{Any,N}; context::C = nothing, repeats = nothing, lifetime = nothing, timeout = 1.0) where {A,N,C}
-    lifetime = something(parse_lifetime(nothing, lifetime, repeats), default_lifetime(algo))
+    lifetime = something(parse_lifetime(lifetime, repeats), default_lifetime(algo))
     if isnothing(context)
         context, algo = setup(algo, inputs_overrides...; lifetime)
     else

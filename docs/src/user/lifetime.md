@@ -50,12 +50,19 @@ Set the process lifetime when constructing the process:
 p = Process(algo; lifetime = Repeat(1_000))
 ```
 
-For an existing process, build a fresh process from the same task description
-with a different lifetime:
+`getlifetime(p)` returns it. `run(p)` takes no `repeats` or `lifetime`: a
+`Process` or `TimedProcess` runs with its own lifetime. Change it between runs:
 
 ```julia
-p2 = copyprocess(p; lifetime = Repeat(2_000))
+setlifetime!(p, Repeat(2_000))      # Process, TimedProcess: not while running or paused
+p2 = setlifetime(p, Repeat(2_000))  # a new process with the same plan, specs and context object
 ```
+
+An `InlineProcess` has the lifetime's type as a type parameter, so it has only
+`setlifetime(ip, lt)`, which returns a new `InlineProcess`. A single run of an
+`InlineProcess` can use another lifetime without changing the stored one:
+`run(ip; repeats = 10)`. `run(plan, context; repeats/lifetime)` takes a lifetime
+for that run as well.
 
 This changes the outer process lifetime. It does not change how often child
 loop algorithms run inside a `CompositeAlgorithm` or `Routine`. Those schedules

@@ -19,7 +19,7 @@ function inline_route_check_child_steps(process::IP) where {IP<:StatefulAlgorith
     namespace_type = typeof(plan).parameters[3]
     algos = StatefulAlgorithms.getalgos(plan)
     session = StatefulAlgorithms.getsession(process)
-    lifetime = StatefulAlgorithms.lifetime(process)
+    lifetime = StatefulAlgorithms.getlifetime(process)
     outer = StatefulAlgorithms.LoopContext(algo, StatefulAlgorithms.getcontext(process))
     lc = StatefulAlgorithms.enter_scope(outer, root_wiring)
 

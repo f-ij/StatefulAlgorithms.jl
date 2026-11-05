@@ -24,7 +24,7 @@ end
 
 """The resolved plan, its starting context (from `setup`, or the given `context`) and the lifetime a new `InlineProcess` gets."""
 @inline function _prepare_inline_process(algo, inputs_overrides...; repeats=nothing, lifetime=nothing, context=nothing)
-    lifetime = something(parse_lifetime(nothing, lifetime, repeats), Repeat(1))
+    lifetime = something(parse_lifetime(lifetime, repeats), Repeat(1))
     isnothing(context) || return resolve(algo), context, lifetime
     context, algo = setup(algo, inputs_overrides...; lifetime)
     return algo, context, lifetime

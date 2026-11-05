@@ -75,7 +75,12 @@ Redirect is not stored in the route/share `PlanWiring`. After loop-algorithm ini
 `apply_redirect_specs(context, la)` resolves each root redirect and rewrites
 the target persistent field to a `RedirectedVar(VarLocation{:state}(...))`
 marker. The source and target fields must already exist in the initialized
-context, and self-redirect is rejected.
+context. After the markers are written, `check_redirect_cycles(context)`
+(`src/LoopAlgorithms/Redirect/Checking.jl`) follows them from every field and
+throws on a cycle (`b.x → a.y → b.x`, or `b.x → b.x`). So a cycle is found
+when the redirects are applied, at every init (`setup`, `init`, building a
+process, `init!`), not at `resolve`. The check walks the context's values at
+run time; it is not worked out from the `Redirect` types.
 
 `init(plan, context, Only(...), ...)` applies redirect materialization again after rebuilding the
 targeted subcontexts, so redirect markers are restored when an affected

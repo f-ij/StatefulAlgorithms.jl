@@ -15,7 +15,7 @@ function _tick!(tp::TimedProcess)
     @lock tp.lock begin
         session = getsession(tp)
         shouldrun(session) || return nothing
-        algo, lt = getalgo(tp), lifetime(tp)
+        algo, lt = getalgo(tp), getlifetime(tp)
         plan = getplan(algo)
         lc = _step!(plan, getloopcursor(tp), LoopContext(getcontext(tp), getruntimecontext(tp)), _root_wiring_view(algo, plan), Namespace{nothing}(), session, lt)
         tick!(session)

@@ -93,20 +93,23 @@ object, and context indexing when you want its current stored data.
 
 ## Re-Initializing One Subcontext
 
-You can re-run `init` for one registered algorithm inside an existing context:
+You can re-run `init` for one registered algorithm inside an existing context with `Only`:
 
 ```julia
-ctx = initcontext(resolved)
+ctx, _ = setup(resolved)
 
-ctx = initcontext(ctx, :Fib_1)
-ctx = initcontext(ctx, :Fib_1; inputs = (; seed = 123))
-ctx = initcontext(ctx, resolved[:Fib_1]; overrides = (; value = 0.0))
+ctx = init(resolved, ctx, Only(:Fib_1))
+ctx = init(resolved, ctx, Only(:Fib_1), InitArgs(:Fib_1; seed = 123))
+ctx = init(resolved, ctx, Only(:Fib_1), Override(:Fib_1; value = 0.0))
 ```
 
-This updates only the targeted subcontext.
+This updates only the targeted subcontexts.
 
-- `inputs` are merged into that subcontext before `init(...)` runs.
-- `overrides` are merged into that subcontext after `init(...)` returns.
+- `InitArgs` values are merged into that subcontext before its `init` runs.
+- `Override` values are merged into that subcontext after its `init` returns.
+
+A process does the same with `init!(p, Only(:Fib_1), ...)`. See
+[The Pipeline: Setup, Run, Cleanup](@ref pipeline_user).
 
 ## Values That Live For A Run
 

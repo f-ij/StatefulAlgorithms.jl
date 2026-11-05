@@ -251,7 +251,7 @@ end
 """Run the dependency workload by stepping the resolved plan by hand, in the shape of the loop's `_repeat_steps`."""
 function scalar_dependency_direct_plan_loop(process::IP) where {IP<:StatefulAlgorithms.InlineProcess}
     algo = @inline StatefulAlgorithms.getalgo(process)
-    lifetime = @inline StatefulAlgorithms.lifetime(process)
+    lifetime = @inline StatefulAlgorithms.getlifetime(process)
     session = @inline StatefulAlgorithms.getsession(process)
     plan = @inline StatefulAlgorithms.getplan(algo)
     cursor = @inline StatefulAlgorithms.loop_cursor(plan, Val(false))
@@ -289,7 +289,7 @@ end
 
 """Run the dependency workload through `StatefulAlgorithms.loop` for an already reset inline process."""
 function scalar_dependency_direct_loop(process::IP) where {IP<:StatefulAlgorithms.InlineProcess}
-    lifetime = StatefulAlgorithms.lifetime(process)
+    lifetime = StatefulAlgorithms.getlifetime(process)
     session, algo, lc = StatefulAlgorithms.prepare_for_loop(process, StatefulAlgorithms.getcontext(process), (;), lifetime, StatefulAlgorithms.Resuming{false}())
     persistent_context, _ = StatefulAlgorithms.loop(session, algo, lc, lifetime)
     return persistent_context

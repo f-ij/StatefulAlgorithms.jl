@@ -58,6 +58,10 @@ object:
   (`Indefinite()`); an `InlineProcess` defaults to one repeat.
 - advanced: `lifetime = Repeat(...)`, `lifetime = Indefinite()`, `lifetime = Until(...)`, `lifetime = RepeatOrUntil(...)`.
 
+These go to the constructor. `run(p)` takes no lifetime; change a process's
+lifetime between runs with `setlifetime!(p, lt)` (an `InlineProcess` also takes
+one for a single run: `run(ip; repeats = 10)`).
+
 See [Lifetime](@ref lifetime_user) for full details.
 For selector syntax used in `Until`, see [Vars (`Var` Selectors)](@ref vars_user).
 

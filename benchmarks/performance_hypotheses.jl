@@ -189,7 +189,7 @@ function run_inline_generated(ip)
     StatefulAlgorithms.reset!(ip)
     graph = StatefulAlgorithms.getalgo(StatefulAlgorithms.taskdata(ip))
     runtime_context = StatefulAlgorithms._merge_into_globals(StatefulAlgorithms.getcontext(ip), (; process = ip))
-    return StatefulAlgorithms.loop(ip, graph, runtime_context, StatefulAlgorithms.lifetime(ip), StatefulAlgorithms.Generated())
+    return StatefulAlgorithms.loop(ip, graph, runtime_context, StatefulAlgorithms.getlifetime(ip), StatefulAlgorithms.Generated())
 end
 
 function naive_fibluc(n)

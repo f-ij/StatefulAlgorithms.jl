@@ -35,7 +35,8 @@ using StatefulAlgorithms
 
     # A process keeps its specs (construction and later `init!` calls) and sets up from them again.
     process = Process(algo, Override(:target; value = 3.0), Interactive(:target, :value); repeats = 1)
-    replayed = StatefulAlgorithms.makecontext(process)
+    init!(process)
+    replayed = getcontext(process)
     @test replayed.target.value isa InteractiveVar{Float64}
     @test replayed.target.value[] == 3.0
     close(process)

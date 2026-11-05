@@ -1,4 +1,3 @@
-export initcontext
 """
 So that warnings are only printed once per type per session
 """
@@ -18,33 +17,5 @@ end
 @inline _init_state_context(context::C, base::B) where {C<:ProcessContext,B<:ProcessContext} = context
 @inline _init_state_context(patch::P, base::B) where {P<:NamedTuple,B<:ProcessContext} =
     @inline merge_into_subcontexts(base, patch)
-
-"""
-Make a context from an algo and empty context
-"""
-function initcontext(algo::F, c::ProcessContext; lifetime = Indefinite()) where {F <: LoopSpec}
-    algo = resolve(algo)
-
-    prepared_context = init(algo, InitContext(c, algo, lifetime))
-
-    state_context = @inline _init_state_context(prepared_context, c)
-    return @inline apply_redirect_specs(state_context, algo)
-end
-
-function initcontext(algo::F, c::Union{Nothing, ProcessContext} = nothing, overrides_and_inputs::InputInterface...; lifetime = Indefinite()) where {F <: LoopSpec}
-    algo = resolve(algo)
-    c = something(c, ProcessContext(algo))
-    resolved = _resolve_lifecycle_specs(getregistry(c), overrides_and_inputs)
-    inputs, overrides, interactives = _split_lifecycle_specs(resolved)
-    input_state_context = merge_resolved_inputs(c, inputs)
-
-    prepared_context = init(algo, InitContext(input_state_context, algo, lifetime))
-
-    prepared_state_context = @inline _init_state_context(prepared_context, input_state_context)
-    overridden_context = merge_resolved_inputs(prepared_state_context, overrides)
-
-    interactive_context = @inline apply_interactive_specs(overridden_context, interactives)
-    return @inline apply_redirect_specs(interactive_context, algo)
-end
 
 export cleanup

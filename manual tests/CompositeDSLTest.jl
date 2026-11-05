@@ -38,10 +38,10 @@ resolved = resolve(algo)
 @assert StatefulAlgorithms.getkey(first(StatefulAlgorithms.getstates(resolved))) == :_state
 
 process_repeat = Process(resolved, repeats = 10)
-@assert repeats(StatefulAlgorithms.lifetime(process_repeat)) == 10
+@assert repeats(StatefulAlgorithms.getlifetime(process_repeat)) == 10
 
 process_indefinite = Process(resolved, repeats = Inf)
-@assert StatefulAlgorithms.lifetime(process_indefinite) isa Indefinite
+@assert StatefulAlgorithms.getlifetime(process_indefinite) isa Indefinite
 
 opts = StatefulAlgorithms.getoptions(resolved)
 sharedcontexts, sharedvars = StatefulAlgorithms._resolve_options(resolved)

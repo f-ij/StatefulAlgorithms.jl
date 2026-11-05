@@ -148,5 +148,5 @@ p = Process(
 )
 c = getcontext(p)
 algo = getalgo(p.taskdata)
-@code_warntype StatefulAlgorithms.generated_processloop(p, algo, c, StatefulAlgorithms.lifetime(p))
-nc = StatefulAlgorithms.generated_processloop(p, algo, c, StatefulAlgorithms.lifetime(p))
+@code_warntype StatefulAlgorithms.generated_processloop(p, algo, c, StatefulAlgorithms.getlifetime(p))
+nc = StatefulAlgorithms.generated_processloop(p, algo, c, StatefulAlgorithms.getlifetime(p))

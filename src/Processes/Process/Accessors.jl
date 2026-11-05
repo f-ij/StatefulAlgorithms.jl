@@ -5,8 +5,8 @@ the listeners are written for `InteractiveProcess`, so a `TimedProcess` uses the
 Operations that are not getters or setters (run time, locking, linking) live in Tools.jl.
 =#
 
-"""The lifetime later runs of `p` get when `run` is given none."""
-@inline lifetime(p::P) where {P<:InteractiveProcess} = getfield(p, :lifetime)
+"""The lifetime of `p`'s runs; changed with `setlifetime!`."""
+@inline getlifetime(p::P) where {P<:InteractiveProcess} = getfield(p, :lifetime)
 
 """
     getloopcursor(p::InteractiveProcess)
@@ -43,18 +43,28 @@ pauses it first.
 setcontext!(p::P, c::C) where {P<:InteractiveProcess, C<:ProcessContext} = (p.state_context = c)
 
 """
-    set_session_lifetime!(p, lifetime)
+    setlifetime!(p, lt) -> p
 
-Run when a run gets a lifetime of another type than the process was built with: the session's type includes the
-lifetime's type, so the process gets a session of the new type with the same counters. Until it is decided where the
-lifetime lives (TODO.md, "Where the lifetime lives").
+Makes `lt` the lifetime of `p`'s later runs (`Process`, `TimedProcess`; an `InlineProcess` has `setlifetime`). The
+session's type includes the lifetime's type, so with a lifetime of another type `p` gets a session of that type with the
+same counters. Only on a process that is neither running nor paused: a paused run keeps the lifetime it started with.
 """
-function set_session_lifetime!(p::InteractiveProcess{F, C}, lt::LT) where {F, C, LT}
+function setlifetime!(p::InteractiveProcess{F, C}, lt::LT) where {F, C, LT<:Lifetime}
+    (isrunning(p) || ispaused(p)) && error("Cannot change the lifetime of a running or paused process; close it first.")
+    p.lifetime = lt
     session = getsession(p)
-    session isa InteractiveSession{C, LT} && return session
+    session isa InteractiveSession{C, LT} && return p
     p.session = InteractiveSession{C, LT}(@atomic(session.shouldrun), @atomic(session.paused), session.loopidx,
         session.tickidx, session.starttime, session.endtime, session.loop_cursor, session.threadid)
+    return p
 end
+
+"""
+    setlifetime(p::Process, lt) -> Process
+
+A new `Process` with `p`'s plan, specs, timeout and context (the same context object, not a copy) and lifetime `lt`.
+"""
+setlifetime(p::Process, lt::LT) where {LT<:Lifetime} = copyprocess(p; lifetime = lt, context = getcontext(p))
 
 """
     _sync_state_context!(p, c)

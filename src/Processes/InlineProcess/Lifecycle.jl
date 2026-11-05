@@ -18,14 +18,14 @@ default call into the loop (`run_session_loop`) is compiled once. As a `Val`, th
     algo = getalgo(p)
     _set_inline_run_context!(p, context)
     runtime_inputs = _inline_runtime_inputs(algo, inputs_overrides, (; kwargs...))
-    run_lifetime = something(parse_lifetime(nothing, lifetime, repeats), StatefulAlgorithms.lifetime(p))
+    run_lifetime = something(parse_lifetime(lifetime, repeats), StatefulAlgorithms.getlifetime(p))
     return @inline _run_inline!(p, run_lifetime, runtime_inputs, inlined)
 end
 
 @inline function run_nogen(p::InlineProcess, inputs_overrides...; context = nothing, repeats=nothing, lifetime=nothing, kwargs...)
     algo = getalgo(p)
     _set_inline_run_context!(p, context)
-    run_lifetime = something(parse_lifetime(nothing, lifetime, repeats), StatefulAlgorithms.lifetime(p))
+    run_lifetime = something(parse_lifetime(lifetime, repeats), StatefulAlgorithms.getlifetime(p))
     runtime_inputs = _inline_runtime_inputs(algo, inputs_overrides, (; kwargs...))
     return @inline _run_inline!(p, run_lifetime, runtime_inputs, Val(false))
 end
@@ -52,6 +52,6 @@ end
 end
 
 @inline function init_and_run(p::InlineProcess, inputs_overrides...)
-    @inline makecontext!(p, inputs_overrides...)
+    init!(p, inputs_overrides...)
     return run(p)
 end

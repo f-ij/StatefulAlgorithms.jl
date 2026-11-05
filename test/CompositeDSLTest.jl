@@ -320,15 +320,15 @@ end
         combine_routes = sharedvars[:DSLCombineAlgo_1]
         @test any(route -> StatefulAlgorithms.source_namespace(route) == :_captured_returns && StatefulAlgorithms.getaliases(route) == (:right,), combine_routes)
 
-        init_ctx = StatefulAlgorithms.initcontext(resolved; lifetime = Repeat(10))
+        init_ctx, _ = setup(resolved; lifetime = Repeat(10))
         @test init_ctx[:_state_1].seed == 3
         @test init_ctx[:_state_1].doubled == 10
 
         process_repeat = Process(resolved, repeats = 10)
-        @test repeats(StatefulAlgorithms.lifetime(process_repeat)) == 10
+        @test repeats(StatefulAlgorithms.getlifetime(process_repeat)) == 10
 
         process_indefinite = Process(resolved, repeats = Inf)
-        @test StatefulAlgorithms.lifetime(process_indefinite) isa Indefinite
+        @test StatefulAlgorithms.getlifetime(process_indefinite) isa Indefinite
 
         p = Process(resolved, repeats = 10)
         StatefulAlgorithms.run(p)
@@ -355,7 +355,7 @@ end
         resolved_named_state = resolve(named_state_algo)
         @test StatefulAlgorithms.getkey(first(StatefulAlgorithms.getstates(resolved_named_state))) == :mystate
 
-        named_ctx = StatefulAlgorithms.initcontext(resolved_named_state)
+        named_ctx, _ = setup(resolved_named_state)
         @test named_ctx[:mystate].a == 1
     end
 

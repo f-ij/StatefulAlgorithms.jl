@@ -29,17 +29,17 @@ c1 = run(pc);
 c2 = run(pr);
 
 e_c = getcontext(pr)
-e_c = StatefulAlgorithms.makecontext(pr)
+e_c = first(setup(getalgo(pr)))
 e_c = StatefulAlgorithms._merge_into_globals(e_c, (; process=pr))
 
-lifetime = StatefulAlgorithms.lifetime(pr)
+lifetime = StatefulAlgorithms.getlifetime(pr)
 mockroutine = resolve(mockroutine)
 
 StatefulAlgorithms.loop(pr, mockroutine, e_c, lifetime)
 @code_warntype StatefulAlgorithms.loop(pr, mockroutine, e_c, lifetime)
 @code_warntype run(pr)
 
-c = @benchmark StatefulAlgorithms.loop($pr, $mockroutine, e_c, $lifetime, StatefulAlgorithms.Generated()) setup = (e_c = StatefulAlgorithms._merge_into_globals(StatefulAlgorithms.makecontext(pr), (; process=pr)))
+c = @benchmark StatefulAlgorithms.loop($pr, $mockroutine, e_c, $lifetime, StatefulAlgorithms.Generated()) setup = (e_c = StatefulAlgorithms._merge_into_globals(first(setup(getalgo(pr))), (; process=pr)))
 @benchmark run($pr)
     
 function testloop(rr::R, context::C) where {R, C}
@@ -55,12 +55,12 @@ function testloop(rr::R, context::C) where {R, C}
     return context 
 end
 
-e_c = StatefulAlgorithms.makecontext(pr)
+e_c = first(setup(getalgo(pr)))
 cr = testloop(rr, e_c)
 
 
-# @benchmark testloop($rr, c) setup = (c = StatefulAlgorithms._merge_into_globals(StatefulAlgorithms.makecontext(pr), (; process=pr)))
-@benchmark testloop($rr, c) setup = (c = StatefulAlgorithms.makecontext(pr))
+# @benchmark testloop($rr, c) setup = (c = StatefulAlgorithms._merge_into_globals(first(setup(getalgo(pr))), (; process=pr)))
+@benchmark testloop($rr, c) setup = (c = first(setup(getalgo(pr))))
 
 @code_warntype testloop(rr, e_c)
 testloop(rr, e_c)
