@@ -34,6 +34,7 @@ makedocs(
             "Contexts" => "internals/contexts.md",
             "Routes, Shares, and Redirects" => "internals/routes_shares.md",
             "Process Pipeline" => "internals/process_pipeline.md",
+            "User Handles and Loop Versions" => "internals/handles_and_loop_versions.md",
             "DSL Semantics" => "internals/dsl_semantics.md",
         ],
     ],
