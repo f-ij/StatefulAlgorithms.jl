@@ -163,9 +163,9 @@ Status: `open`, `done <new hash>`, `skip`, `squashed into #n`, `asked` (waiting 
 | 50 | `e3779590` | A handle is statically findable when its matcher is; a UniquePlanId only when numbered |  | Its `isstaticallyfindable` methods go again in #67 (the trait and Findability.jl are removed); its test is checked with #67. | skip |
 | 51 | `064238e3` | The lifetime's condition and its read of the context are inlined where they are called | `Lifetimes/HookExtensions.jl` | Applied to main's per-lifetime files. Hot path (stop check). | done `e19c2a93` |
 | 52 | `38cedb3d` | unwrap_named_plan: readable docstring |  | #52 includes Backend.jl, which #53 creates, and its test-project change is reverted by #53: ported as one. | squashed into #53 |
-| 53 | `5eea0a63` | Edit: public edit functions in Edit.jl, their helpers in Edit/Backend.jl |  | With #52 (its docstring of `unwrap_named_plan`); the test-project change of #52 reverted by #53, not ported. | done |
-| 54 | `5f002505` | Rename the typed keymap functions: with_keymap_typed, strip_keymap_typed | `InlineProcess.jl` |  | open |
-| 55 | `f4865944` | Registry builder: the walk on values finds the same algorithm with `match` |  |  | open |
+| 53 | `5eea0a63` | Edit: public edit functions in Edit.jl, their helpers in Edit/Backend.jl |  | With #52 (its docstring of `unwrap_named_plan`); the test-project change of #52 reverted by #53, not ported. | done `ea49957c` |
+| 54 | `5f002505` | Rename the typed keymap functions: with_keymap_typed, strip_keymap_typed | `InlineProcess.jl` | Renames `attach_keymap`/`detach_keymap`/`attach_user_registry`, which never came in (`strip_keymap_typed` came with its final name in `f808cc8d`; the others are removed by #82). | skip |
+| 55 | `f4865944` | Registry builder: the walk on values finds the same algorithm with `match` |  |  | done |
 | 56 | `3fcbaf7c` | Registry builder: the walk on types also finds the same algorithm with `match` |  |  | open |
 | 57 | `ca5b1d10` | TODO: GeneralState.jl cleanup, details in agents/general-state-cleanup.md |  | docs/TODO only | open |
 | 58 | `b21615e9` | TODO: Process files folder layout and InlineProcess cleanup (agents/process-files-cleanup.md) |  | docs/TODO only | open |
