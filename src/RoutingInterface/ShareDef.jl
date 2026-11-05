@@ -35,8 +35,8 @@ Base.@nospecializeinfer function Share(@nospecialize(algo1), @nospecialize(algo2
     }, a1, a2)
 end
 
-# The endpoint matchers (parameters 1, 2) are those of the endpoint fields `a1`, `a2` (Identifiable/UniquePlanIds.jl).
-scref_derived_params(::Type{<:Share}) = (1 => 1, 2 => 2)
+# The endpoint matchers (parameters 1, 2) are those of the endpoint fields `a1`, `a2` (`list_field_derived_params`).
+list_field_derived_params(::Type{<:Share}) = ((1, 1, scref_match), (2, 2, scref_match))
 
 """Construct a resolved share from its type parameters."""
 function Share{FirstMatch, SecondMatch, directional, Nothing, Nothing}() where {FirstMatch, SecondMatch, directional}

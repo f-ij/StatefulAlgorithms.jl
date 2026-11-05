@@ -32,12 +32,13 @@ Composite schedule entry that runs a child only when a context predicate passes.
 
 `RunIf(cond, vars...)` defaults to every loop tick. `RunIf(interval, cond,
 vars...)` combines normal interval scheduling with a runtime predicate. The
-selector tuple lives in the type so generated composite steps can specialize on
-the context reads while the predicate function remains a value.
+selectors (`Var`s) are a field: their types decide the context reads while compiling, and a `Var` of a `Unique`
+handle may hold its id as data (`Var`), which must stay out of types.
 """
-struct RunIf{Vars, F, I}
+struct RunIf{V<:Tuple, F, I}
     cond::F
     interval::I
+    vars::V
 end
 
 getinterval(i::Interval{I, First, Offset}) where {I, First, Offset} = I
@@ -63,10 +64,11 @@ Interval(f::R, first::F = :end, offset::O = 0) where {R<:Real, F, O<:Real} = Int
 
 # `vars...` stays untyped: the selectors differ in type, and a typed `Vararg{V}` takes only one type.
 RunIf(cond::F, vars...) where {F<:Function} = RunIf(Interval(1), cond, vars...)
-RunIf(interval::I, cond::F, vars...) where {I<:Interval, F<:Function} = RunIf{vars, typeof(cond), typeof(interval)}(cond, interval)
+RunIf(interval::I, cond::F, vars...) where {I<:Interval, F<:Function} = RunIf{typeof(vars), typeof(cond), typeof(interval)}(cond, interval, vars)
 RunIf(interval::R, cond::F, vars...) where {R<:Real, F<:Function} = RunIf(Interval(interval), cond, vars...)
 
 @inline getcondition(runif::R) where {R<:RunIf} = getfield(runif, :cond)
+@inline getvars(runif::R) where {R<:RunIf} = getfield(runif, :vars)
 @inline getinterval(runif::R) where {R<:RunIf} = getinterval(getfield(runif, :interval))
 getinterval(::Type{<:RunIf{V, F, I}}) where {V, F, I} = getinterval(I)
 @inline schedule_interval(interval::I) where {I<:Interval} = interval
@@ -189,14 +191,14 @@ first_tick(::Interval{I, :end, Offset}) where {I, Offset} = I
 first_tick(::Interval{I, :start, Offset}) where {I, Offset} = 1
 first_tick(::Interval{I, First, Offset}) where {I, First, Offset} = First
 
-Base.:(*)(runif::RunIf{Vars}, interval::I) where {Vars, I<:Interval} =
-    RunIf(schedule_interval(runif) * interval, getcondition(runif), Vars...)
-Base.:(*)(interval::I, runif::RunIf{Vars}) where {I<:Interval, Vars} =
-    RunIf(interval * schedule_interval(runif), getcondition(runif), Vars...)
-Base.:(*)(runif::RunIf{Vars}, num::N) where {Vars, N<:Real} =
-    RunIf(schedule_interval(runif) * num, getcondition(runif), Vars...)
-Base.:(*)(num::N, runif::RunIf{Vars}) where {N<:Real, Vars} =
-    RunIf(num * schedule_interval(runif), getcondition(runif), Vars...)
+Base.:(*)(runif::R, interval::I) where {R<:RunIf, I<:Interval} =
+    RunIf(schedule_interval(runif) * interval, getcondition(runif), getvars(runif)...)
+Base.:(*)(interval::I, runif::R) where {I<:Interval, R<:RunIf} =
+    RunIf(interval * schedule_interval(runif), getcondition(runif), getvars(runif)...)
+Base.:(*)(runif::R, num::N) where {R<:RunIf, N<:Real} =
+    RunIf(schedule_interval(runif) * num, getcondition(runif), getvars(runif)...)
+Base.:(*)(num::N, runif::R) where {N<:Real, R<:RunIf} =
+    RunIf(num * schedule_interval(runif), getcondition(runif), getvars(runif)...)
 
 function Base.lcm(is::Vararg{Union{Interval, RunIf}, N}) where {N}
     nums = getinterval.(is)
@@ -214,17 +216,17 @@ end
 #   `RunIf` counts as its interval; how often its condition holds is not known before the run.
 
 # TODO: check these two `should_run_schedule` methods and the names they use (`should_run_schedule`, `divides`,
-# `getcondition`, `Vars`).
+# `getcondition`, `getvars`).
 @inline should_run_schedule(interval::I, loopidx::Int, context::C) where {I<:Interval, C} = @inline divides(loopidx, interval)
 
-@inline function should_run_schedule(runif::R, loopidx::Int, context::C) where {Vars, R<:RunIf{Vars}, C}
+@inline function should_run_schedule(runif::R, loopidx::Int, context::C) where {V, R<:RunIf{V}, C}
     if !(@inline divides(loopidx, runif))
         return false
     end
-    if isempty(Vars)
+    if V === Tuple{}
         return @inline getcondition(runif)()
     end
-    return @inline getcondition(runif)(getindex(context, Vars...))
+    return @inline getcondition(runif)(getindex(context, getvars(runif)...))
 end
 
 @inline always_runs(::Type{I}) where {F, I<:Interval{1, F, 0}} = true

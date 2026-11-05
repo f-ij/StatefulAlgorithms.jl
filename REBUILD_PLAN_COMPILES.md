@@ -103,9 +103,9 @@ Status: `open`, `done <new hash>`, `skip`, `squashed into #n`, `asked` (waiting 
 | # | Old | Subject | Old-layout files | Notes | Status |
 |---|---|---|---|---|---|
 | 1 | `120bec25` | UniquePlanId: Unique handles numbered per plan, held handles stay keys found from types | `InlineProcess.jl`, `InlineProcessShowing.jl`, `Process.jl`, `ProcessInteraction.jl` | Handout fitted to main by the owner's rule (2026-11-05): the user always gets the map (`getcontext(p)`/`getcontext(ip)`, `fetch(p)`, `setup`, `run(plan, context)`, `init(plan, context, ...)` hand out `with_held_ids`); SA's own reads use `_getcontext_nokeymap(p)` (old `_context`), internal `_setup`, `_init_again`, `_fetch`; contexts coming in are `strip_held_ids`'d. Left out: the per-`Process` `_HeldContextCache` field (`getcontext` is one `InteractiveProcess` method on main). Kept: the global `cached_key_map` (removed by #14). The owner asked for one commit per old commit (2026-11-05). | done `def8e6be` |
-| 2 | `8e1c19c0` | ProcessContexts: _getindex_by_registry -> _find_subcontext_of (name says what it does) |  |  || done |
-| 3 | `fd9407d5` | Vars.jl: _var_match branches with an if and a comment on the stripped-handle case |  |  || done |
-| 4 | `3338d7cd` | UniquePlanId in its own folder; Var holds its id as data like Route; lifetimes and RunIf keep their Vars in a field | `Lifetimes/HookExtensions.jl`, `LoopAlgorithms/HookExtensions.jl` |  | open |
+| 2 | `8e1c19c0` | ProcessContexts: _getindex_by_registry -> _find_subcontext_of (name says what it does) |  |  | done `b4e5df2d` |
+| 3 | `fd9407d5` | Vars.jl: _var_match branches with an if and a comment on the stripped-handle case |  |  | done `e4daea11` |
+| 4 | `3338d7cd` | UniquePlanId in its own folder; Var holds its id as data like Route; lifetimes and RunIf keep their Vars in a field | `Lifetimes/HookExtensions.jl`, `LoopAlgorithms/HookExtensions.jl` | Lifetime changes went into main's per-type files (`Lifetimes/Until.jl`, `AtLeast.jl`, `RepeatOrUntil.jl`, `AtLeastAtMost.jl`, which hold their `lifetime_breakcondition` methods); `RunIf` and `should_run_schedule` in `LoopAlgorithms/Interval.jl`, in main's typed-argument style. | done |
 | 5 | `c5b5f5d2` | UniquePlanId: a block's state id made stripped; type-only uuids kept by strip; docs for the folder and the hooks |  |  | open |
 | 6 | `bae1aa36` | UniquePlanId cleanup: audit fixes |  |  | open |
 | 7 | `c91c97a5` | UniquePlanId: the two rewrite modes (strip, number) together in RewriteModes.jl |  |  | open |

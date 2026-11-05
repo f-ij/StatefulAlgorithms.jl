@@ -1,15 +1,16 @@
 #=
 `RepeatOrUntil`: at most `repeats` repeats, fewer when its condition holds first. The condition reads the variables
-`Vars` from the context.
+`vars` from the context. A `Var` of a `Unique` handle may hold its id as data, which must stay out of types, so the `Var`s are a field, not
+a type parameter; their types still decide the reads while compiling.
 =#
 
-struct RepeatOrUntil{Vars, F} <: RepeatLifetime
+struct RepeatOrUntil{V<:Tuple, F} <: RepeatLifetime
     repeats::Int
     cond::F
+    vars::V
+    RepeatOrUntil(cond::Function, repeats::Int, vars...) = new{typeof(vars), typeof(cond)}(repeats, cond, vars)
 end
 repeats(rou::RepeatOrUntil) = rou.repeats
 
-RepeatOrUntil(cond::Function, repeats::Int, Vars...) = RepeatOrUntil{Vars, typeof(cond)}(repeats, cond)
-
-@inline lifetime_breakcondition(lt::ROU, context::C, done::D) where {Vars, ROU<:RepeatOrUntil{Vars}, C, D<:Integer} =
-    lt.cond(getindex(context, Vars...))
+@inline lifetime_breakcondition(lt::ROU, context::C, done::D) where {ROU<:RepeatOrUntil, C, D<:Integer} =
+    lt.cond(getindex(context, lt.vars...))

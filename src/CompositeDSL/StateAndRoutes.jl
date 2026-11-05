@@ -351,7 +351,7 @@ function _composite_dsl_write_owner(entity, name::Symbol)
 end
 
 """Return `true` for a block's own `@state`: a `GeneralState` carrying the id it got when the block was built."""
-_composite_dsl_is_block_state(entry) = entry isa AbstractIdentifiableAlgo && getalgo(entry) isa GeneralState && _is_given_id(id(entry))
+_composite_dsl_is_block_state(entry) = entry isa AbstractIdentifiableAlgo && getalgo(entry) isa GeneralState && is_given_id(id(entry))
 
 """Return the `@state` of the DSL block `entity` (its identified `GeneralState`), the owner of `c.field` references."""
 function _composite_dsl_block_state(entity::LoopSpec)

@@ -22,7 +22,8 @@ end
 
 abstract type AbstractMatcher{A} end
 getmatchers(m::AbstractMatcher{A}) where {A} = A
-# A matcher type, as the type-level id of a handle whose matcher carries data (`static_id`), matches as itself.
+# A matcher, or a matcher type (the type-level id of a handle whose matcher carries data, `static_id`), matches as itself.
+match_by(m::AbstractMatcher) = m
 match_by(T::Type{<:AbstractMatcher}) = T
 
 """
@@ -34,6 +35,9 @@ there and its value in the handle's `matcher` field. Any other id (a type, an `i
 """
 static_id(id) = id
 static_id(m::AbstractMatcher) = Base.issingletontype(typeof(m)) ? m : typeof(m)
+
+"""Whether the matcher `m` carries data its type does not hold (`UniquePlanId`), so a holder keeps it as a value."""
+carries_data(m) = static_id(m) !== m
 struct SimpleId{id} <: AbstractMatcher{id} end
 SimpleId() = SimpleId{uuid4()}()
 SimpleId(id) = SimpleId{id}()
@@ -43,55 +47,6 @@ struct ObjectIDMatcher{id} <: AbstractMatcher{id} end
 ObjectIDMatcher(id::UInt64) = ObjectIDMatcher{id}()
 ObjectIDMatcher(obj) = ObjectIDMatcher(objectid(obj))
 Base.:(==)(::ObjectIDMatcher{id1}, ::ObjectIDMatcher{id2}) where {id1, id2} = id1 == id2
-
-struct MatchAny{A} <: AbstractMatcher{A} end
-MatchAny(matchers...) = MatchAny(tuple(matchers...))
-function Base.:(==)(m1::MatchAny, a)
-    return any(x -> x == a, getmatchers(m1))
-end
-function Base.:(==)(a, m1::MatchAny)
-    return any(x -> x == a, getmatchers(m1))
-end
-
-struct MatchAll{A} <: AbstractMatcher{A} end
-MatchAll(matchers...) = MatchAll(tuple(matchers...))
-function Base.:(==)(m1::MatchAll, a)
-    return all(x -> x == a, getmatchers(m1))
-end
-function Base.:(==)(a, m1::MatchAll)
-    return all(x -> x == a, getmatchers(m1))
-end
-
-"""
-Match with any parent nodes but not other siblings
-"""
-struct TreeMatcher{A} <: AbstractMatcher{A} end
-get_tid(tm::TreeMatcher{TID}) where TID = tuple(TID.parameters...)
-
-function TreeMatcher(id = uuid4())
-    if id isa Tuple
-        return TreeMatcher{Tuple{id...}}()
-    else
-        return TreeMatcher{Tuple{id}}()
-    end
-end
-
-getchild(tm::TreeMatcher{TID}, id = uuid4()) where TID = TreeMatcher((get_tid(tm)...,id))
-
-@inline function Base.:(==)(tm1::TreeMatcher{TID1}, tm2::TreeMatcher{TID2}) where {TID1,TID2}
-    ids1 = get_tid(tm1)
-    ids2 = get_tid(tm2)
-
-    l1 = length(ids1)
-    l2 = length(ids2)
-    if l1 == l2
-        return ids1 == ids2
-    elseif l1 < l2
-        return ids1 == ids2[1:l1]
-    else
-        return ids1[1:l2] == ids2
-    end
-end 
 
 """
 Matches BOTH with the object type or the match_by of the object type
@@ -131,6 +86,108 @@ function Base.:(==)(sm1::ValMatcher{V1}, sm2::ValMatcher{V2}) where {V1,V2}
     return V1 == V2
 end
 
+"""
+    MatchAnyOf(matchers::Tuple)
+
+Matches what any of `matchers` matches, held as data (a `MatchAny` holds them in its type). Used for a state merged
+from several (`@merge`), whose matchers may carry data (`UniquePlanId`); its type holds only their types.
+"""
+struct MatchAnyOf{T<:Tuple} <: AbstractMatcher{T}
+    matchers::T
+end
+matcher_parts(m::MatchAnyOf) = getfield(m, :matchers)
+matcher_parts(::Type{MatchAnyOf{T}}) where {T} = Tuple(T.parameters)
+_any_matches(m, x) = any(p -> p == x, matcher_parts(m))
+Base.:(==)(m::MatchAnyOf, x) = _any_matches(m, x)
+Base.:(==)(x, m::MatchAnyOf) = _any_matches(m, x)
+Base.:(==)(m::MatchAnyOf, n::MatchAnyOf) = any(p -> _any_matches(m, p), matcher_parts(n))
+
+################################################
+##################   HOOKS   ###################
+################################################
+
+"""
+    matches_type(value, M) -> Bool
+
+Whether the matcher value `value` (an algorithm's `match_by`) is matched by the matcher type `M` (a stored SCRef,
+`scref_match`). Default `value isa M`; a matcher type as the value (a handle type's id) by `<:`.
+Extended by: `ValMatcher`, `MatchAnyOf` (below), `UniquePlanId` (Identifiable/UniquePlanId/HookExtensions.jl).
+"""
+matches_type(value, M) = value isa M
+matches_type(value::Type, M) = value <: M
+matches_type(value, ::Type{<:ValMatcher{V}}) where {V} = value == V || value isa ValMatcher{V}
+# A merged state's matcher matches if any of its parts does.
+matches_type(value::Union{MatchAnyOf, Type{<:MatchAnyOf}}, M) = any(m -> matches_type(m, M), matcher_parts(value))
+
+"""
+    is_given_id(id) -> Bool
+
+Whether `id` (value or type) was given to a handle (`Unique`, a block's `@state`, a merged state), as opposed to one it
+matches by (its type, its key): a state with a given id matches by it, and two handles with the same given id are one
+algorithm. Default `false`.
+Extended by: `SimpleId`, `MatchAnyOf` (below), `UniquePlanId` (Identifiable/UniquePlanId/HookExtensions.jl).
+"""
+is_given_id(@nospecialize(id)) = false
+is_given_id(::Union{SimpleId, Type{<:SimpleId}}) = true
+is_given_id(::Union{MatchAnyOf, Type{<:MatchAnyOf}}) = true
+
+################################################
+#############   NOT USED (KEPT)   ##############
+################################################
+
+# Matchers nothing in the package constructs any more: a merged state matches by `MatchAnyOf`, which holds its parts as
+# data (`UniquePlanId` carries a uuid). Kept as simple facilities.
+
+struct MatchAny{A} <: AbstractMatcher{A} end
+MatchAny(matchers...) = MatchAny(tuple(matchers...))
+function Base.:(==)(m1::MatchAny, a)
+    return any(x -> x == a, getmatchers(m1))
+end
+function Base.:(==)(a, m1::MatchAny)
+    return any(x -> x == a, getmatchers(m1))
+end
+matches_type(value::MatchAny, M) = any(m -> matches_type(m, M), getmatchers(value))
+
+struct MatchAll{A} <: AbstractMatcher{A} end
+MatchAll(matchers...) = MatchAll(tuple(matchers...))
+function Base.:(==)(m1::MatchAll, a)
+    return all(x -> x == a, getmatchers(m1))
+end
+function Base.:(==)(a, m1::MatchAll)
+    return all(x -> x == a, getmatchers(m1))
+end
+
+"""
+Match with any parent nodes but not other siblings
+"""
+struct TreeMatcher{A} <: AbstractMatcher{A} end
+get_tid(tm::TreeMatcher{TID}) where TID = tuple(TID.parameters...)
+
+function TreeMatcher(id = uuid4())
+    if id isa Tuple
+        return TreeMatcher{Tuple{id...}}()
+    else
+        return TreeMatcher{Tuple{id}}()
+    end
+end
+
+getchild(tm::TreeMatcher{TID}, id = uuid4()) where TID = TreeMatcher((get_tid(tm)...,id))
+
+@inline function Base.:(==)(tm1::TreeMatcher{TID1}, tm2::TreeMatcher{TID2}) where {TID1,TID2}
+    ids1 = get_tid(tm1)
+    ids2 = get_tid(tm2)
+
+    l1 = length(ids1)
+    l2 = length(ids2)
+    if l1 == l2
+        return ids1 == ids2
+    elseif l1 < l2
+        return ids1 == ids2[1:l1]
+    else
+        return ids1[1:l2] == ids2
+    end
+end
+
 struct MultiMatcher{A} <: AbstractMatcher{A} end
 function getmatchers(mm::MultiMatcher{A}) where A
     return A
@@ -159,52 +216,3 @@ end
 function Base.:(==)(mm1::MultiMatcher{A}, mm2::MultiMatcher{B}) where {A,B}
     return any(x -> any(y -> x == y, getmatchers(mm2)), getmatchers(mm1))
 end
-
-"""
-    UniquePlanId{N}(origin::UUID)
-
-The matcher of a `Unique` handle. `origin` (data) is the uuid drawn when the handle was made; `N` (type) is:
-- `origin` itself on the handle the user holds (`Unique(f)`), so that handle is a key known from its type alone;
-- `nothing` once a constructor took the handle (`strip_unique`), so constructors compile once for every handle;
-- the handle's number `k` in its plan (1, 2, ...), given when the plan is built (`number_unique_ids`); the registry
-  stores the handle so, and a held handle finds it by its uuid (`is_held_unique_id`).
-Two values are the same handle when their `origin`s are equal; at the type level (a handle's `Id` parameter) they
-match when their `N`s are equal.
-"""
-struct UniquePlanId{N} <: AbstractMatcher{N}
-    origin::UUID
-end
-UniquePlanId(origin::UUID) = UniquePlanId{origin}(origin)
-
-"""The `N` of a `UniquePlanId` (value or type): its uuid, `nothing`, or its number in its plan."""
-plan_number(::Union{UniquePlanId{N}, Type{UniquePlanId{N}}}) where {N} = N
-"""The uuid a `UniquePlanId` was drawn with."""
-origin(id::UniquePlanId) = getfield(id, :origin)
-
-Base.:(==)(a::UniquePlanId, b::UniquePlanId) = origin(a) == origin(b)
-Base.:(==)(a::UniquePlanId, ::Type{UniquePlanId{N}}) where {N} = !isnothing(N) && plan_number(a) == N
-Base.:(==)(T::Type{<:UniquePlanId}, b::UniquePlanId) = b == T
-Base.hash(a::UniquePlanId, h::UInt) = hash(origin(a), hash(UniquePlanId, h))
-
-
-"""
-    MatchAnyOf(matchers::Tuple)
-
-Matches what any of `matchers` matches, held as data (a `MatchAny` holds them in its type). Used for a state merged
-from several (`@merge`), whose matchers may carry data (`UniquePlanId`); its type holds only their types.
-"""
-struct MatchAnyOf{T<:Tuple} <: AbstractMatcher{T}
-    matchers::T
-end
-matcher_parts(m::MatchAnyOf) = getfield(m, :matchers)
-matcher_parts(::Type{MatchAnyOf{T}}) where {T} = Tuple(T.parameters)
-_any_matches(m, x) = any(p -> p == x, matcher_parts(m))
-Base.:(==)(m::MatchAnyOf, x) = _any_matches(m, x)
-Base.:(==)(x, m::MatchAnyOf) = _any_matches(m, x)
-Base.:(==)(m::MatchAnyOf, n::MatchAnyOf) = any(p -> _any_matches(m, p), matcher_parts(n))
-Base.:(==)(m::Type{<:MatchAnyOf}, x::Union{UniquePlanId, Type{<:UniquePlanId}}) = _any_matches(m, x)
-Base.:(==)(x::Union{UniquePlanId, Type{<:UniquePlanId}}, m::Type{<:MatchAnyOf}) = _any_matches(m, x)
-
-"""Whether `id` is the matcher of a `Unique` handle the user holds (`UniquePlanId{uuid}`), ."""
-is_held_unique_id(id) = false
-is_held_unique_id(id::UniquePlanId) = plan_number(id) isa UUID

@@ -58,8 +58,8 @@ Base.@nospecializeinfer function Route(
     }, source_ref, target_ref)
 end
 
-# The endpoint matchers (parameters 1, 2) are those of the endpoint fields `source_ref`, `target_ref` (Identifiable/UniquePlanIds.jl).
-scref_derived_params(::Type{<:Route}) = (1 => 1, 2 => 2)
+# The endpoint matchers (parameters 1, 2) are those of the endpoint fields `source_ref`, `target_ref` (`list_field_derived_params`).
+list_field_derived_params(::Type{<:Route}) = ((1, 1, scref_match), (2, 2, scref_match))
 
 """Construct a resolved route from its type parameters."""
 function Route{Smatch, Tmatch, FT, RFT, varnames, aliases, Nothing, Nothing}() where {Smatch, Tmatch, FT, RFT, varnames, aliases}

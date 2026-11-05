@@ -41,6 +41,6 @@ subcontext (an algorithm, its type or key, `:_captured_returns` for a captured r
 declared local), optionally transformed, as `alias`.
 """
 From(wire::Pair{<:Var, Symbol}) = _var_route(first(wire), last(wire))
-# A `Var` already stores its reference as a route stores an endpoint (an SCKey or a matcher type).
-_var_route(::Var{Ref, name, transform}, alias::Symbol) where {Ref, name, transform} =
-    Route{Ref, OwnerMatcher, transform, nothing, (name,), (alias,), Nothing, ThisChild}(nothing, ThisChild())
+# A `Var` already stores its reference as a route stores an endpoint: the matcher type, and its data as the object.
+_var_route(var::Var{Ref, name, transform, D}, alias::Symbol) where {Ref, name, transform, D} =
+    Route{Ref, OwnerMatcher, transform, nothing, (name,), (alias,), D, ThisChild}(getfield(var, :data), ThisChild())
