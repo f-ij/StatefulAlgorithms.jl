@@ -71,12 +71,15 @@ end
     @test overridden[PipelineCounter].total == 5
 end
 
-@testset "init! on processes: full and Only; Process/TimedProcess keep the merged specs, InlineProcess its own" begin
+@testset "init! on Process/TimedProcess, init on InlineProcess: full and Only, the merged specs kept" begin
     plan_spec = @CompositeAlgorithm begin
         @input step
         PipelineCounter(step)
         PipelineOther()
     end
+    # An InlineProcess has `init(ip, ...)`, returning a new process (its specs and context are typed); the others
+    # `init!(p, ...)`, returning `p`. Both keep the merged specs.
+    initialize(p, specs...) = p isa InlineProcess ? init(p, specs...) : init!(p, specs...)
     for make in (spec -> Process(spec, InitArgs(PipelineCounter; total = 1), InitArgs(PipelineOther; count = 2); repeats = 1),
                  spec -> InlineProcess(spec, InitArgs(PipelineCounter; total = 1), InitArgs(PipelineOther; count = 2); repeats = 1),
                  spec -> TimedProcess(spec, InitArgs(PipelineCounter; total = 1), InitArgs(PipelineOther; count = 2); repeats = 1, interval = 0.01))
@@ -85,23 +88,22 @@ end
         @test state(p) == (1, 2)
 
         # Only: A's `init` runs on the current state, the rest is kept.
-        @test init!(p, Only(PipelineCounter), InitArgs(PipelineCounter; total = 40)) === p
-        @test state(p) == (40, 2)
+        p1 = initialize(p, Only(PipelineCounter), InitArgs(PipelineCounter; total = 40))
+        @test (p1 === p) == !(p isa InlineProcess)
+        @test state(p1) == (40, 2)
+        p isa InlineProcess && @test state(p) == (1, 2)   # the old InlineProcess is left as it was
 
-        # Full: every `init` from the stored specs with the new ones merged over them. An InlineProcess's specs are
-        # fixed (a typed const field), so it does not keep the `Only` call's specs nor this one's.
-        keeps_specs = !(p isa InlineProcess)
-        specs_before = StatefulAlgorithms.getspecs(p)
-        init!(p, InitArgs(PipelineOther; count = 7))
-        @test state(p) == (keeps_specs ? 40 : 1, 7)
-        init!(p)
-        @test state(p) == (keeps_specs ? (40, 7) : (1, 2))
-        @test length(StatefulAlgorithms.getspecs(p)) == 2
-        keeps_specs || @test StatefulAlgorithms.getspecs(p) === specs_before
+        # Full: every `init` from the stored specs with the new ones merged over them.
+        p2 = initialize(p1, InitArgs(PipelineOther; count = 7))
+        @test state(p2) == (40, 7)
+        p3 = initialize(p2)
+        @test state(p3) == (40, 7)
+        @test length(StatefulAlgorithms.getspecs(p3)) == 2
 
-        last_state = state(p)
-        @test_throws ArgumentError init!(p, Only(PipelineCounter), InitArgs(PipelineOther; count = 1))
-        @test state(p) == last_state
+        last_state = state(p3)
+        @test_throws ArgumentError initialize(p3, Only(PipelineCounter), InitArgs(PipelineOther; count = 1))
+        @test state(p3) == last_state
         p isa InlineProcess || close(p)
     end
+    @test !hasmethod(init!, Tuple{InlineProcess})
 end

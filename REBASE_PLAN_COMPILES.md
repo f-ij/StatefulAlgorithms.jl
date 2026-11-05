@@ -103,6 +103,7 @@ and put plan-compiles' map work into it:
 | `partialinitworker!` | `initworker!(slot, Only(...), ...)` | `a0291e0a` |
 | `initcontext(algo, [c], specs...)` (`src/Init.jl`), `initcontext(context, ::Symbol / algo)` | `setup`; `init(plan, context, Only(...), ...)` | `07d5afc4` |
 | `makecontext`, `makecontext!` | `init!(p, ...)` | `07d5afc4` |
+| `init!(ip::InlineProcess, ...)` | `init(ip, ...) -> InlineProcess` (new process with the merged specs); `init_and_run(ip, ...)` = `run(init(ip, ...))` | this commit |
 | `_has_typed_state_context`, `_typed_state_context` | manager launches from `getcontext(worker)` | `11e859a7` |
 | `@DebugMode`, `@GenDebugMode`, `DEBUG_MODE`, `debug_mode()`, `Debugging.jl`, the Preferences dependency, `LocalPreferences.toml` | nothing | `1fc7b986` |
 | `shown_value` hook, `_shown_values` | nothing (it returned its argument everywhere) | `763e1a37` |
@@ -146,9 +147,10 @@ plan-compiles still has the old layout. Its changes to these files go into the n
    (`state_context`, `specs`, `getspecs(p)`). Stored specs are resolved once and merged per target. Paths that set
    up from them (`reset!(ip)`, `close`'s error path, `copyprocess` with the same plan) merge without resolving by name
    again: a lookup by name in the precompile workload makes the package image fail to load on Julia 1.13.1.
-5. **Init interface.** `InitArgs` (values) and `Only(...)` (which `init` runs) are separate. `init!(p, ...)` exists
-   for every process type. `Process` and `TimedProcess` store the merged specs; `InlineProcess` has
-   `const specs::S` and does not.
+5. **Init interface.** `InitArgs` (values) and `Only(...)` (which `init` runs) are separate. `init!(p, ...)` for
+   `Process` and `TimedProcess`; `init(ip, ...)` for `InlineProcess` returns a new process (`const specs::S`, typed
+   context). Every process keeps the merged specs. Rule: a function that changes typed data has no `!` and returns
+   a new process.
 6. **Lifetime.** The process holds a default (`default_lifetime`, `getlifetime`); `run` never changes it. A run's own
    lifetime (`repeats`/`lifetime` on `run`, else the default) is in the session and survives a pause. `setlifetime!`
    (Process, TimedProcess; warns during a run) and `setlifetime` (new process; the only one for `InlineProcess`).

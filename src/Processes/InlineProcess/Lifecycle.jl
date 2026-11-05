@@ -1,5 +1,5 @@
 #=
-What a user calls on an `InlineProcess`: `run` (and `run_nogen`, the same without the `inlined` choice), `init!`,
+What a user calls on an `InlineProcess`: `run` (and `run_nogen`, the same without the `inlined` choice), `init`,
 `reset!` and `init_and_run`.
 =#
 
@@ -31,18 +31,20 @@ end
 end
 
 """
-    init!(ip, InitArgs(...), Override(...)) -> ip
-    init!(ip, Only(A, B), InitArgs(...), Override(...)) -> ip
+    init(ip, InitArgs(...), Override(...)) -> InlineProcess
+    init(ip, Only(A, B), InitArgs(...), Override(...)) -> InlineProcess
 
-Runs `init` again (all of them, from the specs the process was built with and `specs` merged over them, or only the
-ones `Only` names, on the current context) and makes the result the process's context. Unlike `init!(p::Process, ...)`
-the process does not keep the merged specs: its specs are typed and fixed, and other specs for good mean a new
-process. The loop counter is left alone (`reset!` restarts it).
+A new `InlineProcess` with the same plan and lifetime whose context comes from running `init` again: all of them,
+from `ip`'s specs with `specs` merged over them, or only the ones `Only` names, on `ip`'s current context. The new
+process keeps the merged specs. `ip` itself is left as it was.
+
+No `init!`: an `InlineProcess`'s specs and context are typed fields (type parameters `S` and `ContextType`), and new
+specs can change those types, so the result is a new process. The rule for every process function: one that changes
+typed data has no `!` and returns a new process (as `setlifetime(ip, lt)`).
 """
-function init!(ip::InlineProcess, specs::InputInterface...)
-    context, _ = _init_process_context(ip, specs)
-    setcontext!(ip, context)
-    return ip
+function init(ip::IP, specs::Vararg{InputInterface}) where {IP<:InlineProcess}
+    context, stored = _init_process_context(ip, specs)
+    return _construct_inline_process(getalgo(ip), context, stored, getlifetime(ip))
 end
 
 @inline function reset!(p::InlineProcess, inputs_overrides...)
@@ -51,7 +53,11 @@ end
     return true
 end
 
-@inline function init_and_run(p::InlineProcess, inputs_overrides...)
-    init!(p, inputs_overrides...)
-    return run(p)
+"""
+    init_and_run(ip, specs...)
+
+`run(init(ip, specs...))`: the run's result. `ip` itself is left as it was.
+"""
+@inline function init_and_run(ip::IP, specs::Vararg{InputInterface}) where {IP<:InlineProcess}
+    return run(init(ip, specs...))
 end

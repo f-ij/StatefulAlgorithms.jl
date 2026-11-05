@@ -61,7 +61,8 @@ p2 = setlifetime(p, Repeat(2_000))  # a new process with the same plan, specs an
 ```
 
 An `InlineProcess` has the lifetime's type as a type parameter, so it has only
-`setlifetime(ip, lt)`, which returns a new `InlineProcess`.
+`setlifetime(ip, lt)`, which returns a new `InlineProcess` (see
+[Changing typed data: no `!`](@ref no_bang_rule)).
 
 This changes the outer process lifetime. It does not change how often child
 loop algorithms run inside a `CompositeAlgorithm` or `Routine`. Those schedules

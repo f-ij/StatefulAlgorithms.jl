@@ -73,10 +73,11 @@ For selector syntax used in `Until`, see [Vars (`Var` Selectors)](@ref vars_user
 - `close(p)`: stop the process, wait for it, run cleanup when needed, and commit
   the final persistent context.
 - `init!(p, InitArgs(...), Override(...))`: runs every `init` again, from the process's stored specs with the new
-  ones merged over them, and makes the result the process's state. A `Process` or `TimedProcess` keeps the merged
-  specs; an `InlineProcess` keeps the specs it was built with (they are part of its type: other specs mean a new process).
+  ones merged over them, and makes the result the process's state. The process keeps the merged specs.
 - `init!(p, Only(A, B), InitArgs(...))`: only A's and B's `init` run, on the current state; the rest is kept.
 - A running process is paused for `init!` and runs on after; a paused one stays paused.
+- An `InlineProcess` has `init(ip, ...)` instead, which returns a new process (see
+  [Changing typed data: no `!`](@ref no_bang_rule)).
 
 ## Waiting and Fetching
 
@@ -125,6 +126,24 @@ run, the process then stores only the persistent context: the run's runtime valu
 (inputs and declared locals) are dropped. An `InlineProcess` cannot be paused.
 `run(ip; context = ctx)` makes `ctx` (of the process's context type) its context
 before the run.
+
+### [Changing typed data: no `!`](@id no_bang_rule)
+
+An `InlineProcess` is fully typed: its context, specs and lifetime are type
+parameters. A call that can change one of those types cannot change the process
+in place, so it has no `!` and returns a new `InlineProcess`; the old one is left
+as it was. The missing `!` tells you to keep the result:
+
+```julia
+ip = init(ip, InitArgs(A; x = 5))           # init again, from ip's specs with these merged over them
+ip = init(ip, Only(A), InitArgs(A; x = 5))  # only A's init, on ip's current context
+ip = setlifetime(ip, Repeat(2_000))
+```
+
+The new process keeps the merged specs, so a later `reset!(ip)` or `init(ip)`
+starts from `x = 5`. `init_and_run(ip, specs...)` is `run(init(ip, specs...))`.
+A `Process` or `TimedProcess` has the `!` forms (`init!`, `setlifetime!`),
+which change the process and return it.
 
 If you need buffered external updates to context variables, see
 [Interactive Contexts](@ref interactive_user).

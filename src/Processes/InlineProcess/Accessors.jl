@@ -17,8 +17,8 @@ type parameter of `InlineProcess`, so there is no `setlifetime!`.
 setlifetime(ip::IP, lt::LT) where {IP<:InlineProcess, LT<:Lifetime} = _construct_inline_process(getalgo(ip), getcontext(ip), getspecs(ip), lt)
 
 getalgo(ip::InlineProcess) = ip.algo
-"""The `InitArgs`/`Override`/`Interactive` specs the process was built with (resolved, one per target and kind); fixed
-for the process's life."""
+"""The `InitArgs`/`Override`/`Interactive` specs the process's context is set up from (resolved, one per target and
+kind); fixed for the process's life (`init(ip, specs...)` returns a new process with new ones merged in)."""
 getspecs(ip::InlineProcess) = ip.specs
 
 """Make `c` the context of `ip`: later runs start from it."""
