@@ -2,7 +2,7 @@
 
 `refactor/plan-compiles` branched from `main` at `4f35d638` (2026-10-26). Since then `main` got
 `refactor/contexts-processes-pausing` (fast-forwarded 2026-11-04, tip `35a00a31`) and `ce84c26d` (redirect cycles at
-resolve). `refactor/plan-holds-no-data` sits on `35a00a31`. When plan-compiles is rebased onto these (and onto
+resolve), then `refactor/plan-holds-no-data` (rebased onto `ce84c26d` and fast-forwarded 2026-11-05). When plan-compiles is rebased onto `main` (and onto
 `refactor/partitions`, BRANCHES.md), every rename, removal, move and design rule below has to reach its code, or its
 code has to be rewritten into the new place. This file collects them in one place. Before, they were spread over
 commit messages and TODO.md items.
@@ -10,8 +10,8 @@ commit messages and TODO.md items.
 Read with it: TODO.md items "Construction pipeline" (decisions 1–9), "A plan holds no data", "Where the lifetime
 lives", "Names of the `Process` run path", "Finalizers", "When `refactor/partitions` and this branch are combined".
 
-Keep this file up to date: a commit on `refactor/plan-holds-no-data` (or on `main` before the rebase) that renames,
-removes or moves something plan-compiles uses adds a row here.
+Keep this file up to date: a commit on `main` (or a branch headed for it) that renames, removes or moves something
+plan-compiles uses adds a row here, until plan-compiles is rebased.
 
 ## 1. What plan-compiles has that collides
 
@@ -53,9 +53,8 @@ and put plan-compiles' map work into it:
    InlineProcess constructors call it. The loop precompile stubs were removed (`00de6df4`). Port plan-compiles'
    precompile methods onto `_run_loop_and_store!` (the task body, `@noinline`).
 8. **Redirect cycle check.** `main` (`ce84c26d`) checks cycles at resolve: `check_redirect_cycles(registry, options)`
-   at the end of `_resolve_keyed_plan` and `_resolve_plan_typed`. This branch still checks at every init from the
-   context's markers (`check_redirect_cycles(context)` in `apply_redirect_specs`). The rebase onto `main` takes main's
-   version. Owner wants it typed (TODO.md, "Redirect cycle check typed").
+   at the end of `_resolve_keyed_plan` and `_resolve_plan_typed`; `apply_redirect_specs` no longer walks the context's
+   markers for it. plan-compiles takes this version. Owner wants it typed (TODO.md, "Redirect cycle check typed").
 9. **Registry lookup without try/catch** (`589fbfd7`). `get(reg, obj, default)` (`src/Registry/Registries.jl`) finds
    the entry of `obj`'s type (`find_typeidx`, `default` when there is none), then `findfirst_match` (by matcher or by
    the runtime table, depending on `isstaticallyfindable`), `default` when nothing matches. plan-compiles' changes to
