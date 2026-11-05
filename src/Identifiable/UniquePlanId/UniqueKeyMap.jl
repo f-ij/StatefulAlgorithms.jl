@@ -5,9 +5,9 @@ the user holds `UniquePlanId{uuid}`. `resolve` puts the plan's `k => uuid` pairs
 (`numbered_handle`) and are lookups decided from types, as a registry key is. The user always gets the map: every plan
 and context handed out keeps it (`setup`, `run(plan, context)`, `init(plan, context, ...)`, `getcontext(p)`,
 `fetch(p)`). Running the plan (`init`, the loop) takes it out first (`strip_keymap`; the loop's plan and `LoopContext`
-come without it from `prepare_for_loop`), so nothing they compile has a uuid in its type. A process keeps its plan and
-context without the map and the map as a value (its `keymap` field), and puts it back into the contexts it hands to the
-user; SA's own code reads the context without it (`_getcontext_nokeymap`).
+come without it from `prepare_for_loop`), so nothing they compile has a uuid in its type. A process keeps its
+plan and its context with the map, as the user's (`getalgo(p)`, `getcontext(p)`); the map is in no process field. SA's
+own code that needs a process's context without it reads `_getcontext_nokeymap`.
 =#
 
 """
@@ -123,3 +123,18 @@ end
 set of `Unique` handles compiles nothing again.
 """
 Base.@nospecializeinfer strip_keymap(@nospecialize(x)) = with_keymap(x, nothing)
+
+"""
+    strip_keymap_typed(x) -> x without its registry's map
+
+`strip_keymap` for code typed on the map (a method of `InlineProcess`, whose plan and context have it in their types):
+the result's type is known where it is called, so that code stays inferred. For a context: same subcontexts, a new
+registry and `Ref` (its method is in Context/ProcessContexts.jl, after `ProcessContext`); for a `LoopAlgorithm`: same
+plan and options, the registry without the map. Anything else, or a registry without a map, as it is.
+"""
+@inline function strip_keymap_typed(la::LoopAlgorithm{Plan, O, NameSpaceRegistry{E, M}, id}) where {Plan, O, E, M, id}
+    M === Nothing && return la
+    newreg = NameSpaceRegistry{E, Nothing}(getfield(getfield(la, :reg), :entries), nothing)
+    return LoopAlgorithm{Plan, O, NameSpaceRegistry{E, Nothing}, id}(getfield(la, :plan), getfield(la, :options), newreg)
+end
+@inline strip_keymap_typed(x) = x

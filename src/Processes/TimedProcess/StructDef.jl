@@ -25,8 +25,4 @@ mutable struct TimedProcess{F,C} <: InteractiveProcess{F,C}
     lastresult::Any
     # The run's counters, times, cursor and the `shouldrun` flag a tick's routines check (Processes/Process/Session.jl).
     session::InteractiveSession{C}
-    # As in `Process`: the plan's `UniqueKeyMap`, which `getcontext(tp)` puts back. Untyped.
-    keymap::Any
-    # As in `Process`: the context handed to the user, built each time the state context changes. Untyped.
-    user_context::Any
 end

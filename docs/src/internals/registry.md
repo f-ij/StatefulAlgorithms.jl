@@ -68,13 +68,14 @@ steps below 4.7–4.8 ms). So the uuid (`origin`) is data and never changes; the
    `src/Identifiable/UniquePlanId/UniqueKeyMap.jl`). `registry[handle]`, `getkey(registry, handle)` and `context[handle]` with
    a handle the user holds number it from that map while compiling (`numbered_handle`) and look it up from types, as
    a registry key.
-5. Running the plan takes the map out (`strip_keymap`): `setup`, `init(plan, context, ...)`, a direct run's
-   `prepare_for_loop`, `Process`, `InlineProcess` and `TimedProcess` work on the plan and context without it, so `init`
-   and the loop have no uuid in their types and compile once for every new set of `Unique`s. The user always gets the
-   map: what is handed back (the contexts of `setup`, `run(plan, context)` and `init(plan, context, ...)`,
-   `getcontext(p)`, `fetch(p)`) has it put back (`with_keymap`): a process builds the user's context once each time its
-   context changes (`set_user_context!`, from `setcontext!`, construction and after a run) and `getcontext(p)` reads it;
-   a context given back to SA (`Process(...; context)`, `setcontext!(p, c)`) has it stripped. SA's own code reads a process's context without it (`_getcontext_nokeymap`).
+5. The map lives only in registries. Plans and contexts the user gets keep it: the contexts of `setup`,
+   `run(plan, context)` and `init(plan, context, ...)`, and a process's plan and context (`getalgo(p)`, `getcontext(p)`,
+   `fetch(p)`); a process has no field of its own for it. Running the plan takes it out (`strip_keymap`): `setup` and
+   `init(plan, context, ...)` run `init` without it, and `prepare_for_loop` gives the loop the plan and `LoopContext`
+   without it, so `init` and the loop have no uuid in their types and compile once for every new set of `Unique`s. What
+   the loop gives back goes into the process's stored context, which keeps its registry (`_sync_state_context!`), or
+   gets the plan's registry back (`with_plan_registry`). SA's own code that needs a process's context without the map
+   outside the loop reads `_getcontext_nokeymap(p)`.
 
 The matching and registry code ask a matcher only general questions (`matches_type`, `is_given_id`, `is_found_by_data`,
 `lower_matcher`, `carries_data`); `UniquePlanId` answers them in `src/Identifiable/UniquePlanId/HookExtensions.jl`. A

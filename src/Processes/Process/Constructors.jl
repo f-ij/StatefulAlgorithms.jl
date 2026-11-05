@@ -24,37 +24,31 @@ end
 Base.@nospecializeinfer function _build_process(@nospecialize(func), @nospecialize(inputs_overrides::Tuple), @nospecialize(context), @nospecialize(lifetime), @nospecialize(kwargs::NamedTuple))
     resolved = resolve(parse_plan(func))
     lifetime = number_by_keymap(lifetime, getkeymap(resolved))
-    algo, context, specs, lifetime, timeout, keymap = _prepare_process(resolved, inputs_overrides...; context, lifetime, kwargs...)
-    return _construct_process(algo, context, specs, lifetime, timeout, keymap)
+    algo, context, specs, lifetime, timeout = _prepare_process(resolved, inputs_overrides...; context, lifetime, kwargs...)
+    return _construct_process(algo, context, specs, lifetime, timeout)
 end
 
 """
-The resolved plan, its starting context (from `setup`, or the given `context`), the specs, the lifetime, the timeout and
-the plan's `UniqueKeyMap` a new `Process` gets. The plan is resolved first (untyped) and the process works on the plan
-and context without the map (`strip_keymap`), so a new set of `Unique` handles compiles nothing again; the map is kept
-as a value (the process's `keymap`).
+The resolved plan, its starting context (from `setup`, or the given `context`), the specs, the lifetime and the timeout
+a new `Process` gets. The plan keeps the `UniqueKeyMap` in its registry, and so does the context (`with_keymap`); `init`
+runs without it (`_setup`).
 """
 function _prepare_process(algo::A, inputs_overrides::Vararg{Any,N}; context::C = nothing, repeats = nothing, lifetime = nothing, timeout = 1.0) where {A,N,C}
     lifetime = something(parse_lifetime(lifetime, repeats), default_lifetime(algo))
-    resolved = resolve(algo)
-    keymap = getkeymap(resolved)
-    algo = strip_keymap(resolved)
+    algo = resolve(algo)
     if isnothing(context)
-        context, algo = _setup(algo, inputs_overrides...; lifetime)
+        context = first(_setup(algo, inputs_overrides...; lifetime))
     else
         isempty(inputs_overrides) || error("Pass either an initialized `context` or init/override specs to `Process`, not both.")
-        # A context the user got from SA carries the map; the process works with it without.
-        context = strip_keymap(context)
     end
-    return algo, context, _stored_specs(algo, inputs_overrides), lifetime, timeout, keymap
+    return algo, with_keymap(context, getkeymap(algo)), _stored_specs(algo, inputs_overrides), lifetime, timeout
 end
 
 """The `Process` around a prepared plan and context: its session (made for the lifetime's type) and its place in `processlist`."""
-function _construct_process(algo::F, context::ProcessContext, specs::Tuple, lifetime::LT, timeout, keymap) where {F<:AbstractLoopAlgorithm, LT}
+function _construct_process(algo::F, context::ProcessContext, specs::Tuple, lifetime::LT, timeout) where {F<:AbstractLoopAlgorithm, LT}
     C = typeof(loop_cursor(getplan(algo), Val(true)))
     session = InteractiveSession{C}(lifetime)
-    p = Process{F, C}(uuid1(), algo, lifetime, context, specs, nothing, timeout, nothing, Threads.ReentrantLock(), nothing, RuntimeListeners(), session, keymap, nothing)
-    set_user_context!(p, context)
+    p = Process{F, C}(uuid1(), algo, lifetime, context, specs, nothing, timeout, nothing, Threads.ReentrantLock(), nothing, RuntimeListeners(), session)
 
     register_process!(p)
     precompile_interface(p)   # src/PrecompileInterface.jl

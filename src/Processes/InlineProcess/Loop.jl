@@ -18,7 +18,6 @@ end
 # A context given to `run(ip)`: the run starts from it, so it becomes the process's context first.
 @inline _set_inline_run_context!(p::InlineProcess, ::Nothing) = nothing
 @inline function _set_inline_run_context!(p::InlineProcess, context)
-    context = strip_keymap(context)   # a context from `getcontext` carries the `UniqueKeyMap`
     @assert context isa contexttype(p) "Wrong context shape for this process\n Context is of type $(typeof(context)), but expected $(contexttype(p))."
     setcontext!(p, context)
     return nothing
@@ -28,24 +27,27 @@ end
     prepare_for_loop(ip::InlineProcess, context, inputs, resume)
 
 An `InlineProcess` run runs in the process's one session, on its plan, from `context` and the run's inputs
-(Processes/Hooks.jl). An `InlineProcess` cannot pause, so it never resumes.
+(Processes/Hooks.jl). An `InlineProcess` cannot pause, so it never resumes. The loop gets plan and context without the
+plan's `UniqueKeyMap` (`strip_keymap_typed`), so `loop` compiles once for every set of `Unique` handles.
 """
-@inline prepare_for_loop(ip::IP, context::C, inputs::I, resume::Resuming{false}) where {IP<:InlineProcess, C<:ProcessContext, I<:NamedTuple} =
-    getsession(ip), getalgo(ip), (@inline with_inputs((@inline LoopContext(getalgo(ip), context)), getalgo(ip), inputs))
+@inline function prepare_for_loop(ip::IP, context::C, inputs::I, resume::Resuming{false}) where {IP<:InlineProcess, C<:ProcessContext, I<:NamedTuple}
+    algo = strip_keymap_typed(getalgo(ip))
+    return getsession(ip), algo, (@inline with_inputs((@inline LoopContext(algo, strip_keymap_typed(context))), algo, inputs))
+end
 
 """
 One run of `p`: what `prepare_for_loop` makes (the session, the plan, the `LoopContext`), then the loop with those as
-arguments, the same entry as a `Process` run (`run_session_loop`; with `Val(true)`, the loop pasted in). The context it
-gives back becomes the process's.
+arguments, the same entry as a `Process` run (`run_session_loop`; with `Val(true)`, the loop pasted in). The values of
+the context it gives back become the process's.
 """
 @inline function _run_inline!(p::InlineProcess, run_lifetime::LT, runtime_inputs::I, ::Val{inlined}) where {LT, I, inlined}
-    session, algo, lc = @inline prepare_for_loop(p, _getcontext_nokeymap(p), runtime_inputs, Resuming{false}())
+    session, algo, lc = @inline prepare_for_loop(p, getcontext(p), runtime_inputs, Resuming{false}())
     persistent_context, result = if inlined
         @inline loop(session, algo, lc, run_lifetime, Resuming{false}())
     else
         run_session_loop(loop, session, algo, lc, run_lifetime)
     end
-    p.context = persistent_context
-    set_user_context!(p, persistent_context)   # `getcontext(ip)`: the new context with the map
+    # The new values into the process's context, which keeps its registry with the map.
+    p.context = withsubcontexts(getcontext(p), get_subcontexts(persistent_context))
     return result
 end

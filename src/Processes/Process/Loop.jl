@@ -7,21 +7,27 @@ Starting and ending a `Process` run. `run(p)` calls `_start_run!`; the task it s
     prepare_for_loop(p::Process, context, inputs, resume)
 
 Run at the start of every run. Gives the session, the plan and the `LoopContext` to start from: the state context
-plus the run's inputs, or, when resuming, plus the runtime context the pause kept.
+plus the run's inputs, or, when resuming, plus the runtime context the pause kept. The plan and the context are the
+process's, with the plan's `UniqueKeyMap`; the loop gets both without it (`strip_keymap`), so it compiles once for every
+set of `Unique` handles.
 """
 function prepare_for_loop(p::InteractiveProcess, context::C, inputs::NamedTuple, resume::Resuming{false}) where {C<:ProcessContext}
     session = getsession(p)
-    func = getalgo(p)
-    return session, func, with_inputs(LoopContext(func, context), func, inputs)
+    func = strip_keymap(getalgo(p))
+    return session, func, _process_loop_context(func, strip_keymap(context), inputs)
 end
 
 function prepare_for_loop(p::InteractiveProcess, context::C, inputs::NamedTuple, resume::Resuming{true}) where {C<:ProcessContext}
     session = getsession(p)
-    func = getalgo(p)
+    func = strip_keymap(getalgo(p))
     runtime_context = p.runtime_context
     p.runtime_context = nothing
-    return session, func, LoopContext(context, runtime_context)
+    return session, func, LoopContext(strip_keymap(context), runtime_context)
 end
+
+"""The `LoopContext` a new run starts from, from the plan and context without the map; compiled once per plan type."""
+@inline _process_loop_context(func::F, context::C, inputs::I) where {F, C<:ProcessContext, I<:NamedTuple} =
+    with_inputs(LoopContext(func, context), func, inputs)
 
 """
     _start_run!(p, inputs; resume, threaded = true, loopfunc = loop)
@@ -32,7 +38,7 @@ lifetime. `loopfunc` replaces `loop` for tests that look at what the loop gets.
 function _start_run!(p::Process, inputs::NamedTuple = (;); resume::Bool = false, threaded::Bool = true, loopfunc::LF = loop) where {LF}
     resume && wait(p)
     resuming = resume ? Resuming{true}() : Resuming{false}()
-    session, func, lc = prepare_for_loop(p, _getcontext_nokeymap(p), inputs, resuming)
+    session, func, lc = prepare_for_loop(p, getcontext(p), inputs, resuming)
     lt = getlifetime(session)
     # A resumed run clears the pause flag in the loop, after reading the cursor the pause kept.
     resume || @atomic session.paused = false
@@ -67,12 +73,12 @@ function _store_run_contexts!(p::Process, session::InteractiveSession, persisten
     if loop_ispaused(session)
         _sync_state_context!(p, getpersistent(returnvalue))
         p.runtime_context = getruntime(returnvalue)
-        return getfield(p, :user_context)
+        return getcontext(p)
     end
     _sync_state_context!(p, persistent_context)
     session.loop_cursor = nothing
-    # What `fetch(p)` gives, with the plan's `UniqueKeyMap` put back.
-    return returnvalue === persistent_context ? getfield(p, :user_context) : with_keymap(returnvalue, getfield(p, :keymap))
+    # What `fetch(p)` gives, with the plan's registry (`with_plan_registry`).
+    return returnvalue === persistent_context ? getcontext(p) : with_plan_registry(p, returnvalue)
 end
 
 """

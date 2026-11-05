@@ -151,8 +151,7 @@ runtime_input_bucket(ctx) = getproperty(StatefulAlgorithms.get_subcontexts(ctx),
     @test getlifetime(lifetime_process) == Repeat(1)
     copied = setlifetime(lifetime_process, Repeat(3))
     @test getlifetime(copied) == Repeat(3) && getlifetime(lifetime_process) == Repeat(1)
-    # The copy shares the stored context (not a copy of it); `getcontext` hands out a new wrapper with the map each call.
-    @test StatefulAlgorithms._getcontext_nokeymap(copied) === StatefulAlgorithms._getcontext_nokeymap(lifetime_process)
+    @test getcontext(copied) === getcontext(lifetime_process)
     close(copied)
     close(lifetime_process)
 
@@ -162,7 +161,7 @@ runtime_input_bucket(ctx) = getproperty(StatefulAlgorithms.get_subcontexts(ctx),
     inline_process = InlineProcess(runtime_algo; repeats = 1)
     inline_three = setlifetime(inline_process, Repeat(3))
     @test getlifetime(inline_three) == Repeat(3) && getlifetime(inline_process) == Repeat(1)
-    @test StatefulAlgorithms._getcontext_nokeymap(inline_three) === StatefulAlgorithms._getcontext_nokeymap(inline_process)
+    @test getcontext(inline_three) === getcontext(inline_process)
     inline_result = run(inline_process; temp = 2.0, scale = 3)
     @test !haskey(StatefulAlgorithms.get_captured_returns(inline_result), :value)
     @test !haskey(StatefulAlgorithms.get_subcontexts(StatefulAlgorithms.getcontext(inline_process)), :Callable_1)   # function calls have no persistent state

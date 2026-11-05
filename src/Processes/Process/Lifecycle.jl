@@ -15,7 +15,7 @@ pause kept, with the lifetime it started with. A new run's lifetime is `repeats`
 function Base.run(p::Process, inputs_and_overrides...; repeats = nothing, lifetime = nothing, kwargs...)
     @assert isidle(p) "Process is already in use"
     # A lifetime from outside the plan gets the plan's numbers for its `Unique` handles (`number_by_keymap`).
-    lt = parse_lifetime(isnothing(lifetime) ? lifetime : number_by_keymap(lifetime, getfield(p, :keymap)), repeats)
+    lt = parse_lifetime(isnothing(lifetime) ? lifetime : number_by_keymap(lifetime, getkeymap(getalgo(p))), repeats)
 
     if ispaused(p)
         isempty(inputs_and_overrides) || error("Cannot pass init/override specs while resuming a paused Process.")
@@ -44,8 +44,9 @@ into the state context (`_sync_state_context!`). Returns `p.lastresult`. Also en
 the same two contexts between its ticks.
 """
 function _cleanup_paused_process!(p::InteractiveProcess)
-    cleaned = @inline cleanup(getalgo(p), LoopContext(_getcontext_nokeymap(p), p.runtime_context))
-    p.lastresult = with_keymap((@inline loop_final_result(getalgo(p), (@inline final_context(cleaned)), getruntime(cleaned))), getfield(p, :keymap))
+    plan = strip_keymap(getalgo(p))
+    cleaned = cleanup(plan, LoopContext(_getcontext_nokeymap(p), p.runtime_context))
+    p.lastresult = with_plan_registry(p, loop_final_result(plan, final_context(cleaned), getruntime(cleaned)))
     p.runtime_context = nothing
     _sync_state_context!(p, getpersistent(cleaned))
     return p.lastresult
@@ -176,8 +177,8 @@ end
 # end
 
 """
-Fetch the return value of a process; a context comes with the plan's `UniqueKeyMap` back in its registry, put there when
-the run ended (`_store_run_contexts!`, `_cleanup_paused_process!`).
+Fetch the return value of a process; a context comes with the plan's registry, map included, put back when the run
+ended (`_store_run_contexts!`, `_cleanup_paused_process!`).
 """
 @inline Base.fetch(@nospecialize(p::Process)) = if !isnothing(p.task) fetch(p.task) else p.lastresult end
 

@@ -15,7 +15,8 @@ function _tick!(tp::TimedProcess)
     @lock tp.lock begin
         session = getsession(tp)
         shouldrun(session) || return nothing
-        algo, lt = getalgo(tp), getlifetime(session)
+        # The step runs on the plan and context without the map, as the process loop's (`prepare_for_loop`).
+        algo, lt = strip_keymap(getalgo(tp)), getlifetime(session)
         plan = getplan(algo)
         lc = _step!(plan, getloopcursor(tp), LoopContext(_getcontext_nokeymap(tp), getruntimecontext(tp)), _root_wiring_view(algo, plan), Namespace{nothing}(), session, lt)
         tick!(session)

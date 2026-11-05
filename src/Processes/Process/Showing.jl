@@ -108,7 +108,7 @@ function Base.show(io::IO, ::MIME"text/plain", p::Process)
     algo_lines = _process_nested_show_lines(io, getalgo(p))
     _print_process_nested_field(io, "├── ", "│   ", :algo, algo_lines)
 
-    context_lines = _process_context_show_lines(io, _getcontext_nokeymap(p))
+    context_lines = _process_context_show_lines(io, getcontext(p))
     _print_process_nested_field(io, "└── ", "    ", :context, context_lines)
 
     return nothing

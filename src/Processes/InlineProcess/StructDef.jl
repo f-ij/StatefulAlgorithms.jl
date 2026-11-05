@@ -13,9 +13,11 @@ running on a task of its own is what `Process` is for.
 """
 mutable struct InlineProcess{TD,ContextType, Lt, S<:Tuple} <: AbstractProcess
     const id::UUID
+    # The plan; its registry holds the plan's `UniqueKeyMap`, so the type has it and `run(ip)` compiles once per set of
+    # `Unique` handles. A run hands plan and context to the loop without it (`prepare_for_loop`).
     const algo::TD
-    # The process's context: the loop gets it as an argument (`run_session_loop`) and gives the new one back, which
-    # `run(ip)` stores here.
+    # The process's context, with the plan's registry (map included): the loop gets it without the map as an argument
+    # (`run_session_loop`) and gives the new values back, which `run(ip)` stores here.
     context::ContextType
     # The `InitArgs`/`Override`/`Interactive` specs the process was built with (resolved, merged per target), the ones
     # `reset(ip)` and a full `init(ip)` set up from. Typed and fixed, so code reading them stays type stable:
@@ -26,10 +28,4 @@ mutable struct InlineProcess{TD,ContextType, Lt, S<:Tuple} <: AbstractProcess
     # The run's counter, one session for every run (Processes/InlineProcess/Session.jl): what the loop gets instead of the
     # process.
     const session::InlineSession
-    # The plan's `UniqueKeyMap` (or `nothing`): `algo` and `context` are kept without it, so `run(ip)` has no uuid in its
-    # types; `getcontext(ip)` puts it back. Untyped, so the map's type is not in the `InlineProcess` type.
-    const keymap::Any
-    # The context handed to the user (`getcontext(ip)`): `context` with the map put back, built each time `context`
-    # changes (`set_user_context!`, also after every run). Untyped, as `keymap`.
-    user_context::Any
 end

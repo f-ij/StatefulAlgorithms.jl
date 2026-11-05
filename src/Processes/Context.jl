@@ -14,14 +14,31 @@ new `InlineProcess` with it). Without an `Only` every `init` runs from the merge
 `setup`, with the process's lifetime); with `Only(A, B)` only A's and B's `init` run on the process's current context (`init(plan, context, Only(...), ...)`).
 """
 function _init_process_context(p::AbstractProcess, specs::S) where {S<:Tuple}
-    plan = getalgo(p)
+    plan = strip_keymap(getalgo(p))   # `init` runs without the map; the context it gives gets the plan's registry back
     reg = getregistry(plan)
     only, rest = _split_only(reg, specs)
     inits, overrides, interactives = _merged_lifecycle_specs(reg, (getspecs(p)..., rest...))
     stored = (inits..., overrides..., interactives...)
     context = isnothing(only) ? _init_context_for(plan, inits, overrides, interactives, getlifetime(p)) : _init_again(plan, _getcontext_nokeymap(p), only, rest...)
-    return context, stored
+    return with_plan_registry(p, context), stored
 end
+
+"""
+    with_plan_registry(p, x) -> x with the map
+
+`x`, a context or result from the loop's side (its registry without the map), with the plan's `UniqueKeyMap` back in its
+registry (`getkeymap(getalgo(p))`): the way back from the loop to what the process keeps and hands out. Another value as
+it is. Untyped.
+"""
+Base.@nospecializeinfer with_plan_registry(@nospecialize(p::AbstractProcess), @nospecialize(x)) = with_keymap(x, getkeymap(getalgo(p)))
+
+"""
+    _getcontext_nokeymap(p)
+
+The process's context without the plan's `UniqueKeyMap` (`strip_keymap`), for SA's own code that runs on it outside the
+loop. What the user gets, and what the process keeps, is `getcontext(p)`, with the map.
+"""
+Base.@nospecializeinfer _getcontext_nokeymap(@nospecialize(p::AbstractProcess)) = strip_keymap(getcontext(p))
 
 """
     _stored_specs(plan, specs) -> Tuple
@@ -37,7 +54,7 @@ end
 
 function cleanup(p::AbstractProcess)
     lifetime = tasklifetime(p)
-    returncontext = cleanup(getalgo(p), (;process = p, lifetime, _getcontext_nokeymap(p)...))
+    returncontext = cleanup(strip_keymap(getalgo(p)), (;process = p, lifetime, _getcontext_nokeymap(p)...))
     return deletekeys(returncontext, :process, :lifetime)
 end
 
