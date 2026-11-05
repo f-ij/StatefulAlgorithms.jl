@@ -14,11 +14,24 @@ match_by(t::Type{T}) where T = error("No match_by method defined for type $T")
 """
     match(a, b) -> Bool
 
-Whether `a` and `b` (algorithms, their types, or matchers) match: their matchers (`match_by`) compared with `==`. Each
-matcher's `==` decides from the types where they say enough, so the result is folded while compiling (a matcher
-without fields, a numbered `UniquePlanId`), and compares values otherwise (a dynamic `UniquePlanId`).
+Whether `a` and `b` (algorithms, their types, or matchers) match: their matchers (`match_by`) compared with
+`matcher_equals`. Each matcher's method decides from the types where they say enough, so the result is folded while
+compiling (a matcher without fields, a numbered `UniquePlanId`), and compares values otherwise (a dynamic `UniquePlanId`).
 """
-@inline match(obj1::O1, obj2::O2) where {O1,O2} = match_by(obj1) == match_by(obj2)
+@inline match(obj1::O1, obj2::O2) where {O1,O2} = matcher_equals(match_by(obj1), match_by(obj2))
+
+"""
+    matcher_equals(m1, m2) -> Bool
+
+Whether two matchers, or a matcher and a plain id (a type, a symbol, an `isbits` value), name the same algorithm: what
+`match` compares with. Default: `==`. A matcher extends this instead of `Base.:(==)`: an `==` method that takes any value,
+or any type, on one side is a new method of Base's `==` for every type, so loading the package would make Julia throw
+away (invalidate) the compiled code of everything that calls `==` on such arguments, Base's own code included.
+Extended by: `SimpleId`, `ObjectIDMatcher`, `TypeMatcher`, `ValMatcher`, `MatchAnyOf`, `MatchAny`, `MatchAll`,
+`TreeMatcher`, `MultiMatcher` (below); `UniquePlanId` (Identifiable/UniquePlanId/HookExtensions.jl; two ids compare
+with their own `==`).
+"""
+@inline matcher_equals(m1, m2) = m1 == m2
 
 """
     dynamic_match(a, b) -> Bool
@@ -32,12 +45,12 @@ Base.@nospecializeinfer dynamic_match(@nospecialize(a), @nospecialize(b)) = dyna
 """
     dynamic_equals(m1, m2) -> Bool
 
-`m1 == m2` for two matchers, untyped: what `dynamic_match` compares with. A matcher whose `==` reads its type
-parameters, and so compiles for every pair of types, extends it with an untyped method that gives the same answer as
-its `==`. Default: `==`. Extended by: `SimpleId`, `ObjectIDMatcher`, `ValMatcher` (below); `UniquePlanId`
+`matcher_equals(m1, m2)`, untyped: what `dynamic_match` compares with. A matcher whose `matcher_equals` reads its type
+parameters, and so compiles for every pair of types, extends it with an untyped method that gives the same answer.
+Default: `matcher_equals`. Extended by: `SimpleId`, `ObjectIDMatcher`, `ValMatcher` (below); `UniquePlanId`
 (Identifiable/UniquePlanId/StructDef.jl).
 """
-Base.@nospecializeinfer dynamic_equals(@nospecialize(m1), @nospecialize(m2)) = m1 == m2
+Base.@nospecializeinfer dynamic_equals(@nospecialize(m1), @nospecialize(m2)) = matcher_equals(m1, m2)
 
 
 ### MATCHERS
@@ -63,13 +76,13 @@ carries_data(m) = static_id(m) !== m
 struct SimpleId{id} <: AbstractMatcher{id} end
 SimpleId() = SimpleId{uuid4()}()
 SimpleId(id) = SimpleId{id}()
-Base.:(==)(::SimpleId{id1}, ::SimpleId{id2}) where {id1, id2} = id1 == id2
+matcher_equals(::SimpleId{id1}, ::SimpleId{id2}) where {id1, id2} = id1 == id2
 Base.@nospecializeinfer dynamic_equals(@nospecialize(a::SimpleId), @nospecialize(b::SimpleId)) = getmatchers(a) == getmatchers(b)
 
 struct ObjectIDMatcher{id} <: AbstractMatcher{id} end
 ObjectIDMatcher(id::UInt64) = ObjectIDMatcher{id}()
 ObjectIDMatcher(obj) = ObjectIDMatcher(objectid(obj))
-Base.:(==)(::ObjectIDMatcher{id1}, ::ObjectIDMatcher{id2}) where {id1, id2} = id1 == id2
+matcher_equals(::ObjectIDMatcher{id1}, ::ObjectIDMatcher{id2}) where {id1, id2} = id1 == id2
 Base.@nospecializeinfer dynamic_equals(@nospecialize(a::ObjectIDMatcher), @nospecialize(b::ObjectIDMatcher)) = getmatchers(a) == getmatchers(b)
 
 """
@@ -78,21 +91,21 @@ Matches BOTH with the object type or the match_by of the object type
 struct TypeMatcher{T} <: AbstractMatcher{T} end
 TypeMatcher(t::Type) = TypeMatcher{t}()
 # match_by(tm::TypeMatcher{T}) where T = tm
-function Base.:(==)(tm::TypeMatcher{T}, a) where T
+function matcher_equals(tm::TypeMatcher{T}, a) where T
     if a isa Type
         return a == T || match(a, T)
     else
         return typeof(a) == T || match(typeof(a), T)
     end
 end
-function Base.:(==)(a, tm::TypeMatcher{T}) where T
+function matcher_equals(a, tm::TypeMatcher{T}) where T
     if a isa Type
         return a == T || match(a, T)
     else 
         return typeof(a) == T || match(typeof(a), T)
     end
 end
-function Base.:(==)(tm1::TypeMatcher{T1}, tm2::TypeMatcher{T2}) where {T1,T2}
+function matcher_equals(tm1::TypeMatcher{T1}, tm2::TypeMatcher{T2}) where {T1,T2}
     return T1 == T2 || match(T1, T2)
 end
 
@@ -100,13 +113,13 @@ end
 struct ValMatcher{V} <: AbstractMatcher{V} end
 ValMatcher(v) = ValMatcher{v}()
 # match_by(sm::Union{ValMatcher{V}, Type{ValMatcher{V}}}) where V = V
-function Base.:(==)(sm::Union{ValMatcher{V}, Type{ValMatcher{V}}}, a) where V
-    return V == a
+function matcher_equals(sm::Union{ValMatcher{V}, Type{ValMatcher{V}}}, a) where V
+    return matcher_equals(V, a)
 end
-function Base.:(==)(a, sm::Union{ValMatcher{V}, Type{ValMatcher{V}}}) where V
-    return V == a
+function matcher_equals(a, sm::Union{ValMatcher{V}, Type{ValMatcher{V}}}) where V
+    return matcher_equals(V, a)
 end
-function Base.:(==)(sm1::ValMatcher{V1}, sm2::ValMatcher{V2}) where {V1,V2}
+function matcher_equals(sm1::ValMatcher{V1}, sm2::ValMatcher{V2}) where {V1,V2}
     return V1 == V2
 end
 Base.@nospecializeinfer dynamic_equals(@nospecialize(a::ValMatcher), @nospecialize(b::ValMatcher)) = getmatchers(a) == getmatchers(b)
@@ -143,10 +156,10 @@ struct MatchAnyOf{T<:Tuple} <: AbstractMatcher{T}
 end
 matcher_parts(m::MatchAnyOf) = getfield(m, :matchers)
 matcher_parts(::Type{MatchAnyOf{T}}) where {T} = Tuple(T.parameters)
-_any_matches(m, x) = any(p -> p == x, matcher_parts(m))
-Base.:(==)(m::MatchAnyOf, x) = _any_matches(m, x)
-Base.:(==)(x, m::MatchAnyOf) = _any_matches(m, x)
-Base.:(==)(m::MatchAnyOf, n::MatchAnyOf) = any(p -> _any_matches(m, p), matcher_parts(n))
+_any_matches(m, x) = any(p -> matcher_equals(p, x), matcher_parts(m))
+matcher_equals(m::MatchAnyOf, x) = _any_matches(m, x)
+matcher_equals(x, m::MatchAnyOf) = _any_matches(m, x)
+matcher_equals(m::MatchAnyOf, n::MatchAnyOf) = any(p -> _any_matches(m, p), matcher_parts(n))
 
 ################################################
 ##################   HOOKS   ###################
@@ -161,7 +174,7 @@ Extended by: `ValMatcher`, `MatchAnyOf`, `MatchAny` (below), `UniquePlanId` (Ide
 """
 matches_type(value, M) = value isa M
 matches_type(value::Type, M) = value <: M
-matches_type(value, ::Type{<:ValMatcher{V}}) where {V} = value == V || value isa ValMatcher{V}
+matches_type(value, ::Type{<:ValMatcher{V}}) where {V} = matcher_equals(value, V) || value isa ValMatcher{V}
 # A merged state's matcher matches if any of its parts does.
 matches_type(value::Union{MatchAnyOf, Type{<:MatchAnyOf}}, M) = any(m -> matches_type(m, M), matcher_parts(value))
 
@@ -174,21 +187,21 @@ matches_type(value::Union{MatchAnyOf, Type{<:MatchAnyOf}}, M) = any(m -> matches
 
 struct MatchAny{A} <: AbstractMatcher{A} end
 MatchAny(matchers...) = MatchAny(tuple(matchers...))
-function Base.:(==)(m1::MatchAny, a)
-    return any(x -> x == a, getmatchers(m1))
+function matcher_equals(m1::MatchAny, a)
+    return any(x -> matcher_equals(x, a), getmatchers(m1))
 end
-function Base.:(==)(a, m1::MatchAny)
-    return any(x -> x == a, getmatchers(m1))
+function matcher_equals(a, m1::MatchAny)
+    return any(x -> matcher_equals(x, a), getmatchers(m1))
 end
 matches_type(value::MatchAny, M) = any(m -> matches_type(m, M), getmatchers(value))
 
 struct MatchAll{A} <: AbstractMatcher{A} end
 MatchAll(matchers...) = MatchAll(tuple(matchers...))
-function Base.:(==)(m1::MatchAll, a)
-    return all(x -> x == a, getmatchers(m1))
+function matcher_equals(m1::MatchAll, a)
+    return all(x -> matcher_equals(x, a), getmatchers(m1))
 end
-function Base.:(==)(a, m1::MatchAll)
-    return all(x -> x == a, getmatchers(m1))
+function matcher_equals(a, m1::MatchAll)
+    return all(x -> matcher_equals(x, a), getmatchers(m1))
 end
 
 """
@@ -207,7 +220,7 @@ end
 
 getchild(tm::TreeMatcher{TID}, id = uuid4()) where TID = TreeMatcher((get_tid(tm)...,id))
 
-@inline function Base.:(==)(tm1::TreeMatcher{TID1}, tm2::TreeMatcher{TID2}) where {TID1,TID2}
+@inline function matcher_equals(tm1::TreeMatcher{TID1}, tm2::TreeMatcher{TID2}) where {TID1,TID2}
     ids1 = get_tid(tm1)
     ids2 = get_tid(tm2)
 
@@ -241,12 +254,12 @@ function MultiMatcher(matchers...)
     MultiMatcher(tuple(flat_matchers...))
 end
 
-function Base.:(==)(mm::MultiMatcher, a)
-    return any(x -> x == a, getmatchers(mm))
+function matcher_equals(mm::MultiMatcher, a)
+    return any(x -> matcher_equals(x, a), getmatchers(mm))
 end
-function Base.:(==)(a, mm::MultiMatcher)
-    return any(x -> x == a, getmatchers(mm))
+function matcher_equals(a, mm::MultiMatcher)
+    return any(x -> matcher_equals(x, a), getmatchers(mm))
 end
-function Base.:(==)(mm1::MultiMatcher{A}, mm2::MultiMatcher{B}) where {A,B}
-    return any(x -> any(y -> x == y, getmatchers(mm2)), getmatchers(mm1))
+function matcher_equals(mm1::MultiMatcher{A}, mm2::MultiMatcher{B}) where {A,B}
+    return any(x -> any(y -> matcher_equals(x, y), getmatchers(mm2)), getmatchers(mm1))
 end

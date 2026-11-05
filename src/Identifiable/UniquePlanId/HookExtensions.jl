@@ -10,11 +10,11 @@ _matches_plan_number(id::UniquePlanId, N::UUID) = origin(id) == N
 _matches_plan_number(id::UniquePlanId, N::Int) = plan_number(id) === N
 _matches_plan_number(id::UniquePlanId, ::Symbol) = false
 
-Base.:(==)(a::UniquePlanId, T::Type{<:UniquePlanId}) = matches_type(a, T)
-Base.:(==)(T::Type{<:UniquePlanId}, b::UniquePlanId) = matches_type(b, T)
+matcher_equals(a::UniquePlanId, T::Type{<:UniquePlanId}) = matches_type(a, T)
+matcher_equals(T::Type{<:UniquePlanId}, b::UniquePlanId) = matches_type(b, T)
 # A merged state (`MatchAnyOf`) holds the ids of the states it merged.
-Base.:(==)(m::Type{<:MatchAnyOf}, x::Union{UniquePlanId, Type{<:UniquePlanId}}) = _any_matches(m, x)
-Base.:(==)(x::Union{UniquePlanId, Type{<:UniquePlanId}}, m::Type{<:MatchAnyOf}) = _any_matches(m, x)
+matcher_equals(m::Type{<:MatchAnyOf}, x::Union{UniquePlanId, Type{<:UniquePlanId}}) = _any_matches(m, x)
+matcher_equals(x::Union{UniquePlanId, Type{<:UniquePlanId}}, m::Type{<:MatchAnyOf}) = _any_matches(m, x)
 
 # A held id (`UniquePlanId{uuid}`) has its uuid in the type. A dynamic or numbered one has it only in the value: made
 # again from a value (`make_held`, `make_dynamic`, `make_numbered`), or a numbered one through its plan's `UniqueKeyMap`.
