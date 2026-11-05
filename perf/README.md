@@ -18,7 +18,7 @@ Each case runs under two runners: `inline` (`InlineProcess`) and `process` (`Pro
 reads `shouldrun` (`session_breakcondition`) after every routine repeat and after every step, so a pause or close is
 seen while a long repeat runs. That is work a hand-written loop does not do, so the `process` row is not held to the
 target; `REGRESS` still applies to it. (The `process, no stop checks` row, which measured that cost with a perf-only
-lifetime, is gone: it dispatched on the lifetime type in the session's type, which the session no longer has; TODO.md.)
+lifetime, is gone for now: it dispatched on the lifetime type in the session's type, which the session no longer has; it comes back with an API for uninterruptible runs, TODO.md.)
 
 Compile times are measured in fresh processes by `compile.jl` (minimum over 3
 processes, 2 for package precompile): package precompile, `using`, the first run
