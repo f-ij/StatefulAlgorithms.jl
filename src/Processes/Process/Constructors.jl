@@ -19,8 +19,12 @@ function Core.kwcall(kw::NamedTuple, ::Type{Process}, func, inputs_overrides...)
     rest = Base.structdiff(kw, NamedTuple{(:context, :lifetime)})
     return _build_process(func, inputs_overrides, get(kw, :context, nothing), get(kw, :lifetime, nothing), rest)
 end
-function _build_process(func::Func, inputs_overrides::Tuple, context::C, lifetime::LT, kwargs::NamedTuple) where {Func, C, LT}
-    algo, context, specs, lifetime, timeout, keymap = _prepare_process(parse_plan(func), inputs_overrides...; context, lifetime, kwargs...)
+# Untyped: the plan is resolved first, so a lifetime from outside the plan gets the plan's numbers for its `Unique`
+# handles (`number_by_keymap`) before anything typed on it is called.
+Base.@nospecializeinfer function _build_process(@nospecialize(func), @nospecialize(inputs_overrides::Tuple), @nospecialize(context), @nospecialize(lifetime), @nospecialize(kwargs::NamedTuple))
+    resolved = resolve(parse_plan(func))
+    lifetime = number_by_keymap(lifetime, getkeymap(resolved))
+    algo, context, specs, lifetime, timeout, keymap = _prepare_process(resolved, inputs_overrides...; context, lifetime, kwargs...)
     return _construct_process(algo, context, specs, lifetime, timeout, keymap)
 end
 

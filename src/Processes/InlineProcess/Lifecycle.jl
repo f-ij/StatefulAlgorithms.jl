@@ -18,14 +18,16 @@ default call into the loop (`run_session_loop`) is compiled once. As a `Val`, th
     algo = getalgo(p)
     _set_inline_run_context!(p, context)
     runtime_inputs = _inline_runtime_inputs(algo, inputs_overrides, (; kwargs...))
-    run_lifetime = something(parse_lifetime(lifetime, repeats), StatefulAlgorithms.getlifetime(p))
+    # A lifetime from outside the plan gets the plan's numbers (`number_by_keymap`), at run time on every call.
+    run_lifetime = something(parse_lifetime(isnothing(lifetime) ? lifetime : number_by_keymap(lifetime, getfield(p, :keymap)), repeats), StatefulAlgorithms.getlifetime(p))
     return @inline _run_inline!(p, run_lifetime, runtime_inputs, inlined)
 end
 
 @inline function run_nogen(p::InlineProcess, inputs_overrides...; context = nothing, repeats=nothing, lifetime=nothing, kwargs...)
     algo = getalgo(p)
     _set_inline_run_context!(p, context)
-    run_lifetime = something(parse_lifetime(lifetime, repeats), StatefulAlgorithms.getlifetime(p))
+    # A lifetime from outside the plan gets the plan's numbers (`number_by_keymap`), at run time on every call.
+    run_lifetime = something(parse_lifetime(isnothing(lifetime) ? lifetime : number_by_keymap(lifetime, getfield(p, :keymap)), repeats), StatefulAlgorithms.getlifetime(p))
     runtime_inputs = _inline_runtime_inputs(algo, inputs_overrides, (; kwargs...))
     return @inline _run_inline!(p, run_lifetime, runtime_inputs, Val(false))
 end

@@ -17,8 +17,11 @@ function Core.kwcall(kw::NamedTuple, ::Type{InlineProcess}, func, inputs_overrid
     rest = Base.structdiff(kw, NamedTuple{(:context, :lifetime)})
     return _build_inline_process(func, inputs_overrides, get(kw, :context, nothing), get(kw, :lifetime, nothing), rest)
 end
-function _build_inline_process(func::Func, inputs_overrides::Tuple, context::C, lifetime::LT, kwargs::NamedTuple) where {Func, C, LT}
-    algo, prepared_context, lifetime, keymap = _prepare_inline_process(parse_plan(func), inputs_overrides...; context, lifetime, kwargs...)
+# Untyped, as `_build_process`: a lifetime from outside the plan gets the plan's numbers (`number_by_keymap`) first.
+Base.@nospecializeinfer function _build_inline_process(@nospecialize(func), @nospecialize(inputs_overrides::Tuple), @nospecialize(context), @nospecialize(lifetime), @nospecialize(kwargs::NamedTuple))
+    resolved = resolve(parse_plan(func))
+    lifetime = number_by_keymap(lifetime, getkeymap(resolved))
+    algo, prepared_context, lifetime, keymap = _prepare_inline_process(resolved, inputs_overrides...; context, lifetime, kwargs...)
     return _construct_inline_process(algo, prepared_context, _stored_specs(algo, inputs_overrides), lifetime, keymap)
 end
 

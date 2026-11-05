@@ -130,7 +130,7 @@ again.
 """
 Base.@nospecializeinfer function setup(@nospecialize(plan_spec::LoopSpec), @nospecialize(specs::InputInterface...); lifetime = Indefinite())
     plan = resolve(plan_spec)
-    context, _ = _setup(strip_keymap(plan), specs...; lifetime)
+    context, _ = _setup(strip_keymap(plan), specs...; lifetime = number_by_keymap(lifetime, getkeymap(plan)))
     return with_keymap(context, getkeymap(plan)), plan
 end
 
@@ -155,7 +155,8 @@ again.
 Base.@nospecializeinfer function Base.run(@nospecialize(plan::LoopSpec), @nospecialize(context::ProcessContext); repeats = 1, lifetime = nothing, kwargs...)
     # resolved: read untyped, as the plan's type carries the map
     _registry_field(plan) isa NameSpaceRegistry || throw(ArgumentError("run(plan, context) needs the resolved plan that `setup` returns."))
-    lt = parse_lifetime(lifetime, isnothing(lifetime) ? repeats : nothing)
+    # A lifetime from outside the plan gets the plan's numbers for its `Unique` handles (`number_by_keymap`).
+    lt = parse_lifetime(number_by_keymap(lifetime, getkeymap(plan)), isnothing(lifetime) ? repeats : nothing)
     session, loop_plan, lc = prepare_for_loop(plan, context, (; kwargs...), Resuming{false}())
     final_context, result = run_session_loop(session, loop_plan, lc, lt)
     return with_keymap(final_context, getkeymap(plan)), result
@@ -174,7 +175,8 @@ it (an `Override` for a target whose `init` does not run only sets its values). 
 comes back has it again.
 """
 Base.@nospecializeinfer function init(@nospecialize(plan::LoopSpec), @nospecialize(context::ProcessContext), @nospecialize(specs::InputInterface...); lifetime = Indefinite())
-    return with_keymap(_init_again(strip_keymap(plan), strip_keymap(context), specs...; lifetime), getkeymap(plan))
+    keymap = getkeymap(plan)
+    return with_keymap(_init_again(strip_keymap(plan), strip_keymap(context), specs...; lifetime = number_by_keymap(lifetime, keymap)), keymap)
 end
 
 """`init(plan, context, ...)` on a context without the plan's `UniqueKeyMap`."""
