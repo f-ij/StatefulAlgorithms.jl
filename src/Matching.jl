@@ -96,6 +96,18 @@ struct KeyMatcher{key} <: AbstractMatcher{key} end
 KeyMatcher(key::Symbol) = KeyMatcher{key}()
 
 """
+    reconstruct_matcher(M) -> the matcher of type `M`
+
+The matcher of type `M`, from the type alone. A matcher without fields (`KeyMatcher{k}`, `TypeMatcher{T}`,
+`SimpleId{id}`, ...) is the only instance of its type. A matcher with data can be reconstructed only where its type
+holds that data; `UniquePlanId` adds a method (a held one has its uuid in the type). Errors otherwise.
+"""
+function reconstruct_matcher(::Type{M}) where {M}
+    Base.issingletontype(M) && return M.instance
+    error("Cannot reconstruct a matcher of type $M from its type: it holds data the type does not.")
+end
+
+"""
     MatchAnyOf(matchers::Tuple)
 
 Matches what any of `matchers` matches, held as data (a `MatchAny` holds them in its type). Used for a state merged

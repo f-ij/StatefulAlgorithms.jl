@@ -122,8 +122,8 @@ Status: `open`, `done <new hash>`, `skip`, `squashed into #n`, `asked` (waiting 
 | 18 | `827f6ca8` | Rename HeldIds.jl to UniqueKeyMap.jl, after the type it defines |  |  | done `e8974d40` |
 | 19 | `e937ccc5` | Var holds only its matcher: `Var{M, name, transform}`, `matcher::M`; a context key is a `KeyMatcher{k}` |  |  | done `0068c27b` |
 | 20 | `2ddd5389` | `Var` of a `Unique` handle, `RunIf` and the condition lifetimes are built untyped: no compile per new handle |  | Lifetime constructors went into main's per-type files (`Lifetimes/Until.jl`, ...). | done `c9fb653d` |
-| 21 | `2f0e7af0` | Unique builds its matcher with the UniquePlanId constructor; remove user_unique_id |  |  | done |
-| 22 | `b3c6cb20` | `reconstruct_var(V)` and `reconstruct_matcher(M)`: a `Var` and its matcher from the type alone |  |  | open |
+| 21 | `2f0e7af0` | Unique builds its matcher with the UniquePlanId constructor; remove user_unique_id |  |  | done `e94e6d32` |
+| 22 | `b3c6cb20` | `reconstruct_var(V)` and `reconstruct_matcher(M)`: a `Var` and its matcher from the type alone |  |  | done |
 | 23 | `5446565b` | A lifetime from outside the plan gets the plan's numbers when it is given (`number_by_keymap`) | `InlineProcess.jl`, `Process.jl`, `ProcessInteraction.jl` |  | open |
 | 24 | `4d040669` | ProcessSession: the loop runs on a session, not on the process; the process holds the plan's UniqueKeyMap typed | `AbstractProcesses/Hooks.jl`, `AbstractProcesses/Interface.jl`, `InlineProcess.jl`, `Lifetimes/HookExtensions.jl`, `Process.jl`, `ProcessInteraction.jl`, `ProcessPrecompile.jl`, `ProcessStatus.jl` |  | open |
 | 25 | `a122cf81` | Copied processes and manager workers keep the plan's UniqueKeyMap; run(p; lifetime) and a manager's job lifetime number while compiling | `Copy.jl`, `InlineProcess.jl`, `Process.jl`, `ProcessInteraction.jl` |  | open |
