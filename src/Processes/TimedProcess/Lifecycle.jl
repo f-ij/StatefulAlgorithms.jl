@@ -9,7 +9,7 @@ Starts `tp`'s timer, which runs a step every `interval` seconds, the first one n
 context and the run's inputs, as a `Process` run does (`prepare_for_loop`), and keeps the run's runtime context and a
 new cursor on the process; a paused run resumes from what its pause kept, with the lifetime it started with. A new
 run's lifetime is `repeats`/`lifetime` when given, otherwise `getlifetime(tp)`; it goes into the session
-(`session.lifetime`, which every tick reads) and the process's own stays as it is.
+(`getlifetime(getsession(tp))`, which every tick reads) and the process's own stays as it is.
 """
 function Base.run(tp::TimedProcess; repeats = nothing, lifetime = nothing, kwargs...)
     isrunning(tp) && error("TimedProcess is already running.")
@@ -18,12 +18,12 @@ function Base.run(tp::TimedProcess; repeats = nothing, lifetime = nothing, kwarg
         isempty(kwargs) || error("Cannot pass new runtime inputs while resuming a paused TimedProcess.")
         isnothing(lt) || error("Cannot pass `repeats` or `lifetime` while resuming a paused TimedProcess: it keeps the lifetime it started with.")
     else
-        getsession(tp).lifetime = something(lt, StatefulAlgorithms.getlifetime(tp))
+        setlifetime!(getsession(tp), something(lt, StatefulAlgorithms.getlifetime(tp)))
         session, algo, lc = prepare_for_loop(tp, getcontext(tp), (; kwargs...), Resuming{false}())
         session.loop_cursor = starting_cursor(session, getplan(algo), Resuming{false}())
         tp.runtime_context = getruntime(lc)
         before_while(session)
-        if _lifetime_over(session.lifetime, lc, session)
+        if _lifetime_over(getlifetime(session), lc, session)
             _end_timed_run!(tp)
             return tp
         end

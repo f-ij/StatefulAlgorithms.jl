@@ -31,6 +31,16 @@ InteractiveSession{C}(lifetime::Lifetime) where {C} = InteractiveSession{C}(fals
 
 @inline shouldrun(s::InteractiveSession) = @atomic :monotonic s.shouldrun
 
+"""The lifetime of the session's current or last run (the process's own default is `getlifetime(p)`)."""
+@inline getlifetime(s::S) where {S<:InteractiveSession} = s.lifetime
+"""
+    setlifetime!(s::InteractiveSession, lt) -> lt
+
+Store `lt` as the lifetime of the session's run. Only stores: `run` calls it before a new run starts, `reset!` when
+nothing runs (`setlifetime!(p, lt)` on the process changes its default instead).
+"""
+@inline setlifetime!(s::S, lt::LT) where {S<:InteractiveSession, LT<:Lifetime} = (s.lifetime = lt)
+
 ##########################################
 ########## Hook extensions ###############
 ##########################################

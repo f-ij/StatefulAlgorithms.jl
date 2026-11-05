@@ -8,7 +8,7 @@ export Process
 mutable struct Process{F,C} <: InteractiveProcess{F,C}
     id::UUID
     algo::F
-    # The lifetime of a run given none (`run(p; repeats/lifetime)` gives one); the run's own is `session.lifetime`.
+    # The lifetime of a run given none (`run(p; repeats/lifetime)` gives one); the run's own is `getlifetime(getsession(p))`.
     default_lifetime::Lifetime
     # The process's state, its user's handle (with the registry). Written only by `setcontext!`.
     state_context::ProcessContext

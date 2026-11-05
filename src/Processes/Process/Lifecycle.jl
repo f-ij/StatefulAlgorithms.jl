@@ -10,7 +10,7 @@ export start, restart, quit, pause, syncclose, closeprocess
 
 Starts a run of `p` on its own task, from its state context, with the run's inputs; a paused run resumes from what its
 pause kept, with the lifetime it started with. A new run's lifetime is `repeats`/`lifetime` when given, otherwise
-`getlifetime(p)`; it goes into the session (`session.lifetime`) and the process's own stays as it is.
+`getlifetime(p)`; it goes into the session (`getlifetime(getsession(p))`) and the process's own stays as it is.
 """
 function Base.run(p::Process, inputs_and_overrides...; repeats = nothing, lifetime = nothing, kwargs...)
     @assert isidle(p) "Process is already in use"
@@ -24,7 +24,7 @@ function Base.run(p::Process, inputs_and_overrides...; repeats = nothing, lifeti
     end
     isempty(inputs_and_overrides) || error("Process run accepts runtime inputs as keywords only. Use init!(p, InitArgs(...), ...) before running to apply init/override specs.")
 
-    getsession(p).lifetime = something(lt, getlifetime(p))
+    setlifetime!(getsession(p), something(lt, getlifetime(p)))
     _start_run!(p, (; kwargs...))
 end
 

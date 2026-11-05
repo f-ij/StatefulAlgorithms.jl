@@ -8,14 +8,14 @@ end (`_end_timed_run!`).
     _tick!(tp)
 
 One tick of `tp`'s timer: one step of the plan (`_step!`) from the state context and the runtime context the process
-keeps, which then keeps the step's. The run ends when its lifetime (`session.lifetime`) is over after the step. A tick after a pause or
+keeps, which then keeps the step's. The run ends when its lifetime (`getlifetime(getsession(tp))`) is over after the step. A tick after a pause or
 close does nothing.
 """
 function _tick!(tp::TimedProcess)
     @lock tp.lock begin
         session = getsession(tp)
         shouldrun(session) || return nothing
-        algo, lt = getalgo(tp), session.lifetime
+        algo, lt = getalgo(tp), getlifetime(session)
         plan = getplan(algo)
         lc = _step!(plan, getloopcursor(tp), LoopContext(getcontext(tp), getruntimecontext(tp)), _root_wiring_view(algo, plan), Namespace{nothing}(), session, lt)
         tick!(session)

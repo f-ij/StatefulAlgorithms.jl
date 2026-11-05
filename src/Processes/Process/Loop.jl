@@ -33,7 +33,7 @@ function _start_run!(p::Process, inputs::NamedTuple = (;); resume::Bool = false,
     resume && wait(p)
     resuming = resume ? Resuming{true}() : Resuming{false}()
     session, func, lc = prepare_for_loop(p, getcontext(p), inputs, resuming)
-    lt = session.lifetime
+    lt = getlifetime(session)
     # A resumed run clears the pause flag in the loop, after reading the cursor the pause kept.
     resume || @atomic session.paused = false
     @atomic session.shouldrun = true
@@ -87,7 +87,7 @@ function reset!(p::Process)
     reset_loopidx!(session)
     reset_ticks!(p)
     session.loop_cursor = nothing
-    session.lifetime = getlifetime(p)
+    setlifetime!(session, getlifetime(p))
     @atomic session.paused = false
     @atomic session.shouldrun = true
     reset_times!(session)

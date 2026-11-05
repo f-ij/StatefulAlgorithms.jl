@@ -138,12 +138,12 @@ runtime_input_bucket(ctx) = getproperty(StatefulAlgorithms.get_subcontexts(ctx),
     @test getlifetime(lifetime_process) == Indefinite()
     @test_throws ArgumentError run(lifetime_process; repeats = 1, lifetime = Repeat(1))
     # A paused run keeps the lifetime it started with: `repeats` on the resume is an error, `setlifetime!` warns and changes only the default.
-    lifetime_process.session.lifetime = Repeat(5); @atomic lifetime_process.session.paused = true
+    setlifetime!(StatefulAlgorithms.getsession(lifetime_process), Repeat(5)); @atomic lifetime_process.session.paused = true
     @test_throws ErrorException run(lifetime_process; repeats = 1)
     @test (@test_logs (:warn,) setlifetime!(lifetime_process, Repeat(7))) === lifetime_process
-    @test lifetime_process.session.lifetime == Repeat(5)
+    @test getlifetime(StatefulAlgorithms.getsession(lifetime_process)) == Repeat(5)
     StatefulAlgorithms.reset!(lifetime_process)
-    @test lifetime_process.session.lifetime == Repeat(7)
+    @test getlifetime(StatefulAlgorithms.getsession(lifetime_process)) == Repeat(7)
     @test getlifetime(setlifetime!(lifetime_process, Repeat(1))) == Repeat(1)
     run(lifetime_process; temp = 2.0, scale = 3)
     wait(lifetime_process)
