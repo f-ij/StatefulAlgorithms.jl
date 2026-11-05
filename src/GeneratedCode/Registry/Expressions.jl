@@ -62,8 +62,11 @@ from their expressions (`compute_multiplier` of an algorithm's schedule entries,
 """
 Base.@nospecializeinfer function write_multipliers_expr(multipliers::Vector{Any})
     all(m -> m isa Number, multipliers) && return QuoteNode(Float64[multipliers...])
-    return Expr(:call, getindex, Float64, multipliers...)   # `Float64[m1, m2, ...]`
+    return Expr(:call, collect_multipliers, multipliers...)
 end
+
+# `Float64[m1, m2, ...]`, compiled once for any number of multipliers (`getindex(Float64, ...)` compiles per count).
+Base.@nospecializeinfer collect_multipliers(@nospecialize(multipliers...)) = Float64[m for m in multipliers]
 
 """
     write_lookup_table_expr(algos) -> expression
