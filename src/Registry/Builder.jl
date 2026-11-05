@@ -9,67 +9,49 @@ A `RegistryBuilder` is plain vectors, the same type for every plan, so adding do
 The same code runs while the generated `build_registry_and_key_plan` is generated, on the plan's type: `add!` then gets
 `GeneratedValue`s (GeneratedValues.jl) instead of algorithms, decides everything from their types (a step that needs
 the values, such as a merge, throws `NeedsValues`), and GeneratedCode/Registry/Expressions.jl writes the code that
-builds the registry. The lookup key of a `Unique` handle needs its uuid, a value, so there it is a `RuntimeLookupKey`, filled
-in by the generated code.
+builds the registry, its lookup tables written from the algorithms (`write_lookup_table_expr`).
 =#
 
 """
-    RuntimeLookupKey(id, handle_expr)
+    TypeEntryBuilder{M}(type)
 
-Stands in for the lookup key of a `Unique` handle while the walk works on the plan's type: that key comes from the
-uuid in the handle's `matcher` value (`dynamic_lookup_key`), which only exists at run time; `handle_expr` is the
-expression in the generated function that gives the handle. Equal for the same id `id` (the handle's
-`UniquePlanId{k}` type).
+One entry type of a `RegistryBuilder{M}`: the entry type `type` (`Lin`), its keyed algorithms in order, their
+multipliers (`M`), the runtime lookup table (`LookupKey` => index), and each algorithm's matcher once it has been
+computed (`entry_matcher`). In the walk on values `M` is `Float64`, as in the registry entry it becomes; in the walk on
+types `M` is `Any` (multipliers are expressions, `multiply_multipliers`) and the lookup table stays empty: the generated
+code makes it from the algorithms (`write_lookup_table_expr`).
 """
-struct RuntimeLookupKey
-    id::Any
-    handle_expr::Any
-end
-Base.isequal(a::RuntimeLookupKey, b::RuntimeLookupKey) = isequal(a.id, b.id)
-Base.hash(a::RuntimeLookupKey, h::UInt) = hash(a.id, hash(RuntimeLookupKey, h))
-
-"""The keys of a lookup table in the walk on types: a registry entry's (`LookupKey`), plus those only known at run time."""
-const TypeWalkLookupKey = Union{LookupKey,RuntimeLookupKey}
-
-"""
-    TypeEntryBuilder{M, K}(type)
-
-One entry type of a `RegistryBuilder{M, K}`: the entry type `type` (`Lin`), its keyed algorithms in order, their
-multipliers (`M`), the runtime lookup table (`K` => index), and each algorithm's matcher once it has been computed
-(`entry_matcher`). In the walk on values `M` is `Float64` and `K` is `LookupKey`, as in the registry entry it becomes;
-in the walk on types `M` is `Any` (multipliers are expressions, `multiply_multipliers`) and `K` is `TypeWalkLookupKey`.
-"""
-struct TypeEntryBuilder{M, K}
+struct TypeEntryBuilder{M}
     type::Any
     algos::Vector{Any}
     multipliers::Vector{M}
-    lookup::Dict{K,Int}
+    lookup::Dict{LookupKey,Int}
     matchers::Vector{Any}
 end
-TypeEntryBuilder{M, K}(@nospecialize(type)) where {M, K} = TypeEntryBuilder{M, K}(type, Any[], M[], Dict{K,Int}(), Any[])
+TypeEntryBuilder{M}(@nospecialize(type)) where {M} = TypeEntryBuilder{M}(type, Any[], M[], Dict{LookupKey,Int}(), Any[])
 
 struct MatcherNotComputed end   # an entry whose matcher is not computed yet
 
 """
     RegistryBuilder()
     RegistryBuilder(registry)
-    RegistryBuilder{Any, TypeWalkLookupKey}()
+    RegistryBuilder{Any}()
 
 A registry under construction, as plain values: its entry types in registry order (`TypeEntryBuilder`s). Empty, or
 holding what `registry` (a `NameSpaceRegistry`) holds. Fill it with `add!`; `registry(builder)` gives the registry.
-`M` and `K` are the types of its multipliers and lookup keys (`TypeEntryBuilder`): `Float64` and `LookupKey` (the
-default) for the walk on values, `Any` and `TypeWalkLookupKey` for the walk on types.
+`M` is the type of its multipliers (`TypeEntryBuilder`): `Float64` (the default) for the walk on values, `Any` for the
+walk on types.
 """
-struct RegistryBuilder{M, K}
-    entries::Vector{TypeEntryBuilder{M, K}}
+struct RegistryBuilder{M}
+    entries::Vector{TypeEntryBuilder{M}}
 end
-RegistryBuilder{M, K}() where {M, K} = RegistryBuilder{M, K}(TypeEntryBuilder{M, K}[])
-RegistryBuilder() = RegistryBuilder{Float64, LookupKey}()
+RegistryBuilder{M}() where {M} = RegistryBuilder{M}(TypeEntryBuilder{M}[])
+RegistryBuilder() = RegistryBuilder{Float64}()
 function RegistryBuilder(reg::NameSpaceRegistry)
     b = RegistryBuilder()
     for rte in getentries(reg)
         algos = Any[getalgos(rte)...]
-        push!(b.entries, TypeEntryBuilder{Float64, LookupKey}(getentrytype(rte), algos, copy(getmultipliers(rte)), copy(getdynamiclookup(rte)),
+        push!(b.entries, TypeEntryBuilder{Float64}(getentrytype(rte), algos, copy(getmultipliers(rte)), copy(getdynamiclookup(rte)),
             Any[MatcherNotComputed() for _ in algos]))
     end
     return b
@@ -101,7 +83,7 @@ Base.@nospecializeinfer function add!(b::RegistryBuilder, @nospecialize(algo), @
         push!(entry.algos, keyed)
         push!(entry.multipliers, multiplier)
         push!(entry.matchers, MatcherNotComputed())
-        entry.lookup[lookup_key(keyed)] = length(entry.algos)
+        set_lookup_key!(entry, keyed, length(entry.algos))
         return keyed
     end
     add_again!(entry, idx, algo)
@@ -115,11 +97,11 @@ end
 The entry of `builder` that algorithms of entry type `E` go into: the first whose type `E` is a subtype of, else a new
 one, put first or last (`entrytype_goes_first`).
 """
-Base.@nospecializeinfer function find_or_add_entry!(b::RegistryBuilder{M, K}, @nospecialize(E)) where {M, K}
+Base.@nospecializeinfer function find_or_add_entry!(b::RegistryBuilder{M}, @nospecialize(E)) where {M}
     for entry in b.entries
         E <: entry.type && return entry
     end
-    entry = TypeEntryBuilder{M, K}(E)
+    entry = TypeEntryBuilder{M}(E)
     entrytype_goes_first(E) ? pushfirst!(b.entries, entry) : push!(b.entries, entry)
     return entry
 end
@@ -133,7 +115,7 @@ its runtime lookup key.
 """
 Base.@nospecializeinfer function find_same(entry::TypeEntryBuilder, @nospecialize(algo))
     if !(algo isa GeneratedValue)
-        isstaticallyfindable(algo) || return get(entry.lookup, dynamic_lookup_key(algo), nothing)
+        isstaticallyfindable(algo) || return get(entry.lookup, LookupKey(algo), nothing)
     end
     added = added_matcher(algo isa GeneratedValue ? algo.valuetype : algo)
     for i in eachindex(entry.algos)
@@ -166,8 +148,8 @@ end
 
 """Puts `new` at `idx` in `entry`, moving the lookup key from the old algorithm to `new` and forgetting its matcher."""
 Base.@nospecializeinfer function replace_algo!(entry::TypeEntryBuilder, idx::Int, @nospecialize(new))
-    delete!(entry.lookup, lookup_key(entry.algos[idx]))
-    entry.lookup[lookup_key(new)] = idx
+    delete_lookup_key!(entry, entry.algos[idx])
+    set_lookup_key!(entry, new, idx)
     entry.algos[idx] = new
     entry.matchers[idx] = MatcherNotComputed()
     return nothing
@@ -201,19 +183,14 @@ has_autokey(@nospecialize(x)) = x isa GeneratedValue ? is_autokey(algotype(x.val
 """Whether the algorithm `x` has a key given to it, not an automatic one."""
 has_given_key(@nospecialize(x)) = has_key(x) && !has_autokey(x)
 
-"""
-    lookup_key(algo) -> LookupKey or RuntimeLookupKey
-
-The key of `algo` in its entry's runtime lookup table (`dynamic_lookup_key`). For a `GeneratedValue`, worked out from its
-type, as `dynamic_lookup_key` does for a value; for a handle that keeps its matcher as data (`keeps_matcher_data`), a
-`RuntimeLookupKey`.
-"""
-Base.@nospecializeinfer function lookup_key(@nospecialize(algo))
-    algo isa GeneratedValue || return dynamic_lookup_key(algo)
-    T = algo.valuetype
-    keeps_matcher_data(T) && return RuntimeLookupKey(id(T), algo.value_expr)
-    return LookupKey(lower_matcher(entry_matcher(T)))
-end
+# The lookup table of the walk on values. The walk on types (`GeneratedValue`s) leaves it empty: the generated code
+# makes it from the algorithms (`write_lookup_table_expr`).
+"""Puts `algo`'s `LookupKey` => `idx` into `entry`'s lookup table."""
+Base.@nospecializeinfer set_lookup_key!(entry::TypeEntryBuilder, @nospecialize(algo), idx::Int) =
+    (algo isa GeneratedValue || (entry.lookup[LookupKey(algo)] = idx); nothing)
+"""Takes `algo`'s `LookupKey` out of `entry`'s lookup table."""
+Base.@nospecializeinfer delete_lookup_key!(entry::TypeEntryBuilder, @nospecialize(algo)) =
+    (algo isa GeneratedValue || delete!(entry.lookup, LookupKey(algo)); nothing)
 
 """
     add(registry, algo, multiplier = 1.0) -> (new registry, keyed algo)
@@ -236,7 +213,7 @@ end
 The registry `builder` (filled with values) holds: one `RegistryTypeEntry{E, Tuple{algorithm types...}}` per entry
 type, in order, with its multipliers and lookup table. Each type is built once, its constructor called on the values.
 """
-Base.@nospecializeinfer function registry(b::RegistryBuilder{Float64, LookupKey})
+Base.@nospecializeinfer function registry(b::RegistryBuilder{Float64})
     typeentries = Vector{Any}(undef, length(b.entries))
     for (i, entry) in enumerate(b.entries)
         algos = Tuple(entry.algos)

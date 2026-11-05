@@ -52,7 +52,7 @@ end
 Base.@nospecializeinfer function build_known_entry(entry::TypeEntryBuilder)
     algos = build_tuple(entry.algos, GeneratedValue(Nothing, nothing))
     multipliers = GeneratedValue(Vector{Float64}, write_multipliers_expr(entry.multipliers))
-    lookup = GeneratedValue(Dict{LookupKey,Int}, write_lookup_table_expr(entry.lookup))
+    lookup = GeneratedValue(Dict{LookupKey,Int}, write_lookup_table_expr(entry.algos))
     return build_from_parts(RegistryTypeEntry{entry.type, algos.valuetype}, Any[algos, multipliers, lookup])
 end
 
@@ -66,25 +66,27 @@ Base.@nospecializeinfer function write_multipliers_expr(multipliers::Vector{Any}
 end
 
 """
-    write_lookup_table_expr(lookup) -> expression
+    write_lookup_table_expr(algos) -> expression
 
-The expression that gives an entry's lookup table `lookup` (of a builder filled by the walk on types): the table of
-its fixed keys as a constant, or, when some keys are only known at run time (`Unique` handles), a copy of it with
-those keys added.
+The expression that gives the lookup table of an entry whose algorithms are `algos` (`GeneratedValue`s of the walk on
+types): `LookupKey(algo)` => its position for each. A key the algorithm's type decides (`known_lookupkey`) is worked out
+now, the others (a `Unique` handle's) by the generated code, `LookupKey(<the algorithm's expression>)`. The table of the
+known keys is a constant; with other keys, a copy of it with those added.
 """
-Base.@nospecializeinfer function write_lookup_table_expr(lookup::Dict{TypeWalkLookupKey,Int})
-    fixed_keys, fixed_idxs = LookupKey[], Int[]
+Base.@nospecializeinfer function write_lookup_table_expr(algos::Vector{Any})
+    known_keys, known_idxs = LookupKey[], Int[]
     runtime = Any[]
-    for (k, i) in lookup
-        if k isa RuntimeLookupKey
-            push!(runtime, Expr(:call, setindex!, :d, i, Expr(:call, dynamic_lookup_key, k.handle_expr)))
+    for (i, algo) in enumerate(algos)
+        key = known_lookupkey(algo.valuetype)
+        if key isa LookupKey
+            push!(known_keys, key); push!(known_idxs, i)
         else
-            push!(fixed_keys, k::LookupKey); push!(fixed_idxs, i)
+            push!(runtime, Expr(:call, setindex!, :d, i, Expr(:call, LookupKey, algo.value_expr)))
         end
     end
-    fixed = QuoteNode(lookup_table(Tuple(fixed_keys), Tuple(fixed_idxs)))
-    isempty(runtime) && return fixed
-    return Expr(:let, Expr(:(=), :d, Expr(:call, copy, fixed)), Expr(:block, runtime..., :d))
+    known = QuoteNode(lookup_table(Tuple(known_keys), Tuple(known_idxs)))
+    isempty(runtime) && return known
+    return Expr(:let, Expr(:(=), :d, Expr(:call, copy, known)), Expr(:block, runtime..., :d))
 end
 
 """A new lookup table with `keys[i] => idxs[i]`."""
