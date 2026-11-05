@@ -62,10 +62,13 @@ function Interval(i::Int, first::Symbol, offset::Int = 0)
 end
 Interval(f::R, first::F = :end, offset::O = 0) where {R<:Real, F, O<:Real} = Interval(round(Int, f), first, round(Int, offset))
 
-# `vars...` stays untyped: the selectors differ in type, and a typed `Vararg{V}` takes only one type.
-RunIf(cond::F, vars...) where {F<:Function} = RunIf(Interval(1), cond, vars...)
-RunIf(interval::I, cond::F, vars...) where {I<:Interval, F<:Function} = RunIf{typeof(vars), typeof(cond), typeof(interval)}(cond, interval, vars)
-RunIf(interval::R, cond::F, vars...) where {R<:Real, F<:Function} = RunIf(Interval(interval), cond, vars...)
+# Untyped: a `Var` of a `Unique` handle puts its uuid in `vars`' type, so a typed constructor would compile once for
+# every new handle. A `RunIf` is only built while constructing a plan, where the next call is untyped as well.
+Base.@nospecializeinfer RunIf(@nospecialize(cond::Function), @nospecialize(vars...)) = RunIf(Interval(1), cond, vars...)
+Base.@nospecializeinfer RunIf(@nospecialize(interval::Interval), @nospecialize(cond::Function), @nospecialize(vars...)) =
+    new_instance(Core.apply_type(RunIf, typeof(vars), typeof(cond), typeof(interval)), cond, interval, vars)
+Base.@nospecializeinfer RunIf(interval::Real, @nospecialize(cond::Function), @nospecialize(vars...)) =
+    RunIf(Interval(interval), cond, vars...)
 
 @inline getcondition(runif::R) where {R<:RunIf} = getfield(runif, :cond)
 @inline getvars(runif::R) where {R<:RunIf} = getfield(runif, :vars)

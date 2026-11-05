@@ -7,8 +7,11 @@ a type parameter; their types still decide the reads while compiling.
 struct Until{V<:Tuple, F} <: IndefiniteLifetime
     cond::F
     vars::V
-    Until(cond::Function, vars...) = new{typeof(vars), typeof(cond)}(cond, vars)
 end
+# Built untyped: a `Var` of a `Unique` handle puts its uuid in `vars`' type, so a typed constructor would compile once for
+# every new handle. Only built while constructing a plan or process.
+Base.@nospecializeinfer Until(@nospecialize(cond::Function), @nospecialize(vars...)) =
+    new_instance(Core.apply_type(Until, typeof(vars), typeof(cond)), cond, vars)
 
 @inline lifetime_breakcondition(lt::U, context::C, done::D) where {U<:Until, C, D<:Integer} =
     lt.cond(getindex(context, lt.vars...))

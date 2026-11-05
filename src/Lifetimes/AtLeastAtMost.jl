@@ -9,8 +9,11 @@ struct AtLeastAtMost{V<:Tuple, F} <: RepeatLifetime
     repeats::Int
     cond::F
     vars::V
-    AtLeastAtMost(cond::Function, atleast::Int, atmost::Int, vars...) = new{typeof(vars), typeof(cond)}(atleast, atmost, cond, vars)
 end
+# Built untyped: a `Var` of a `Unique` handle puts its uuid in `vars`' type, so a typed constructor would compile once for
+# every new handle. Only built while constructing a plan or process.
+Base.@nospecializeinfer AtLeastAtMost(@nospecialize(cond::Function), atleast::Int, atmost::Int, @nospecialize(vars...)) =
+    new_instance(Core.apply_type(AtLeastAtMost, typeof(vars), typeof(cond)), atleast, atmost, cond, vars)
 repeats(aam::AtLeastAtMost) = aam.repeats
 
 @inline lifetime_breakcondition(lt::AAM, context::C, done::D) where {AAM<:AtLeastAtMost, C, D<:Integer} =

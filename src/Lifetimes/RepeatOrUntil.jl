@@ -8,8 +8,11 @@ struct RepeatOrUntil{V<:Tuple, F} <: RepeatLifetime
     repeats::Int
     cond::F
     vars::V
-    RepeatOrUntil(cond::Function, repeats::Int, vars...) = new{typeof(vars), typeof(cond)}(repeats, cond, vars)
 end
+# Built untyped: a `Var` of a `Unique` handle puts its uuid in `vars`' type, so a typed constructor would compile once for
+# every new handle. Only built while constructing a plan or process.
+Base.@nospecializeinfer RepeatOrUntil(@nospecialize(cond::Function), repeats::Int, @nospecialize(vars...)) =
+    new_instance(Core.apply_type(RepeatOrUntil, typeof(vars), typeof(cond)), repeats, cond, vars)
 repeats(rou::RepeatOrUntil) = rou.repeats
 
 @inline lifetime_breakcondition(lt::ROU, context::C, done::D) where {ROU<:RepeatOrUntil, C, D<:Integer} =
