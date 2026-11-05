@@ -105,7 +105,7 @@ end
     _split_only(reg, specs) -> (only, rest)
 
 Takes the `Only(...)` out of the specs given to `init`/`init!`: `only` is it, resolved against `reg`, or `nothing` when
-there is none (every `init` runs). More than one `Only` is an error. With an `Only`, a targetless `InitArgs(; ...)` in
+there is none (every `init` runs). More than one `Only` is an error. With an `Only`, an `InitArgs(ToAll(); ...)` in
 `rest` goes to the `Only` targets alone.
 """
 function _split_only(reg::R, specs::S) where {R<:NameSpaceRegistry, S<:Tuple}
@@ -114,7 +114,7 @@ function _split_only(reg::R, specs::S) where {R<:NameSpaceRegistry, S<:Tuple}
     rest = filter(spec -> !(spec isa Only), specs)
     isempty(onlys) && return nothing, rest
     only = first(resolve(reg, first(onlys)))
-    rest = map(spec -> spec isa InitArgs{AllInitTargets} ? InitArgs{only_targets(only)}(get_vars(spec)) : spec, rest)
+    rest = map(spec -> _is_to_all_ns(spec) ? InitArgs{only_targets(only)}(get_vars(spec)) : spec, rest)
     return only, rest
 end
 

@@ -52,9 +52,9 @@ end
 end
 
 """
-Resolve a targetless `InitArgs` into one resolved `InitArgs` per registered namespace.
+Resolve an `InitArgs(ToAll(); ...)` into one resolved `InitArgs` per registered namespace.
 """
-@inline function resolve(reg::R, init::I) where {R<:NameSpaceRegistry, I<:InitArgs{AllInitTargets}}
+@inline function resolve(reg::R, init::I) where {R<:NameSpaceRegistry, I<:InitArgs{ToAll()}}
     vars = get_vars(init)
 
     # After this point the init pipeline can use the ordinary target-specific

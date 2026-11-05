@@ -7,7 +7,7 @@
 @inline _target_label(x) = string(x)
 @inline _target_label(x::Symbol) = String(x)
 @inline _target_label(::Type{T}) where {T} = string(nameof(T))
-@inline _target_label(::Type{AllInitTargets}) = "all"
+@inline _target_label(::ToAll) = "ToAll()"
 @inline _target_label(::Nothing) = "nothing"
 
 function Base.summary(io::IO, ov::InitArgs)

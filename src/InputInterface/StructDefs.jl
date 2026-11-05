@@ -1,4 +1,4 @@
-export InitArgs, Only, Override
+export InitArgs, Only, Override, ToAll
 
 abstract type InputInterface end
 
@@ -14,7 +14,13 @@ input types so generated code observes them in the correct world age.
 """
 function get_target end
 
-struct AllInitTargets end
+"""
+    ToAll()
+
+A target that stands for every registered namespace (every algorithm and state): `InitArgs(ToAll(); x = 1)` gives
+`x` to each of them. Resolving turns it into one `InitArgs` per namespace (`src/InputInterface/Resolving.jl`).
+"""
+struct ToAll end
 
 ########################################
 ########### User Interface #############
@@ -41,12 +47,10 @@ end
 """
     InitArgs(; name = value, ...)
 
-Values for every registered algorithm and state: each receives them in its part of the context before its `init` runs.
+`InitArgs(ToAll(); name = value, ...)`: values for every registered algorithm and state, each receives them in its
+part of the context before its `init` runs.
 """
-function InitArgs(; kwargs...)
-    nt = (;kwargs...)
-    InitArgs{AllInitTargets, typeof(nt), Nothing}(nt, nothing)
-end
+InitArgs(; kwargs...) = InitArgs(ToAll(); kwargs...)
 
 InitArgs{Target}(vars::NT) where {Target,NT<:NamedTuple} = InitArgs{Target,NT,Nothing}(vars, nothing)
 
@@ -112,6 +116,7 @@ Override{Target}(vars::NT) where {Target,NT<:NamedTuple} = Override{Target,NT,No
 @inline get_target(::Type{<:Union{InitArgs{Target}, Override{Target}}}) where {Target} = Target
 
 @inline _input_target_parameter(target::Symbol) = target
+@inline _input_target_parameter(target::ToAll) = target
 @inline _input_target_parameter(target::Tuple) = map(_input_target_parameter, target)
 @inline _input_target_parameter(target::AbstractMatcher) = target
 @inline _input_target_parameter(::Type{T}) where {T} = match_by(T)

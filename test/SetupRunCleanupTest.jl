@@ -50,7 +50,7 @@ end
     # Without `Only` every `init` runs, on the given context.
     full = init(two_plan, partial, InitArgs(PipelineOther; count = 0))
     @test (full[PipelineCounter].total, full[PipelineOther].count) == (8, 0)
-    # A targetless `InitArgs` with an `Only` goes to the `Only` targets alone.
+    # `InitArgs(; ...)` (= `InitArgs(ToAll(); ...)`) with an `Only` goes to the `Only` targets alone.
     partial = init(two_plan, full, Only(PipelineCounter), InitArgs(; total = 1, count = 9))
     @test (partial[PipelineCounter].total, partial[PipelineOther].count) == (1, 0)
 

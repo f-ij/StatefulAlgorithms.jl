@@ -38,7 +38,8 @@ context = cleanup(plan, context)
 
 - Every algorithm's `init` runs.
 - `InitArgs(Target; values...)` gives the values that algorithm's `init` reads. For several targets at once:
-  `InitArgs(A => (; x = 1, y = 2), B => (; z = 3))`. `InitArgs(; values...)` gives them to every algorithm.
+  `InitArgs(A => (; x = 1, y = 2), B => (; z = 3))`. `InitArgs(; values...)`, short for `InitArgs(ToAll(); values...)`,
+  gives them to every algorithm and state.
 - `Override(Target; values...)` sets values after `init` has run.
 - `lifetime = ...` (optional) tells `init` how long the run will be, so it can size buffers.
 
