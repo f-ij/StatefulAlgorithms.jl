@@ -85,21 +85,14 @@ through the runtime lookup table for values that are not `isstaticallyfindable`.
     end
 end
 
-"""`reg[algo]`, or `default` when `algo` is not in `reg`."""
+"""`reg[algo]`, or `default` when `algo` is not in `reg`: no entry of its type, or no match in that entry. The entry
+looks it up by its matcher or through its runtime lookup table, chosen by `isstaticallyfindable` (`findfirst_match`)."""
 @inline function Base.get(reg::NameSpaceRegistry, obj, default = nothing)
-    if isstaticallyfindable(obj)
-        try
-            return static_get(reg, obj)
-        catch e
-            return default
-        end
-    else
-        try
-            return dynamic_get(reg, obj)
-        catch e
-            return default
-        end
-    end
+    typeidx = find_typeidx(reg, assign_entrytype(obj))
+    isnothing(typeidx) && return default
+    entry = getentries(reg)[typeidx]
+    idx = findfirst_match(entry, obj)
+    return isnothing(idx) ? default : getalgos(entry)[idx]
 end
 
 """Whether `val` is in `reg`."""
