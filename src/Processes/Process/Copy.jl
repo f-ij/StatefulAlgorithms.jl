@@ -1,6 +1,6 @@
 #=
 Copying a `Process`: the `InitArgs`/`Override` specs its context is set up from (`copyinputs`, `copyoverrides`) and a new process
-from its plan and specs, or from a plan (`copyprocess`); making a process run another's plan and context (`createfrom!`).
+from its plan and specs (`copyprocess`); making a process run another's plan and context (`createfrom!`).
 =#
 
 export copyprocess, copyinputs, copyoverrides
@@ -24,18 +24,18 @@ The `Override` and `Interactive` specs `p`'s context is set up from.
 
 A new process with `p`'s plan and stored specs, set up from them (every `init` runs). It takes no specs: other values
 for the copy are a separate step, `init!(q, InitArgs(...), Override(...))` (or with `Only(...)` for some `init`). With
-`context`, the new process starts from it instead and keeps `p`'s specs. A process with another plan is
-`copyprocess(plan, specs...)`: `p`'s specs are keyed by its own plan's registry.
+`context`, no `init` runs: the new process starts from that context with its values (for example
+`deepcopy(getcontext(p))`, or `getcontext(p)` itself) and keeps `p`'s specs. It must have the shape of `p`'s context
+(the same type). A process with another plan is `Process(plan, specs...)`: `p`'s specs are keyed by its own plan's
+registry.
 """
 function copyprocess(p::Process; lifetime = StatefulAlgorithms.getlifetime(p), timeout = p.timeout, context = nothing, kwargs...)
     isnothing(context) && return Process(getalgo(p), getspecs(p)...; lifetime, timeout)
+    typeof(context) === typeof(getcontext(p)) || throw(ArgumentError("copyprocess: `context` must have the shape of the process's context ($(typeof(getcontext(p)))), got $(typeof(context))."))
     q = Process(getalgo(p); context, lifetime, timeout)
     q.specs = getspecs(p)
     return q
 end
-
-copyprocess(la::ALA, specs...; lifetime = Indefinite(), timeout = 1.0, context = nothing, kwargs...) where {ALA<:AbstractLoopAlgorithm} =
-    isnothing(context) ? Process(la, specs...; lifetime, timeout) : Process(la; context, lifetime, timeout)
 
 """Make `p1` run `p2`'s plan, specs, state context and timeout, from the start."""
 function createfrom!(p1::Process, p2::Process)
