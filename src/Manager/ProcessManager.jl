@@ -226,7 +226,10 @@ Extract a per-run process lifetime from manager launch keyword arguments.
 `lifetime` and `repeats` are launch controls, not runtime inputs.
 """
 function _manager_launch_lifetime(worker::P, kwargs::K) where {P<:Process, K<:NamedTuple}
-    return parse_lifetime(get(kwargs, :lifetime, nothing), get(kwargs, :repeats, nothing))
+    lifetime = get(kwargs, :lifetime, nothing)
+    # Numbered as the worker's plan numbers its `Unique` handles (`number_by_keymap`), as `run(p; lifetime)` does.
+    lifetime = isnothing(lifetime) ? lifetime : number_by_keymap(lifetime, getfield(getregistry(getalgo(worker)), :keymap))
+    return parse_lifetime(lifetime, get(kwargs, :repeats, nothing))
 end
 
 """
