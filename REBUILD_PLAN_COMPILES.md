@@ -109,8 +109,8 @@ Status: `open`, `done <new hash>`, `skip`, `squashed into #n`, `asked` (waiting 
 | 5 | `c5b5f5d2` | UniquePlanId: a block's state id made stripped; type-only uuids kept by strip; docs for the folder and the hooks |  |  | done `8adb7eaa` |
 | 6 | `bae1aa36` | UniquePlanId cleanup: audit fixes |  |  | done `777dc9fc` |
 | 7 | `c91c97a5` | UniquePlanId: the two rewrite modes (strip, number) together in RewriteModes.jl |  |  | done `484af9d4` |
-| 8 | `94d7c134` | RewriteModes.jl: when each mode runs, a section per mode, inline comments on what each method does |  |  | done |
-| 9 | `fb7fa985` | CONDITIONS_EVENTS_DESIGN.md: design decisions for Condition, DSL if/else and OnChange events |  | docs/TODO only | open |
+| 8 | `94d7c134` | RewriteModes.jl: when each mode runs, a section per mode, inline comments on what each method does |  |  | done `9294e1df` |
+| 9 | `fb7fa985` | CONDITIONS_EVENTS_DESIGN.md: design decisions for Condition, DSL if/else and OnChange events |  | docs/TODO only | done |
 | 10 | `32ee2c69` | LoopAlgorithms/ConstructorCommon.jl: the constructor code shared by composites and routines |  |  | open |
 | 11 | `0af3c4f2` | CONDITIONS_EVENTS_DESIGN.md: callback carried by the value, OnChange between steps, AfterMerge, interactive OnRead as considered (not planned) |  | docs/TODO only | open |
 | 12 | `2051d4bd` | @Routine docstring: drop the claim that `x = @repeat …` is an error (it is rewritten to a repeated block) |  |  | open |
