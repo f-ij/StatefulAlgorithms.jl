@@ -1,22 +1,9 @@
 #=
-Process sessions: what the loop runs with instead of the process the user holds.
+`ProcessSession`: the mutable run state (loop counter; for `Process` also times and the pause/stop flags) that the
+loop and the steps get in place of the process. Keeps process types out of the compiled loop.
 
-A process (`Process`, `InlineProcess`) is the user's handle: it holds the plan and its context. The loop and the steps get
-a `ProcessSession` instead: the run's mutable record (its counters, and for an interactive process the times, the pause
-and stop flags and the resume point), shared with the process. The plan, the context and the lifetime are the loop's
-arguments (`run_session_loop`), so no type the loop is compiled for is a process type.
-
-Each way of running has its own session type, as each has its own process type:
-
-| Session              | Made by                                   | Holds                                                     |
-|:---------------------|:------------------------------------------|:----------------------------------------------------------|
-| `InlineSession`      | `InlineProcess` (once), `run(plan)` (per run) | loop counter                                          |
-| `InteractiveSession` | `Process`, `TimedProcess` (made with it, kept for every run) | also ticks, the start and end time, the `shouldrun` and `paused` flags, the cursor of a paused run, the thread, the run's lifetime (`getlifetime(session)`) |
-
-This folder holds what every session shares: the abstract type (here), Interface.jl (what every session provides: the
-loop counter; the times, kept only by `InteractiveSession`) and Hooks.jl (the stop check, `session_breakcondition`).
-Each session type is defined with its process, in `Processes/<process>/Session.jl`, which also holds that type's
-methods of the session hooks.
+Subtypes live with their process: `InlineSession` (Processes/InlineProcess/Session.jl), `InteractiveSession`
+(Processes/Process/Session.jl). Interface.jl: the loop counter; Hooks.jl: the session hooks.
 =#
 
 """
