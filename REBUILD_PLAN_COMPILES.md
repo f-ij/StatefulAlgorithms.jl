@@ -107,8 +107,8 @@ Status: `open`, `done <new hash>`, `skip`, `squashed into #n`, `asked` (waiting 
 | 3 | `fd9407d5` | Vars.jl: _var_match branches with an if and a comment on the stripped-handle case |  |  | done `e4daea11` |
 | 4 | `3338d7cd` | UniquePlanId in its own folder; Var holds its id as data like Route; lifetimes and RunIf keep their Vars in a field | `Lifetimes/HookExtensions.jl`, `LoopAlgorithms/HookExtensions.jl` | Lifetime changes went into main's per-type files (`Lifetimes/Until.jl`, `AtLeast.jl`, `RepeatOrUntil.jl`, `AtLeastAtMost.jl`, which hold their `lifetime_breakcondition` methods); `RunIf` and `should_run_schedule` in `LoopAlgorithms/Interval.jl`, in main's typed-argument style. | done `e638d23d` |
 | 5 | `c5b5f5d2` | UniquePlanId: a block's state id made stripped; type-only uuids kept by strip; docs for the folder and the hooks |  |  | done `8adb7eaa` |
-| 6 | `bae1aa36` | UniquePlanId cleanup: audit fixes |  |  | done |
-| 7 | `c91c97a5` | UniquePlanId: the two rewrite modes (strip, number) together in RewriteModes.jl |  |  | open |
+| 6 | `bae1aa36` | UniquePlanId cleanup: audit fixes |  |  | done `777dc9fc` |
+| 7 | `c91c97a5` | UniquePlanId: the two rewrite modes (strip, number) together in RewriteModes.jl |  |  | done |
 | 8 | `94d7c134` | RewriteModes.jl: when each mode runs, a section per mode, inline comments on what each method does |  |  | open |
 | 9 | `fb7fa985` | CONDITIONS_EVENTS_DESIGN.md: design decisions for Condition, DSL if/else and OnChange events |  | docs/TODO only | open |
 | 10 | `32ee2c69` | LoopAlgorithms/ConstructorCommon.jl: the constructor code shared by composites and routines |  |  | open |
