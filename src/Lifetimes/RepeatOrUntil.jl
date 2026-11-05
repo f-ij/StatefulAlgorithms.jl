@@ -16,7 +16,7 @@ Base.@nospecializeinfer RepeatOrUntil(@nospecialize(cond::Function), repeats::In
 repeats(rou::RepeatOrUntil) = rou.repeats
 
 @inline lifetime_breakcondition(lt::ROU, context::C, done::D) where {ROU<:RepeatOrUntil, C, D<:Integer} =
-    lt.cond(getindex(context, lt.vars...))
+    (@inline lt.cond((@inline getindex(context, lt.vars...))))
 
 # The same lifetime with its `Var`s given their context keys (`resolve_var_keys`, Lifetimes/Hooks.jl).
 @inline function resolve_var_keys(lt::ROU, context::C) where {V, F, ROU<:RepeatOrUntil{V, F}, C}

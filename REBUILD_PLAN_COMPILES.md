@@ -159,9 +159,9 @@ Status: `open`, `done <new hash>`, `skip`, `squashed into #n`, `asked` (waiting 
 | 46 | `7b2c5351` | DynamicUnique(f): a Unique with its uuid in the value only, made directly |  |  | done `6bb5a176` |
 | 47 | `9f8670e2` | TODO (merge semantics): is_given_id goes with the registry merge and name matching |  | docs/TODO only | done `4c033d45` |
 | 48 | `81c72225` | States match by their id, never by name; the registry merges no states; is_given_id is gone |  | RegistryBuildTest: main's merge check on `RB_MERGE_PLAN` replaced by the old commit's clash/rename check, on `setup`. | done `72e9f0c2` |
-| 49 | `0d739b0d` | TODO (merge semantics): record what is done |  | docs/TODO only | done |
-| 50 | `e3779590` | A handle is statically findable when its matcher is; a UniquePlanId only when numbered |  |  | open |
-| 51 | `064238e3` | The lifetime's condition and its read of the context are inlined where they are called | `Lifetimes/HookExtensions.jl` |  | open |
+| 49 | `0d739b0d` | TODO (merge semantics): record what is done |  | docs/TODO only | done `c12ea4ff` |
+| 50 | `e3779590` | A handle is statically findable when its matcher is; a UniquePlanId only when numbered |  | Its `isstaticallyfindable` methods go again in #67 (the trait and Findability.jl are removed); its test is checked with #67. | skip |
+| 51 | `064238e3` | The lifetime's condition and its read of the context are inlined where they are called | `Lifetimes/HookExtensions.jl` | Applied to main's per-lifetime files. Hot path (stop check). | done |
 | 52 | `38cedb3d` | unwrap_named_plan: readable docstring |  |  | open |
 | 53 | `5eea0a63` | Edit: public edit functions in Edit.jl, their helpers in Edit/Backend.jl |  |  | open |
 | 54 | `5f002505` | Rename the typed keymap functions: with_keymap_typed, strip_keymap_typed | `InlineProcess.jl` |  | open |
