@@ -1,19 +1,20 @@
 """
-    InteractiveSession{C, LT}
+    InteractiveSession{C}
 
-The session of a `Process` run: a run on its own task that the user can pause, resume and close while it runs. Made
-with the process and kept on it after a run ends, so its counters and times stay readable. A process given a lifetime
-of another type gets a new session with the same counters (`setlifetime!`); a resumed run goes on in the same one.
+The session of a `Process` or `TimedProcess` run: a run the user can pause, resume and close while it runs. Made with
+the process and kept on it after a run ends, so its counters and times stay readable; a resumed run goes on in the same
+one, with the lifetime it started with.
 
 - `shouldrun`, `paused`: set by the user (`pause(p)`, `close(p)`), read by the loop after every step and every routine
   repeat (`session_breakcondition`). Atomic, read without an ordering barrier.
 - `loopidx`, `tickidx`: steps done and ticks (steps and routine repeats), written by the loop.
 - `starttime`, `endtime`, `threadid`: when and where the run ran.
 - `loop_cursor`: the cursor of a paused run (`C`, the plan's cursor type), so the run resumes where it stopped.
-
-`LT` is the run's lifetime type, so a hook can depend on it (perf/cases.jl: `NoStopRepeat`).
+- `lifetime`: the run's lifetime, set by `run` (the run's `repeats`/`lifetime`, otherwise the process's
+  `default_lifetime`) and by `reset!`, kept by a pause. Abstract: the loop gets it as an argument, so the loop is
+  compiled for its concrete type (one dynamic call per run).
 """
-mutable struct InteractiveSession{C, LT} <: ProcessSession
+mutable struct InteractiveSession{C} <: ProcessSession
     @atomic shouldrun::Bool
     @atomic paused::Bool
     loopidx::UInt
@@ -22,10 +23,11 @@ mutable struct InteractiveSession{C, LT} <: ProcessSession
     endtime::Union{Nothing, Float64, UInt64}
     loop_cursor::Union{Nothing, C}
     threadid::Int
+    lifetime::Lifetime
 end
 
 # As a new process: not running (`shouldrun` off) and not started; `run(p)` sets both flags.
-InteractiveSession{C, LT}() where {C, LT} = InteractiveSession{C, LT}(false, true, UInt(1), UInt(1), nothing, nothing, nothing, 0)
+InteractiveSession{C}(lifetime::Lifetime) where {C} = InteractiveSession{C}(false, true, UInt(1), UInt(1), nothing, nothing, nothing, 0, lifetime)
 
 @inline shouldrun(s::InteractiveSession) = @atomic :monotonic s.shouldrun
 

@@ -242,7 +242,7 @@ function _manager_process_launch_args(worker::P, kwargs::K) where {P<:Process, K
 end
 
 # TODO: check whether this is still used, and whether it should be: a second, synchronous way to run a `Process`
-# (sets the session flags and calls `prepare_for_loop`, `run_session_loop` and `_store_run_contexts!` itself) next to
+# (sets the session's lifetime and flags and calls `prepare_for_loop`, `run_session_loop` and `_store_run_contexts!` itself) next to
 # Processes/Process/Loop.jl.
 """
     runprocessinline!(worker; lifetime = nothing, repeats = nothing, kwargs...)
@@ -257,13 +257,13 @@ function runprocessinline!(worker::P; lifetime = nothing, repeats = nothing, kwa
 
     launch_kwargs = (; lifetime, repeats)
     launch_lifetime = _manager_launch_lifetime(worker, launch_kwargs)
-    isnothing(launch_lifetime) || setlifetime!(worker, launch_lifetime)
 
     # Build the same runtime context as the asynchronous Process path, but call
     # the loop directly so no scheduler task is created for short manager jobs.
     base_context = getcontext(worker)
-    lt = StatefulAlgorithms.getlifetime(worker)
-    session, plan, lc = prepare_for_loop(worker, base_context, (; kwargs...), lt, Resuming{false}())
+    getsession(worker).lifetime = something(launch_lifetime, StatefulAlgorithms.getlifetime(worker))
+    session, plan, lc = prepare_for_loop(worker, base_context, (; kwargs...), Resuming{false}())
+    lt = session.lifetime
     @atomic session.paused = false
     @atomic session.shouldrun = true
     persistent_context, returnvalue = run_session_loop(session, plan, lc, lt)
@@ -1229,8 +1229,7 @@ shape or provide recipe `start!`.
 """
 function _start_worker!(worker::Process, kwargs::NamedTuple)
     lifetime, runtime_kwargs = _manager_process_launch_args(worker, kwargs)
-    isnothing(lifetime) || setlifetime!(worker, lifetime)
-    run(worker; runtime_kwargs...)
+    run(worker; lifetime, runtime_kwargs...)
     return worker
 end
 

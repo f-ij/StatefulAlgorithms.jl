@@ -5,8 +5,8 @@ the listeners are written for `InteractiveProcess`, so a `TimedProcess` uses the
 Operations that are not getters or setters (run time, locking, linking) live in Tools.jl.
 =#
 
-"""The lifetime of `p`'s runs; changed with `setlifetime!`."""
-@inline getlifetime(p::P) where {P<:InteractiveProcess} = getfield(p, :lifetime)
+"""The lifetime of `p`'s runs that are given none (`run(p; repeats/lifetime)` gives one); changed with `setlifetime!`."""
+@inline getlifetime(p::P) where {P<:InteractiveProcess} = getfield(p, :default_lifetime)
 
 """
     getloopcursor(p::InteractiveProcess)
@@ -45,17 +45,12 @@ setcontext!(p::P, c::C) where {P<:InteractiveProcess, C<:ProcessContext} = (p.st
 """
     setlifetime!(p, lt) -> p
 
-Makes `lt` the lifetime of `p`'s later runs (`Process`, `TimedProcess`; an `InlineProcess` has `setlifetime`). The
-session's type includes the lifetime's type, so with a lifetime of another type `p` gets a session of that type with the
-same counters. Only on a process that is neither running nor paused: a paused run keeps the lifetime it started with.
+Makes `lt` the lifetime of `p`'s later runs that are given none (`Process`, `TimedProcess`; an `InlineProcess` has
+`setlifetime`). A running or paused run keeps the lifetime it started with (a warning says so).
 """
-function setlifetime!(p::InteractiveProcess{F, C}, lt::LT) where {F, C, LT<:Lifetime}
-    (isrunning(p) || ispaused(p)) && error("Cannot change the lifetime of a running or paused process; close it first.")
-    p.lifetime = lt
-    session = getsession(p)
-    session isa InteractiveSession{C, LT} && return p
-    p.session = InteractiveSession{C, LT}(@atomic(session.shouldrun), @atomic(session.paused), session.loopidx,
-        session.tickidx, session.starttime, session.endtime, session.loop_cursor, session.threadid)
+function setlifetime!(p::P, lt::LT) where {P<:InteractiveProcess, LT<:Lifetime}
+    (isrunning(p) || ispaused(p)) && @warn "setlifetime!: the run going on keeps its lifetime; `$lt` is for the next run."
+    p.default_lifetime = lt
     return p
 end
 

@@ -143,7 +143,7 @@ context (inputs, declared locals, returns) is dropped when the run ends; only th
 function Base.run(plan::LA, context::C; repeats = 1, lifetime = nothing, kwargs...) where {LA<:LoopSpec, C<:ProcessContext}
     isresolved(plan) || throw(ArgumentError("run(plan, context) needs the resolved plan that `setup` returns."))
     lt = parse_lifetime(lifetime, isnothing(lifetime) ? repeats : nothing)
-    session, plan, lc = prepare_for_loop(plan, context, (; kwargs...), lt, Resuming{false}())
+    session, plan, lc = prepare_for_loop(plan, context, (; kwargs...), Resuming{false}())
     return run_session_loop(session, plan, lc, lt)
 end
 
@@ -201,10 +201,10 @@ end
 ##########################################
 
 """
-    prepare_for_loop(plan, context, inputs, lifetime, resume)
+    prepare_for_loop(plan, context, inputs, resume)
 
 A plan run directly (`run(plan, context)`): a new `InlineSession` for the run (the loop needs a counter; nothing can pause or
 close a direct run), the plan, and the `LoopContext` from `context` and the run's inputs (Processes/Hooks.jl).
 """
-@inline prepare_for_loop(plan::LA, context::C, inputs::I, lt::LT, resume::Resuming{false}) where {LA<:LoopSpec, C<:ProcessContext, I<:NamedTuple, LT} =
+@inline prepare_for_loop(plan::LA, context::C, inputs::I, resume::Resuming{false}) where {LA<:LoopSpec, C<:ProcessContext, I<:NamedTuple} =
     InlineSession(), plan, (@inline with_inputs((@inline LoopContext(plan, context)), plan, inputs))

@@ -56,7 +56,7 @@ for every process type, and `run(plan, context; repeats/lifetime)`. Change the
 stored lifetime between runs:
 
 ```julia
-setlifetime!(p, Repeat(2_000))      # Process, TimedProcess: not while running or paused
+setlifetime!(p, Repeat(2_000))      # Process, TimedProcess: a run going on keeps its own (a warning says so)
 p2 = setlifetime(p, Repeat(2_000))  # a new process with the same plan, specs and context object
 ```
 

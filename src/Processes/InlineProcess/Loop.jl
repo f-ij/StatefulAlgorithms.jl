@@ -25,12 +25,12 @@ end
 end
 
 """
-    prepare_for_loop(ip::InlineProcess, context, inputs, lifetime, resume)
+    prepare_for_loop(ip::InlineProcess, context, inputs, resume)
 
 An `InlineProcess` run runs in the process's one session, on its plan, from `context` and the run's inputs
 (Processes/Hooks.jl). An `InlineProcess` cannot pause, so it never resumes.
 """
-@inline prepare_for_loop(ip::IP, context::C, inputs::I, lt::LT, resume::Resuming{false}) where {IP<:InlineProcess, C<:ProcessContext, I<:NamedTuple, LT} =
+@inline prepare_for_loop(ip::IP, context::C, inputs::I, resume::Resuming{false}) where {IP<:InlineProcess, C<:ProcessContext, I<:NamedTuple} =
     getsession(ip), getalgo(ip), (@inline with_inputs((@inline LoopContext(getalgo(ip), context)), getalgo(ip), inputs))
 
 """
@@ -39,7 +39,7 @@ arguments, the same entry as a `Process` run (`run_session_loop`; with `Val(true
 gives back becomes the process's.
 """
 @inline function _run_inline!(p::InlineProcess, run_lifetime::LT, runtime_inputs::I, ::Val{inlined}) where {LT, I, inlined}
-    session, algo, lc = @inline prepare_for_loop(p, getcontext(p), runtime_inputs, run_lifetime, Resuming{false}())
+    session, algo, lc = @inline prepare_for_loop(p, getcontext(p), runtime_inputs, Resuming{false}())
     persistent_context, result = if inlined
         @inline loop(session, algo, lc, run_lifetime, Resuming{false}())
     else

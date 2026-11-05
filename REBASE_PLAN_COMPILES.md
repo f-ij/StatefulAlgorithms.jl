@@ -21,18 +21,20 @@ and put plan-compiles' map work into it:
 
 1. **Where the map is dropped.** plan-compiles drops the `UniqueKeyMap` with `strip_keymap` at its `makeloop!` /
    `prepare_loop` call sites and in `_prepare_process`. Here the one hand-off of every run is
-   `prepare_for_loop(owner, context, inputs, lifetime, resume) -> (session, plan, loop_context)`
+   `prepare_for_loop(owner, context, inputs, resume) -> (session, plan, loop_context)`
    (`src/Processes/Hooks.jl`, methods per process type and for `run(plan, context)` in `src/LoopAlgorithms/DirectRuns.jl`).
    That is where the map, later maybe the whole registry, is dropped. Nowhere earlier: the user's context keeps the
    map in its registry (TODO.md, UniquePlanId items; `exp/ukm-in-registry`).
-2. **No `makeloop!`.** Removed (`1ab7a5ee`): `run(p)` calls `_start_run!(p, inputs; resume, lifetime)`, which prepares the run
+2. **No `makeloop!`.** Removed (`1ab7a5ee`): `run(p)` calls `_start_run!(p, inputs; resume)`, which prepares the run
    and starts its task. The typed/dynamic split and the lifetime variants are gone, and so is `ProcessTaskBody`
    (a closure now).
 3. **No `create_session` and no session copy.** `prepare_for_loop` uses the process's own session (`getsession(p)`).
    A lifetime of another type is set only by `setlifetime!(p, lt)`, which gives the process a session of that type
    with the same counters (`07d5afc4`; this replaced `set_session_lifetime!` and before it `adapt_session`/`create_session`).
-   `run(p/tp; repeats/lifetime)` is a per-run override that stores nothing (falls back to `getlifetime(p)`); a
-   `TimedProcess` timer passes it to every tick, `_tick!(tp, lt)`.
+   Since then the run's lifetime lives in the session (`InteractiveSession{C}` with `lifetime::Lifetime`, no `LT`
+   parameter, so no session swap): `run(p/tp; repeats/lifetime)` sets `session.lifetime`, falling back to the
+   process's `default_lifetime` (the field was `lifetime`); a resume keeps it; `reset!` restores the default.
+   `prepare_for_loop(owner, context, inputs, resume)` lost its lifetime argument. perf's `NoStopRepeat` row is removed.
 4. **The plan holds no context.** plan-compiles' `Process{F,C}` holds the plan with the map-carrying registry and
    reads the context through it (`getpersistentcontext`, `context(p)`). Here the process holds the context itself
    (`state_context`, read with `getcontext(p)`), and the plan (`LoopAlgorithm{Plan, O, R, id}`) holds only plan,

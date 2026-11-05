@@ -7,7 +7,8 @@ export TimedProcess
 
 mutable struct TimedProcess{F,C} <: InteractiveProcess{F,C}
     algo::F
-    lifetime::Lifetime
+    # As in `Process`: the lifetime of a run given none; the run's own is `session.lifetime`.
+    default_lifetime::Lifetime
     # As in `Process`: the process's state; written only by `setcontext!`.
     state_context::ProcessContext
     # As in `Process`: the specs the context is set up from (construction, merged with later `init!` calls).

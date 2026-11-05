@@ -7,20 +7,23 @@ What a user calls on a `TimedProcess`: `run`, `pause`, `close`, `fetch` and `ini
 
 Starts `tp`'s timer, which runs a step every `interval` seconds, the first one now. A new run starts from the state
 context and the run's inputs, as a `Process` run does (`prepare_for_loop`), and keeps the run's runtime context and a
-new cursor on the process; a paused run resumes from what its pause kept. The run's lifetime is `repeats`/`lifetime`
-when given, otherwise `getlifetime(tp)`; the process's lifetime stays as it is (`setlifetime!` changes it).
+new cursor on the process; a paused run resumes from what its pause kept, with the lifetime it started with. A new
+run's lifetime is `repeats`/`lifetime` when given, otherwise `getlifetime(tp)`; it goes into the session
+(`session.lifetime`, which every tick reads) and the process's own stays as it is.
 """
 function Base.run(tp::TimedProcess; repeats = nothing, lifetime = nothing, kwargs...)
     isrunning(tp) && error("TimedProcess is already running.")
-    lt = something(parse_lifetime(lifetime, repeats), StatefulAlgorithms.getlifetime(tp))
+    lt = parse_lifetime(lifetime, repeats)
     if ispaused(tp)
         isempty(kwargs) || error("Cannot pass new runtime inputs while resuming a paused TimedProcess.")
+        isnothing(lt) || error("Cannot pass `repeats` or `lifetime` while resuming a paused TimedProcess: it keeps the lifetime it started with.")
     else
-        session, algo, lc = prepare_for_loop(tp, getcontext(tp), (; kwargs...), lt, Resuming{false}())
+        getsession(tp).lifetime = something(lt, StatefulAlgorithms.getlifetime(tp))
+        session, algo, lc = prepare_for_loop(tp, getcontext(tp), (; kwargs...), Resuming{false}())
         session.loop_cursor = starting_cursor(session, getplan(algo), Resuming{false}())
         tp.runtime_context = getruntime(lc)
         before_while(session)
-        if _lifetime_over(lt, lc, session)
+        if _lifetime_over(session.lifetime, lc, session)
             _end_timed_run!(tp)
             return tp
         end
@@ -28,7 +31,7 @@ function Base.run(tp::TimedProcess; repeats = nothing, lifetime = nothing, kwarg
     session = getsession(tp)
     @atomic session.paused = false
     @atomic session.shouldrun = true
-    tp.timer = Timer(_ -> _tick!(tp, lt), 0; interval = tp.interval)
+    tp.timer = Timer(_ -> _tick!(tp), 0; interval = tp.interval)
     return tp
 end
 

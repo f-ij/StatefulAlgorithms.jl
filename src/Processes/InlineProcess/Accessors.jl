@@ -6,7 +6,7 @@ Getters and setters of `InlineProcess`: its context (and its type), plan and lif
 contexttype(::Union{InlineProcess{TD,ContextType}, Type{<:InlineProcess{TD,ContextType}}}) where {TD,ContextType} = ContextType
 
 """The lifetime of `ip`'s runs when `run` is given none (a run can take its own: `run(ip; repeats/lifetime)`)."""
-@inline getlifetime(ip::IP) where {IP<:InlineProcess} = ip.lifetime
+@inline getlifetime(ip::IP) where {IP<:InlineProcess} = ip.default_lifetime
 
 """
     setlifetime(ip, lt) -> InlineProcess

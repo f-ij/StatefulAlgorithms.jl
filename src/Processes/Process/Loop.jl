@@ -4,18 +4,18 @@ Starting and ending a `Process` run. `run(p)` calls `_start_run!`; the task it s
 =#
 
 """
-    prepare_for_loop(p::Process, context, inputs, lifetime, resume)
+    prepare_for_loop(p::Process, context, inputs, resume)
 
 Run at the start of every run. Gives the session, the plan and the `LoopContext` to start from: the state context
 plus the run's inputs, or, when resuming, plus the runtime context the pause kept.
 """
-function prepare_for_loop(p::InteractiveProcess, context::C, inputs::NamedTuple, lt::LT, resume::Resuming{false}) where {C<:ProcessContext, LT}
+function prepare_for_loop(p::InteractiveProcess, context::C, inputs::NamedTuple, resume::Resuming{false}) where {C<:ProcessContext}
     session = getsession(p)
     func = getalgo(p)
     return session, func, with_inputs(LoopContext(func, context), func, inputs)
 end
 
-function prepare_for_loop(p::InteractiveProcess, context::C, inputs::NamedTuple, lt::LT, resume::Resuming{true}) where {C<:ProcessContext, LT}
+function prepare_for_loop(p::InteractiveProcess, context::C, inputs::NamedTuple, resume::Resuming{true}) where {C<:ProcessContext}
     session = getsession(p)
     func = getalgo(p)
     runtime_context = p.runtime_context
@@ -24,16 +24,16 @@ function prepare_for_loop(p::InteractiveProcess, context::C, inputs::NamedTuple,
 end
 
 """
-    _start_run!(p, inputs; resume, lifetime = getlifetime(p), threaded = true, loopfunc = loop)
+    _start_run!(p, inputs; resume, threaded = true, loopfunc = loop)
 
-Called by `run(p)`: starts a new run (`resume = false`) or resumes a paused one on a task of its own, with `lifetime`.
-`loopfunc` replaces `loop` for tests that look at what the loop gets.
+Called by `run(p)`: starts a new run (`resume = false`) or resumes a paused one on a task of its own, with the session's
+lifetime. `loopfunc` replaces `loop` for tests that look at what the loop gets.
 """
-function _start_run!(p::Process, inputs::NamedTuple = (;); resume::Bool = false, lifetime::LT = getlifetime(p), threaded::Bool = true, loopfunc::LF = loop) where {LT, LF}
+function _start_run!(p::Process, inputs::NamedTuple = (;); resume::Bool = false, threaded::Bool = true, loopfunc::LF = loop) where {LF}
     resume && wait(p)
-    lt = lifetime
     resuming = resume ? Resuming{true}() : Resuming{false}()
-    session, func, lc = prepare_for_loop(p, getcontext(p), inputs, lt, resuming)
+    session, func, lc = prepare_for_loop(p, getcontext(p), inputs, resuming)
+    lt = session.lifetime
     # A resumed run clears the pause flag in the loop, after reading the cursor the pause kept.
     resume || @atomic session.paused = false
     @atomic session.shouldrun = true
@@ -78,7 +78,8 @@ end
     reset!(process)
 
 Run before running a process again from the start without new init (the manager's `resetworker!`): the next run starts
-at step 1 with fresh counters and loop cursor. The context is kept as it is. A `Package`'s own interval counter is not
+at step 1 with fresh counters and loop cursor, and the session's lifetime is the process's default again. The context is
+kept as it is. A `Package`'s own interval counter is not
 reset (TODO.md, "Packaging and threaded composites").
 """
 function reset!(p::Process)
@@ -86,6 +87,7 @@ function reset!(p::Process)
     reset_loopidx!(session)
     reset_ticks!(p)
     session.loop_cursor = nothing
+    session.lifetime = getlifetime(p)
     @atomic session.paused = false
     @atomic session.shouldrun = true
     reset_times!(session)

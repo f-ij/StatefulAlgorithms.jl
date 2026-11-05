@@ -21,7 +21,8 @@ mutable struct InlineProcess{TD,ContextType, Lt, S<:Tuple} <: AbstractProcess
     # `reset!(ip)` and a full `init!(ip)` set up from. Typed and fixed, so code reading them stays type stable: other
     # specs for good mean a new process.
     const specs::S
-    lifetime::Lt
+    # The lifetime of a run given none (`run(ip; repeats/lifetime)` gives one for that run).
+    default_lifetime::Lt
     # The run's counter, one session for every run (Processes/InlineProcess/Session.jl): what the loop gets instead of the
     # process.
     const session::InlineSession

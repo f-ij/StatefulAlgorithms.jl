@@ -23,8 +23,9 @@ run(p)
 ```
 
 `run(p)` starts the process loop task. If the process was paused, `run(p)`
-resumes the suspended runtime context and loop cursor; new runtime inputs and init
-specs are rejected during resume.
+resumes the suspended runtime context and loop cursor, with the lifetime the run
+started with; new runtime inputs, init specs, `repeats` and `lifetime` are rejected
+during resume.
 
 If the loop algorithm declares runtime `@input` values, pass them as run
 keywords:

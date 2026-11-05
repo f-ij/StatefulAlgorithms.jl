@@ -42,7 +42,7 @@ end
 """The `Process` around a prepared plan and context: its session (made for the lifetime's type) and its place in `processlist`."""
 function _construct_process(algo::F, context::ProcessContext, specs::Tuple, lifetime::LT, timeout) where {F<:AbstractLoopAlgorithm, LT}
     C = typeof(loop_cursor(getplan(algo), Val(true)))
-    session = InteractiveSession{C, LT}()
+    session = InteractiveSession{C}(lifetime)
     p = Process{F, C}(uuid1(), algo, lifetime, context, specs, nothing, timeout, nothing, Threads.ReentrantLock(), nothing, RuntimeListeners(), session)
 
     register_process!(p)

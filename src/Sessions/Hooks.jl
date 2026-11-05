@@ -7,9 +7,7 @@ Each function here has the default every session gets. Extended, each in the hoo
 session's file, in:
 - Processes/Process/Session.jl: `InteractiveSession` (all of them: its `shouldrun` and `paused` flags, ticks, times,
   the cursor of a paused run);
-- Processes/InlineProcess/Session.jl: `InlineSession` (`before_while`: its counter starts at 1 for every run);
-- perf/cases.jl: an `InteractiveSession` with a `NoStopRepeat` lifetime (never interrupted, to time the loop without
-  the check).
+- Processes/InlineProcess/Session.jl: `InlineSession` (`before_while`: its counter starts at 1 for every run).
 
 The logical stop check, a lifetime's own condition, is `lifetime_breakcondition` (Lifetimes/Hooks.jl).
 =#
