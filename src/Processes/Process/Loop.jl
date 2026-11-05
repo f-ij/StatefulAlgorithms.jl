@@ -24,14 +24,14 @@ function prepare_for_loop(p::InteractiveProcess, context::C, inputs::NamedTuple,
 end
 
 """
-    _start_run!(p, inputs; resume, threaded = true, loopfunc = loop)
+    _start_run!(p, inputs; resume, lifetime = getlifetime(p), threaded = true, loopfunc = loop)
 
-Called by `run(p)`: starts a new run (`resume = false`) or resumes a paused one on a task of its own. `loopfunc`
-replaces `loop` for tests that look at what the loop gets.
+Called by `run(p)`: starts a new run (`resume = false`) or resumes a paused one on a task of its own, with `lifetime`.
+`loopfunc` replaces `loop` for tests that look at what the loop gets.
 """
-function _start_run!(p::Process, inputs::NamedTuple = (;); resume::Bool = false, threaded::Bool = true, loopfunc::LF = loop) where {LF}
+function _start_run!(p::Process, inputs::NamedTuple = (;); resume::Bool = false, lifetime::LT = getlifetime(p), threaded::Bool = true, loopfunc::LF = loop) where {LT, LF}
     resume && wait(p)
-    lt = getlifetime(p)
+    lt = lifetime
     resuming = resume ? Resuming{true}() : Resuming{false}()
     session, func, lc = prepare_for_loop(p, getcontext(p), inputs, lt, resuming)
     # A resumed run clears the pause flag in the loop, after reading the cursor the pause kept.

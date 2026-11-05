@@ -23,8 +23,8 @@ run(p)
 ```
 
 `run(p)` starts the process loop task. If the process was paused, `run(p)`
-resumes the suspended runtime context and loop cursor; new runtime inputs, init
-specs, and lifetime changes are rejected during resume.
+resumes the suspended runtime context and loop cursor; new runtime inputs and init
+specs are rejected during resume.
 
 If the loop algorithm declares runtime `@input` values, pass them as run
 keywords:
@@ -58,9 +58,9 @@ object:
   (`Indefinite()`); an `InlineProcess` defaults to one repeat.
 - advanced: `lifetime = Repeat(...)`, `lifetime = Indefinite()`, `lifetime = Until(...)`, `lifetime = RepeatOrUntil(...)`.
 
-These go to the constructor. `run(p)` takes no lifetime; change a process's
-lifetime between runs with `setlifetime!(p, lt)` (an `InlineProcess` also takes
-one for a single run: `run(ip; repeats = 10)`).
+These go to the constructor. `run(p; repeats = 10)` (or `lifetime = ...`) uses
+that lifetime for one run and leaves the process's own; change the process's
+lifetime with `setlifetime!(p, lt)`.
 
 See [Lifetime](@ref lifetime_user) for full details.
 For selector syntax used in `Until`, see [Vars (`Var` Selectors)](@ref vars_user).

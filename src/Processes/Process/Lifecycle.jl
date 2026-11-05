@@ -6,23 +6,24 @@ What a user calls on a `Process`: `run`, `wait`, `fetch`, `pause`, `close`, `res
 export start, restart, quit, pause, syncclose, closeprocess
 
 """
-    run(p::Process; inputs...)
+    run(p::Process; repeats, lifetime, inputs...)
 
-Starts a run of `p` on its own task, from its state context, with its lifetime (`getlifetime(p)`; change it with
-`setlifetime!`) and the run's inputs; a paused run resumes from what its pause kept.
+Starts a run of `p` on its own task, from its state context, with the run's inputs; a paused run resumes from what its
+pause kept. The run's lifetime is `repeats`/`lifetime` when given, otherwise `getlifetime(p)`; the process's lifetime
+stays as it is (`setlifetime!` changes it).
 """
-function Base.run(p::Process, inputs_and_overrides...; kwargs...)
+function Base.run(p::Process, inputs_and_overrides...; repeats = nothing, lifetime = nothing, kwargs...)
     @assert isidle(p) "Process is already in use"
-    _reject_run_lifetime(kwargs)
+    lt = something(parse_lifetime(lifetime, repeats), getlifetime(p))
 
     if ispaused(p)
         isempty(inputs_and_overrides) || error("Cannot pass init/override specs while resuming a paused Process.")
         isempty(kwargs) || error("Cannot pass new runtime inputs while resuming a paused Process.")
-        return _start_run!(p; resume = true)
+        return _start_run!(p; resume = true, lifetime = lt)
     end
     isempty(inputs_and_overrides) || error("Process run accepts runtime inputs as keywords only. Use init!(p, InitArgs(...), ...) before running to apply init/override specs.")
 
-    _start_run!(p, (; kwargs...))
+    _start_run!(p, (; kwargs...); lifetime = lt)
 end
 
 """

@@ -128,10 +128,15 @@ runtime_input_bucket(ctx) = getproperty(StatefulAlgorithms.get_subcontexts(ctx),
     @test !haskey(StatefulAlgorithms.get_captured_returns(StatefulAlgorithms.getcontext(inline_worker)), :process)
     close(inline_worker)
 
-    # The lifetime is the process's (`setlifetime!`), not a `run` keyword.
+    # `repeats`/`lifetime` on `run` are for that run only; the process's lifetime changes with `setlifetime!`.
     lifetime_process = Process(runtime_algo)
-    @test_throws ArgumentError run(lifetime_process; repeats = 1, temp = 2.0, scale = 3)
-    @test_throws ArgumentError run(lifetime_process; lifetime = Repeat(1), temp = 2.0, scale = 3)
+    run(lifetime_process; repeats = 2, temp = 2.0, scale = 3)
+    wait(lifetime_process)
+    @test getlidx(lifetime_process) == 3 && getlifetime(lifetime_process) == Indefinite()  # 2 steps done; getlidx is the next one
+    run(lifetime_process; lifetime = Repeat(1), temp = 2.0, scale = 3)
+    wait(lifetime_process)
+    @test getlifetime(lifetime_process) == Indefinite()
+    @test_throws ArgumentError run(lifetime_process; repeats = 1, lifetime = Repeat(1))
     @test getlifetime(setlifetime!(lifetime_process, Repeat(1))) == Repeat(1)
     run(lifetime_process; temp = 2.0, scale = 3)
     wait(lifetime_process)

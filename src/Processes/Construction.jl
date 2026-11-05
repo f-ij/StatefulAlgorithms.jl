@@ -33,18 +33,6 @@ function parse_lifetime(lifetime::L, repeats::R) where {L, R}
     throw(ArgumentError("`repeats` takes a whole number or `Inf`, got `$repeats`."))
 end
 
-"""
-    _reject_run_lifetime(kwargs)
-
-Throws when a `run` of a `Process` or `TimedProcess` is given `repeats` or `lifetime`: their runs use the process's
-lifetime, set with `setlifetime!`.
-"""
-function _reject_run_lifetime(kwargs::K) where {K}
-    (haskey(kwargs, :repeats) || haskey(kwargs, :lifetime)) &&
-        throw(ArgumentError("`run` on a Process or TimedProcess takes no `repeats` or `lifetime`: set the lifetime with `setlifetime!(p, lt)` before the run."))
-    return nothing
-end
-
 """The lifetime of a new `Process` given none: one repeat for a `Routine` (a fixed sequence), otherwise until it is closed."""
 function default_lifetime(plan::P) where {P}
     inner = plan isa LoopAlgorithm ? getplan(plan) : plan
