@@ -211,11 +211,3 @@ end
 
 @inline Base.replace(pc::ProcessContext{D,R}, args::NamedTuple) where {D,R} = @inline _replace_subcontexts(pc, args)
 
-# `strip_keymap_typed` (Identifiable/UniquePlanId/UniqueKeyMap.jl) of a context: same subcontexts, its registry without
-# the map in a new `Ref`.
-@inline function strip_keymap_typed(c::ProcessContext{D, Base.RefValue{NameSpaceRegistry{E, M}}}) where {D, E, M}
-    M === Nothing && return c
-    reg = getfield(c, :reg)[]
-    newreg = NameSpaceRegistry{E, Nothing}(getfield(reg, :entries), nothing)
-    return ProcessContext{D, Base.RefValue{NameSpaceRegistry{E, Nothing}}}(getfield(c, :subcontexts), Ref(newreg))
-end
