@@ -29,12 +29,15 @@ and put plan-compiles' map work into it:
    and starts its task. The typed/dynamic split and the lifetime variants are gone, and so is `ProcessTaskBody`
    (a closure now).
 3. **No `create_session` and no session copy.** `prepare_for_loop` uses the process's own session (`getsession(p)`).
-   A lifetime of another type is set only by `setlifetime!(p, lt)`, which gives the process a session of that type
-   with the same counters (`07d5afc4`; this replaced `set_session_lifetime!` and before it `adapt_session`/`create_session`).
-   Since then the run's lifetime lives in the session (`InteractiveSession{C}` with `lifetime::Lifetime`, no `LT`
-   parameter, so no session swap): `run(p/tp; repeats/lifetime)` sets `session.lifetime`, falling back to the
-   process's `default_lifetime` (the field was `lifetime`); a resume keeps it; `reset!` restores the default.
-   `prepare_for_loop(owner, context, inputs, resume)` lost its lifetime argument. perf's `NoStopRepeat` row is removed.
+   The run's lifetime lives in the session (`cef76251`): `InteractiveSession{C}` with `lifetime::Lifetime`, no `LT`
+   parameter, so a lifetime of another type never needs a new session. `run(p/tp; repeats/lifetime)` sets
+   `session.lifetime`, falling back to the process's `default_lifetime` (the field was `lifetime`); a resume keeps it
+   (`repeats`/`lifetime` on a resume are an error); `reset!` restores the default; `setlifetime!(p, lt)` only sets
+   `default_lifetime` and warns on a running or paused process. `prepare_for_loop(owner, context, inputs, resume)`
+   lost its lifetime argument; the loop still gets `session.lifetime` as an argument. The manager passes a job's
+   lifetime as the run's, not through `setlifetime!`. This replaced the session swap of `07d5afc4`
+   (`set_session_lifetime!`, before it `adapt_session`/`create_session`). perf's `NoStopRepeat` runner is removed
+   until an uninterruptible-run API exists (TODO.md, "An uninterruptible run").
 4. **The plan holds no context.** plan-compiles' `Process{F,C}` holds the plan with the map-carrying registry and
    reads the context through it (`getpersistentcontext`, `context(p)`). Here the process holds the context itself
    (`state_context`, read with `getcontext(p)`), and the plan (`LoopAlgorithm{Plan, O, R, id}`) holds only plan,
@@ -87,13 +90,13 @@ and put plan-compiles' map work into it:
 | Removed | Use instead | Commit |
 |---|---|---|
 | `makeloop!` (typed/dynamic split, lifetime variants), `ProcessTaskBody` | `_start_run!` | `1ab7a5ee` |
-| `create_session`, `adapt_session`, the session copy, `set_session_lifetime!` | the process's session; `setlifetime!` | `4df2c7ab`, `2c271525`, `07d5afc4` |
+| `create_session`, `adapt_session`, the session copy, `set_session_lifetime!` | the process's session, which holds the run's lifetime (`session.lifetime`) | `4df2c7ab`, `2c271525`, `07d5afc4`, `cef76251` |
 | `LoopRunProcess` | an `InlineSession` per direct run | `8dd09746` |
 | `_loop_persistent_context`, `_loop_runtime_context` | `loop`/`run_session_loop` take `(session, plan, loop_context, lifetime, resume)` | `2aba4abe` |
 | `_paused_visible_context`, `_paused_state_context`, `_clear_paused_subcontext`, `_store_runtime_context!`, `context(p::Process, c)` | the pause split: state context + `p.runtime_context` | `e7cc9fea` |
 | `InlineProcess` mode parameter, `threaded` keyword, `isthreaded`/`isasync` for it | `InlineProcess` runs in the caller's task only | `b0f1f214` |
 | `repeat` keyword (constructors, manager launches) | `repeats` | `670761c6`, `07d5afc4` |
-| `run(p; repeats/lifetime)`, `run(tp; ...)`, positional `run(p, lt)` | `setlifetime!(p, lt)` before the run (an `ArgumentError` says so). `run(ip; ...)` and `run(plan, context; ...)` keep a per-run lifetime | `07d5afc4` |
+| `run(p; repeats/lifetime)`, `run(tp; ...)`, positional `run(p, lt)` | `run(p/tp/ip; repeats/lifetime)` is a per-run lifetime (stored in `session.lifetime` for `Process`/`TimedProcess`, never in the process); no positional lifetime; `setlifetime!(p, lt)` changes the default | `07d5afc4`, `ceda37a8`, `cef76251` |
 | `getpersistentcontext`, `getstoredinits`, `getstoredoverrides`, `getcontext(la)`, `_with_lifecycle`, `_without_lifecycle`, `FinalizedAlgorithm` forwards, `src/Copy.jl` | the user or the process holds context and specs | `11e859a7` |
 | plan-level `init(la, specs...)`, `partialinit`, `run(la; ...)` | `setup(plan_spec, specs...) -> (context, plan)`, `run(plan, context) -> (context, result)`, `init(plan, context, [Only(...)], specs...)` | `23f5c6b7`, `11e859a7`, `a0291e0a` |
 | `reinit(plan, context, ...)`, `reinit(p)`, `reinit(p, target; ...)`, backend `init(plan, ::AbstractContext)` | `init(plan, context, ...)`, `init!(p, ...)` | `a0291e0a` |
@@ -131,7 +134,7 @@ plan-compiles still has the old layout. Its changes to these files go into the n
 ## 5. Design rules plan-compiles has to follow after the rebase
 
 1. **Sessions.** The loop, the steps and the lifetimes take a `ProcessSession`. `InlineSession` holds only the loop counter.
-   `InteractiveSession{C, LT}` adds ticks, times, the `shouldrun`/`paused` flags, the paused cursor and the thread. The
+   `InteractiveSession{C}` adds ticks, times, the `shouldrun`/`paused` flags, the paused cursor, the thread and the run's lifetime. The
    session belongs to the process, and the loop reaches it through `run_session_loop`.
 2. **Every run starts at `prepare_for_loop`**, which hands the loop a `LoopContext`. For a new run the inputs are checked and
    added by `with_inputs` on top of `LoopContext(plan, context)`.
@@ -146,8 +149,9 @@ plan-compiles still has the old layout. Its changes to these files go into the n
 5. **Init interface.** `InitArgs` (values) and `Only(...)` (which `init` runs) are separate. `init!(p, ...)` exists
    for every process type. `Process` and `TimedProcess` store the merged specs; `InlineProcess` has
    `const specs::S` and does not.
-6. **Lifetime.** The process holds it. `run` does not change it. `setlifetime!` (Process, TimedProcess) and
-   `setlifetime` (new process; the only one for `InlineProcess`).
+6. **Lifetime.** The process holds a default (`default_lifetime`, `getlifetime`); `run` never changes it. A run's own
+   lifetime (`repeats`/`lifetime` on `run`, else the default) is in the session and survives a pause. `setlifetime!`
+   (Process, TimedProcess; warns during a run) and `setlifetime` (new process; the only one for `InlineProcess`).
 7. **Pure accessors.** `setcontext!` and `_sync_state_context!` only store; callers pause first (memory and TODO.md,
    "Later: a sync mode").
 8. **Interval semantics** (`0c05ec68`, `e8049a17`, `7a60a823`). A number given as `first` runs on that tick. `child * parent` is
