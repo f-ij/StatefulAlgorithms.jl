@@ -155,8 +155,8 @@ Status: `open`, `done <new hash>`, `skip`, `squashed into #n`, `asked` (waiting 
 | 42 | `32f77cf1` | LookupKey(algo) makes every lookup key; RuntimeLookupKey is gone |  |  | done `b8a950e8` |
 | 43 | `b9b202bf` | TODO: fast path for a plan with one Unique per type |  | docs/TODO only | done `eec66865` |
 | 44 | `0b19557a` | TODO (urgent): merge semantics, which states may become one and whether the registry merge should exist |  | docs/TODO only | done `1eb2cff3` |
-| 45 | `c7957f13` | DSL: a block's own @state is its first state; no id check |  |  | done |
-| 46 | `7b2c5351` | DynamicUnique(f): a Unique with its uuid in the value only, made directly |  |  | open |
+| 45 | `c7957f13` | DSL: a block's own @state is its first state; no id check |  |  | done `df2db49f` |
+| 46 | `7b2c5351` | DynamicUnique(f): a Unique with its uuid in the value only, made directly |  |  | done |
 | 47 | `9f8670e2` | TODO (merge semantics): is_given_id goes with the registry merge and name matching |  | docs/TODO only | open |
 | 48 | `81c72225` | States match by their id, never by name; the registry merges no states; is_given_id is gone |  |  | open |
 | 49 | `0d739b0d` | TODO (merge semantics): record what is done |  | docs/TODO only | open |
