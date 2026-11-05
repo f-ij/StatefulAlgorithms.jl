@@ -54,12 +54,12 @@ Base.@nospecializeinfer function _resolve_scopes(@nospecialize(la::AbstractPlan)
         funcs[i] = child
     end
     # The owners were recorded by step 3 (`_resolve_wiring`).
-    resets = (; returns, owners = node_resets(typeof(wiring)).owners)
+    resets = (; returns, owners = getfield(node_resets(typeof(wiring)), :owners))
     global_ = getfield(wiring, :global_wiring)
     own_locals = getfield(wiring, :locals)
     children_ = Tuple(children)
     W = Core.apply_type(PlanWiring, typeof(global_), typeof(children_), typeof(own_locals), Sc, resets)
-    return rebuild_plan(la, Tuple(funcs), W(global_, children_, own_locals))
+    return rebuild_plan(la, Tuple(funcs), new_instance(W, global_, children_, own_locals))
 end
 
 """

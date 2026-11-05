@@ -158,3 +158,9 @@ Base.@nospecializeinfer function findfirst_unspecialized(@nospecialize(f), items
     end
     return nothing
 end
+
+"""A named tuple of `names` and `values`, made with `new_instance`: `NamedTuple{names}(values)` compiles for each type."""
+Base.@nospecializeinfer function new_named_tuple(names::Vector{Symbol}, values::Vector{Any})
+    vals = Tuple(values)
+    return new_instance(Core.apply_type(NamedTuple, Tuple(names), typeof(vals)), vals...)
+end

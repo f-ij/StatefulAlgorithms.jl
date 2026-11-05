@@ -56,10 +56,10 @@ A copy of `plan` whose children are `funcs` and whose wiring is `wiring`; every 
 parameter that the `funcs` or `wiring` field is declared as becomes the type of the new value, so the copy's type
 follows its new contents.
 
-Default: calls the plan type's constructor with all its fields, in field order. Correct for any plan type that stores
-`funcs` and `wiring` as fields and whose constructor takes all fields in order (Julia's default constructor). A plan
-type that stores its children or wiring differently, or whose constructor takes other arguments, defines its own
-method.
+Default: the plan type made again with all its fields, in field order, without calling its constructor
+(`replace_fields`). Correct for any plan type that stores `funcs` and `wiring` as fields and has no inner constructor
+that checks or changes them. A plan type that stores its children or wiring differently, or whose constructor must
+run, defines its own method.
 """
 Base.@nospecializeinfer function rebuild_plan(@nospecialize(plan::AbstractPlan), @nospecialize(funcs::Tuple), @nospecialize(wiring))
     return replace_fields(plan, (:funcs, :wiring), (funcs, wiring))
@@ -84,7 +84,7 @@ only the children change (step 1 of `resolve`, the DSL).
 """
     replace_fields(s, names, values) -> copy of s
 
-`s` with the fields `names` set to `values`, built by `s`'s type's constructor called with all fields in order; the
+`s` with the fields `names` set to `values`, made with `new_instance` (no constructor call, which would compile for each new type); the
 type parameter that a replaced field is declared as (`_field_parameter_index`) becomes the type of the new value. Used
 by the defaults above and the registry walk; works on types as values, so it is compiled once, not once per plan type.
 
@@ -103,6 +103,6 @@ Base.@nospecializeinfer function replace_fields(@nospecialize(s), names::Tuple{V
         fields[i] = new
     end
     NT = Core.apply_type(T.name.wrapper, params...)
-    s isa GeneratedValue || return NT(fields...)
+    s isa GeneratedValue || return new_instance(NT, fields...)
     return build_from_parts(NT, fields)
 end

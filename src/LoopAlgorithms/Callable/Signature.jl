@@ -73,7 +73,7 @@ names (for `:properties`, `(property, name)` pairs), `types` a `Tuple{...}` of t
 The types are a `Tuple` type because a tuple of types cannot be a type parameter.
 """
 struct CallReturns{kind, names, types} end
-_returns_parts(::Type{CallReturns{kind, names, types}}) where {kind, names, types} = (kind, names, types)
+Base.@nospecializeinfer _returns_parts(@nospecialize(R::Type{<:CallReturns})) = Tuple(R.parameters)   # (kind, names, types)
 _return_name(x::Union{Symbol, Splat}) = (x, Any)
 _return_name(x::Pair{<:Union{Symbol, Splat}, <:Type}) = (x.first, x.second)
 _return_name(x) = error("Callable return names are `Symbol`s, `Splat(:name)`, or `name => Type`; got $(x)")
@@ -95,18 +95,31 @@ end
 
 _input_names(item::Symbol) = (item,)
 _input_names(item::Splat) = (splatname(item),)
-_input_names(item::Tuple) = _input_names(last(item))   # keyword (name, input)
-_input_names(::ValueRef) = ()                          # literal
+_input_names(@nospecialize(item::Tuple)) = _input_names(last(item))   # keyword (name, input)
+_input_names(@nospecialize(::ValueRef)) = ()                          # literal
 
-"""The plan names a `Callable` (type) reads, or every name read by the `Callable`s in `funcs`."""
-callable_input_names(::Type{<:Callable{F, Args, Kwargs}}) where {F, Args, Kwargs} =
-    Tuple(unique(Symbol[n for item in (Args..., Kwargs...) for n in _input_names(item)]))
-callable_input_names(::Type) = ()
-
-"""The plan names a `Callable` (type) writes its returns to."""
-function callable_return_names(::Type{<:Callable{F, Args, Kwargs, Returns}}) where {F, Args, Kwargs, Returns}
-    kind, names, _ = _returns_parts(Returns)
-    kind === :none && return ()
-    return Tuple(kind === :properties ? map(last, names) : map(n -> n isa Splat ? splatname(n) : n, names))
+"""
+The plan names a `Callable` (type) reads; `()` for any other type. Read from the type as a value, so compiled once, not
+once per `Callable` type: its callers (resolve, code generation) have the type as a value.
+"""
+Base.@nospecializeinfer function callable_input_names(@nospecialize(T::Type))
+    T isa DataType && T <: Callable || return ()
+    p = T.parameters    # {F, Args, Kwargs, Returns, V}
+    names = Symbol[]
+    for items in (p[2], p[3]), item in items, n in _input_names(item)
+        n in names || push!(names, n)
+    end
+    return Tuple(names)
 end
-callable_return_names(::Type) = ()
+
+"""The plan names a `Callable` (type) writes its returns to; `()` for any other type. Compiled once, as `callable_input_names`."""
+Base.@nospecializeinfer function callable_return_names(@nospecialize(T::Type))
+    T isa DataType && T <: Callable || return ()
+    kind, names, _ = _returns_parts(T.parameters[4])
+    kind === :none && return ()
+    found = Symbol[]
+    for n in names
+        push!(found, kind === :properties ? last(n) : n isa Splat ? splatname(n) : n)
+    end
+    return Tuple(found)
+end

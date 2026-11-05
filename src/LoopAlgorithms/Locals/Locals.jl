@@ -84,8 +84,7 @@ Base.@nospecializeinfer function collect_plan_locals_untyped(@nospecialize(optio
             isnothing(k) ? (push!(names, name); push!(values, getfield(declared, j))) : (values[k] = getfield(declared, j))
         end
     end
-    vals = Tuple(values)
-    return new_instance(Core.apply_type(NamedTuple, Tuple(names), typeof(vals)), vals...)
+    return new_named_tuple(names, values)
 end
 
 """

@@ -60,6 +60,31 @@ twice.
     return (head..., _collect_root_options_children(Base.tail(children))...)
 end
 
+"""
+`_collect_root_options(la)` compiled once, for `resolve`: the plan tree walked as a value (`getfield`), the options
+gathered in a vector.
+"""
+Base.@nospecializeinfer function _collect_root_options_untyped(@nospecialize(la::LoopSpec))
+    found = Any[]
+    _append_root_options!(found, la)
+    return Tuple(found)
+end
+Base.@nospecializeinfer function _append_root_options!(found::Vector{Any}, @nospecialize(la::LoopSpec))
+    la isa FinalizedAlgorithm && return _append_root_options!(found, getfield(la, :inner))
+    la isa LoopAlgorithm && return _append_root_options!(found, getfield(la, :plan))
+    options = getfield(la, :options)
+    for i in 1:nfields(options)
+        option = getfield(options, i)
+        option isa RootOption && push!(found, option)
+    end
+    children = getfield(la, :funcs)
+    for i in 1:nfields(children)
+        child = getfield(children, i)
+        child isa LoopSpec && _append_root_options!(found, child)
+    end
+    return found
+end
+
 """The route/share wiring stored in one plan (plan-wide and per child), as one tuple of `Route`s and `Share`s."""
 @inline collect_wiring(plan::AbstractPlan) = _flatten_plan_wiring(global_wiring(getwiring(plan)), child_wiring(getwiring(plan)))
 @inline collect_wiring(la::LoopAlgorithm) = collect_wiring(getplan(la))
