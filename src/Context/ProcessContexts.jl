@@ -77,9 +77,9 @@ Return the subcontext of the algorithm `obj`, looked up in the registry. In a co
 handle the user holds is first numbered by the context's `UniqueKeyMap` (`numbered_handle`), while compiling.
 """
 @inline Base.getindex(pc::ProcessContext{D, HeldRegistry{RR, M}}, obj::IdentifiableAlgo) where {D, RR, M} =
-    @inline _getindex_by_registry(pc, numbered_handle(obj, M))
-@inline Base.getindex(pc::ProcessContext, obj) = @inline _getindex_by_registry(pc, obj)
-@inline function _getindex_by_registry(pc::ProcessContext, obj)
+    @inline _find_subcontext_of(pc, numbered_handle(obj, M))
+@inline Base.getindex(pc::ProcessContext, obj) = @inline _find_subcontext_of(pc, obj)
+@inline function _find_subcontext_of(pc::ProcessContext, obj)
     reg = getregistry(pc)
     isnothing(reg) && error("Cannot index a runtime ProcessContext by object because it has no registry.")
     name = getkey(reg[obj])
