@@ -40,7 +40,8 @@ end
 
 """The `InlineProcess` around a prepared plan, its context, specs and lifetime, with its one session."""
 function _construct_inline_process(algo::TD, context::C, specs::S, lifetime::Lt, keymap) where {TD, C, S<:Tuple, Lt}
-    ip = InlineProcess{TD, C, Lt, S}(uuid1(), algo, context, specs, lifetime, InlineSession(), keymap)
+    ip = InlineProcess{TD, C, Lt, S}(uuid1(), algo, context, specs, lifetime, InlineSession(), keymap, nothing)
+    set_user_context!(ip, context)
     precompile_interface(ip)   # src/PrecompileInterface.jl
     return ip
 end

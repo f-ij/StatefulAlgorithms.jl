@@ -49,7 +49,8 @@ end
 function _construct_process(algo::F, context::ProcessContext, specs::Tuple, lifetime::LT, timeout, keymap) where {F<:AbstractLoopAlgorithm, LT}
     C = typeof(loop_cursor(getplan(algo), Val(true)))
     session = InteractiveSession{C}(lifetime)
-    p = Process{F, C}(uuid1(), algo, lifetime, context, specs, nothing, timeout, nothing, Threads.ReentrantLock(), nothing, RuntimeListeners(), session, keymap)
+    p = Process{F, C}(uuid1(), algo, lifetime, context, specs, nothing, timeout, nothing, Threads.ReentrantLock(), nothing, RuntimeListeners(), session, keymap, nothing)
+    set_user_context!(p, context)
 
     register_process!(p)
     precompile_interface(p)   # src/PrecompileInterface.jl

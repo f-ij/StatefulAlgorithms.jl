@@ -20,7 +20,7 @@ end
 @inline function _set_inline_run_context!(p::InlineProcess, context)
     context = strip_keymap(context)   # a context from `getcontext` carries the `UniqueKeyMap`
     @assert context isa contexttype(p) "Wrong context shape for this process\n Context is of type $(typeof(context)), but expected $(contexttype(p))."
-    p.context = context
+    setcontext!(p, context)
     return nothing
 end
 
@@ -46,5 +46,6 @@ gives back becomes the process's.
         run_session_loop(loop, session, algo, lc, run_lifetime)
     end
     p.context = persistent_context
+    set_user_context!(p, persistent_context)   # `getcontext(ip)`: the new context with the map
     return result
 end

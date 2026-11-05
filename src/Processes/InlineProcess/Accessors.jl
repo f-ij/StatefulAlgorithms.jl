@@ -22,10 +22,15 @@ kind); fixed for the process's life (`init(ip, specs...)` returns a new process 
 getspecs(ip::InlineProcess) = ip.specs
 
 """Make `c` the context of `ip`: later runs start from it. A context from `getcontext` is stored without its
-`UniqueKeyMap` (`strip_keymap`)."""
-@inline setcontext!(ip::InlineProcess, c) = (ip.context = strip_keymap(c))
-"""The context of `ip`, with the plan's `UniqueKeyMap` back in its registry (`with_keymap`), so a `Unique` handle the
-user holds is a key found from types: `getcontext(ip)[handle]`. SA's own code reads `_getcontext_nokeymap(ip)`."""
-Base.@nospecializeinfer getcontext(@nospecialize(ip::InlineProcess)) = with_keymap(_getcontext_nokeymap(ip), getfield(ip, :keymap))
+`UniqueKeyMap` (`strip_keymap`); the context handed to the user is built from it (`set_user_context!`)."""
+@inline function setcontext!(ip::InlineProcess, c)
+    ip.context = strip_keymap(c)
+    set_user_context!(ip, ip.context)
+    return ip.context
+end
+"""The context of `ip`, with the plan's `UniqueKeyMap` back in its registry, so a `Unique` handle the user holds is a
+key found from types: `getcontext(ip)[handle]`. Built when the context changes (`set_user_context!`), not here. SA's
+own code reads `_getcontext_nokeymap(ip)`."""
+Base.@nospecializeinfer getcontext(@nospecialize(ip::InlineProcess)) = getfield(ip, :user_context)
 """The context of `ip` as SA works with it: without the plan's `UniqueKeyMap` (see `getcontext`)."""
 @inline _getcontext_nokeymap(ip::InlineProcess) = ip.context::contexttype(ip)

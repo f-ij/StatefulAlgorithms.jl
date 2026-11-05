@@ -67,11 +67,12 @@ function _store_run_contexts!(p::Process, session::InteractiveSession, persisten
     if loop_ispaused(session)
         _sync_state_context!(p, getpersistent(returnvalue))
         p.runtime_context = getruntime(returnvalue)
-        return _getcontext_nokeymap(p)
+        return getfield(p, :user_context)
     end
     _sync_state_context!(p, persistent_context)
     session.loop_cursor = nothing
-    return returnvalue
+    # What `fetch(p)` gives, with the plan's `UniqueKeyMap` put back.
+    return returnvalue === persistent_context ? getfield(p, :user_context) : with_keymap(returnvalue, getfield(p, :keymap))
 end
 
 """

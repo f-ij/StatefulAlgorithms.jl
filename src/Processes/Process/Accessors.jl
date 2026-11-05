@@ -30,11 +30,11 @@ getalgo(p::P) where {P<:InteractiveProcess} = p.algo
     getcontext(p::InteractiveProcess)
 
 The process's state context: the user's handle on the process's state, with the registry. Never a run's runtime
-context: a paused run keeps that apart (`p.runtime_context`). Its registry has the plan's `UniqueKeyMap` back
-(`with_keymap`, from the process's `keymap`), so a `Unique` handle the user holds is a key found from types:
-`getcontext(p)[handle]`. SA's own code reads `_getcontext_nokeymap(p)`.
+context: a paused run keeps that apart (`p.runtime_context`). Its registry has the plan's `UniqueKeyMap` back, so a
+`Unique` handle the user holds is a key found from types: `getcontext(p)[handle]`. Built when the state context changes
+(`set_user_context!`), not here. SA's own code reads `_getcontext_nokeymap(p)`.
 """
-Base.@nospecializeinfer getcontext(@nospecialize(p::InteractiveProcess)) = with_keymap(_getcontext_nokeymap(p), getfield(p, :keymap))
+Base.@nospecializeinfer getcontext(@nospecialize(p::InteractiveProcess)) = getfield(p, :user_context)
 
 """
     _getcontext_nokeymap(p::InteractiveProcess)
@@ -48,9 +48,14 @@ _getcontext_nokeymap(p::P) where {P<:InteractiveProcess} = p.state_context
     setcontext!(p::InteractiveProcess, c) -> c
 
 Store `c` as the process's state context. Does not look at whether `p` runs: a caller that may race a running loop
-pauses it first. A context from `getcontext` is stored without its `UniqueKeyMap` (`strip_keymap`).
+pauses it first. A context from `getcontext` is stored without its `UniqueKeyMap` (`strip_keymap`); the context handed
+to the user is built from it (`set_user_context!`).
 """
-setcontext!(p::P, c::C) where {P<:InteractiveProcess, C<:ProcessContext} = (p.state_context = strip_keymap(c))
+function setcontext!(p::P, c::C) where {P<:InteractiveProcess, C<:ProcessContext}
+    p.state_context = strip_keymap(c)
+    set_user_context!(p, p.state_context)
+    return p.state_context
+end
 
 """
     setlifetime!(p, lt) -> p

@@ -44,7 +44,7 @@ the same two contexts between its ticks.
 """
 function _cleanup_paused_process!(p::InteractiveProcess)
     cleaned = @inline cleanup(getalgo(p), LoopContext(_getcontext_nokeymap(p), p.runtime_context))
-    p.lastresult = @inline loop_final_result(getalgo(p), (@inline final_context(cleaned)), getruntime(cleaned))
+    p.lastresult = with_keymap((@inline loop_final_result(getalgo(p), (@inline final_context(cleaned)), getruntime(cleaned))), getfield(p, :keymap))
     p.runtime_context = nothing
     _sync_state_context!(p, getpersistent(cleaned))
     return p.lastresult
@@ -62,7 +62,7 @@ function Base.close(p::Process)
 
     try
         wait(p)
-        isnothing(p.task) || (p.lastresult = _fetch(p))
+        isnothing(p.task) || (p.lastresult = fetch(p))
 
         was_paused && _cleanup_paused_process!(p)
     catch(err)
@@ -174,10 +174,11 @@ end
 #     end    
 # end
 
-"""The run's result as SA works with it (see `fetch`)."""
-@inline _fetch(@nospecialize(p::Process)) = if !isnothing(p.task) fetch(p.task) else p.lastresult end
-"""Fetch the return value of a process; a context comes with the plan's `UniqueKeyMap` back in its registry (`with_keymap`)."""
-Base.@nospecializeinfer Base.fetch(@nospecialize(p::Process)) = with_keymap(_fetch(p), getfield(p, :keymap))
+"""
+Fetch the return value of a process; a context comes with the plan's `UniqueKeyMap` back in its registry, put there when
+the run ended (`_store_run_contexts!`, `_cleanup_paused_process!`).
+"""
+@inline Base.fetch(@nospecialize(p::Process)) = if !isnothing(p.task) fetch(p.task) else p.lastresult end
 
 """
 Quit all processes in the process list

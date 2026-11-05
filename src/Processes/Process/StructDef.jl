@@ -30,6 +30,9 @@ mutable struct Process{F,C} <: InteractiveProcess{F,C}
     # The plan's `UniqueKeyMap` (or `nothing`): `algo` and the contexts are kept without it, so the loop's types have no
     # uuid; `getcontext(p)` and `fetch(p)` put it back. Untyped, so the map's type is not in the `Process` type.
     keymap::Any
+    # The context handed to the user (`getcontext(p)`): the state context with the map put back, built each time the
+    # state context changes (`set_user_context!`). Untyped, as `keymap`.
+    user_context::Any
 end
 
 Base.:(==)(p1::Process, p2::Process) = p1.id == p2.id

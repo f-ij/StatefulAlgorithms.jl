@@ -29,4 +29,7 @@ mutable struct InlineProcess{TD,ContextType, Lt, S<:Tuple} <: AbstractProcess
     # The plan's `UniqueKeyMap` (or `nothing`): `algo` and `context` are kept without it, so `run(ip)` has no uuid in its
     # types; `getcontext(ip)` puts it back. Untyped, so the map's type is not in the `InlineProcess` type.
     const keymap::Any
+    # The context handed to the user (`getcontext(ip)`): `context` with the map put back, built each time `context`
+    # changes (`set_user_context!`, also after every run). Untyped, as `keymap`.
+    user_context::Any
 end

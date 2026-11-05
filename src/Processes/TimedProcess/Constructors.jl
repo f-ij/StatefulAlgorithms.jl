@@ -13,7 +13,8 @@ function TimedProcess(func::Func, inputs_overrides::Vararg{Any,N}; interval::Rea
     algo, context, specs, lifetime, _, keymap = _prepare_process(parse_plan(func), inputs_overrides...; kwargs...)
     C = typeof(loop_cursor(getplan(algo), Val(true)))
     session = InteractiveSession{C}(lifetime)
-    tp = TimedProcess{typeof(algo), C}(algo, lifetime, context, specs, nothing, Float64(interval), nothing, ReentrantLock(), nothing, session, keymap)
+    tp = TimedProcess{typeof(algo), C}(algo, lifetime, context, specs, nothing, Float64(interval), nothing, ReentrantLock(), nothing, session, keymap, nothing)
+    set_user_context!(tp, context)
     precompile_interface(tp)   # src/PrecompileInterface.jl
     return tp
 end
