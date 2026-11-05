@@ -3,7 +3,7 @@
 Two ways for a loop algorithm to run something only some of the time:
 
 - a **condition**, checked when a child is scheduled or a repeat starts: "does this hold now?"
-- an **event**, checked at the end of the step that wrote a value: "did this step change it?"
+- an **event**, checked at each merge into a value: "did this merge change it?"
 
 Nothing here is built yet. These are the decisions agreed so far, and what is still open. Locals are designed against
 `exp/no-maybe` (a local's type is the join of what its writers return; no `Maybe`).
@@ -44,34 +44,41 @@ Nothing here is built yet. These are the decisions agreed so far, and what is st
 
 2.2.4 Typing (no-maybe): a writer returns a plain `T` while the slot holds `OnChange{T}`. The hook also tells `settle_locals` that a write into `OnChange{T}` stays `OnChange{T}`, so the join doesn't widen to `Union{OnChange{T}, T}`.
 
-### 2.3 When it fires: between steps
+### 2.3 When it fires: at every merge
 
-2.3.1 `OnChange` is a between-steps facility. What happens inside a step of an algorithm is opaque: only what the step leaves behind counts. The check is at the end of the step that wrote the value, against the value before that step.
+2.3.1 `OnChange` is a between-steps facility. What happens inside a step of an algorithm is opaque: only what the step leaves behind counts. It is a changed flag, not a count of writes.
 
-2.3.2 The callback runs at most once per writing step.
+2.3.2 The boundary is the literal merge: every merge into the value is one check, and fires the callback at most once. No extra scope rule decides it.
+- 2.3.2.1 In a routine, `x = @repeat 10 child()` is the repeated block `local x; @repeat 10 begin x = child() end` (`_dsl_repeated_assignment`): 10 merges into `x`, so up to 10 callbacks.
+- 2.3.2.2 To merge once, write `@repeat 9 child(); x = child()` (the same 10 runs, the last one assigns).
 
-2.3.3 Scalars: the step's written value is compared with the held value (`old !== new`). With `!==`, `NaN` to `NaN` doesn't fire and `0.0` to `-0.0` does; this goes in the docstring.
+2.3.3 `OnChange` compares the held value with the merged one (`old !== new`). It means the same for every type: a different value (for an array: replaced by another object). With `!==`, `NaN` to `NaN` doesn't fire and `0.0` to `-0.0` does; this goes in the docstring. The callback gets `(old, new)`.
 
-2.3.4 Arrays changed in place: `OnChange` is a thin wrapper during the step that is not stripped right away.
-- 2.3.4.1 Any mutating operation sets a flag, once per operation.
-- 2.3.4.2 The flag is checked and reset at the end of the step. The event means "written to during the step", not "different".
-- 2.3.4.3 Bulk operations forward to the inner array and set the flag after, so they lower to exactly the same code on the contained array (for example `copyto!(w::OnChange, bc::Broadcasted) = (copyto!(parent(w), bc); setflag!(w); w)`, and likewise `fill!`, `mul!`, `map!`).
+### 2.4 `OnMutate`: in-place writes
 
-### 2.4 Callback after the merge
+2.4.1 Writes into the same object (an array changed in place) are a separate wrapper, `OnMutate`, not part of `OnChange`. It differs in meaning (written to, not different), in what the callback gets (`(new)`: the old contents are gone) and in implementation (a forwarding wrapper with a flag). A user picks the one they mean; both work on arrays.
 
-2.4.1 A new terminating write action, `AfterMerge(callback, old, new)`, carries a callback that runs *after* the merge, so it sees the context with the write in it.
+2.4.2 `OnMutate` is a thin wrapper during the step that is not stripped right away. Any mutating operation sets a flag, once per operation.
 
-2.4.2 `_build_write_payload` splits actions by type when compiling: `DirectWrite`s go into the payload, `AfterMerge`s into a second tuple, which `merge(scv, args, demand)` runs after `merge_into_subcontexts`.
+2.4.3 Bulk operations forward to the inner array and set the flag after, so they lower to exactly the same code on the contained array (for example `copyto!(w::OnMutate, bc::Broadcasted) = (copyto!(parent(w), bc); setflag!(w); w)`, and likewise `fill!`, `mul!`, `map!`).
 
-2.4.3 A callback is either a plain function (side effects only), or something stepped through a view whose returns go through the normal `merge`. Chains of events are then repeated merge rounds. Their number is known when the plan is built, so the generated code stays flat; cycles are an error when the plan is built.
+2.4.4 The flag is checked and reset at the merge of any step that can write the value. A step that mutates it and returns `nothing` still goes through a merge (`merge(scv, ::Nothing)`), so that is where its flag is checked.
 
-2.4.4 When several watched fields change in one merge, their callbacks run in field order.
+### 2.5 Callback after the merge
 
-### 2.5 Scope
+2.5.1 A new terminating write action, `AfterMerge(callback, old, new)`, carries a callback that runs *after* the merge, so it sees the context with the write in it.
 
-2.5.1 Events within the loop algorithm only. This system is not meant for async compute.
+2.5.2 `_build_write_payload` splits actions by type when compiling: `DirectWrite`s go into the payload, `AfterMerge`s into a second tuple, which `merge(scv, args, demand)` runs after `merge_into_subcontexts`.
 
-2.5.2 An `OnChange` wrapping an `InteractiveVar` is not supported.
+2.5.3 A callback is either a plain function (side effects only), or something stepped through a view whose returns go through the normal `merge`. Chains of events are then repeated merge rounds. Their number is known when the plan is built, so the generated code stays flat; cycles are an error when the plan is built.
+
+2.5.4 When several watched fields change in one merge, their callbacks run in field order.
+
+### 2.6 Scope
+
+2.6.1 Events within the loop algorithm only. This system is not meant for async compute.
+
+2.6.2 An `OnChange` wrapping an `InteractiveVar` is not supported.
 
 ## 3. Considered, not planned: events from interactive writes
 
@@ -86,12 +93,12 @@ Nothing here is built yet. These are the decisions agreed so far, and what is st
 
 ## 4. Open
 
-4.1 Arrays (2.3.4):
+4.1 `OnMutate` (2.4):
 - 4.1.1 Hand-written element loops (`x[i] = …` on the wrapper) store the flag every iteration. Check whether LLVM moves it out of the loop.
 - 4.1.2 `getindex`/`setindex!` on the wrapper must be `@propagate_inbounds`.
 - 4.1.3 Aliasing: a reference held elsewhere (in an algorithm's own state since `init`, or shared into another subcontext) writes past the wrapper. Rule: a watched array is written only through its watched name. Shares can be detected when the plan is built.
 
-4.2 Callback writes (2.4.3):
+4.2 Callback writes (2.5.3):
 - 4.2.1 The action types are fixed when compiling, so an extra write happens every step. When nothing changed, it writes back the value already there; the callback's result converts to that location's type.
 - 4.2.2 How a wrapper's target `Var` becomes a location type when compiling is not worked out.
 

@@ -113,8 +113,8 @@ Status: `open`, `done <new hash>`, `skip`, `squashed into #n`, `asked` (waiting 
 | 9 | `fb7fa985` | CONDITIONS_EVENTS_DESIGN.md: design decisions for Condition, DSL if/else and OnChange events |  | docs/TODO only | done `72f56c5b` |
 | 10 | `32ee2c69` | LoopAlgorithms/ConstructorCommon.jl: the constructor code shared by composites and routines |  |  | done `936c8e3c` |
 | 11 | `0af3c4f2` | CONDITIONS_EVENTS_DESIGN.md: callback carried by the value, OnChange between steps, AfterMerge, interactive OnRead as considered (not planned) |  | docs/TODO only | done `f362169c` |
-| 12 | `2051d4bd` | @Routine docstring: drop the claim that `x = @repeat …` is an error (it is rewritten to a repeated block) |  |  | done |
-| 13 | `a90a7861` | Design doc: OnChange fires per merge, OnMutate for in-place writes; ReturnsUpdatesTest comment: `x = @repeat` with @Routine is a repeated block, not an error |  | docs/TODO only | open |
+| 12 | `2051d4bd` | @Routine docstring: drop the claim that `x = @repeat …` is an error (it is rewritten to a repeated block) |  |  | done `28d39af2` |
+| 13 | `a90a7861` | Design doc: OnChange fires per merge, OnMutate for in-place writes; ReturnsUpdatesTest comment: `x = @repeat` with @Routine is a repeated block, not an error |  | docs/TODO only | done |
 | 14 | `ca4792d6` | UniqueKeyMap in the registry from resolve until the plan is run; no HeldRegistry, no global map cache | `InlineProcess.jl`, `Process.jl`, `ProcessInteraction.jl`, `TimedProcess.jl` |  | open |
 | 15 | `620e8ad7` | UserContextCache.jl: cache of the context a process hands to the user (with its UniqueKeyMap put back), per process | `InlineProcess.jl`, `Process.jl`, `ProcessInteraction.jl` |  | open |
 | 16 | `20e1cf78` | Revert the user-context cache (UserContextCache.jl): context(p) builds the user's context once when handing it out | `InlineProcess.jl`, `Process.jl`, `ProcessInteraction.jl` |  | open |
