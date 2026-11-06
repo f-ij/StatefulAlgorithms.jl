@@ -22,3 +22,15 @@ suspicious while porting; nothing here is acted on yet unless it says so.
    these rows stay open, together with the rows that build on them (#101 resolved locations without a matcher, #102
    `resolve_var(s)`, #105 if it needs them). Port them once partitions is in main. The handoff said to ask at the first
    twin; the owner said to finish without questions and note such things here.
+4. **`run(ip)` allocates 64 bytes per call when the plan has `Unique` handles** (measured 2026-11-06, main `036b61ed` against
+   this branch `f5a66237`, 3 alternating rounds). A short `run(ip)` (two `Unique` counters, 1 or 10 steps) costs 7.6-7.9 ns
+   per call here against 5.0-5.1 ns on main; without `Unique` handles both are 4.9 ns and allocate nothing. Cause:
+   `prepare_for_loop(::InlineProcess)` strips the map with `strip_keymap_typed`, which builds a new registry `Ref` for the
+   loop's context on every run. The per-step loop time is unchanged (perf suite, all 26 rows within noise). Possible
+   fixes, not done: the loop's context needs no registry at all (a `reg::Nothing` loop context), or the stripped
+   registry `Ref` is made once with the process's context and reused (it holds no map, so it is not a map in the
+   process).
+5. **The InteractiveIsing checks cannot run against main or this branch.** InteractiveIsing (all branches, newest
+   `landau-ginzburg-relax` 2026-11-03) calls `StatefulAlgorithms.context`, renamed `getcontext` on main, so it does not
+   load with main's SA either. The 3D throughput, phi and II test checks need InteractiveIsing ported to the current SA
+   API first.
