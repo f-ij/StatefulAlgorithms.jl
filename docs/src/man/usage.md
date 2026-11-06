@@ -28,3 +28,5 @@ For current documentation, use the split docs below.
 - [Context Internals](@ref context_internals)
 - [Routes and Shares Internals](@ref routes_shares_internals)
 - [Process Pipeline Internals](@ref process_pipeline_internals)
+- [User Handles and Loop Versions](@ref handles_loop_versions_internals)
+- [DSL Semantics](@ref dsl_semantics_internals)

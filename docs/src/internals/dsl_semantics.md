@@ -1,4 +1,4 @@
-# DSL semantics
+# [DSL semantics](@id dsl_semantics_internals)
 
 What a `@CompositeAlgorithm` / `@Routine` block means: what each statement does when the block is built and in every
 step, where each name lives, how long it lives, and what is an error. The model is a Julia loop body: a block is
@@ -33,16 +33,18 @@ A block builds a plan (`CompositeAlgorithm` or `Routine`) that holds, apart from
 | options | `getoptions` | `@redirect`, `@input` (`RuntimeInputs`) |
 
 `resolve` wraps the plan in a `LoopAlgorithm`: it names every algorithm and state in a registry, resolves the wiring
-against it, and collects the `RootOption`s (`Redirect`, `RuntimeInputs`) of every plan in the tree. `states(la)` lists the
+against it, collects the `RootOption`s (`Redirect`, `RuntimeInputs`) of every plan in the tree, and gives every `Var`
+in a schedule (a `RunIf`'s, a routine child's lifetime) its context key (src/LoopAlgorithms/Resolving/Resolving.jl
+lists the steps). `states(la)` lists the
 states of the resolved tree by name.
 
 ## Identity
 
 | Thing | Matched by | Name in the context |
 |---|---|---|
-| an algorithm value | its value (`===` for mutable values, equality for values without data) | `Type_1`, `Type_2`, ... or its `@alias` |
+| an algorithm value | its value (`===` for mutable values, equality for values without data) | `Type_1`, `Type_2`, ... or its `@alias`; two different algorithms with one `@alias` in a plan are an error |
 | a block's `@state` | an id given when the block is built: one per construction | `_state_1`, `_state_2`, ... |
-| a named state (`@state name begin ... end`) | its name: every state with that name is one | `name` |
+| a named state (`@state name begin ... end`) | its value, as any algorithm: the same block code built twice gives one state. The name is only its key: two different states with one name in a plan are an error ("rename one of them first", `rename(plan, :name => :new_name)`); `@merge` makes states one | `name` |
 | a merged state (`@merge`) | the id of each state it was merged from | `_state_k` |
 
 The same block value used in two places shares its state; two constructions, also from the same code, do not.

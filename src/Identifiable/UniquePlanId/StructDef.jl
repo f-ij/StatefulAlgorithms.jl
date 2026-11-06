@@ -16,8 +16,9 @@ which says which of three forms the id is in:
 | numbered | `k` = 1, 2, ... | `UniquePlanId{k}(origin)`, `make_numbered`; `number_unique_ids` | a plan is resolved: each new `origin` gets the next number | is the same in every rebuild of the same code |
 
 The registry, the context, `init` and the loop only see numbered ids, which match by their type alone (`==`). From
-`resolve` until the plan is run, the registry also carries the plan's `k => uuid` pairs (`UniqueKeyMap`,
-UniqueKeyMap.jl), so a held handle is numbered and found from types there too. The uuid is kept so that every form can
+`resolve` on, every registry the user holds (the plan's, a context's, a process's) also carries the plan's `k => uuid`
+pairs (`UniqueKeyMap`, UniqueKeyMap.jl), so a held handle is numbered and found from types there too; `init` and the
+loop get the plan without them, and the loop's context has no registry. The uuid is kept so that every form can
 be made again from any other, and for the dynamic fallback of `==`.
 """
 struct UniquePlanId{N} <: AbstractMatcher{N}

@@ -11,7 +11,8 @@ The runtime data stack has three layers:
 `ProcessContext{D,R}` stores two values (`src/Context/StructDefs.jl`):
 
 1. `subcontexts::D`, a named tuple of `SubContext` values.
-2. `reg::R`, the registry used for identity lookup.
+2. `reg::R`: the plan's registry (with its `UniqueKeyMap`) in the contexts the user and the process hold, used for
+   identity lookup; `nothing` in the contexts the loop works on (`drop_registry`: no registry reaches the loop).
 
 The initialized process owns a persistent `ProcessContext`. Loop execution also
 builds a separate runtime `ProcessContext`: the run's inputs (`:_inputs`) and
@@ -22,8 +23,8 @@ live there instead of changing persistent state shape.
 Persistent contexts support these lookup forms:
 
 1. `pc[:name]` or `pc.name` selects a subcontext by symbol.
-2. `pc[obj]` resolves an algorithm or state reference through `reg` and selects
-   its subcontext.
+2. `pc[obj]` resolves an algorithm or state reference through `reg` (a held `Unique` handle is numbered by the map
+   while compiling) and selects its subcontext. On a context without a registry it is an error.
 
 `get_captured_returns(runtime_context)` returns the data in `:_captured_returns`, while
 `get_inputs(runtime_context)` returns the data in `:_inputs`. If those
@@ -47,8 +48,8 @@ does not depend on execution-plan wiring.
 `step!`, `init`, and `cleanup` receive a `SubContextView`
 (`src/Context/View/StructDef.jl`). A view carries:
 
-1. the context bundle (`src/Context/Bundles/`): a `LoopContext` while stepping (the persistent context, the
-   separate runtime context and the plan node), an `InitContext` while initializing (the persistent context, the
+1. the context bundle (`src/Context/Bundles/`): a `LoopContext` while stepping (the persistent context without its
+   registry, the separate runtime context and the plan node), an `InitContext` while initializing (the persistent context, the
    algorithm being prepared and the lifetime);
 2. the current identifiable instance or namespace;
 3. explicitly injected values; and

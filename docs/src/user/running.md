@@ -56,7 +56,8 @@ object:
 
 - `repeats = 1000` -> run a fixed number of iterations.
 - omitted -> one repeat for a `Routine`, otherwise until the process is closed
-  (`Indefinite()`); an `InlineProcess` defaults to one repeat.
+  (`Indefinite()`); an `InlineProcess` defaults to one repeat and never takes `Indefinite()` (it cannot be paused or
+  closed, so the run would never end).
 - advanced: `lifetime = Repeat(...)`, `lifetime = Indefinite()`, `lifetime = Until(...)`, `lifetime = RepeatOrUntil(...)`.
 
 These go to the constructor. `run(p; repeats = 10)` (or `lifetime = ...`) uses
@@ -71,7 +72,8 @@ For selector syntax used in `Until`, see [Vars (`Var` Selectors)](@ref vars_user
 - `pause(p)`: stop loop while keeping resumable state.
 - `run(p)`: start a new task or resume after pause.
 - `close(p)`: stop the process, wait for it, run cleanup when needed, and commit
-  the final persistent context.
+  the final persistent context. A process you drop is not closed for you: the garbage collector only removes it from
+  the process list, so a paused process dropped without `close(p)` gets no cleanup.
 - `init!(p, InitArgs(...), Override(...))`: runs every `init` again, from the process's stored specs with the new
   ones merged over them, and makes the result the process's state. The process keeps the merged specs.
 - `init!(p, Only(A, B), InitArgs(...))`: only A's and B's `init` run, on the current state; the rest is kept.
@@ -82,7 +84,7 @@ For selector syntax used in `Until`, see [Vars (`Var` Selectors)](@ref vars_user
 ## Waiting and Fetching
 
 - `wait(p)`: block until task completes.
-- `fetch(p)`: return the task return value.
+- `fetch(p)`: return the task return value. A context in it has the plan's registry, so `fetch(p)[handle]` works.
 
 In practice:
 
@@ -121,9 +123,11 @@ run(ip)
 Both process types take a repeat count as `repeats = 10_000` and a lifetime as
 `lifetime = Repeat(10_000)`; a number given as `lifetime` is an error.
 `run(ip)` runs the loop in the caller's task and returns the same final context as
-`fetch(p)` does for a `Process` (or the finalizer's result). Like a finished `Process`
+`fetch(p)` does for a `Process` (or the finalizer's result), with the plan's registry, so `run(ip)[handle]` works.
+`run(ip; async = Val(true))` runs it on a task (`@async`) and returns the task; `fetch` it for the result. Like a finished `Process`
 run, the process then stores only the persistent context: the run's runtime values
-(inputs and declared locals) are dropped. An `InlineProcess` cannot be paused.
+(inputs and declared locals) are dropped. An `InlineProcess` cannot be paused, so it never takes an `Indefinite()` lifetime, neither as its own nor for one
+run.
 `run(ip; context = ctx)` makes `ctx` (of the process's context type) its context
 before the run.
 

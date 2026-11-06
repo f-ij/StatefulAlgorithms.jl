@@ -48,7 +48,8 @@ Transform details:
 
 ## 2. Share Resolution
 
-`Share(a,b; directional=false)` is converted to `SharedContext` metadata:
+`Share(a,b; directional=false)` is resolved (`resolve_wiring(reg, ::Share)`, `src/RoutingInterface/Sharing.jl`) to
+resolved shares keyed by the target namespace, `Share{source_key, target_key, directional}`:
 
 - `a -> b`
 - and also `b -> a` when non-directional.
@@ -90,7 +91,7 @@ field is reinitialized.
 
 When creating `SubContextView` locations (`src/Context/View/Locations.jl`):
 
-- `SharedContext` contributes all variables from the shared subcontext.
+- A resolved share contributes all variables from the shared subcontext.
 - Route metadata contributes only specified routed vars, plus transform and
   reverse transform if provided.
 - Local fields whose storage type is `RedirectedVar` redirect their local

@@ -52,3 +52,5 @@ If you are new to the package, read these first:
 - [Context Internals](@ref context_internals)
 - [Routes, Shares, and Redirects Internals](@ref routes_shares_internals)
 - [Process Pipeline Internals](@ref process_pipeline_internals)
+- [User Handles and Loop Versions](@ref handles_loop_versions_internals)
+- [DSL Semantics](@ref dsl_semantics_internals)

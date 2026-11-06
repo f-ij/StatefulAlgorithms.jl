@@ -8,8 +8,9 @@ export run, reset
 """
     run(ip; context, repeats, lifetime, async = Val(false), inlined = Val(false), inputs...)
 
-One run of `ip` in the caller's task, from the context it holds (or `context`, which becomes its context), returning
-the run's result. `async = Val(true)` runs it on a task (`@async`) and returns the task; as a `Val`, the branch is
+One run of `ip`, in the caller's task, from the context it holds (or `context`, which becomes its context), returning
+the run's result with the plan's registry (`run(ip)[handle]` works). `async = Val(true)` runs it on a task (`@async`)
+and returns the task instead; as a `Val`, the branch is
 decided while compiling, so `run(ip)` compiles no task code. `inlined = Val(true)` pastes the loop into `run(ip)`: the context is not passed into a call and back
 (57-62 instead of 121-150 ns per `run(ip)` for the 616-byte context of the 3D Ising model with one step per run,
 measured on `refactor/plan-compiles`), but the loop's machine code is then made again for every caller, while the

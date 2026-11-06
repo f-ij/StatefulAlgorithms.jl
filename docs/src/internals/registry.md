@@ -30,15 +30,19 @@ Algorithms are added to a `RegistryBuilder` with `add!(builder, obj, multiplier)
 registry). Adding:
 
 1. Find/create the entry for the object's entry type.
-2. If no match exists, create a key with `Autokey` (`TypeName_index`) and wrap as `IdentifiableAlgo`.
-3. If a match exists, reuse the existing key and increase multiplier.
+2. If no match exists and the object has a given key (an `@alias`, a named state, `rename`) that a different algorithm
+   already has, it is an error ("rename one of them first", `check_key_unused`). States and algorithms are matched by
+   their id, never by name; making two states one is `@merge`.
+3. If no match exists, create a key with `Autokey` (`TypeName_index`) and wrap as `IdentifiableAlgo`.
+4. If a match exists, reuse the existing key and increase multiplier.
 
 Key consequences:
 
 - Same value entered repeatedly: same key reused.
 - Same type entered repeatedly: same key reused for that type identity.
 - Type-entered value vs value-entered value can still be different identities.
-- This stays true across nested `CompositeAlgorithm`/`Routine` trees because the whole tree is added to one `RegistryBuilder` in one walk before context creation (`build_registry_and_key_plan`, step 1 of `resolve`, `src/LoopAlgorithms/Resolving/Registering.jl`).
+- This stays true across nested `CompositeAlgorithm`/`Routine` trees because the whole tree is added to one `RegistryBuilder` in one walk before context creation (`build_registry_and_key_plan`, step 1 of `resolve`, `src/GeneratedCode/Registry/Setup.jl`; the walk on values is in
+`src/LoopAlgorithms/Resolving/Registering.jl`).
 
 ## 3. `Unique` and Distinguishability
 
@@ -72,10 +76,11 @@ steps below 4.7–4.8 ms). So the uuid (`origin`) is data and never changes; the
 5. The map lives only in registries. Plans and contexts the user gets keep it: the contexts of `setup`,
    `run(plan, context)` and `init(plan, context, ...)`, and a process's plan and context (`getalgo(p)`, `getcontext(p)`,
    `fetch(p)`); a process has no field of its own for it. Running the plan takes it out (`strip_keymap`): `setup` and
-   `init(plan, context, ...)` run `init` without it, and `prepare_for_loop` gives the loop the plan and `LoopContext`
-   without it, so `init` and the loop have no uuid in their types and compile once for every new set of `Unique`s. What
-   the loop gives back goes into the process's stored context, which keeps its registry (`_sync_state_context!`), or
-   gets the plan's registry back (`with_plan_registry`). SA's own code that needs a process's context without the map
+   `init(plan, context, ...)` run `init` without it, and `prepare_for_loop` gives the loop the plan without it and a
+   `LoopContext` whose context has no registry at all (`drop_registry`), so `init` and the loop have no uuid in their
+   types and compile once for every new set of `Unique`s. What the loop gives back goes into the context the user or the
+   process keeps, which keeps its registry (`_sync_state_context!`, `withsubcontexts` in `run(plan, context)`), or gets
+   the plan's registry back (`with_plan_registry`). SA's own code that needs a process's context without the map
    outside the loop reads `_getcontext_nokeymap(p)`.
 
 The matching and registry code ask a matcher only general questions (`matcher_equals`, `matches_type`,
@@ -101,8 +106,10 @@ That is the same key space used by:
 
 Important runtime detail in `NameSpaceRegistry.getindex`:
 
-- `Type`, direct immutable values, and `AbstractIdentifiableAlgo` values use the static lookup path.
-- other values use the dynamic lookup table keyed by `match_by(obj)`.
+- `reg[obj]` first numbers a held `Unique` handle by the registry's `UniqueKeyMap` (`number_held_handle`), then finds
+  the entry of `obj`'s entry type and, in it, the first algorithm `obj` matches (`findfirst_match`): decided while
+  compiling when the types decide it, otherwise at run time.
+- the entries' runtime lookup tables are kept, but no lookup uses them.
 
 So direct immutable instances can match equal values, while ordinary mutable
 instances match by object identity. `Unique(...)` gives an explicit fresh

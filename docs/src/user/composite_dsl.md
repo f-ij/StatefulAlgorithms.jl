@@ -50,6 +50,10 @@ algo = @CompositeAlgorithm begin
 end
 ```
 
+The name is the state's key, not its identity: two different states with the same name in one plan are an error
+("rename one of them first"). Rename one (`rename(plan, :learning_state => :other_name)`), or make them one state with
+`@merge` (see Explicit State Sharing).
+
 ## Runtime Inputs
 
 Declare per-run values with `@input`.
@@ -100,7 +104,8 @@ is the same as `algo = @CompositeAlgorithm begin @input temperature::AbstractFlo
 
 ## Aliases
 
-Use `@alias` to name an algorithm constructor or value for later DSL entries.
+Use `@alias` to name an algorithm constructor or value for later DSL entries. The alias is the algorithm's key in the
+context: two different algorithms with the same alias in one plan are an error ("rename one of them first").
 
 ```julia
 algo = @Routine begin

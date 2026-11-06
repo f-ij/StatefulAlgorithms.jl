@@ -5,7 +5,7 @@
 Persistent state for a resolved process.
 
 `ProcessContext` stores named subcontexts and the registry needed to resolve
-external references. Runtime inputs, loop handles, and transient step returns
+external references (with the plan's `UniqueKeyMap`); `nothing` in the contexts the loop works on (`drop_registry`). Runtime inputs, loop handles, and transient step returns
 live in a separate runtime `ProcessContext` passed explicitly through loop
 execution.
 """

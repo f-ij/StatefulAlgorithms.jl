@@ -9,13 +9,16 @@ execution.
 
 1. Turn `func` into a plan (`parse_plan`, `src/Processes/Construction.jl`): a plan or plan type as it is, anything
    else wrapped as a one-child `CompositeAlgorithm`.
-2. Make the lifetime (`parse_lifetime`): `repeats = n` becomes `Repeat(n)` (`repeats = Inf` becomes `Indefinite()`),
-   `lifetime` takes a `Lifetime`, at most one of the two; with neither, `default_lifetime` gives `Repeat(1)` for a
-   `Routine` and `Indefinite()` otherwise.
-3. Run `setup(algo, specs...; lifetime)` (resolves the plan and builds its context), or only resolve the plan when a
-   `context` is given.
-4. Store the resolved plan, the context (`Process.state_context`) and the specs (`Process.specs`) on the process.
-   `Process.runtime_context` holds a paused run's runtime context.
+2. Resolve the plan (its registry gets the plan's `UniqueKeyMap`), then make the lifetime (`parse_lifetime`):
+   `repeats = n` becomes `Repeat(n)` (`repeats = Inf` becomes `Indefinite()`), `lifetime` takes a `Lifetime`, at most
+   one of the two; with neither, `default_lifetime` gives `Repeat(1)` for a `Routine` and `Indefinite()` otherwise. A
+   given lifetime's `Var`s get the plan's numbers for its `Unique` handles (`number_by_keymap_dynamic`).
+3. Set up the context without the map (`_setup`: `init` compiles once for every set of `Unique` handles) and give it the
+   plan's registry back (`with_keymap`), or take the given `context`.
+4. Store the resolved plan (with the map), the context (`Process.state_context`) and the specs (`Process.specs`) on the
+   process. `Process.runtime_context` holds a paused run's runtime context.
+5. Register the process in `processlist` under its `list_ref`, compile its first run (`precompile_interface`,
+   `src/PrecompileInterface.jl`) and set the finalizer `remove_process!`, which only drops the list entry (no `close`).
 
 Construction goes `Process(...)` -> `_build_process` -> `_prepare_process` (the
 plan, its context and the lifetime) -> `_construct_process` (the process and its
@@ -53,13 +56,13 @@ context; with `Only(...)` it only rebuilds the subcontexts `Only` names.
 with `resume = true` when `p` is paused. `_start_run!`:
 
 - takes the state context (`getcontext(p)`),
-- calls `prepare_for_loop(p, context, inputs, lifetime, resume)`, the first call
+- calls `prepare_for_loop(p, context, inputs, resume)`, the first call
   of every run (Processes/Hooks.jl): the session the run runs in, the plan
-  and the `LoopContext` the run starts from: `LoopContext(plan, context)`
-  (the state context and the plan's declared locals), then `with_inputs`, which
+  without its `UniqueKeyMap` (`strip_keymap`) and the `LoopContext` the run starts from: `LoopContext(plan, context)`
+  (the state context without its registry, `drop_registry`, and the plan's declared locals), then `with_inputs`, which
   checks the inputs against the plan's `@input` metadata and adds them, and
 - spawns the loop task, which runs `_run_loop_and_store!`:
-  `run_session_loop(session, plan, loop_context, lifetime, resume)`, then `_store_run_contexts!`.
+  `run_session_loop(loopfunc, session, plan, loop_context, lifetime, resume)`, then `_store_run_contexts!`.
 
 `InlineProcess`, the manager's inline run and `run(plan, context)` start from
 `prepare_for_loop` too.
@@ -68,7 +71,8 @@ The entered `loop` method then builds or restores the per-run
 `AbstractLoopCursor` from the resolved plan.
 
 `run(plan, context; kwargs...)` runs a resolved plan directly on a user-held context
-with a fresh non-pausable loop cursor and returns the next persistent context and the run's result.
+with a fresh non-pausable loop cursor and returns the context you passed with the run's state values in it (it keeps
+its registry, so `context[handle]` still works) and the run's result.
 
 ## 4. Loop Bootstrap and Runtime Inputs
 
@@ -78,6 +82,11 @@ and its runtime context, as an argument, and the session instead of the process:
 ```julia
 loop(session, algo, loop_context, lifetime, resume)
 ```
+
+The loop's context has no registry, so everything that reads a `Var` gets the `Var`'s context key before the loop: the
+run's lifetime at the loop's start (`resolve_var_keys(lifetime, getregistry(plan))`; an `InlineProcess` gives its own
+lifetime its keys when it is built), and every `Var` in a schedule (a `RunIf`'s, a routine child's lifetime) when the
+plan is resolved (`resolve` step 5, `_resolve_schedule_vars`).
 
 The runtime context starts with the run's inputs (`:_inputs`, when there are
 any) and declared locals (`:_declared_locals`). A step adds a return
@@ -121,7 +130,9 @@ The completion paths distinguish stored state from the task result:
    cleaned persistent state plus the runtime subcontexts still present at the end
    (inputs and declared locals; returns have ended with their blocks).
    `FinalizedAlgorithm` instead passes that projection to its final function and
-   returns the function's result.
+   returns the function's result. The finalizer's context has the plan's registry
+   (`with_registry`), so it can read `ctx[A]`; the result `fetch(p)` gives has the
+   process's registry with the map (`with_plan_registry`).
 
 Paused processes resume through the normal `loop` path with a `Resuming{true}`
 entry trait; fresh runs use `Resuming{false}`. New runtime inputs, init specs, and

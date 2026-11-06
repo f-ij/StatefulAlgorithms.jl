@@ -41,3 +41,7 @@ suspicious while porting; nothing here is acted on yet unless it says so.
    `landau-ginzburg-relax` 2026-11-03) calls `StatefulAlgorithms.context`, renamed `getcontext` on main, so it does not
    load with main's SA either. The 3D throughput, phi and II test checks need InteractiveIsing ported to the current SA
    API first.
+6. **Two broken process functions, also on main** (found by the docs review, 2026-11-06; not fixed):
+   - `quitall()` (src/Processes/Process/Lifecycle.jl) calls `quit` on each `processlist` value, which is a `WeakRef`, not
+     the process (`quit` has no `WeakRef` method); it should use `.value` and skip collected entries.
+   - `cleanup(p::AbstractProcess)` (src/Processes/Context.jl) calls `tasklifetime(p)`, which is defined nowhere.

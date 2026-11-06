@@ -30,6 +30,10 @@ If you do not pass `lifetime`:
   which defaults to one pass (`Repeat(1)`)
 - an `InlineProcess` defaults to one pass (`Repeat(1)`)
 
+An `InlineProcess` never takes `Indefinite()` (nor `repeats = Inf`), neither as its own lifetime nor for one run: it
+runs in the caller's task and cannot be paused or closed, so the run would never end. Use a `Process`. A lifetime with
+its own stop condition (`Until`, `AtLeast`) is allowed.
+
 ## Explicit Lifetime Types
 
 These types are available in code:

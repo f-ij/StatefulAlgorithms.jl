@@ -49,7 +49,8 @@ The returned plan holds no context. The context is yours.
 
 - `repeats = n` or `lifetime = ...` sets how long the run lasts.
 - The other keywords are the plan's `@input` values for this run.
-- It returns the final context and the run's result, which is what the plan's finalizer returns.
+- It returns the final context and the run's result, which is what the plan's finalizer returns. The context is the
+  one you passed with the run's values in it, so it keeps its registry and `context[handle]` keeps working.
 - Values that exist only during a run (inputs, locals, returns) are dropped at the end; only the state comes back.
 
 ### `init`

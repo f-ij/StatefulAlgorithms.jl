@@ -1,6 +1,6 @@
 #=
-The list of live processes (`processlist`), by their `list_ref`, so a process can be found and quit without a reference
-to it.
+The live processes (`processlist`), by their `list_ref`, as weak references, so `quitall` can reach every process that
+is still referenced somewhere. A collected process only loses its entry (no `close`).
 =#
 """
 Module dict for managing alive processes if no active reference is alive
@@ -12,7 +12,3 @@ register_process!(p) = (processlist[p.list_ref] = WeakRef(p); p.list_ref)
 # of `Unique` handles, 12 ms on the old branch, when the garbage collector ran it).
 Base.@nospecializeinfer remove_process!(@nospecialize(p::Process)) = (pop!(processlist, getfield(p, :list_ref), nothing); nothing)
 
-# function Base.finalizer(p::Process)
-#     quit(p)
-#     delete!(processlist, p.id)
-# end
