@@ -28,11 +28,11 @@ end
 
 An `InlineProcess` run runs in the process's one session, on its plan, from `context` and the run's inputs
 (Processes/Hooks.jl). An `InlineProcess` cannot pause, so it never resumes. The loop gets plan and context without the
-plan's `UniqueKeyMap` (`strip_keymap_typed`), and the context without its registry (`LoopContext(plan, context)` drops
+plan's `UniqueKeyMap` (`loop_algo`, made once with the process), and the context without its registry (`LoopContext(plan, context)` drops
 it), so `loop` compiles once for every set of `Unique` handles.
 """
 @inline function prepare_for_loop(ip::IP, context::C, inputs::I, resume::Resuming{false}) where {IP<:InlineProcess, C<:ProcessContext, I<:NamedTuple}
-    algo = strip_keymap_typed(getalgo(ip))
+    algo = getfield(ip, :loop_algo)
     return getsession(ip), algo, (@inline with_inputs((@inline LoopContext(algo, context)), algo, inputs))
 end
 

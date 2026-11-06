@@ -11,7 +11,7 @@ Mainly used to compose algorithms in tight loops, plugging into the ProcessLoopA
 This doesn't provide the multitasking features of Process, but is faster to restart. A run runs in the caller's task:
 running on a task of its own is what `Process` is for.
 """
-mutable struct InlineProcess{TD,ContextType, Lt, S<:Tuple} <: AbstractProcess
+mutable struct InlineProcess{TD,ContextType, Lt, S<:Tuple, A} <: AbstractProcess
     const id::UUID
     # The plan; its registry holds the plan's `UniqueKeyMap`, so the type has it and `run(ip)` compiles once per set of
     # `Unique` handles. A run hands plan and context to the loop without it (`prepare_for_loop`).
@@ -28,4 +28,7 @@ mutable struct InlineProcess{TD,ContextType, Lt, S<:Tuple} <: AbstractProcess
     # The run's counter, one session for every run (Processes/InlineProcess/Session.jl): what the loop gets instead of the
     # process.
     const session::InlineSession
+    # `algo` without the plan's `UniqueKeyMap` (`strip_keymap`), made once with the process: the plan every run hands to
+    # the loop (`prepare_for_loop`), so a run does not rebuild it. Not a map: the map is only in `algo`'s registry.
+    const loop_algo::A
 end
