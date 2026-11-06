@@ -38,8 +38,8 @@ end
 """
     LoopContext(plan, context)
 
-The `LoopContext` a new run starts from: `context` as its persistent context and, as its runtime context, the plan's
-declared locals (`_declared_locals`). The run's inputs are added to it afterwards (`with_inputs`). A paused run that
+The `LoopContext` a new run starts from: `context` without its registry (`drop_registry`: no registry reaches the
+loop) as its persistent context and, as its runtime context, the plan's declared locals (`_declared_locals`). The run's inputs are added to it afterwards (`with_inputs`). A paused run that
 resumes does not start from it but from `LoopContext(context, runtime_context)`, with the runtime context its pause kept.
 
 Returns (`_captured_returns`, `_subcontext_returns`) are not in it: a step adds them where they are assigned and removes
@@ -53,7 +53,7 @@ would tie step code to the session type; most such uses belong in the plan (sche
     locals = collect_tree_locals(plan)
     runtime = isempty(locals) ? (@inline _empty_context()) :
               (@inline with_subcontext(_empty_context(), Val(:_declared_locals), SubContext{:_declared_locals}(locals)))
-    return LoopContext(context, runtime)
+    return LoopContext((@inline drop_registry(context)), runtime)
 end
 
 """Wraps a persistent context in a bundle with an empty runtime context, for looking at a context outside a loop."""

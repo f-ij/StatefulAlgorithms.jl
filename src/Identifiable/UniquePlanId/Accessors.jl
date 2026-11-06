@@ -21,10 +21,7 @@ Base.@nospecializeinfer function _registry_field(@nospecialize(x))
     x isa NameSpaceRegistry && return x
     x isa FinalizedAlgorithm && return _registry_field(getfield(x, :inner))
     x isa LoopAlgorithm && return getfield(x, :reg)
-    if x isa ProcessContext
-        ref = getfield(x, :reg)
-        return ref isa Base.RefValue ? ref[] : nothing
-    end
+    x isa ProcessContext && return getfield(x, :reg)
     return nothing
 end
 
@@ -42,13 +39,12 @@ Base.@nospecializeinfer function with_keymap(@nospecialize(x), @nospecialize(key
         entries = getfield(x, :entries)
         return new_instance(Core.apply_type(NameSpaceRegistry, typeof(entries), typeof(keymap)), entries, keymap)
     elseif x isa ProcessContext
-        ref = getfield(x, :reg)
-        ref isa Base.RefValue || return x
-        reg = with_keymap(ref[], keymap)
-        reg === ref[] && return x
-        newref = new_instance(Core.apply_type(Base.RefValue, typeof(reg)), reg)
+        reg = getfield(x, :reg)
+        reg isa NameSpaceRegistry || return x
+        newreg = with_keymap(reg, keymap)
+        newreg === reg && return x
         subcontexts = getfield(x, :subcontexts)
-        return new_instance(Core.apply_type(ProcessContext, typeof(subcontexts), typeof(newref)), subcontexts, newref)
+        return new_instance(Core.apply_type(ProcessContext, typeof(subcontexts), typeof(newreg)), subcontexts, newreg)
     elseif x isa FinalizedAlgorithm
         inner = with_keymap(getfield(x, :inner), keymap)
         inner === getfield(x, :inner) && return x
@@ -78,15 +74,14 @@ Base.@nospecializeinfer strip_keymap(@nospecialize(x)) = with_keymap(x, nothing)
     strip_keymap_typed(x) -> x without its registry's map
 
 `strip_keymap` for code typed on the map (a method of `InlineProcess`, whose plan and context have it in their types):
-the result's type is known where it is called, so that code stays inferred. For a context: same subcontexts, a new
-registry and `Ref`; for a `LoopAlgorithm`: same plan and options, the registry without the map. Anything else, or a
+the result's type is known where it is called, so that code stays inferred. For a context: same subcontexts, the
+registry without the map; for a `LoopAlgorithm`: same plan and options, the registry without the map. Anything else, or a
 registry without a map, as it is.
 """
-@inline function strip_keymap_typed(c::ProcessContext{D, Base.RefValue{NameSpaceRegistry{E, M}}}) where {D, E, M}
+@inline function strip_keymap_typed(c::ProcessContext{D, NameSpaceRegistry{E, M}}) where {D, E, M}
     M === Nothing && return c
-    reg = getfield(c, :reg)[]
-    newreg = NameSpaceRegistry{E, Nothing}(getfield(reg, :entries), nothing)
-    return ProcessContext{D, Base.RefValue{NameSpaceRegistry{E, Nothing}}}(getfield(c, :subcontexts), Ref(newreg))
+    newreg = NameSpaceRegistry{E, Nothing}(getfield(getfield(c, :reg), :entries), nothing)
+    return ProcessContext{D, NameSpaceRegistry{E, Nothing}}(getfield(c, :subcontexts), newreg)
 end
 @inline function strip_keymap_typed(la::LoopAlgorithm{Plan, O, NameSpaceRegistry{E, M}, id}) where {Plan, O, E, M, id}
     M === Nothing && return la

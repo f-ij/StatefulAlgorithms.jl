@@ -26,11 +26,13 @@ end
 """
     with_plan_registry(p, x) -> x with the map
 
-`x`, a context or result from the loop's side (its registry without the map), with the plan's `UniqueKeyMap` back in its
-registry (`getkeymap(getalgo(p))`): the way back from the loop to what the process keeps and hands out. Another value as
-it is. Untyped.
+`x`, a context or result from the loop's side (no registry), with the registry of `p`'s plan, which has the plan's
+`UniqueKeyMap`: the way back from the loop to what the process keeps and hands out. Another value as it is. Untyped.
 """
-Base.@nospecializeinfer with_plan_registry(@nospecialize(p::AbstractProcess), @nospecialize(x)) = with_keymap(x, getkeymap(getalgo(p)))
+Base.@nospecializeinfer function with_plan_registry(@nospecialize(p::AbstractProcess), @nospecialize(x))
+    x isa ProcessContext || return x
+    return ProcessContext(get_subcontexts(x), getregistry(getalgo(p)))
+end
 
 """
     _getcontext_nokeymap(p)

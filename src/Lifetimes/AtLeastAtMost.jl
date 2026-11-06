@@ -20,7 +20,7 @@ repeats(aam::AtLeastAtMost) = aam.repeats
     done >= lt.atleast && (@inline lt.cond((@inline getindex(context, lt.vars...))))
 
 # The same lifetime with its `Var`s given their context keys (`resolve_var_keys`, Lifetimes/Hooks.jl).
-@inline function resolve_var_keys(lt::AAM, context::C) where {V, F, AAM<:AtLeastAtMost{V, F}, C}
-    vars = @inline _resolve_var_keys(lt.vars, context)
+@inline function resolve_var_keys(lt::AAM, registry::R) where {V, F, AAM<:AtLeastAtMost{V, F}, R}
+    vars = @inline _resolve_var_keys(lt.vars, registry)
     return AtLeastAtMost{typeof(vars), F}(lt.atleast, lt.repeats, lt.cond, vars)
 end

@@ -27,7 +27,8 @@ function cleanup(algos::LA, persistent_context) where {LA<:LoopSpec}
 end
 
 function cleanup(algos::LA, lc::L) where {LA<:LoopSpec,L<:LoopContext}
-    named_algos = all_algos(getregistry(lc))
+    # From the plan's registry: the loop's context has none (`drop_registry`).
+    named_algos = all_algos(getregistry(algos))
 
     # Keep cleanup on the same statically unrolled path as init. A runtime loop
     # over heterogeneous registered algorithms boxes the returned context.

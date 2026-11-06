@@ -28,11 +28,12 @@ end
 
 An `InlineProcess` run runs in the process's one session, on its plan, from `context` and the run's inputs
 (Processes/Hooks.jl). An `InlineProcess` cannot pause, so it never resumes. The loop gets plan and context without the
-plan's `UniqueKeyMap` (`strip_keymap_typed`), so `loop` compiles once for every set of `Unique` handles.
+plan's `UniqueKeyMap` (`strip_keymap_typed`), and the context without its registry (`LoopContext(plan, context)` drops
+it), so `loop` compiles once for every set of `Unique` handles.
 """
 @inline function prepare_for_loop(ip::IP, context::C, inputs::I, resume::Resuming{false}) where {IP<:InlineProcess, C<:ProcessContext, I<:NamedTuple}
     algo = strip_keymap_typed(getalgo(ip))
-    return getsession(ip), algo, (@inline with_inputs((@inline LoopContext(algo, strip_keymap_typed(context))), algo, inputs))
+    return getsession(ip), algo, (@inline with_inputs((@inline LoopContext(algo, context)), algo, inputs))
 end
 
 """
@@ -56,10 +57,10 @@ end
 """
     with_plan_registry(ip::InlineProcess, x)
 
-A context the loop gives back (`x`, its registry without the map) with the registry of `ip`'s context, which has the
-plan's `UniqueKeyMap`: the same registry `Ref`, so this is typed and makes no registry. A value that is not a context
-as it is. (The untyped method for any process is in Processes/Context.jl.)
+A context the loop gives back (`x`, without a registry) with the registry of `ip`'s context, which has the plan's
+`UniqueKeyMap`. Typed. A value that is not a context as it is. (The untyped method for any process is in
+Processes/Context.jl.)
 """
 @inline with_plan_registry(ip::InlineProcess, c::ProcessContext{D}) where {D} =
-    ProcessContext{D, typeof(getfield(getcontext(ip), :reg))}(getfield(c, :subcontexts), getfield(getcontext(ip), :reg))
+    ProcessContext{D, typeof(getregistry(getcontext(ip)))}(get_subcontexts(c), getregistry(getcontext(ip)))
 @inline with_plan_registry(ip::InlineProcess, x) = x

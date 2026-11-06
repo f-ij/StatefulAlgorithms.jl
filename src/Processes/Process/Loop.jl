@@ -8,13 +8,13 @@ Starting and ending a `Process` run. `run(p)` calls `_start_run!`; the task it s
 
 Run at the start of every run. Gives the session, the plan and the `LoopContext` to start from: the state context
 plus the run's inputs, or, when resuming, plus the runtime context the pause kept. The plan and the context are the
-process's, with the plan's `UniqueKeyMap`; the loop gets both without it (`strip_keymap`), so it compiles once for every
-set of `Unique` handles.
+process's, with the plan's `UniqueKeyMap`; the loop gets the plan without it (`strip_keymap`) and the context without
+its registry (`LoopContext(plan, context)`, `drop_registry`), so it compiles once for every set of `Unique` handles.
 """
 function prepare_for_loop(p::InteractiveProcess, context::C, inputs::NamedTuple, resume::Resuming{false}) where {C<:ProcessContext}
     session = getsession(p)
     func = strip_keymap(getalgo(p))
-    return session, func, _process_loop_context(func, strip_keymap(context), inputs)
+    return session, func, _process_loop_context(func, drop_registry(context), inputs)
 end
 
 function prepare_for_loop(p::InteractiveProcess, context::C, inputs::NamedTuple, resume::Resuming{true}) where {C<:ProcessContext}
@@ -22,10 +22,11 @@ function prepare_for_loop(p::InteractiveProcess, context::C, inputs::NamedTuple,
     func = strip_keymap(getalgo(p))
     runtime_context = p.runtime_context
     p.runtime_context = nothing
-    return session, func, LoopContext(strip_keymap(context), runtime_context)
+    return session, func, LoopContext(drop_registry(context), runtime_context)
 end
 
-"""The `LoopContext` a new run starts from, from the plan and context without the map; compiled once per plan type."""
+"""The `LoopContext` a new run starts from, from the plan without the map and the context without its registry; compiled
+once per plan type."""
 @inline _process_loop_context(func::F, context::C, inputs::I) where {F, C<:ProcessContext, I<:NamedTuple} =
     with_inputs(LoopContext(func, context), func, inputs)
 

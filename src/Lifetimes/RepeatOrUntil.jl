@@ -19,7 +19,7 @@ repeats(rou::RepeatOrUntil) = rou.repeats
     (@inline lt.cond((@inline getindex(context, lt.vars...))))
 
 # The same lifetime with its `Var`s given their context keys (`resolve_var_keys`, Lifetimes/Hooks.jl).
-@inline function resolve_var_keys(lt::ROU, context::C) where {V, F, ROU<:RepeatOrUntil{V, F}, C}
-    vars = @inline _resolve_var_keys(lt.vars, context)
+@inline function resolve_var_keys(lt::ROU, registry::R) where {V, F, ROU<:RepeatOrUntil{V, F}, R}
+    vars = @inline _resolve_var_keys(lt.vars, registry)
     return RepeatOrUntil{typeof(vars), F}(lt.repeats, lt.cond, vars)
 end

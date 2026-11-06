@@ -16,12 +16,9 @@ Build a process context from named `SubContext` buckets.
         end
     end
     @assert isempty(bad_names) "All fields in ProcessContext subcontexts must be of type SubContext, but found non-SubContext fields: $bad_names"
-    @assert R <: Union{AbstractRegistry,Base.RefValue{<:AbstractRegistry},Nothing} "Registry must be `Nothing`, an AbstractRegistry or a Ref to one, got: $R"
-    if R <: AbstractRegistry
-        # Box the registry: contexts are rebuilt every step, and a boxed registry is
-        # carried as one pointer instead of being copied along with the subcontexts.
-        return :(ProcessContext{D,Base.RefValue{R}}(subcontexts, Ref(reg)))
-    end
+    @assert R <: Union{AbstractRegistry,Nothing} "Registry must be `Nothing` or an AbstractRegistry, got: $R"
+    # Held directly, not behind a `Ref`: the loop's contexts have no registry (`LoopContext(plan, context)` drops it),
+    # so the registry is never rebuilt along with them every step.
     return :(ProcessContext{D,R}(subcontexts, reg))
 end
 
@@ -32,11 +29,20 @@ end
 ############################################################################################
 
 @inline get_subcontexts(pc::ProcessContext) = getfield(pc, :subcontexts)
-"""Registry field as stored: a `Ref` to the registry, or `nothing`. Rebuilds pass this through."""
-@inline registryref(pc::ProcessContext) = getfield(pc, :reg)
-@inline getregistry(pc::ProcessContext) = _unref(registryref(pc))
-@inline _unref(ref::Base.RefValue) = ref[]
-@inline _unref(::Nothing) = nothing
+"""The context's registry, or `nothing` for a context the loop works on (`drop_registry`)."""
+@inline getregistry(pc::ProcessContext) = getfield(pc, :reg)
+
+"""
+    drop_registry(context) -> context
+
+`context` without its registry (`reg` is `nothing`): what the loop works on. The registry, with the plan's
+`UniqueKeyMap`, stays in the context the user and the process keep; what the loop gives back goes into that one
+(`withsubcontexts`). Done where the loop's context is made (`LoopContext(plan, context)`, a resumed run).
+"""
+@inline drop_registry(pc::ProcessContext{D}) where {D} = ProcessContext{D, Nothing}(get_subcontexts(pc), nothing)
+
+"""`context` with `registry` as its registry: for user code that reads a loop's context by algorithm (a finalizer)."""
+@inline with_registry(pc::ProcessContext{D}, registry::R) where {D, R} = ProcessContext{D, R}(get_subcontexts(pc), registry)
 
 """
 Return the subcontext named `name`; when there is no such subcontext, the captured return, input or declared local
@@ -111,7 +117,7 @@ end
 Return `pc` rebuilt with `subcontexts` in place of its subcontexts; the registry is kept.
 """
 @inline function withsubcontexts(pc::PC, subcontexts::D) where {PC<:ProcessContext,D<:NamedTuple}
-    return ProcessContext(subcontexts, registryref(pc))
+    return ProcessContext(subcontexts, getregistry(pc))
 end
 
 """Return `pc` with a named subcontext inserted or replaced."""

@@ -18,7 +18,8 @@ function Base.run(tp::TimedProcess; repeats = nothing, lifetime = nothing, kwarg
         isempty(kwargs) || error("Cannot pass new runtime inputs while resuming a paused TimedProcess.")
         isnothing(lt) || error("Cannot pass `repeats` or `lifetime` while resuming a paused TimedProcess: it keeps the lifetime it started with.")
     else
-        setlifetime!(getsession(tp), something(lt, StatefulAlgorithms.getlifetime(tp)))
+        # The lifetime's `Var`s by key, from the plan's registry: a tick's context has none.
+        setlifetime!(getsession(tp), resolve_var_keys(something(lt, StatefulAlgorithms.getlifetime(tp)), getregistry(getalgo(tp))))
         session, algo, lc = prepare_for_loop(tp, getcontext(tp), (; kwargs...), Resuming{false}())
         session.loop_cursor = starting_cursor(session, getplan(algo), Resuming{false}())
         tp.runtime_context = getruntime(lc)

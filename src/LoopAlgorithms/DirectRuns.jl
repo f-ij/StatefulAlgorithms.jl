@@ -159,7 +159,8 @@ Base.@nospecializeinfer function Base.run(@nospecialize(plan::LoopSpec), @nospec
     lt = parse_lifetime(number_by_keymap_dynamic(lifetime, getkeymap(plan)), isnothing(lifetime) ? repeats : nothing)
     session, loop_plan, lc = prepare_for_loop(plan, context, (; kwargs...), Resuming{false}())
     final_context, result = run_session_loop(session, loop_plan, lc, lt)
-    return with_keymap(final_context, getkeymap(plan)), result
+    # The loop's values go back into the user's context, which keeps its registry with the map.
+    return withsubcontexts(context, get_subcontexts(final_context)), result
 end
 
 """
@@ -227,14 +228,15 @@ end
 
 A plan run directly (`run(plan, context)`): a new `InlineSession` for the run (the loop needs a counter; nothing can pause or
 close a direct run), the plan, and the `LoopContext` from `context` and the run's inputs (Processes/Hooks.jl). The plan
-and the context are the user's, with the plan's `UniqueKeyMap`; the loop gets both without it (`strip_keymap`), so a
-new set of `Unique` handles compiles no loop again.
+and the context are the user's, with the plan's `UniqueKeyMap`; the loop gets the plan without it (`strip_keymap`) and
+the context without its registry (`drop_registry`), so a new set of `Unique` handles compiles no loop again.
 """
 Base.@nospecializeinfer function prepare_for_loop(@nospecialize(plan::LoopSpec), @nospecialize(context::ProcessContext), inputs::NamedTuple, resume::Resuming{false})
     loop_plan = strip_keymap(plan)
-    return InlineSession(), loop_plan, _direct_loop_context(loop_plan, strip_keymap(context), inputs)
+    return InlineSession(), loop_plan, _direct_loop_context(loop_plan, drop_registry(context), inputs)
 end
 
-"""The `LoopContext` of a direct run, from the plan and context without the map; compiled once per plan type."""
+"""The `LoopContext` of a direct run, from the plan without the map and the context without its registry; compiled once
+per plan type."""
 @inline _direct_loop_context(plan::LA, context::C, inputs::I) where {LA<:LoopSpec, C<:ProcessContext, I<:NamedTuple} =
     @inline with_inputs((@inline LoopContext(plan, context)), plan, inputs)

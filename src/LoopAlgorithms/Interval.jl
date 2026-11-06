@@ -220,6 +220,13 @@ end
 
 # TODO: check these two `should_run_schedule` methods and the names they use (`should_run_schedule`, `divides`,
 # `getcondition`, `getvars`).
+# A `RunIf` with its `Var`s given their context keys (`resolve_var_keys`, Lifetimes/Hooks.jl): when the plan is resolved,
+# so the condition reads by key in the loop, whose context has no registry.
+@inline function resolve_var_keys(runif::R, registry::Reg) where {V, F, I, R<:RunIf{V, F, I}, Reg}
+    vars = @inline _resolve_var_keys(getvars(runif), registry)
+    return RunIf{typeof(vars), F, I}(getcondition(runif), getfield(runif, :interval), vars)
+end
+
 @inline should_run_schedule(interval::I, loopidx::Int, context::C) where {I<:Interval, C} = @inline divides(loopidx, interval)
 
 @inline function should_run_schedule(runif::R, loopidx::Int, context::C) where {V, R<:RunIf{V}, C}

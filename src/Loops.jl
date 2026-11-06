@@ -2,11 +2,13 @@
     finalizer!(func, persistent_context, runtime_context, session, lifetime)
 
 Run cleanup and build the final result (`finalstep` gets `final_context`) while the run's runtime values are still
-there. Returns the persistent context and the result; the runtime values end with the run.
+there. Returns the persistent context and the result; the runtime values end with the run. The finalizer is user code
+that reads the context by algorithm (`context[A]`), so its context gets the plan's registry back (`with_registry`).
 """
 @inline function finalizer!(func::F, persistent_context::C, runtime_context::RC, session::S, lifetime::LT) where {F,C<:ProcessContext,RC<:ProcessContext,S<:ProcessSession,LT<:Lifetime}
     cleaned = @inline cleanup(func, LoopContext(persistent_context, runtime_context))
-    return (@inline getpersistent(cleaned)), (@inline loop_final_result(func, (@inline final_context(cleaned)), getruntime(cleaned)))
+    shown = @inline with_registry((@inline final_context(cleaned)), (@inline getregistry(func)))
+    return (@inline getpersistent(cleaned)), (@inline loop_final_result(func, shown, getruntime(cleaned)))
 end
 
 """Build the root wiring view for one loop execution."""
@@ -52,9 +54,9 @@ Run a single function in a loop indefinitely.
     step_cursor = @inline starting_cursor(session, step_plan, resume)
     persistent_context = @inline getpersistent(lc)
     runtime_context = @inline getruntime(lc)
-    # The lifetime's `Var`s by key: the stop check before every step does not load the registry. A lifetime whose
-    # `Var`s have their keys already (an `InlineProcess` gives them before the loop) stays as it is.
-    lifetime = @inline resolve_var_keys(lifetime, persistent_context)
+    # The lifetime's `Var`s by key, from the plan's registry: the loop's context has none. A lifetime whose `Var`s have
+    # their keys already (an `InlineProcess` gives them before the loop) stays as it is.
+    lifetime = @inline resolve_var_keys(lifetime, (@inline getregistry(func)))
 
     isresuming && @inline clear_pause!(session)
 
@@ -90,9 +92,9 @@ Base.@constprop :aggressive @inline function loop(session::S, algo::F, lc::LC, l
     step_cursor = @inline starting_cursor(session, step_plan, resume)
     persistent_context = @inline getpersistent(lc)
     runtime_context = @inline getruntime(lc)
-    # The lifetime's `Var`s by key: the stop check before every step does not load the registry. A lifetime whose
-    # `Var`s have their keys already (an `InlineProcess` gives them before the loop) stays as it is.
-    lifetime = @inline resolve_var_keys(lifetime, persistent_context)
+    # The lifetime's `Var`s by key, from the plan's registry: the loop's context has none. A lifetime whose `Var`s have
+    # their keys already (an `InlineProcess` gives them before the loop) stays as it is.
+    lifetime = @inline resolve_var_keys(lifetime, (@inline getregistry(algo)))
 
     isresuming && @inline clear_pause!(session)
 

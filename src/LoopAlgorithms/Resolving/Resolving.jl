@@ -14,8 +14,10 @@ Resolving a plan: everything that can only be decided once the whole composition
 4. Scopes: each plan node records (in its `PlanWiring` type) its scope, the declared locals and
    captured returns its children see by name (`Scope`), and routes that read them point at
    their slots.
+5. Schedule `Var`s: every `Var` in a schedule (a `RunIf`'s, a routine child's lifetime) gets the context key it reads,
+   as the loop's context has no registry.
 
-Steps 1 and 2 are in Registering.jl, step 3 in Wiring.jl, step 4 in Scopes.jl. `resolve` and the other entry points
+Steps 1 and 2 are in Registering.jl, step 3 in Wiring.jl, step 4 in Scopes.jl, step 5 below. `resolve` and the other entry points
 are below. Typed.jl is the inferred version of the steps. What a plan type provides (its getters, `rebuild_plan`) is in LoopAlgorithms/Interface.jl.
 =#
 
@@ -66,13 +68,14 @@ Base.@nospecializeinfer function _resolve_plan(@nospecialize(la::LoopSpec))
 end
 
 """
-Run steps 2 to 4 on `keyed_la`, a root wrapper that step 1 gave keys to with `registry`, and return it resolved, with the
+Run steps 2 to 5 on `keyed_la`, a root wrapper that step 1 gave keys to with `registry`, and return it resolved, with the
 `RootOption`s of its plan tree on it. Compiled once: the resolved wrapper is made with `new_instance`.
 """
 Base.@nospecializeinfer function _resolve_keyed_plan(@nospecialize(keyed_la::LoopAlgorithm), @nospecialize(registry::NameSpaceRegistry))
     keyed_plan = getfield(keyed_la, :plan)
     options = _collect_root_options_untyped(keyed_plan)
     plan = _resolve_scopes(_resolve_wiring(keyed_plan, registry, (;)), NoScope, "")   # 3. routes, shares; 4. scopes
+    plan = _resolve_schedule_vars(plan, registry)                                     # 5. the schedules' `Var`s
     check_redirect_cycles(registry, options)
     # 2. share the registry, with the resolved plan and the root options: `_attach_registry`, `setfield` and `setoptions`.
     p = typeof(keyed_la).parameters    # {Plan, O, R, id}
@@ -113,4 +116,34 @@ Base.@nospecializeinfer function _build_shared_registry_and_key_plans(@nospecial
         keyed[i] = register_tree!(builder, la isa LoopAlgorithm ? la : LoopAlgorithm(la))
     end
     return registry(builder), Tuple(keyed)
+end
+
+"""
+    _resolve_schedule_vars(plan, registry) -> plan
+
+Step 5: every `Var` in the schedules of `plan` and its nested plans (a `RunIf`'s, a routine child's lifetime) gets the
+context key of the subcontext it reads (`resolve_var_keys`), found in `registry`. The loop's context has no registry
+(`drop_registry`), so a schedule's `Var` is read by key. A plan whose schedules hold no `Var` comes back as it is.
+Untyped, as the other steps.
+"""
+Base.@nospecializeinfer function _resolve_schedule_vars(@nospecialize(plan::AbstractPlan), @nospecialize(registry::NameSpaceRegistry))
+    algos = getfield(plan, :funcs)
+    n = nfields(algos)
+    funcs = Vector{Any}(undef, n)
+    changed = false
+    for i in 1:n
+        child = getfield(algos, i)
+        if child isa AbstractPlan
+            resolved = _resolve_schedule_vars(child, registry)
+            changed |= resolved !== child
+            child = resolved
+        end
+        funcs[i] = child
+    end
+    changed && (plan = rebuild_plan(plan, Tuple(funcs), getfield(plan, :wiring)))
+    schedule = getschedule(plan)
+    schedule isa Tuple || return plan
+    entries = Any[resolve_var_keys(entry, registry) for entry in schedule]
+    all(i -> entries[i] === schedule[i], eachindex(entries)) && return plan
+    return setschedule(plan, Tuple(entries))
 end

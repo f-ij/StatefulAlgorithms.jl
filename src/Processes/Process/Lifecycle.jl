@@ -45,8 +45,9 @@ the same two contexts between its ticks.
 """
 function _cleanup_paused_process!(p::InteractiveProcess)
     plan = strip_keymap(getalgo(p))
-    cleaned = cleanup(plan, LoopContext(_getcontext_nokeymap(p), p.runtime_context))
-    p.lastresult = with_plan_registry(p, loop_final_result(plan, final_context(cleaned), getruntime(cleaned)))
+    cleaned = cleanup(plan, LoopContext(drop_registry(getcontext(p)), p.runtime_context))
+    shown = with_registry(final_context(cleaned), getregistry(getalgo(p)))   # the finalizer reads by algorithm
+    p.lastresult = with_plan_registry(p, loop_final_result(plan, shown, getruntime(cleaned)))
     p.runtime_context = nothing
     _sync_state_context!(p, getpersistent(cleaned))
     return p.lastresult
