@@ -40,6 +40,8 @@ end
 
 """The `InlineProcess` around a prepared plan, its context, specs and lifetime, with its one session."""
 function _construct_inline_process(algo::TD, context::C, specs::S, lifetime::Lt) where {TD, C, S<:Tuple, Lt}
+    # It runs in the caller's task and cannot be paused or closed: an `Indefinite` run would never end.
+    @assert !(lifetime isa Indefinite) "An InlineProcess cannot have an Indefinite lifetime: it cannot be paused or closed. Use a Process."
     loop_algo = strip_keymap(algo)   # untyped, once: also strips a `FinalizedAlgorithm`'s inner plan
     ip = InlineProcess{TD, C, Lt, S, typeof(loop_algo)}(uuid1(), algo, context, specs, lifetime, InlineSession(), loop_algo)
     precompile_interface(ip)   # src/PrecompileInterface.jl

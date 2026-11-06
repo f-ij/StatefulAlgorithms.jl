@@ -53,3 +53,14 @@ end
     @test isempty(named_overrides)
     @test @inferred(StatefulAlgorithms.resolve_process_inputs_overrides(resolved, specs)) == (named_inputs, named_overrides)
 end
+
+@testset "InlineProcess rejects an Indefinite lifetime" begin
+    @StepAlgorithm function IndefiniteCounter(@managed(count = 0))
+        @update count += 1
+    end
+    @test_throws AssertionError InlineProcess(IndefiniteCounter(); lifetime = Indefinite())
+    ip = InlineProcess(IndefiniteCounter(); repeats = 2)
+    @test_throws AssertionError setlifetime(ip, Indefinite())
+    @test_throws AssertionError run(ip; lifetime = Indefinite())
+    run(ip)   # a bounded run still works
+end

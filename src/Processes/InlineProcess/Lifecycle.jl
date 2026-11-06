@@ -23,6 +23,7 @@ default call into the loop (`run_session_loop`) is compiled once. As a `Val`, th
     # (`resolve_var_keys`), while compiling, before the call to the loop. The process's own lifetime has its keys from
     # when the process was built, so it stays as it is.
     run_lifetime = resolve_var_keys(something(parse_lifetime(isnothing(lifetime) ? lifetime : number_by_keymap(lifetime, getfield(getregistry(getalgo(p)), :keymap)), repeats), StatefulAlgorithms.getlifetime(p)), getregistry(getcontext(p)))
+    @assert !(run_lifetime isa Indefinite) "An InlineProcess cannot run with an Indefinite lifetime: it cannot be paused or closed. Use a Process."
     isasync && return @async _run_inline!(p, run_lifetime, runtime_inputs, inlined)
     return @inline _run_inline!(p, run_lifetime, runtime_inputs, inlined)
 end
@@ -34,6 +35,7 @@ end
     # (`resolve_var_keys`), while compiling, before the call to the loop. The process's own lifetime has its keys from
     # when the process was built, so it stays as it is.
     run_lifetime = resolve_var_keys(something(parse_lifetime(isnothing(lifetime) ? lifetime : number_by_keymap(lifetime, getfield(getregistry(getalgo(p)), :keymap)), repeats), StatefulAlgorithms.getlifetime(p)), getregistry(getcontext(p)))
+    @assert !(run_lifetime isa Indefinite) "An InlineProcess cannot run with an Indefinite lifetime: it cannot be paused or closed. Use a Process."
     runtime_inputs = _inline_runtime_inputs(algo, inputs_overrides, (; kwargs...))
     return @inline _run_inline!(p, run_lifetime, runtime_inputs, Val(false))
 end
