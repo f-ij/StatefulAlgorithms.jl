@@ -104,12 +104,6 @@ end
     end
 end
 
-@inline function Base.getindex(c::SubContext, vars::Var...)
-    ntuple(Val(length(vars))) do i
-        getindex(c, vars[i])
-    end
-end
-
 """
 Read a DSL runtime variable selector from `ProcessContext._captured_returns`.
 """
