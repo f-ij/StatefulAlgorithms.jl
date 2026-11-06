@@ -31,6 +31,12 @@ suspicious while porting; nothing here is acted on yet unless it says so.
    is stored by value in the process's context and put on the result (`with_plan_registry`), and its entries hold a
    `Vector` (`multipliers`) and a `Dict` (`dynamic_lookup`), so every store has GC write barriers. Making the registry
    plain data (those two moved out) is the TODO "Does a running loop need the registry?"; not measured.
+   Per step (2026-11-06, long runs, minimum over rounds, main against this branch): no case is slower here. Two `Unique`
+   counters 0.45 ns (both); `Process` 0.51-0.57 ns (both); a lifetime reading a `Unique`'s `Var`: `InlineProcess`
+   0.48-0.50 -> 0.46 ns, `Process` 1.65-1.68 -> 0.63-0.65 ns; a `RunIf` on a type's `Var` 0.25-0.33 -> 0.24 ns; a
+   routine child's lifetime on a type's `Var` 0.71-0.74 -> 0.66-0.67 ns (both sides also show 1.3-1.8 ns runs, likely
+   the slower cores). A `RunIf` or routine-child lifetime on a `Unique` handle's `Var` errors on main ("Wiring references
+   Var subcontext not found in registry") and runs here (0.24 ns, 0.67 ns).
 5. **The InteractiveIsing checks cannot run against main or this branch.** InteractiveIsing (all branches, newest
    `landau-ginzburg-relax` 2026-11-03) calls `StatefulAlgorithms.context`, renamed `getcontext` on main, so it does not
    load with main's SA either. The 3D throughput, phi and II test checks need InteractiveIsing ported to the current SA
