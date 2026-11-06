@@ -7,9 +7,11 @@ function _split_children_and_wiring(funcs::Tuple, options::Tuple)
     return raw, map(_append_withwiring_wires, funcs, _build_child_wiring(raw, options))
 end
 @inline _unwrap_with_wiring(child) = child
-@inline _unwrap_with_wiring(w::WithWiring) = getfield(w, :child)
+# A `WithWiring` passes through here only while a plan is built: not specialized on its wires.
+Base.@nospecializeinfer _unwrap_with_wiring(@nospecialize(w::WithWiring)) = getfield(w, :child)
 @inline _append_withwiring_wires(child, bucket) = bucket
-@inline _append_withwiring_wires(w::WithWiring, bucket::Wiring) = Wiring((routes(bucket)..., getfield(w, :wires)...), shares(bucket))
+Base.@nospecializeinfer _append_withwiring_wires(@nospecialize(w::WithWiring), @nospecialize(bucket::Wiring)) =
+    Wiring((routes(bucket)..., getfield(w, :wires)...), shares(bucket))
 _append_withwiring_wires(w::WithWiring, bucket) = error("`WithWiring` can only wire a concrete child, not the nested plan $(getfield(w, :child)).")
 
 """Point the routes that belong to this child (target namespace `OwnerMatcher`) at its namespace."""

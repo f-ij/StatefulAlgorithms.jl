@@ -9,6 +9,7 @@ include("Construction.jl")
 include("Updating.jl")
 include("Backend.jl")
 include("Resolving.jl")
+include("HookExtensions.jl")
 
 
 

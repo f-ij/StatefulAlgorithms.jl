@@ -23,12 +23,12 @@ Wiring that belongs to one plan child, attached by position: the target namespac
 
     CompositeAlgorithm(Sensor, WithWiring(Callable(total_energy, (:spins,), :energy), From(Var(Sensor, :state) => :spins)), ...)
 """
-struct WithWiring{C}
+struct WithWiring{C, W<:Tuple}
     child::C
-    # Untyped on purpose: the wires only travel to the plan constructor, which builds the typed
-    # wiring. Keeping their types (which include their source-namespace refs) out of `WithWiring`
-    # keeps the type of a plan's child list the same when an identical plan is built again.
-    wires::Tuple
+    # Typed, so that the `Unique` ids in the wires are found from the type, as everywhere else
+    # (`replace_unique_ids`). A `WithWiring` only lives until the plan constructor takes the wires into the plan's wiring
+    # (`_split_children_and_wiring`, which does not specialize on them), so a built plan never holds one.
+    wires::W
 end
 WithWiring(child, wires::Route...) = WithWiring(child, wires)
 @inline fixed_namespace(w::WithWiring) = fixed_namespace(getfield(w, :child))

@@ -1,12 +1,25 @@
 """
-    list_field_derived_params(T) -> tuple of (param, field, derive)
+    rebuild_with_fields(x, fields::Vector{Any}) -> x's kind of value with `fields`
 
-The type parameters of `T` that are worked out from one of its fields: parameter `param` is `derive(field value)`.
-After a rewrite of the `UniquePlanId`s in a value (`rewrite_unique_ids`), each is worked out again from the rewritten
-field, so an id made dynamic or numbered in a field is so in the type too. A field that is `nothing` keeps
-its parameter. Default `()`.
-Extended by: `IdentifiableAlgo` (its id from its `matcher` field, `static_id`); `Route`, `Share`, `Redirect` (their
-matcher types from their endpoint fields, `scref_match`). A `Var` needs none: its only matcher parameter is the type
-of its `matcher` field.
+`x` built again with new field values, as `replace_unique_ids` does to each struct on a path to a replaced id. Default:
+a tuple or named tuple of `fields`; a struct of `x`'s type with each type parameter that a field is declared as set to
+that field's new type, the others kept. A type with a parameter worked out from a field in another way adds a method.
+Extended by: `IdentifiableAlgo` (its id from its matcher, Identifiable/HookExtensions.jl); `Route`, `Share`,
+`Redirect` (their endpoint matchers, RoutingInterface/HookExtensions.jl).
 """
-list_field_derived_params(@nospecialize(T)) = ()
+Base.@nospecializeinfer function rebuild_with_fields(@nospecialize(x), fields::Vector{Any})
+    x isa Tuple && return Core._apply_iterate(iterate, tuple, fields)
+    T = typeof(x)
+    x isa NamedTuple && return NamedTuple{T.parameters[1]}(Core._apply_iterate(iterate, tuple, fields))
+    return new_instance(Core.apply_type(T.name.wrapper, _params_from_fields(T, fields)...), fields...)
+end
+
+# The type parameters of `T` with each one a field is declared as set to that field's new type.
+Base.@nospecializeinfer function _params_from_fields(@nospecialize(T::DataType), fields::Vector{Any})
+    params = Any[T.parameters...]
+    for i in eachindex(fields)
+        j = _field_parameter_index(T, i)
+        isnothing(j) || (params[j] = typeof(fields[i]))
+    end
+    return params
+end

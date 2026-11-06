@@ -57,10 +57,11 @@ steps below 4.7–4.8 ms). So the uuid (`origin`) is data and never changes; the
 | 2 | `:dynamic` | `strip_unique`; `DynamicUnique(f)` | a constructor or DSL block takes the handle; a DSL block makes its own `@state`: the same type for every handle |
 | 3 | `k` = 1, 2, ... | `number_unique_ids` | a plan is resolved: each new uuid gets the next number |
 
-1. Every holder of an id keeps it as a value next to its type, so both rewrites (strip and number) reach it: a handle in
-   its `matcher` field, a route in its endpoint fields, a `Var` in its `matcher` field. A `Var`'s type parameter is
-   that field's type, so the rewrite updates it with the field. The other holders also copy the id into a separate
-   type parameter, which is worked out again from the field (`list_field_derived_params`).
+1. Every holder of an id keeps it as a value next to its type, so the one replacement (`replace_unique_ids`, which
+   strips, numbers and maps) reaches it: a handle in its `matcher` field, a route in its endpoint fields, a `Var` in its
+   `matcher` field. It finds them from the value's type once (`unique_id_locations`) and rebuilds the value along those
+   paths only. A `Var`'s type parameter is that field's type, so it follows the field. The other holders also copy the
+   id into a separate type parameter, worked out again when they are rebuilt (`rebuild_with_fields`).
 2. A plan's schedule (a `Routine`'s lifetimes, a composite's intervals, which may hold `Var`s) is a field; the plan's
    type has only the schedule's type, in which an id is `UniquePlanId{k}`: which handle within the plan.
 3. The registry stores each handle numbered, as the plan has it.
@@ -79,8 +80,8 @@ steps below 4.7–4.8 ms). So the uuid (`origin`) is data and never changes; the
 
 The matching and registry code ask a matcher only general questions (`matcher_equals`, `matches_type`,
 `lower_to_lookupkey`, `carries_data`); `UniquePlanId` answers them in `src/Identifiable/UniquePlanId/HookExtensions.jl`. A
-holder says which of its type parameters come from its fields with `list_field_derived_params`
-(`src/Identifiable/UniquePlanId/Hooks.jl`). A plan's schedule is changed only through `setschedule`
+holder whose type parameters come from its fields in another way than being their types rebuilds itself with
+`rebuild_with_fields` (`src/Identifiable/UniquePlanId/Hooks.jl`). A plan's schedule is changed only through `setschedule`
 (`src/LoopAlgorithms/ParameterReplacement.jl`).
 
 This is the mechanism used when you need multiple logically separate instances of the same algorithm in one composition.

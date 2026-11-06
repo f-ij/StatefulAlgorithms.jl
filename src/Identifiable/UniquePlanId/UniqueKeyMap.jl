@@ -61,69 +61,51 @@ map, decided while compiling. Any other value, a handle the map does not have, o
 end
 @inline numbered_handle(obj, ::Type) = obj
 
+# The expression that builds `ex` (a value of type `T`) with the ids at `locations[lo:hi]` numbered by `mode`, worked
+# out from `T` alone, as `replace_unique_ids` builds the value (`_rebuild_along`): each struct on a path gets the type
+# `replace_ids_in_type` gives, so a parameter a holder works out from a field (a handle's id, a route's matchers) is
+# numbered from its own uuid, as the field is. Runs while generating code.
+function _numbered_expr(@nospecialize(T), ex, locations::Vector{UniqueIdLocation}, lo::Int, hi::Int, depth::Int, mode::_MapIds)
+    if length(locations[lo].path) == depth
+        holds_type(locations[lo]) && return QuoteNode(replace_ids_in_type(T.parameters[1], mode))
+        NT = replace_type_id(mode, T)
+        return NT === T ? ex : :($NT(origin($ex)))
+    end
+    exprs = Any[:(getfield($ex, $i)) for i in 1:fieldcount(T)]
+    first_of_group = lo
+    while first_of_group <= hi
+        i = step_index(locations[first_of_group].path[depth + 1])
+        last_of_group = first_of_group
+        while last_of_group < hi && step_index(locations[last_of_group + 1].path[depth + 1]) == i
+            last_of_group += 1
+        end
+        exprs[i] = _numbered_expr(fieldtype(T, i), exprs[i], locations, first_of_group, last_of_group, depth + 1, mode)
+        first_of_group = last_of_group + 1
+    end
+    T <: Tuple && return :(tuple($(exprs...)))
+    T <: NamedTuple && return :(NamedTuple{$(T.parameters[1])}(tuple($(exprs...))))
+    return Expr(:new, replace_ids_in_type(T, mode), exprs...)
+end
+
 """
     number_by_keymap(x, keymap::UniqueKeyMap) -> x, numbered as the plan numbers its handles
 
 What `number_by_keymap_dynamic` does, decided while compiling: the numbered value is built by code generated for
 `typeof(x)` and the map's type, so it is inferred and costs no walk at run time. Used by the typed handles
-(`run(ip; lifetime)`, `run(p; lifetime)`), whose plan's type has the map. Compiled once per value type and map, as the handle's
-own methods are. Where the type alone does not say how to number (an id dynamic or numbered elsewhere, whose uuid is
-only in the value; a holder whose type parameters are worked out from its fields, `list_field_derived_params`; a
-field of an abstract type), it numbers at run time (`number_by_keymap_dynamic`), not inferred. With no map (`nothing`)
-`x` as it is.
+(`run(ip; lifetime)`, `run(p; lifetime)`, a manager's per-job lifetime), whose type has the map. Compiled once per value
+type and map, as the handle's own methods are. When an id in `x` is not held (dynamic or numbered elsewhere: its uuid is
+only in the value), it numbers at run time (`number_by_keymap_dynamic`), not inferred. With no map (`nothing`) `x` as it
+is.
 """
 @generated function number_by_keymap(x::X, keymap::K) where {X, K<:UniqueKeyMap}
     numbers = Dict{UUID, Int}()
     for pair in K.parameters[1]
         numbers[pair.second] = pair.first
     end
-    built = _build_numbered_expr(X, :x, _MapIds(numbers), IdDict{Any, Bool}())
-    isnothing(built) && return :(number_by_keymap_dynamic(x, keymap))
-    return first(built)
+    # A mutable value with ids in it cannot be rebuilt: `number_by_keymap_dynamic` reports it.
+    locations = try unique_id_locations(X) catch; return :(number_by_keymap_dynamic(x, keymap)) end
+    isempty(locations) && return :x
+    all(l -> holds_type(l) || is_held_unique_id(l.leaftype), locations) || return :(number_by_keymap_dynamic(x, keymap))
+    return _numbered_expr(X, :x, locations, 1, length(locations), 0, _MapIds(numbers))
 end
 @inline number_by_keymap(x, ::Nothing) = x
-
-# `(expression, type)` of `ex` (a value of type `T`) numbered by `mode`, worked out from `T` alone, or `nothing` when
-# `T` does not say how (see `number_by_keymap`). Runs while generating code.
-function _build_numbered_expr(@nospecialize(T), ex, mode::_MapIds, cache::IdDict{Any, Bool})
-    T isa DataType || return nothing
-    _may_hold_unique_ids(T, cache) || return (ex, T)
-    if T <: UniquePlanId
-        is_held_unique_id(T) || return nothing
-        k = get(mode.numbers, plan_number(T), nothing)
-        isnothing(k) && return (ex, T)
-        return (:(UniquePlanId{$k}(origin($ex))), UniquePlanId{k})
-    end
-    if T <: Type
-        NewType = _rewrite_type(T.parameters[1], mode, cache)
-        return (QuoteNode(NewType), Type{NewType})
-    end
-    ismutabletype(T) && return nothing
-    isempty(list_field_derived_params(T)) || return nothing
-    exprs = Any[]
-    types = Any[]
-    for i in 1:fieldcount(T)
-        built = _build_numbered_expr(fieldtype(T, i), :(getfield($ex, $i)), mode, cache)
-        isnothing(built) && return nothing
-        push!(exprs, built[1])
-        push!(types, built[2])
-    end
-    T <: Tuple && return (:(tuple($(exprs...))), Tuple{types...})
-    if T <: NamedTuple
-        names = T.parameters[1]
-        return (:(NamedTuple{$names}(tuple($(exprs...)))), NamedTuple{names, Tuple{types...}})
-    end
-    params = Any[T.parameters...]
-    from_field = falses(length(params))
-    for i in eachindex(types)
-        j = _field_parameter_index(T, i)
-        isnothing(j) && continue
-        params[j] = types[i]
-        from_field[j] = true
-    end
-    for j in eachindex(params)
-        from_field[j] || params[j] isa TypeVar || (params[j] = _rewrite_value(params[j], mode, cache))
-    end
-    NT = Core.apply_type(T.name.wrapper, params...)
-    return (Expr(:new, NT, exprs...), NT)
-end

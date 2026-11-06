@@ -29,9 +29,6 @@ struct IdentifiableAlgo{F, Id, VarAliases, AlgoName, Key, M} <: AbstractIdentifi
     matcher::M
 end
 
-# The type-level id (parameter 2) follows the matcher in the `matcher` field, when it carries data.
-list_field_derived_params(::Type{<:IdentifiableAlgo}) = ((2, 2, static_id),)
-
 """Whether the handle type `T` keeps its matcher as data (`carries_data`), next to its type-level id."""
 keeps_matcher_data(@nospecialize(T::Type)) = T <: IdentifiableAlgo && fieldtype(T, :matcher) !== Nothing
 

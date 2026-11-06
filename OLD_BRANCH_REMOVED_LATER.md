@@ -21,7 +21,7 @@ These came in with #1-#23 and are, or will be, removed by a later row:
 | `is_found_by_data` (hook) | #4 | #41 | still in; goes with #41 |
 | `_is_merged_id`, `is_given_id` | #6, #4 | #48 | still in; go with #48 |
 | `KeyMatcher{key}`; `Var` as its own struct (`matcher` field) | #19 | #101, #100 | still in; go with #100/#101 |
-| `list_field_derived_params` returns `(param, field, derive)` specs | #4 | survives at the old tip; deleted by `9d5c7936` (one function replaces the ids in a value, no such hook) | stays until row #107, where `9d5c7936` is ported (moved from monolithic-resolve, 2026-11-06) |
+| `list_field_derived_params` returns `(param, field, derive)` specs | #4 | survives at the old tip; deleted by `9d5c7936` (one function replaces the ids in a value, no such hook) | removed with row #107 (`9d5c7936`, moved from monolithic-resolve, 2026-11-06) |
 
 ## 2. Not to port (introduced and removed again on the old branch)
 
