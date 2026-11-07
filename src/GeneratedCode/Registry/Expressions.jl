@@ -42,14 +42,14 @@ The expression that builds the registry `builder` holds (filled by the walk on t
 `registry(builder)` builds from values: the registry's type written out, its algorithms read from the plan or
 constants (`build_known_entry`).
 """
-Base.@nospecializeinfer function write_registry_expr(b::RegistryBuilder)
+function write_registry_expr(b::RegistryBuilder)
     entries = Any[build_known_entry(entry) for entry in b.entries]
     all_entries = build_tuple(entries, GeneratedValue(Nothing, nothing))
     return build_from_parts(NameSpaceRegistry{all_entries.valuetype, Nothing}, Any[all_entries, GeneratedValue(Nothing, nothing)]).value_expr
 end
 
 """The `GeneratedValue` of the registry entry that `entry` (of a builder filled by the walk on types) holds."""
-Base.@nospecializeinfer function build_known_entry(entry::TypeEntryBuilder)
+function build_known_entry(entry::TypeEntryBuilder)
     algos = build_tuple(entry.algos, GeneratedValue(Nothing, nothing))
     multipliers = GeneratedValue(Vector{Float64}, write_multipliers_expr(entry.multipliers))
     lookup = GeneratedValue(Dict{LookupKey,Int}, write_lookup_table_expr(entry.algos))
@@ -60,7 +60,7 @@ end
 The expression that gives an entry's multipliers: a constant when all are numbers (states), else the vector built
 from their expressions (`compute_multiplier` of an algorithm's schedule entries, `read_multipliers`).
 """
-Base.@nospecializeinfer function write_multipliers_expr(multipliers::Vector{Any})
+function write_multipliers_expr(multipliers::Vector{Any})
     all(m -> m isa Number, multipliers) && return QuoteNode(Float64[multipliers...])
     return Expr(:call, collect_multipliers, multipliers...)
 end
@@ -76,7 +76,7 @@ types): `LookupKey(algo)` => its position for each. A key the algorithm's type d
 now, the others (a `Unique` handle's) by the generated code, `LookupKey(<the algorithm's expression>)`. The table of the
 known keys is a constant; with other keys, a copy of it with those added.
 """
-Base.@nospecializeinfer function write_lookup_table_expr(algos::Vector{Any})
+function write_lookup_table_expr(algos::Vector{Any})
     known_keys, known_idxs = LookupKey[], Int[]
     runtime = Any[]
     for (i, algo) in enumerate(algos)

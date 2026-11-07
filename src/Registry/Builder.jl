@@ -224,7 +224,7 @@ end
 The registry `builder` (filled with values) holds: one `RegistryTypeEntry{E, Tuple{algorithm types...}}` per entry
 type, in order, with its multipliers and lookup table. Each type is built once, its constructor called on the values.
 """
-Base.@nospecializeinfer function registry(b::RegistryBuilder{Float64})
+function registry(b::RegistryBuilder{Float64})
     typeentries = Vector{Any}(undef, length(b.entries))
     for (i, entry) in enumerate(b.entries)
         algos = Tuple(entry.algos)
