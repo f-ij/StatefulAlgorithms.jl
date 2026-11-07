@@ -4,7 +4,8 @@ a concrete plan type and a caller that knows the plan type gets the resolved typ
 use it: inferring and compiling the pipeline as one function costs more for the first resolve of a plan than the
 untyped steps, and gives nothing to a caller that gets `Any` from `resolve` anyway.
 
-Steps 1 and 2 (registry, attaching it) are shared with `resolve`; steps 3 and 4 have typed versions here.
+Steps 1 and 2 (registry, attaching it) are shared with `resolve`; steps 3 to 5 have typed versions here.
+ReLayoutTest.jl checks that both give the same type, also with a `Var` in a schedule (step 5).
 
 Preserved on purpose: nothing in the package calls this yet, but it stays, in this file apart from the untyped steps.
 When an untyped step is changed (e.g. to compile less), its inferred twin here is kept.
@@ -25,6 +26,7 @@ When an untyped step is changed (e.g. to compile less), its inferred twin here i
     keyed_la = _attach_registry(keyed_la, registry)                             # 2. share the registry
     plan = _resolve_wiring_typed(getplan(keyed_la), registry, (;))    # 3. routes, shares
     plan = _resolve_scopes_typed(plan, NoScope, Val(()))                        # 4. scopes
+    plan = _resolve_schedule_vars_typed(plan, registry)                         # 5. the schedules' `Var`s
     options = _collect_root_options(keyed_la)
     check_redirect_cycles(registry, options)
     return setoptions(setfield(keyed_la, :plan, plan), options)
@@ -152,6 +154,24 @@ _point_route_at_storage_typed(r::Route{:_declared_locals, To, T, RT, V, A}, ::Ty
     Route{:_declared_locals, To, T, RT, _look_up_storage_names_typed(scope_locals(Sc), V, "local", "declared"), A, Nothing, Nothing}()
 _point_route_at_storage_typed(r::Route{:_captured_returns, To, T, RT, V, A}, ::Type{Sc}) where {To, T, RT, V, A, Sc} =
     Route{:_captured_returns, To, T, RT, _look_up_storage_names_typed(scope_returns(Sc), V, "return", "captured by a call"), A, Nothing, Nothing}()
+
+"""
+The inferred `_resolve_schedule_vars` (Resolving.jl, step 5): every `Var` in the schedules of `plan` and its nested
+plans gets the context key it reads (`resolve_var_keys`), found in `registry`.
+"""
+@inline function _resolve_schedule_vars_typed(plan::P, registry::R) where {P<:AbstractPlan, R<:NameSpaceRegistry}
+    plan = rebuild_loopalgorithm_funcs(plan, _resolve_child_schedule_vars_typed(getalgos(plan), registry))
+    schedule = getschedule(plan)
+    schedule isa Tuple || return plan
+    return setfield(plan, fieldname(typeof(plan), 2), map(entry -> resolve_var_keys(entry, registry), schedule))
+end
+# Tuple recursion, not a closure in `map`, for the reason at `_resolve_child_plans_typed`.
+@inline _resolve_child_schedule_vars_typed(::Tuple{}, registry::R) where {R<:NameSpaceRegistry} = ()
+@inline _resolve_child_schedule_vars_typed(children::C, registry::R) where {C<:Tuple, R<:NameSpaceRegistry} =
+    (_resolve_child_schedule_var_typed(first(children), registry), _resolve_child_schedule_vars_typed(Base.tail(children), registry)...)
+@inline _resolve_child_schedule_var_typed(child::C, registry::R) where {C<:AbstractPlan, R<:NameSpaceRegistry} =
+    _resolve_schedule_vars_typed(child, registry)
+@inline _resolve_child_schedule_var_typed(child::C, ::R) where {C, R<:NameSpaceRegistry} = child
 
 """The inferred `_look_up_storage_names` (Scopes.jl)."""
 _look_up_storage_names_typed(storage::NamedTuple, names::Tuple, kind, how) = map(name -> _look_up_storage_names_typed(storage, name, kind, how), names)

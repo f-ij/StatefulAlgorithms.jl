@@ -101,6 +101,14 @@ rl_var_runif(k) = (b = Unique(RLCounter()); CompositeAlgorithm(b, RLReader, (1, 
     end
 end
 
+@testset "The untyped and the typed resolve give the same type with a Var in the schedule" begin
+    # Step 5 (each schedule `Var` gets its context key) is in both resolves; the key is in the `Var`'s type.
+    rl_var_nested(k) = CompositeAlgorithm(rl_var_runif(k), (1,))
+    for plan in (rl_var_lifetime(0), rl_var_runif(0), rl_var_nested(0))
+        @test typeof(StatefulAlgorithms.strip_keymap(resolve(plan))) === typeof(@inferred StatefulAlgorithms._resolve_plan_typed(StatefulAlgorithms.number_unique_ids(plan)))
+    end
+end
+
 @testset "A RunIf on a Unique handle's Var in a nested composite" begin
     b = Unique(RLCounter())
     inner = CompositeAlgorithm(b, RLReader, (1, RunIf(x -> x >= 4.0, Var(b, :x))), Route(b => RLReader, :x))
