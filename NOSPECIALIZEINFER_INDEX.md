@@ -67,9 +67,9 @@ Totals: 158 blocks; dispatch only 9, generator 13, typed 55, untyped only 81.
 
 | function | @nospecialize arguments | callers | note |
 |---|---|---|---|
-| `IdentifiableAlgo` | f | typed | Autokey, DSL owner code, edit backend (typed per algorithm type); result Any |
-| `IdentifiableAlgo` | f | typed | Autokey, DSL owner code, edit backend (typed per algorithm type); result Any |
-| `IdentifiableAlgo` | f, (unnamed) | typed | Autokey, DSL owner code, edit backend (typed per algorithm type); result Any |
+| `IdentifiableAlgo` | f | typed | DSL owner code, constructor parsing, edit backend (typed per algorithm type; Autokey is untyped since `85500883`); result Any; open, see TODO.md |
+| `IdentifiableAlgo` | f | typed | DSL owner code, constructor parsing, edit backend (typed per algorithm type; Autokey is untyped since `85500883`); result Any; open, see TODO.md |
+| `IdentifiableAlgo` | f, (unnamed) | typed | DSL owner code, constructor parsing, edit backend (typed per algorithm type; Autokey is untyped since `85500883`); result Any; open, see TODO.md |
 | `Unique` | f | typed | user code (typed per algorithm type); result Any |
 | `DynamicUnique` | f | typed | DSL block code (typed per state type); result Any |
 | `unique_with_id` | f, id | untyped only |  |
