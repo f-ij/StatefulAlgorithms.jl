@@ -33,6 +33,12 @@ whole registry and the keyed plan; the code returned only reads the values the t
 puts them in place (the rest are constants, `is_known_value`). When a step needs the values (`NeedsValues`), the code returned calls
 `build_registry_from_values(la)`; any other error of the walk is thrown, so a bug on the types path does not silently
 move a plan to the run-time path.
+
+No dynamic ids reach this walk: `resolve` numbers every `Unique` handle (`number_unique_ids`) before step 1, so each
+`UniquePlanId` in `LA` is numbered (`UniquePlanId{k}`) or held (`UniquePlanId{uuid}`), and its type tells it apart.
+The walk does not check this. A dynamic id here (`UniquePlanId{:dynamic}`, the same type for every handle) is a bug in
+the caller: its handles would be taken for one algorithm. Tested in RegistryBuildTest.jl ("no dynamic ids reach the
+registry build").
 """
 Base.@nospecializeinfer function generate_registry_setup(@nospecialize(LA))
     builder = RegistryBuilder{Any}()

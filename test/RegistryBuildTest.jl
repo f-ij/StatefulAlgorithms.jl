@@ -183,6 +183,16 @@ end
     @test rb_same_setup(RB.build_registry_and_key_plan(deep_la), RB.build_registry_from_values(deep_la))
 end
 
+@testset "Registry build: no dynamic ids reach the registry build" begin
+    # `generate_registry_setup` does not check for dynamic ids: `resolve` numbers them first. Two handles of one
+    # algorithm, dynamic before `resolve`, are two entries after it.
+    dynamic_ids(x) = count(l -> l.leaftype === RB.DynamicPlanId, RB.unique_id_locations(typeof(x)))
+    plan = CompositeAlgorithm(RB.DynamicUnique(RBSrc), RB.DynamicUnique(RBSrc), (1, 1))
+    @test dynamic_ids(plan) == 2
+    @test dynamic_ids(rb_loopalgorithm(plan)) == 0
+    @test RB.all_keys(RB.getregistry(resolve(plan))) == (:RBSrc_1, :RBSrc_2)
+end
+
 @testset "Registry: a Unique handle is found in every form, with or without the plan's map" begin
     a, b = Unique(RBSrc), Unique(RBSrc)
     reg = RB.getregistry(resolve(CompositeAlgorithm(a, b, (1, 1))))
