@@ -186,7 +186,11 @@ end
 @testset "Registry build: no dynamic ids reach the registry build" begin
     # `generate_registry_setup` does not check for dynamic ids: `resolve` numbers them first. Two handles of one
     # algorithm, dynamic before `resolve`, are two entries after it.
-    dynamic_ids(x) = count(l -> l.leaftype === RB.DynamicPlanId, RB.unique_id_locations(typeof(x)))
+    function dynamic_ids(x)
+        n = Ref(0)
+        RB.map_matchers_of_type(RB.UniquePlanId, x, id -> (RB.is_dynamic_unique_id(id) && (n[] += 1); id))
+        return n[]
+    end
     plan = CompositeAlgorithm(RB.DynamicUnique(RBSrc), RB.DynamicUnique(RBSrc), (1, 1))
     @test dynamic_ids(plan) == 2
     @test dynamic_ids(rb_loopalgorithm(plan)) == 0

@@ -61,11 +61,11 @@ steps below 4.7–4.8 ms). So the uuid (`origin`) is data and never changes; the
 | 2 | `:dynamic` | `strip_unique`; `DynamicUnique(f)` | a constructor or DSL block takes the handle; a DSL block makes its own `@state`: the same type for every handle |
 | 3 | `k` = 1, 2, ... | `number_unique_ids` | a plan is resolved: each new uuid gets the next number |
 
-1. Every holder of an id keeps it as a value next to its type, so the one replacement (`replace_unique_ids`, which
-   strips, numbers and maps) reaches it: a handle in its `matcher` field, a route in its endpoint fields, a `Var` in its
-   `matcher` field. It finds them from the value's type once (`unique_id_locations`) and rebuilds the value along those
-   paths only. A `Var`'s type parameter is that field's type, so it follows the field. The other holders also copy the
-   id into a separate type parameter, worked out again when they are rebuilt (`rebuild_with_fields`).
+1. Every holder of an id keeps it as a value next to its type: a handle in its `matcher` field, a route in its endpoint
+   fields, a `Var` in its `matcher` field. Stripping, numbering and mapping are each one
+   `map_matchers_of_type(UniquePlanId, x, f)` (`src/Matching.jl`): every type that holds ids, or holds values that do (a
+   plan, its wiring, a `RunIf`, a lifetime), has its own method and rebuilds itself with the new ones, so its type
+   follows them (a handle through `setmatcher`, a route works its endpoint matchers out again).
 2. A plan's schedule (a `Routine`'s lifetimes, a composite's intervals, which may hold `Var`s) is a field; the plan's
    type has only the schedule's type, in which an id is `UniquePlanId{k}`: which handle within the plan.
 3. The registry stores each handle numbered, as the plan has it.
@@ -85,8 +85,7 @@ steps below 4.7–4.8 ms). So the uuid (`origin`) is data and never changes; the
 
 The matching and registry code ask a matcher only general questions (`matcher_equals`, `matches_type`,
 `lower_to_lookupkey`, `carries_data`); `UniquePlanId` answers them in `src/Identifiable/UniquePlanId/HookExtensions.jl`. A
-holder whose type parameters come from its fields in another way than being their types rebuilds itself with
-`rebuild_with_fields` (`src/Identifiable/UniquePlanId/Hooks.jl`). A plan's schedule is changed only through `setschedule`
+holder rebuilds itself with new matchers in its own `map_matchers_of_type` method. A plan's schedule is changed only through `setschedule`
 (`src/LoopAlgorithms/ParameterReplacement.jl`).
 
 This is the mechanism used when you need multiple logically separate instances of the same algorithm in one composition.

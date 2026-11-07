@@ -25,8 +25,7 @@ Wiring that belongs to one plan child, attached by position: the target namespac
 """
 struct WithWiring{C, W<:Tuple}
     child::C
-    # Typed, so that the `Unique` ids in the wires are found from the type, as everywhere else
-    # (`replace_unique_ids`). A `WithWiring` only lives until the plan constructor takes the wires into the plan's wiring
+    # A `WithWiring` only lives until the plan constructor takes the wires into the plan's wiring
     # (`_split_children_and_wiring`, which does not specialize on them), so a built plan never holds one.
     wires::W
 end
@@ -50,3 +49,10 @@ function _var_route(var::Var{M, name, transform}, alias::Symbol) where {M, name,
     object = carries_data(matcher) ? matcher : nothing
     return Route{M, OwnerMatcher, transform, nothing, (name,), (alias,), typeof(object), ThisChild}(object, ThisChild())
 end
+
+##########################################
+########## Hook extensions ###############
+##########################################
+# Its child and wires with their matchers replaced (`map_matchers_of_type`, Matching.jl): a constructor strips the
+# `Unique` ids of its inputs before it takes the wires into the plan's wiring.
+Base.@nospecializeinfer map_matchers_of_type(M::Type, @nospecialize(w::WithWiring), f) = map_matchers_in_fields(M, w, f, (:child, :wires))

@@ -178,6 +178,88 @@ matches_type(value, ::Type{<:ValMatcher{V}}) where {V} = matcher_equals(value, V
 # A merged state's matcher matches if any of its parts does.
 matches_type(value::Union{MatchAnyOf, Type{<:MatchAnyOf}}, M) = any(m -> matches_type(m, M), matcher_parts(value))
 
+"""
+    map_matchers_of_type(M, obj, f) -> obj
+
+`obj` with every matcher of type `M` in it replaced by `f(matcher)`: what turns the `Unique` ids of a plan or lifetime
+into another form (`strip_unique`, `number_unique_ids`, `number_by_keymap_dynamic`, with `M = UniquePlanId`). A matcher
+of type `M` is replaced; a type that holds matchers rebuilds itself with the new ones (its type follows them); a tuple
+or named tuple maps its elements. Anything else, and a value with no matcher of type `M` changed, is returned as it is
+(`===`). Default: `obj`. Untyped, so a plan with new `Unique` handles compiles nothing here.
+
+Extended by: tuples, named tuples, `AbstractMatcher`, `MatchAnyOf` (below); `IdentifiableAlgo` (its matcher, through
+`setmatcher`, and its `func`; Identifiable/HookExtensions.jl); `Route`, `Share`, `Redirect` (their endpoints;
+RoutingInterface/HookExtensions.jl); `Var` (Context/Vars.jl); `RunIf` (LoopAlgorithms/Interval.jl); the lifetimes with
+`Var`s (`Until`, `AtLeast`, `RepeatOrUntil`, `AtLeastAtMost`, each in its file); the plans and what they hold
+(`CompositeAlgorithm`, `Routine`, `ThreadedCompositeAlgorithm`, `FinalizedAlgorithm`, `WithWiring` in their files;
+`LoopAlgorithm`, `PlanWiring`, `Wiring` in LoopAlgorithms/Interface.jl).
+"""
+Base.@nospecializeinfer map_matchers_of_type(M::Type, @nospecialize(obj), f) = obj
+
+"""
+    map_matchers(obj, f) -> obj
+
+`obj` with every matcher in it replaced by `f(matcher)`: `map_matchers_of_type` for matchers of any type. Not used
+yet; the `Unique` id forms use `map_matchers_of_type`, which leaves every other matcher alone.
+"""
+Base.@nospecializeinfer map_matchers(@nospecialize(obj), f) = map_matchers_of_type(Any, obj, f)
+
+Base.@nospecializeinfer map_matchers_of_type(M::Type, @nospecialize(m::AbstractMatcher), f) = m isa M ? f(m) : m
+# A merged state's matcher holds the matchers it merged.
+Base.@nospecializeinfer function map_matchers_of_type(M::Type, @nospecialize(m::MatchAnyOf), f)
+    parts = matcher_parts(m)
+    new = map_matchers_of_type(M, parts, f)
+    new === parts && return m
+    return new_instance(Core.apply_type(MatchAnyOf, typeof(new)), new)
+end
+Base.@nospecializeinfer function map_matchers_of_type(M::Type, @nospecialize(t::Tuple), f)
+    new = _map_matchers_in_elements(M, t, f)
+    return isnothing(new) ? t : Core._apply_iterate(iterate, tuple, new)
+end
+Base.@nospecializeinfer function map_matchers_of_type(M::Type, @nospecialize(t::NamedTuple), f)
+    new = _map_matchers_in_elements(M, t, f)
+    return isnothing(new) ? t : NamedTuple{keys(t)}(Core._apply_iterate(iterate, tuple, new))
+end
+
+# The elements of `t` mapped, or `nothing` when none changed (then nothing is allocated).
+Base.@nospecializeinfer function _map_matchers_in_elements(M::Type, @nospecialize(t), f)
+    n = nfields(t)
+    for i in 1:n
+        old = getfield(t, i)
+        new = map_matchers_of_type(M, old, f)
+        new === old && continue
+        values = Any[getfield(t, j) for j in 1:n]
+        values[i] = new
+        for j in i+1:n
+            values[j] = map_matchers_of_type(M, values[j], f)
+        end
+        return values
+    end
+    return nothing
+end
+
+"""
+    map_matchers_in_fields(M, obj, f, names) -> obj
+
+`obj` with `map_matchers_of_type(M, _, f)` applied to its fields `names`, rebuilt with `replace_fields` when one changed
+(each type parameter a changed field is declared as follows it); `obj` itself otherwise. What a type whose type
+parameters follow its fields calls in its `map_matchers_of_type` method, naming the fields that can hold matchers.
+"""
+Base.@nospecializeinfer function map_matchers_in_fields(M::Type, @nospecialize(obj), f, @nospecialize(names::Tuple))
+    changed = nothing   # allocated at the first changed field
+    values = nothing
+    for name in names
+        old = getfield(obj, name)
+        new = map_matchers_of_type(M, old, f)
+        new === old && continue
+        isnothing(changed) && (changed = Symbol[]; values = Any[])
+        push!(changed, name)
+        push!(values, new)
+    end
+    isnothing(changed) && return obj
+    return replace_fields(obj, Tuple(changed), Tuple(values))
+end
+
 ################################################
 #############   NOT USED (KEPT)   ##############
 ################################################

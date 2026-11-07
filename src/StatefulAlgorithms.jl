@@ -20,6 +20,7 @@ module StatefulAlgorithms
     include("Unroll.jl")
     include("Printing.jl")
     include("ExpressionTools.jl")
+    include("Matching.jl")   # before the lifetimes, which extend its `map_matchers_of_type`
 
     # include("Arena.jl")
 
@@ -43,7 +44,6 @@ module StatefulAlgorithms
     include("ProcessEntities/ProcessEntities.jl")
 
 
-    include("Matching.jl")
     include("Identifiable/Identifiable.jl")
 
     include("Registry/Registry.jl")
@@ -52,6 +52,7 @@ module StatefulAlgorithms
     include("ProcessEntities/AlgoStates/GeneralState.jl")
     include("SubContextRefs.jl")
     include("Identifiable/UniquePlanId/UniqueKeyMap.jl")
+    include("Identifiable/UniquePlanId/NumberByKeymapTyped.jl")   # the typed `number_by_keymap`, kept apart until measured
     include("Identifiable/UniquePlanId/HookExtensions.jl")
 
     include("RoutingInterface/RoutingInterface.jl")

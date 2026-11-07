@@ -23,3 +23,6 @@ repeats(rou::RepeatOrUntil) = rou.repeats
     vars = @inline _resolve_var_keys(lt.vars, registry)
     return RepeatOrUntil{typeof(vars), F}(lt.repeats, lt.cond, vars)
 end
+
+# Its `Var`s with their matchers replaced (`map_matchers_of_type`, Matching.jl).
+Base.@nospecializeinfer map_matchers_of_type(M::Type, @nospecialize(lt::RepeatOrUntil), f) = map_matchers_in_fields(M, lt, f, (:vars,))

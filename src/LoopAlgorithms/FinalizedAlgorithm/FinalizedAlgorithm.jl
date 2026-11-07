@@ -176,3 +176,7 @@ final function takes two arguments.
     final = finalfunction(fa)
     return applicable(final, cleaned_context, runtime_context) ? final(cleaned_context, runtime_context) : final(cleaned_context)
 end
+
+# Its inner algorithm and final function with their matchers replaced (`map_matchers_of_type`, Matching.jl).
+Base.@nospecializeinfer map_matchers_of_type(M::Type, @nospecialize(fa::FinalizedAlgorithm), f) =
+    map_matchers_in_fields(M, fa, f, (:inner, :final))

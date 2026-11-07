@@ -127,6 +127,7 @@ and put plan-compiles' map work into it:
 | positional `VarLocation(type, ...)` constructor | `VarLocation(...)` with typed arguments | `943dd99c`, `18ac9042` |
 | Process precompile stubs (`schedule_loop_precompile!`, `wait_loop_precompile!`, `precompile_loop!`, `_callable_instance`) | `precompile_interface` | `00de6df4` |
 | exports of undefined names: `preparedata!`, `getallocator`, `getnewallocator`, `InlineProcessAlgorithm` | | `23f5c6b7`, `742fe57b`, `82e28e6b` |
+| (on plan-compiles, 2026-11-07) `replace_unique_ids`, `unique_id_locations`, `replace_ids_in_type`, the mode structs `_StripIds`/`_NumberIds`/`_MapIds`, `rebuild_with_fields`, `_params_from_fields`; files `Identifiable/UniquePlanId/ReplaceIds.jl`, `Identifiable/UniquePlanId/Hooks.jl` | `map_matchers_of_type(UniquePlanId, x, f)` (`src/Matching.jl`), one method per holder type in its own file; a new type that holds ids extends it | the `map_matchers_of_type` commit |
 
 ## 4. Moved files
 

@@ -47,6 +47,7 @@ Totals: 158 blocks; dispatch only 9, generator 13, typed 55, untyped only 81.
 | function | @nospecialize arguments | callers | note |
 |---|---|---|---|
 | `Var` | subcontext_ref | typed | user code with a Unique handle (new type per uuid); result Any via new_instance |
+| `map_matchers_of_type` | v | dispatch only |  |
 
 ### src/Functions.jl
 
@@ -78,7 +79,7 @@ Totals: 158 blocks; dispatch only 9, generator 13, typed 55, untyped only 81.
 
 | function | @nospecialize arguments | callers | note |
 |---|---|---|---|
-| `rebuild_with_fields` | sa | dispatch only |  |
+| `map_matchers_of_type` | sa | dispatch only |  |
 
 ### src/Identifiable/IdentifiableAlgos.jl
 
@@ -102,24 +103,14 @@ Totals: 158 blocks; dispatch only 9, generator 13, typed 55, untyped only 81.
 | `strip_keymap` | x | typed | prepare_for_loop(::InteractiveProcess), _init_process_context, cleanup, _setup (typed per process/context type); result Any |
 | `getkeymap` | x | typed | process constructors, setup/init; measured by an agent: unblocked, callers infer one keymap type per set of Unique handles |
 
-### src/Identifiable/UniquePlanId/Hooks.jl
+### src/Identifiable/UniquePlanId/NumberByKeymapTyped.jl
 
 | function | @nospecialize arguments | callers | note |
 |---|---|---|---|
-| `rebuild_with_fields` | x | dispatch only |  |
-| `_params_from_fields` | T | untyped only |  |
-
-### src/Identifiable/UniquePlanId/ReplaceIds.jl
-
-| function | @nospecialize arguments | callers | note |
-|---|---|---|---|
-| `type_mentions_unique_ids` | T | untyped only |  |
-| `replace_ids_in_type` | T | generator |  |
-| `replace_unique_ids` | x | untyped only |  |
-| `read_path` | x, path | untyped only |  |
-| `_rebuild_along` | v | untyped only |  |
-| `unique_id_locations` | T | generator |  |
-| `_collect_locations!` | T, path | untyped only |  |
+| `_keymap_id_locations` | T | generator |  |
+| `_collect_keymap_locations!` | T, path | untyped only |  |
+| `_type_mentions_unique_ids` | T | untyped only |  |
+| `_keymap_numbered_type` | T | generator |  |
 
 ### src/Identifiable/UniquePlanId/ReplaceModes.jl
 
@@ -127,7 +118,8 @@ Totals: 158 blocks; dispatch only 9, generator 13, typed 55, untyped only 81.
 |---|---|---|---|
 | `strip_unique` | x | typed | DSL block code; result Any |
 | `number_unique_ids` | x | typed | multi-plan resolve (typed per plan types) |
-| `number_by_keymap_dynamic` | x, keymap | typed | spliced into the generated number_by_keymap fallback |
+| `number_by_keymap_dynamic` | x, keymap | typed | spliced into the generated number_by_keymap fallback (NumberByKeymapTyped.jl) |
+| `strip_held_id` | id | untyped only |  |
 
 ### src/Identifiable/UniquePlanId/StructDef.jl
 
@@ -146,24 +138,28 @@ Totals: 158 blocks; dispatch only 9, generator 13, typed 55, untyped only 81.
 | function | @nospecialize arguments | callers | note |
 |---|---|---|---|
 | `AtLeast` | cond, vars | typed | same as Until |
+| `map_matchers_of_type` | lt | dispatch only |  |
 
 ### src/Lifetimes/AtLeastAtMost.jl
 
 | function | @nospecialize arguments | callers | note |
 |---|---|---|---|
 | `AtLeastAtMost` | cond, vars | typed | same as Until |
+| `map_matchers_of_type` | lt | dispatch only |  |
 
 ### src/Lifetimes/RepeatOrUntil.jl
 
 | function | @nospecialize arguments | callers | note |
 |---|---|---|---|
 | `RepeatOrUntil` | cond, vars | typed | same as Until |
+| `map_matchers_of_type` | lt | dispatch only |  |
 
 ### src/Lifetimes/Until.jl
 
 | function | @nospecialize arguments | callers | note |
 |---|---|---|---|
 | `Until` | cond, vars | typed | user code, DSL (typed; new type per uuid with a Var); result Any |
+| `map_matchers_of_type` | lt | dispatch only |  |
 
 ### src/LoopAlgorithms/Callable/Signature.jl
 
@@ -178,6 +174,7 @@ Totals: 158 blocks; dispatch only 9, generator 13, typed 55, untyped only 81.
 | function | @nospecialize arguments | callers | note |
 |---|---|---|---|
 | `CompositeAlgorithm` | args | typed | user code, parse_plan (typed); result Any |
+| `map_matchers_of_type` | plan | dispatch only |  |
 
 ### src/LoopAlgorithms/ConstructorCommon.jl
 
@@ -204,6 +201,7 @@ Totals: 158 blocks; dispatch only 9, generator 13, typed 55, untyped only 81.
 |---|---|---|---|
 | `_strip_nested_finalized_algorithm` | algo | untyped only |  |
 | `_strip_nested_finalized_algorithm` | pair | untyped only |  |
+| `map_matchers_of_type` | fa | dispatch only |  |
 
 ### src/LoopAlgorithms/Fusing/Fusing.jl
 
@@ -219,6 +217,9 @@ Totals: 158 blocks; dispatch only 9, generator 13, typed 55, untyped only 81.
 |---|---|---|---|
 | `rebuild_plan` | plan, funcs, wiring | untyped only |  |
 | `replace_fields` | s, values | untyped only |  |
+| `map_matchers_of_type` | la | dispatch only |  |
+| `map_matchers_of_type` | w (PlanWiring) | dispatch only |  |
+| `map_matchers_of_type` | w (Wiring) | dispatch only |  |
 
 ### src/LoopAlgorithms/Interval.jl
 
@@ -227,6 +228,7 @@ Totals: 158 blocks; dispatch only 9, generator 13, typed 55, untyped only 81.
 | `RunIf` | cond, vars | typed | user code and DSL schedules; Vars of a Unique handle are a new type per uuid; result Any |
 | `RunIf` | interval, cond, vars | typed | user code and DSL schedules; Vars of a Unique handle are a new type per uuid; result Any |
 | `RunIf` | cond, vars | typed | user code and DSL schedules; Vars of a Unique handle are a new type per uuid; result Any |
+| `map_matchers_of_type` | runif | dispatch only |  |
 
 ### src/LoopAlgorithms/Locals/Locals.jl
 
@@ -317,6 +319,13 @@ Totals: 158 blocks; dispatch only 9, generator 13, typed 55, untyped only 81.
 | function | @nospecialize arguments | callers | note |
 |---|---|---|---|
 | `Routine` | args | typed | user code, parse_plan (typed); result Any |
+| `map_matchers_of_type` | plan | dispatch only |  |
+
+### src/LoopAlgorithms/WithWiring.jl
+
+| function | @nospecialize arguments | callers | note |
+|---|---|---|---|
+| `map_matchers_of_type` | w | dispatch only |  |
 
 ### src/Matching.jl
 
@@ -327,6 +336,10 @@ Totals: 158 blocks; dispatch only 9, generator 13, typed 55, untyped only 81.
 | `dynamic_equals` | m1, m2 | dispatch only |  |
 | `dynamic_equals` | a, b | dispatch only |  |
 | `dynamic_equals` | a, b | dispatch only |  |
+| `map_matchers_of_type` | obj (default), m (AbstractMatcher, MatchAnyOf), t (Tuple, NamedTuple) | dispatch only | the hook |
+| `map_matchers` | obj | untyped only | not called yet |
+| `_map_matchers_in_elements` | t | untyped only |  |
+| `map_matchers_in_fields` | obj, names | untyped only |  |
 
 ### src/PrecompileInterface.jl
 
@@ -406,7 +419,7 @@ Totals: 158 blocks; dispatch only 9, generator 13, typed 55, untyped only 81.
 
 | function | @nospecialize arguments | callers | note |
 |---|---|---|---|
-| `rebuild_with_fields` | w | dispatch only |  |
+| `map_matchers_of_type` | w | dispatch only |  |
 
 ### src/RoutingInterface/RedirectDef.jl
 
@@ -445,6 +458,7 @@ Totals: 158 blocks; dispatch only 9, generator 13, typed 55, untyped only 81.
 | function | @nospecialize arguments | callers | note |
 |---|---|---|---|
 | `ThreadedCompositeAlgorithm` | args | untyped only |  |
+| `map_matchers_of_type` | plan | dispatch only |  |
 
 ### src/Utils.jl
 

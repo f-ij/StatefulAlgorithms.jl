@@ -107,3 +107,10 @@ Read a DSL runtime variable selector from `ProcessContext._captured_returns`.
 @inline function Base.getindex(c::ProcessContext, var::Var{KeyMatcher{:_captured_returns}, name}) where {name}
     _var_transform(var, get_captured_returns(c)[name])
 end
+
+################################################
+##############   HOOK EXTENSIONS   #############
+################################################
+
+# Its matcher replaced (`map_matchers_of_type`, Matching.jl); `M` follows it.
+Base.@nospecializeinfer map_matchers_of_type(M::Type, @nospecialize(v::Var), f) = map_matchers_in_fields(M, v, f, (:matcher,))

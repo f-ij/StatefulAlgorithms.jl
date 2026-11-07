@@ -1,11 +1,13 @@
 #=
-How a handle (`IdentifiableAlgo`) answers the hooks of `UniquePlanId` (Identifiable/UniquePlanId/Hooks.jl).
+How a handle (`IdentifiableAlgo`) answers the hooks of the matching system (Matching.jl).
 =#
 
-# Its type-level id (parameter 2) is worked out from its matcher (`static_id`), so a handle is made again with
-# `identifiable_with_id`; a handle without a matcher field keeps its id.
-Base.@nospecializeinfer function rebuild_with_fields(@nospecialize(sa::IdentifiableAlgo), fields::Vector{Any})
-    p = typeof(sa).parameters    # {F, Id, VarAliases, AlgoName, Key, M}
-    matcher = fields[2]
-    return identifiable_with_id(fields[1], isnothing(matcher) ? p[2] : matcher, p[3], p[4], p[5])
+# Its `func` first (a nested plan's handles), then its own matcher: a new matcher makes the handle again through
+# `setmatcher`, which works its type-level id (parameter 2) out from it. A handle whose matcher is in its type alone
+# (`id` gives that type) has no matcher value to replace.
+Base.@nospecializeinfer function map_matchers_of_type(M::Type, @nospecialize(sa::IdentifiableAlgo), f)
+    sa = map_matchers_in_fields(M, sa, f, (:func,))
+    matcher = id(sa)
+    new = map_matchers_of_type(M, matcher, f)
+    return new === matcher ? sa : setmatcher(sa, new)
 end

@@ -106,3 +106,13 @@ Base.@nospecializeinfer function replace_fields(@nospecialize(s), names::Tuple{V
     s isa GeneratedValue || return new_instance(NT, fields...)
     return build_from_parts(NT, fields)
 end
+
+###############################################################################
+# Hook extensions of the types in AbstractTypeDefs.jl
+###############################################################################
+# `map_matchers_of_type` (Matching.jl) for the loop algorithm and the plan wiring, whose types are defined before the
+# matching system: each maps the fields that can hold matchers. A `LoopAlgorithm`'s registry is built from its numbered
+# plan and is not mapped.
+Base.@nospecializeinfer map_matchers_of_type(M::Type, @nospecialize(la::LoopAlgorithm), f) = map_matchers_in_fields(M, la, f, (:plan, :options))
+Base.@nospecializeinfer map_matchers_of_type(M::Type, @nospecialize(w::PlanWiring), f) = map_matchers_in_fields(M, w, f, (:global_wiring, :child_wiring))
+Base.@nospecializeinfer map_matchers_of_type(M::Type, @nospecialize(w::Wiring), f) = map_matchers_in_fields(M, w, f, (:routes, :shares))
