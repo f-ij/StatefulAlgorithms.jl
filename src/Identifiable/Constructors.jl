@@ -37,20 +37,17 @@ Scoped Algorithms don't wrap other IdentifiableAlgos
 """
 IdentifiableAlgo(na::IdentifiableAlgo, name::Symbol) = setcontextkey(na, name)
 
-function Autokey(f::F, i::Int, id = nothing; customname = Symbol(), aliases...) where F
+# Untyped: keys an algorithm while a plan or registry is built; nothing is compiled per algorithm type or index.
+function Autokey(@nospecialize(f), i::Int, @nospecialize(id = nothing); customname = Symbol(), aliases...)
     f = instantiate(f)
-    TName = autokey_basename(f)
-    key = @inline static_symbol(TName,(:_), i)
-    @inline IdentifiableAlgo(f, key, id; customname, aliases...)
+    return IdentifiableAlgo(f, autokey(typeof(f), i), id; customname, aliases...)
 end
 
-function Autokey(f::IA, i::Int; customname = Symbol(), aliases...) where IA <: IdentifiableAlgo
+function Autokey(@nospecialize(f::IdentifiableAlgo), i::Int; customname = Symbol(), aliases...)
     if getkey(f) != Symbol() # If it already has a key, don't change it
         return f
     end
-    TName = autokey_basename(getalgo(f))
-    key = @inline static_symbol(TName,(:_), i)
-    setcontextkey(f, key)
+    return setcontextkey(f, autokey(typeof(getalgo(f)), i))
 end
 
 
