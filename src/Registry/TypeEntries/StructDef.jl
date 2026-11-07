@@ -11,6 +11,9 @@ registry copies them (`RegistryBuilder(registry)`).
 struct RegistryTypeEntry{T,E}
     algos::E
     multipliers::Vector{Float64}
+    # Kept on purpose for now, although no lookup reads it (`dynamic_lookup`, `dynamic_get` have no callers): it is
+    # still built for every entry (`set_lookup_key!`, `write_lookup_table_expr`). A candidate for removal later,
+    # together with LookupKey.jl.
     dynamic_lookup::Dict{LookupKey,Int}
 end
 
