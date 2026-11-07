@@ -27,19 +27,11 @@ end
 _holds_type(l::_KeymapIdLocation) = l.leaftype <: Type
 
 """
-Every place in a value of type `T` that holds a `UniquePlanId`, found from `T` alone and kept for the session. A field
-declared with an abstract type is not looked into; a mutable value whose type mentions an id is an error, as it cannot
-be rebuilt.
+Every place in a value of type `T` that holds a `UniquePlanId`, found from `T` alone (walked again on every call; it
+only runs while `number_by_keymap` is generated). A field declared with an abstract type is not looked into; a mutable
+value whose type mentions an id is an error, as it cannot be rebuilt.
 """
-Base.@nospecializeinfer function _keymap_id_locations(@nospecialize(T))
-    @lock _KEYMAP_ID_LOCATIONS_LOCK get!(_KEYMAP_ID_LOCATIONS, T) do
-        locations = _KeymapIdLocation[]
-        _collect_keymap_locations!(locations, T, ())
-        locations
-    end
-end
-const _KEYMAP_ID_LOCATIONS = IdDict{Any, Vector{_KeymapIdLocation}}()
-const _KEYMAP_ID_LOCATIONS_LOCK = ReentrantLock()
+Base.@nospecializeinfer _keymap_id_locations(@nospecialize(T)) = _collect_keymap_locations!(_KeymapIdLocation[], T, ())
 
 Base.@nospecializeinfer function _collect_keymap_locations!(locations::Vector{_KeymapIdLocation}, @nospecialize(T), @nospecialize(path::Tuple))
     if T isa DataType && T <: UniquePlanId
@@ -59,23 +51,22 @@ Base.@nospecializeinfer function _collect_keymap_locations!(locations::Vector{_K
     return locations
 end
 
-"""Whether `UniquePlanId` appears anywhere in the type `T` itself (its parameters, nested); kept for the session."""
-Base.@nospecializeinfer function _type_mentions_unique_ids(@nospecialize(T))
-    T isa Union && return _type_mentions_unique_ids(T.a) || _type_mentions_unique_ids(T.b)
+"""
+Whether `UniquePlanId` appears anywhere in the type `T` itself (its parameters, nested). `seen` holds the types this
+call has entered, so a type that mentions itself ends the walk; it lives for one call only.
+"""
+Base.@nospecializeinfer function _type_mentions_unique_ids(@nospecialize(T), seen::Base.IdSet{Any} = Base.IdSet{Any}())
+    T isa Union && return _type_mentions_unique_ids(T.a, seen) || _type_mentions_unique_ids(T.b, seen)
     T isa DataType || return false
     T <: UniquePlanId && return true
-    @lock _TYPE_MENTIONS_LOCK begin
-        cached = get(_TYPE_MENTIONS, T, nothing)
-        isnothing(cached) || return cached
-        _TYPE_MENTIONS[T] = false   # a type that mentions itself
-        found = any(T.parameters) do p
-            p isa Type ? _type_mentions_unique_ids(p) : !(p isa TypeVar) && _type_mentions_unique_ids(typeof(p))
-        end
-        _TYPE_MENTIONS[T] = found
+    T in seen && return false
+    push!(seen, T)
+    for p in T.parameters
+        p isa TypeVar && continue
+        _type_mentions_unique_ids(p isa Type ? p : typeof(p), seen) && return true
     end
+    return false
 end
-const _TYPE_MENTIONS = IdDict{DataType, Bool}()
-const _TYPE_MENTIONS_LOCK = ReentrantLock()
 
 # A held id type numbered from the map (`numbers`, uuid => k); any other id type, or one the map does not have, as it is.
 function _keymap_type_id(numbers::Dict{UUID, Int}, @nospecialize(T::Type{<:UniquePlanId}))
