@@ -3,6 +3,12 @@ How a `UniquePlanId` answers the hooks of the matching system (Matching.jl) and 
 Registry/LookupKey.jl). Included after both.
 =#
 
+# Two ids: the same handle (`same_unique_id`, StructDef.jl). Typed, so two numbered ids fold while compiling.
+@inline matcher_equals(a::UniquePlanId{N1}, b::UniquePlanId{N2}) where {N1, N2} = same_unique_id(N1, N2, a, b)
+# Untyped (`dynamic_match`): the same answer, compiled once instead of for every pair of ids.
+Base.@nospecializeinfer dynamic_equals(@nospecialize(a::UniquePlanId), @nospecialize(b::UniquePlanId)) =
+    same_unique_id(typeof(a).parameters[1], typeof(b).parameters[1], a, b)
+
 # A value against a type: the type's `N` names the handle by uuid (a held handle) or by its number in the plan;
 # `:dynamic` names none, so no handle matches it by type.
 matches_type(id::UniquePlanId, ::Type{UniquePlanId{N}}) where {N} = _matches_plan_number(id, N)

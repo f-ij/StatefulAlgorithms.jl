@@ -24,12 +24,12 @@ compiling (a matcher without fields, a numbered `UniquePlanId`), and compares va
     matcher_equals(m1, m2) -> Bool
 
 Whether two matchers, or a matcher and a plain id (a type, a symbol, an `isbits` value), name the same algorithm: what
-`match` compares with. Default: `==`. A matcher extends this instead of `Base.:(==)`: an `==` method that takes any value,
-or any type, on one side is a new method of Base's `==` for every type, so loading the package would make Julia throw
-away (invalidate) the compiled code of everything that calls `==` on such arguments, Base's own code included.
+`match` compares with. Default: `==`, for plain ids. A matcher extends this and never `Base.:(==)`: one equality
+function for matchers, and an `==` method that takes any value, or any type, on one side is a new method of Base's `==`
+for every type, so loading the package would make Julia throw away (invalidate) the compiled code of everything that
+calls `==` on such arguments, Base's own code included.
 Extended by: `SimpleId`, `ObjectIDMatcher`, `TypeMatcher`, `ValMatcher`, `MatchAnyOf`, `MatchAny`, `MatchAll`,
-`TreeMatcher`, `MultiMatcher` (below); `UniquePlanId` (Identifiable/UniquePlanId/HookExtensions.jl; two ids compare
-with their own `==`).
+`TreeMatcher`, `MultiMatcher` (below); `UniquePlanId` (Identifiable/UniquePlanId/HookExtensions.jl).
 """
 @inline matcher_equals(m1, m2) = m1 == m2
 

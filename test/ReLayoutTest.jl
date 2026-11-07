@@ -124,8 +124,9 @@ end
     @test StatefulAlgorithms.repeats(r) == (4, 5)
 end
 
-@testset "UniquePlanId: numbered ids match by type, a dynamic one by uuid" begin
+@testset "UniquePlanId: numbered ids match by number, a dynamic one by uuid" begin
     SA = StatefulAlgorithms
+    eq = SA.matcher_equals
     u1, u2 = SA.uuid4(), SA.uuid4()
     held = SA.UniquePlanId(u1)
     dyn = SA.make_dynamic(held)
@@ -133,14 +134,17 @@ end
     @test dyn isa SA.DynamicPlanId && SA.is_dynamic_unique_id(dyn) && SA.origin(dyn) == u1
     @test SA.is_numbered_unique_id(one) && SA.is_held_unique_id(SA.make_held(one)) && SA.make_held(one) === held
     # Two numbered ids: by number only, decided while compiling.
-    @test one == other_one && one != two
-    @test Base.return_types(==, (typeof(one), typeof(two))) == [Bool]
-    @test only(Base.code_typed(==, (typeof(one), typeof(two)))).first.code[end].val === false
+    @test eq(one, other_one) && !eq(one, two)
+    @test Base.return_types(eq, (typeof(one), typeof(two))) == [Bool]
+    @test only(Base.code_typed(eq, (typeof(one), typeof(two)))).first.code[end].val === false
     # A dynamic id against any form, or a held against a numbered one: by uuid.
-    @test dyn == one && one == dyn && dyn == held && held == one && one == held
-    @test dyn != SA.DynamicPlanId(u2) && SA.DynamicPlanId(u2) != one
-    # `match` gives the same answer both ways round.
+    @test eq(dyn, one) && eq(one, dyn) && eq(dyn, held) && eq(held, one) && eq(one, held)
+    @test !eq(dyn, SA.DynamicPlanId(u2)) && !eq(SA.DynamicPlanId(u2), one)
+    # `match` and the untyped `dynamic_equals` give the same answer both ways round.
     @test SA.match(one, dyn) && SA.match(dyn, one) && !SA.match(two, SA.DynamicPlanId(u2))
+    @test SA.dynamic_equals(dyn, one) && !SA.dynamic_equals(two, SA.DynamicPlanId(u2))
+    # `==` is Base's own: two ids are `==` only when identical.
+    @test one != other_one && dyn != one
     # A dynamic id as a type names no handle; a held one is made again from its type.
     @test !SA.matches_type(dyn, SA.DynamicPlanId) && SA.reconstruct_matcher(typeof(held)) === held
     @test_throws ErrorException SA.reconstruct_matcher(SA.DynamicPlanId)

@@ -15,11 +15,11 @@ which says which of three forms the id is in:
 | dynamic | `:dynamic` | `DynamicPlanId(origin)`, `make_dynamic`; `strip_unique`, `DynamicUnique(f)` | a constructor or DSL block takes the handle; a DSL block makes its own `@state`; a plan keeps it so until resolved | is the same for every handle: only the value says which it is |
 | numbered | `k` = 1, 2, ... | `UniquePlanId{k}(origin)`, `make_numbered`; `number_unique_ids` | a plan is resolved: each new `origin` gets the next number | is the same in every rebuild of the same code |
 
-The registry, the context, `init` and the loop only see numbered ids, which match by their type alone (`==`). From
+The registry, the context, `init` and the loop only see numbered ids, which match by their number alone (`matcher_equals`). From
 `resolve` on, every registry the user holds (the plan's, a context's, a process's) also carries the plan's `k => uuid`
 pairs (`UniqueKeyMap`, UniqueKeyMap.jl), so a held handle is numbered and found from types there too; `init` and the
 loop get the plan without them, and the loop's context has no registry. The uuid is kept so that every form can
-be made again from any other, and for the dynamic fallback of `==`.
+be made again from any other, and for the dynamic fallback of `matcher_equals`.
 """
 struct UniquePlanId{N} <: AbstractMatcher{N}
     origin::UUID
@@ -58,23 +58,16 @@ make_dynamic(id::UniquePlanId) = DynamicPlanId(origin(id))
 make_numbered(id::UniquePlanId, k::Int) = UniquePlanId{k}(origin(id))
 
 """
-    a == b
+    same_unique_id(N1, N2, a, b) -> Bool
 
-Whether two ids are the same handle. The static path first: two numbered ids (or two held ones) are told apart by `N`
-alone, so the answer is decided from their types while compiling and the uuid is never read. Only when one of them is
-dynamic, or the two are in different forms (a held handle asked of a registry without a map), are their uuids
-compared, at run time.
+Whether the ids `a` and `b`, of forms `N1` and `N2`, are the same handle: what `matcher_equals` and `dynamic_equals`
+answer for two ids (HookExtensions.jl). The static path first: two numbered ids (or two held ones) are told apart by
+`N` alone, so with `N1`, `N2` constants (`matcher_equals`) the answer is decided while compiling and the uuid is never
+read. Only when one of them is dynamic, or the two are in different forms (a held handle asked of a registry without a
+map), are their uuids compared, at run time.
 """
-@inline Base.:(==)(a::UniquePlanId{N1}, b::UniquePlanId{N2}) where {N1, N2} = same_unique_id(N1, N2, a, b)
-# `==` untyped (`dynamic_match`): the same answer, compiled once instead of for every pair of ids.
-Base.@nospecializeinfer dynamic_equals(@nospecialize(a::UniquePlanId), @nospecialize(b::UniquePlanId)) =
-    same_unique_id(typeof(a).parameters[1], typeof(b).parameters[1], a, b)
-# The answer of both, from the ids' forms `N1`, `N2`: constants in `==`, so it folds there; run-time values in `dynamic_equals`.
 @inline function same_unique_id(N1, N2, a::UniquePlanId, b::UniquePlanId)
     N1 isa Int && N2 isa Int && return N1 === N2
     N1 isa UUID && N2 isa UUID && return N1 === N2
     return origin(a) == origin(b)
 end
-# By uuid: the same hash for every form of one handle. Two numbered ids of different plans with the same `k` are `==`
-# but hash apart; they never meet, as only one plan's numbered ids are in a registry.
-Base.hash(a::UniquePlanId, h::UInt) = hash(origin(a), hash(UniquePlanId, h))
