@@ -114,4 +114,4 @@ end
 ################################################
 
 # Its matcher replaced (`map_matchers_of_type`, Matching.jl); `M` follows it.
-Base.@nospecializeinfer map_matchers_of_type(M::Type, @nospecialize(v::Var), f) = map_matchers_in_fields(M, v, f, (:matcher,))
+map_matchers_of_type(M::Type, @nospecialize(v::Var), f) = map_matchers_in_fields(M, v, f, (:matcher,))

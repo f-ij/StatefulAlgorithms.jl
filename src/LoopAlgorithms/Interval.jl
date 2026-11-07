@@ -245,4 +245,4 @@ end
 @inline compute_multiplier(i::I) where {I<:Interval} = 1 / getinterval(i)
 @inline compute_multiplier(runif::R) where {R<:RunIf} = 1 / getinterval(runif)
 
-Base.@nospecializeinfer map_matchers_of_type(M::Type, @nospecialize(runif::RunIf), f) = map_matchers_in_fields(M, runif, f, (:vars,))
+map_matchers_of_type(M::Type, @nospecialize(runif::RunIf), f) = map_matchers_in_fields(M, runif, f, (:vars,))

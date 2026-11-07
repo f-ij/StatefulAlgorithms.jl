@@ -55,4 +55,4 @@ end
 ##########################################
 # Its child and wires with their matchers replaced (`map_matchers_of_type`, Matching.jl): a constructor strips the
 # `Unique` ids of its inputs before it takes the wires into the plan's wiring.
-Base.@nospecializeinfer map_matchers_of_type(M::Type, @nospecialize(w::WithWiring), f) = map_matchers_in_fields(M, w, f, (:child, :wires))
+map_matchers_of_type(M::Type, @nospecialize(w::WithWiring), f) = map_matchers_in_fields(M, w, f, (:child, :wires))

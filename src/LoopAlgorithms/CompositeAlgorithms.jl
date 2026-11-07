@@ -136,5 +136,5 @@ end
 ##########################################
 # Its children, schedule (`RunIf` entries hold `Var`s), wiring, states and options with their matchers replaced
 # (`map_matchers_of_type`, Matching.jl); `namespaces` holds names only.
-Base.@nospecializeinfer map_matchers_of_type(M::Type, @nospecialize(plan::CompositeAlgorithm), f) =
+map_matchers_of_type(M::Type, @nospecialize(plan::CompositeAlgorithm), f) =
     map_matchers_in_fields(M, plan, f, (:funcs, :intervals, :wiring, :states, :options))

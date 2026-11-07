@@ -77,5 +77,5 @@ repeats(r::Routine, idx::Val) = repeats(lifetimes(r, idx))
 ##########################################
 # Its children, lifetimes (some hold `Var`s), wiring, states and options with their matchers replaced
 # (`map_matchers_of_type`, Matching.jl); `namespaces` holds names only.
-Base.@nospecializeinfer map_matchers_of_type(M::Type, @nospecialize(plan::Routine), f) =
+map_matchers_of_type(M::Type, @nospecialize(plan::Routine), f) =
     map_matchers_in_fields(M, plan, f, (:funcs, :repeats, :wiring, :states, :options))

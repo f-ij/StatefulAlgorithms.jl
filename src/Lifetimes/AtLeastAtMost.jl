@@ -26,4 +26,4 @@ repeats(aam::AtLeastAtMost) = aam.repeats
 end
 
 # Its `Var`s with their matchers replaced (`map_matchers_of_type`, Matching.jl).
-Base.@nospecializeinfer map_matchers_of_type(M::Type, @nospecialize(lt::AtLeastAtMost), f) = map_matchers_in_fields(M, lt, f, (:vars,))
+map_matchers_of_type(M::Type, @nospecialize(lt::AtLeastAtMost), f) = map_matchers_in_fields(M, lt, f, (:vars,))

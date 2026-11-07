@@ -5,7 +5,7 @@ How the wiring (`Route`, `Share`, `Redirect`) answers the hooks of the matching 
 # Fields 1 and 2 are the endpoints (handles, kept until the plan is resolved); type parameters 1 and 2 are their
 # matchers (`scref_match`), worked out again from the new endpoints, and the parameters the endpoint fields are declared
 # as follow their new types. An endpoint that is `nothing` keeps its matcher.
-Base.@nospecializeinfer function map_matchers_of_type(M::Type, @nospecialize(w::Union{Route, Share, Redirect}), f)
+function map_matchers_of_type(M::Type, @nospecialize(w::Union{Route, Share, Redirect}), f)
     ends = (getfield(w, 1), getfield(w, 2))
     new = (map_matchers_of_type(M, ends[1], f), map_matchers_of_type(M, ends[2], f))
     new[1] === ends[1] && new[2] === ends[2] && return w

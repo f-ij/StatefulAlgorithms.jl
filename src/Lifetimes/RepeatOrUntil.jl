@@ -25,4 +25,4 @@ repeats(rou::RepeatOrUntil) = rou.repeats
 end
 
 # Its `Var`s with their matchers replaced (`map_matchers_of_type`, Matching.jl).
-Base.@nospecializeinfer map_matchers_of_type(M::Type, @nospecialize(lt::RepeatOrUntil), f) = map_matchers_in_fields(M, lt, f, (:vars,))
+map_matchers_of_type(M::Type, @nospecialize(lt::RepeatOrUntil), f) = map_matchers_in_fields(M, lt, f, (:vars,))

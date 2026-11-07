@@ -100,5 +100,5 @@ end
 @inline _constructor_type(::ThreadedCompositeAlgorithm) = ThreadedCompositeAlgorithm
 
 # Its matchers replaced as a `CompositeAlgorithm`'s (`map_matchers_of_type`, Matching.jl).
-Base.@nospecializeinfer map_matchers_of_type(M::Type, @nospecialize(plan::ThreadedCompositeAlgorithm), f) =
+map_matchers_of_type(M::Type, @nospecialize(plan::ThreadedCompositeAlgorithm), f) =
     map_matchers_in_fields(M, plan, f, (:funcs, :intervals, :wiring, :states, :options))

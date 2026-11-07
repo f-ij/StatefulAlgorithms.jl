@@ -178,5 +178,5 @@ final function takes two arguments.
 end
 
 # Its inner algorithm and final function with their matchers replaced (`map_matchers_of_type`, Matching.jl).
-Base.@nospecializeinfer map_matchers_of_type(M::Type, @nospecialize(fa::FinalizedAlgorithm), f) =
+map_matchers_of_type(M::Type, @nospecialize(fa::FinalizedAlgorithm), f) =
     map_matchers_in_fields(M, fa, f, (:inner, :final))
