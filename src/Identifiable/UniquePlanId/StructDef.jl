@@ -31,7 +31,7 @@ UniquePlanId(origin::UUID) = UniquePlanId{origin}(origin)
     DynamicPlanId(origin::UUID)
 
 A dynamic id (`UniquePlanId{:dynamic}`): the uuid in its value only, so its type is the same for every handle. As a type,
-it names no handle (`matches_type`).
+it names no handle: a dynamic id is found by its value only.
 """
 const DynamicPlanId = UniquePlanId{:dynamic}
 

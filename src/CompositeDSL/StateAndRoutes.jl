@@ -602,8 +602,8 @@ _composite_dsl_rebind_option(option::LocalPlanOption, binds::Tuple) =
     map(o -> LocalPlanOption(getfield(option, :owner), o), _composite_dsl_rebind_option(getfield(option, :option), binds))
 function _composite_dsl_rebind_option(route::Route, binds::Tuple)
     isresolved(route) && return (route,)
-    source_owner = isnothing(get_source_ref(route)) ? source_match_by(route) : get_source_ref(route)
-    target_owner = isnothing(get_target_ref(route)) ? target_match_by(route) : get_target_ref(route)
+    source_owner = isnothing(get_source_ref(route)) ? endpoint_matcher(source_match_by(route), nothing) : get_source_ref(route)
+    target_owner = isnothing(get_target_ref(route)) ? endpoint_matcher(target_match_by(route), nothing) : get_target_ref(route)
     varnames, aliases = source_fieldnames(route), getaliases(route)
     kept = Pair{Symbol, Symbol}[]
     moved = Any[]

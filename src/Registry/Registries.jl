@@ -159,22 +159,29 @@ function dynamic_get(reg::NameSpaceRegistry, val)
 end
 
 """
+    findfirst_by_matcher(registry, matcher) -> keyed algo or nothing
+
+The first algorithm in `registry` that the matcher value `matcher` matches (`match`, on values), or `nothing`. A
+recursion over the algorithms (a tuple of different types), so a match decided by the types (a numbered `UniquePlanId`,
+a matcher without fields) is folded while compiling.
+"""
+@inline findfirst_by_matcher(reg::NameSpaceRegistry, matcher) = _findfirst_by_matcher(matcher, all_algos(reg))
+@inline function _findfirst_by_matcher(matcher, algos)
+    isempty(algos) && return nothing
+    head = gethead(algos)
+    match(matcher, head) && return head
+    return _findfirst_by_matcher(matcher, gettail(algos))
+end
+
+"""
     get_by_matcher(registry, matcher) -> keyed algo
 
-The first algorithm in `registry` that `matcher` matches (`match`); errors when there is none.
+`findfirst_by_matcher`, erroring when there is none.
 """
 @inline function get_by_matcher(reg::NameSpaceRegistry, matcher)
-    return _get_by_matcher(matcher, all_algos(reg))
-end
-@inline function _get_by_matcher(matcher, algos)
-    if isempty(algos)
-        error("Matcher $matcher not found in the algorithms of the registry: $algos")
-    end
-    head = gethead(algos)
-    if match(matcher, head)
-        return head
-    end
-    return _get_by_matcher(matcher, gettail(algos))
+    found = findfirst_by_matcher(reg, matcher)
+    isnothing(found) && error("Matcher $matcher not found in the algorithms of the registry: $(all_keys(reg))")
+    return found
 end
 
 """
@@ -293,18 +300,18 @@ Base.@nospecializeinfer function dynamic_findfirst_algotype(@nospecialize(T::Typ
 end
 
 """
-    dynamic_findfirst_matcher_type(M, reg) -> keyed algo or nothing
+    dynamic_findfirst_matcher(matcher, reg) -> keyed algo or nothing
 
-The first algorithm in `reg` (as `all_algos` lists them) whose matcher is of the matcher type `M` (`matches_type`), on
-values, or `nothing`.
+`findfirst_by_matcher` untyped: the first algorithm in `reg` (as `all_algos` lists them) that the matcher value
+`matcher` matches (`dynamic_match`), or `nothing`. Compiled once, not once per registry and matcher.
 """
-Base.@nospecializeinfer function dynamic_findfirst_matcher_type(@nospecialize(M::Type), @nospecialize(reg::NameSpaceRegistry))
+Base.@nospecializeinfer function dynamic_findfirst_matcher(@nospecialize(matcher), @nospecialize(reg::NameSpaceRegistry))
     entries = getfield(reg, :entries)
     for i in 1:nfields(entries)
         algos = getfield(getfield(entries, i), :algos)
         for j in 1:nfields(algos)
             algo = getfield(algos, j)
-            matches_type(match_by(algo), M) && return algo
+            dynamic_match(matcher, algo) && return algo
         end
     end
     return nothing

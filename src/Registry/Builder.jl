@@ -65,13 +65,16 @@ keyed (`Lin_1`), or, when it is the same algorithm as one already there (`match`
 whose multiplier then grows by `multiplier`. Where it goes and under which key is decided by the rules in
 Interfaces.jl.
 
-`algo` can be a `GeneratedValue`: it must then be a handle (`IdentifiableAlgo`), whose type decides everything.
+`algo` can be a `GeneratedValue`: it must then be a handle (`IdentifiableAlgo`), whose type decides everything. A
+merged state (matched by `MatchAnyOf`) needs the values: matchers are compared as values, and which ids it holds is
+in its matcher's value (a merge, `add_again!`, needs the values anyway).
 """
 Base.@nospecializeinfer function add!(b::RegistryBuilder, @nospecialize(algo), @nospecialize(multiplier))
     T = read_type(algo)
     T <: NameSpaceRegistry && error("Cannot add a NameSpaceRegistry to another NameSpaceRegistry")
     T === Nothing && error("Trying to add `nothing` to a registry")
     algo isa GeneratedValue && !(isconcretetype(T) && T <: IdentifiableAlgo) && throw(NeedsValues())
+    algo isa GeneratedValue && match_by(T) isa Type && match_by(T) <: MatchAnyOf && throw(NeedsValues())
     entry = find_or_add_entry!(b, assign_entrytype(algo isa GeneratedValue ? T : algo))
     idx = find_same(entry, algo)
     if isnothing(idx)

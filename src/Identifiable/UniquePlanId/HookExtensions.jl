@@ -9,19 +9,6 @@ Registry/LookupKey.jl). Included after both.
 Base.@nospecializeinfer dynamic_equals(@nospecialize(a::UniquePlanId), @nospecialize(b::UniquePlanId)) =
     same_unique_id(typeof(a).parameters[1], typeof(b).parameters[1], a, b)
 
-# A value against a type: the type's `N` names the handle by uuid (a held handle) or by its number in the plan;
-# `:dynamic` names none, so no handle matches it by type.
-matches_type(id::UniquePlanId, ::Type{UniquePlanId{N}}) where {N} = _matches_plan_number(id, N)
-_matches_plan_number(id::UniquePlanId, N::UUID) = origin(id) == N
-_matches_plan_number(id::UniquePlanId, N::Int) = plan_number(id) === N
-_matches_plan_number(id::UniquePlanId, ::Symbol) = false
-
-matcher_equals(a::UniquePlanId, T::Type{<:UniquePlanId}) = matches_type(a, T)
-matcher_equals(T::Type{<:UniquePlanId}, b::UniquePlanId) = matches_type(b, T)
-# A merged state (`MatchAnyOf`) holds the ids of the states it merged.
-matcher_equals(m::Type{<:MatchAnyOf}, x::Union{UniquePlanId, Type{<:UniquePlanId}}) = _any_matches(m, x)
-matcher_equals(x::Union{UniquePlanId, Type{<:UniquePlanId}}, m::Type{<:MatchAnyOf}) = _any_matches(m, x)
-
 # A held id (`UniquePlanId{uuid}`) has its uuid in the type. A dynamic or numbered one has it only in the value: made
 # again from a value (`make_held`, `make_dynamic`, `make_numbered`), or a numbered one through its plan's `UniqueKeyMap`.
 function reconstruct_matcher(T::Type{UniquePlanId{N}}) where {N}

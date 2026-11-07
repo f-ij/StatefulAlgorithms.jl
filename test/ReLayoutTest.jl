@@ -145,7 +145,7 @@ end
     @test SA.dynamic_equals(dyn, one) && !SA.dynamic_equals(two, SA.DynamicPlanId(u2))
     # `==` is Base's own: two ids are `==` only when identical.
     @test one != other_one && dyn != one
-    # A dynamic id as a type names no handle; a held one is made again from its type.
-    @test !SA.matches_type(dyn, SA.DynamicPlanId) && SA.reconstruct_matcher(typeof(held)) === held
+    # A held id is made again from its type; a dynamic one is not (its uuid is only in the value).
+    @test SA.reconstruct_matcher(typeof(held)) === held
     @test_throws ErrorException SA.reconstruct_matcher(SA.DynamicPlanId)
 end

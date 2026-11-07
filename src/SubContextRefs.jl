@@ -14,11 +14,16 @@ Terms:
   endpoint is written as an SCRef and, once the plan is resolved, is an SCKey.
 
 An SCRef is used in three steps:
-1. Store: a route keeps the SCRef in two parts, its matcher in the route's type
+1. Store: a route keeps the SCRef in two parts, its matcher type in the route's type
    (`scref_match`) and the object itself until the plan is resolved (`scref_object`).
 2. Resolve: once the registry exists, the stored parts give the SCKey (`resolve_scref`).
 3. Match: plan options ask whether a plan child is the subcontext an SCRef names
    (`child_matches_scref`).
+
+Matchers are compared as values (`matcher_equals`), never by their type: the stored parts give the matcher value
+(`endpoint_matcher`): the object's matcher, or, for an endpoint stored without an object, the matcher made from its
+type, which only a matcher without fields can be (`reconstruct_matcher`). A matcher that carries data (`UniquePlanId`)
+always keeps its object.
 =#
 
 ################################################
@@ -47,8 +52,7 @@ scref_match(ref) = ref isa Symbol ? ref : typeof(scref_matcher(ref))
     same_scref(a, b) -> Bool
 
 Whether two SCRefs name the same subcontext before they are in one plan: two SCKeys by name, any other two by `match`
-(an SCKey has no matcher, so it names none of them). An SCRef can also be a matcher type, as a route keeps an endpoint
-without its object: it matches as itself (`match_by`).
+(an SCKey has no matcher, so it names none of them). An SCRef can also be a matcher value (`endpoint_matcher`).
 """
 same_scref(a::Symbol, b::Symbol) = a === b
 same_scref(a::Symbol, b::B) where {B} = false
@@ -57,6 +61,17 @@ same_scref(a::A, b::B) where {A, B} = match(a, b)
 
 """The object part of an SCRef, kept until the plan is resolved; `nothing` when it is already an SCKey."""
 scref_object(ref) = ref isa Symbol ? nothing : ref
+
+"""
+    endpoint_matcher(match, object) -> SCKey or matcher value
+
+What a stored SCRef (its `scref_match` part `match` and its `scref_object` part `object`) is compared by: an SCKey
+stays itself; otherwise the object's matcher (`scref_matcher`), or, without an object, the matcher of type `match`
+(`reconstruct_matcher`: only a matcher without fields is stored without its object).
+"""
+endpoint_matcher(match::Symbol, object) = match
+endpoint_matcher(::Type{M}, ::Nothing) where {M} = reconstruct_matcher(M)
+endpoint_matcher(::Type{M}, object) where {M} = scref_matcher(object)
 
 """
 The namespace every instance of this kind lives in, given by its SCKey, or `nothing` when each
@@ -72,24 +87,24 @@ instance gets its own namespace from the registry. Calls (`Callable`) all live i
 The SCKey of a stored SCRef, in order:
 1. an SCKey is itself;
 2. the object's SCKey: its `fixed_namespace`, its own key, or the key the registry gave it;
-3. without an object (or one not in the registry): the first registry entry its matcher matches.
-
-The matcher is taken as a type parameter (`::Type{M}`) so each route's resolution is compiled for
-its own matcher and stays inferable.
+3. without an object (or one not in the registry): the first registry entry its matcher value matches
+   (`endpoint_matcher`, `matcher_sckey`).
 """
 @inline resolve_scref(reg::NameSpaceRegistry, match::Symbol, object, role::String) = match
 @inline function resolve_scref(reg::NameSpaceRegistry, ::Type{M}, object, role::String) where {M}
     key = object_sckey(reg, object)
-    return isnothing(key) ? matcher_sckey(reg, M, object, role) : key
+    return isnothing(key) ? matcher_sckey(reg, endpoint_matcher(M, object), role) : key
 end
 # A type SCRef (`Route(a => SomeAlgoType, ...)`) keeps the type as a `DataType` value, which hides it
-# from inference; the matcher in the route's type parameters still carries it, so resolve by that.
+# from inference; the `TypeMatcher` in the route's type parameters is a matcher without fields, so its value is made
+# from it.
 @inline resolve_scref(reg::NameSpaceRegistry, ::Type{M}, object::Type, role::String) where {M<:TypeMatcher} =
-    matcher_sckey(reg, M, object, role)
+    matcher_sckey(reg, reconstruct_matcher(M), role)
 
 """The SCKey of an SCRef's object, or `nothing` when it has none."""
 @inline object_sckey(reg::NameSpaceRegistry, ::Nothing) = nothing
-# A matcher kept as the object (a `Var`'s matcher, as a `From` wire's source) has no key of its own: its type finds it.
+# A matcher kept as the object (a `Var`'s matcher, as a `From` wire's source) has no key of its own: it is found as a
+# matcher (`matcher_sckey`).
 @inline object_sckey(reg::NameSpaceRegistry, ::AbstractMatcher) = nothing
 @inline function object_sckey(reg::NameSpaceRegistry, object)
     fixed = fixed_namespace(object)
@@ -100,25 +115,27 @@ end
     return isnothing(key) || key == Symbol() ? getkey(reg, object) : key
 end
 
-"""The SCKey of the first registry entry an SCRef's matcher matches."""
-function matcher_sckey(reg::NameSpaceRegistry, ::Type{M}, object, role::String) where {M<:TypeMatcher}
-    matches = findall(_typematcher_target(M), reg)
-    isempty(matches) && _scref_not_found_error(reg, M, role)
+"""
+The SCKey of the first registry entry the matcher value `m` matches: a `TypeMatcher` the first algorithm of its target
+type (or a subtype), any other matcher by `matcher_equals` (`findfirst_by_matcher`).
+"""
+function matcher_sckey(reg::NameSpaceRegistry, m::TypeMatcher{T}, role::String) where {T}
+    matches = findall(T, reg)
+    isempty(matches) && _scref_not_found_error(reg, m, role)
     return getkey(first(matches))
 end
-function matcher_sckey(reg::NameSpaceRegistry, ::Type{M}, object, role::String) where {M<:AbstractMatcher}
-    for entry in all_algos(reg)
-        matches_type(match_by(entry), M) && return getkey(entry)
-    end
-    _scref_not_found_error(reg, M, role)
+@inline function matcher_sckey(reg::NameSpaceRegistry, m::AbstractMatcher, role::String)
+    found = findfirst_by_matcher(reg, m)
+    isnothing(found) && _scref_not_found_error(reg, m, role)
+    return getkey(found)
 end
-matcher_sckey(reg::NameSpaceRegistry, match, object, role::String) = _scref_not_found_error(reg, object, role)
+matcher_sckey(reg::NameSpaceRegistry, m, role::String) = _scref_not_found_error(reg, m, role)
 
 """
     dynamic_resolve_scref(reg, match, object, role) -> SCKey
 
 `resolve_scref` on values, for `resolve`: the same order, with the registry walked by the lookups on values
-(`dynamic_findkey`, `dynamic_findfirst_algotype`, `dynamic_findfirst_matcher_type`). Compiled once, not once per
+(`dynamic_findkey`, `dynamic_findfirst_algotype`, `dynamic_findfirst_matcher`). Compiled once, not once per
 registry and matcher.
 """
 Base.@nospecializeinfer function dynamic_resolve_scref(@nospecialize(reg::NameSpaceRegistry), @nospecialize(match), @nospecialize(object), role::String)
@@ -134,7 +151,7 @@ Base.@nospecializeinfer function dynamic_resolve_scref(@nospecialize(reg::NameSp
         isnothing(found) && _scref_not_found_error(reg, match, role)
         return getkey(found)
     elseif match <: AbstractMatcher
-        found = dynamic_findfirst_matcher_type(match, reg)
+        found = dynamic_findfirst_matcher(endpoint_matcher(match, object), reg)
         isnothing(found) && _scref_not_found_error(reg, match, role)
         return getkey(found)
     end
@@ -170,25 +187,25 @@ end
 ##################   MATCH   ###################
 ################################################
 
-"""Whether a plan child (type) is the subcontext a stored SCRef names: an SCKey names a keyed child."""
-function child_matches_scref(::Type{Child}, match::Symbol) where {Child}
-    Child <: AbstractIdentifiableAlgo || return false
-    return getkey(Child) == match
-end
+"""
+    child_matches_scref(child, m) -> Bool
 
-"""A type matcher names a child of that algorithm type (or a subtype)."""
-function child_matches_scref(::Type{Child}, ::Type{<:TypeMatcher{Target}}) where {Child, Target}
-    if Child <: AbstractIdentifiableAlgo
-        child_algo = algotype(Child)
+Whether the plan child `child` is the subcontext a stored SCRef names, `m` its `endpoint_matcher`: an SCKey names a
+keyed child, a `TypeMatcher` a child of that algorithm type (or a subtype), any other matcher a handle whose own
+matcher it equals (`matcher_equals`).
+"""
+function child_matches_scref(child::C, m::Symbol) where {C}
+    child isa AbstractIdentifiableAlgo || return false
+    return getkey(child) == m
+end
+function child_matches_scref(child::C, ::TypeMatcher{Target}) where {C, Target}
+    if child isa AbstractIdentifiableAlgo
+        child_algo = algotype(C)
         return child_algo == Target || (child_algo isa Type && Target isa Type && child_algo <: Target)
     end
-    return Child == Target || (Target isa Type && Child <: Target)
+    return C == Target || (Target isa Type && C <: Target)
 end
-
-"""Any other matcher names a keyed child whose own matcher matches."""
-function child_matches_scref(::Type{Child}, match::Type{<:AbstractMatcher}) where {Child}
-    Child <: AbstractIdentifiableAlgo || return false
-    return matches_type(match_by(Child), match)
+function child_matches_scref(child::C, m::AbstractMatcher) where {C}
+    child isa AbstractIdentifiableAlgo || return false
+    return matcher_equals(match_by(child), m)
 end
-
-@inline child_matches_scref(child, match) = child_matches_scref(typeof(child), match)

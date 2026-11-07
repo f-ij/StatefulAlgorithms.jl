@@ -162,3 +162,22 @@ end
     stripped = StatefulAlgorithms.strip_unique(Var(h, :x))
     @test_throws ErrorException reconstruct_var(typeof(stripped))
 end
+
+@testset "A Var is found by its matcher's value" begin
+    SA = StatefulAlgorithms
+    @StepAlgorithm function ValueVarCounter(@managed(x = 0))
+        @update x += 1
+    end
+    a, b = Unique(ValueVarCounter()), Unique(ValueVarCounter())
+    reg = SA.getregistry(resolve(CompositeAlgorithm(a, b, (1, 1))))
+    key_of(::Var{SA.KeyMatcher{key}}) where {key} = key
+    var_of(id) = Var{typeof(id), :x, nothing}(id)
+    # Every form of `b`'s id finds `b`; a dynamic one has the same type for every handle, so only its value can.
+    for id in (SA.id(b), SA.make_dynamic(SA.id(b)), SA.make_numbered(SA.id(b), 2))
+        @test key_of(SA.resolve_var_key(var_of(id), reg)) === :ValueVarCounter_2
+    end
+    # A numbered id is decided while compiling: the key is in the inferred type.
+    numbered = var_of(SA.make_numbered(SA.id(b), 2))
+    @test Base.return_types(SA.resolve_var_key, (typeof(numbered), typeof(reg))) ==
+        [Var{SA.KeyMatcher{:ValueVarCounter_2}, :x, nothing}]
+end

@@ -15,9 +15,9 @@ state as it was put into the plan (its type, or the instance), or a context key 
 (`Until(cond, Var(counter, :count))`), and as the source of a wire in `WithWiring` (`From`).
 
 `subcontext_ref` is stored as its matcher (`scref_matcher`) in the `matcher` field: a context key as a `KeyMatcher`,
-anything else (a type, an instance, a `Unique` handle) as the matcher it is found by. The field's type `M` decides
-the read while compiling: a key reads that subcontext, any other matcher the registry entry it matches
-(`resolve_scref`); a type reads the first registered algorithm of that type. Only a matcher that carries data (a
+anything else (a type, an instance, a `Unique` handle) as the matcher it is found by. A key reads that subcontext,
+any other matcher the registry entry it matches, compared as values (`resolve_scref`; decided while compiling when
+the types decide it: a key, a matcher without fields, a numbered id); a type reads the first registered algorithm of that type. Only a matcher that carries data (a
 `Unique` handle's `UniquePlanId`) takes bytes. The transform must be a plain function or a closure without captured
 values, as for routes.
 """
@@ -53,21 +53,22 @@ Var(name::Symbol) = Var(:_captured_returns, name)
 ################################################
 
 """
-Return the subcontext a `Var` refers to: the one its `KeyMatcher` names, or the registry entry its
-matcher matches (resolved as a route endpoint, so the key is found at compile time).
+Return the subcontext a `Var` refers to: the one its `KeyMatcher` names, or the registry entry its matcher matches,
+compared as values (resolved as a route endpoint; folded while compiling when the types decide it, as for a numbered
+id).
 """
-@inline _var_subcontext(c::ProcessContext, ::Type{KeyMatcher{key}}) where {key} = c[key]
-@inline function _var_subcontext(c::ProcessContext, ::Type{M}) where {M<:AbstractMatcher}
+@inline _var_subcontext(c::ProcessContext, ::Var{KeyMatcher{key}}) where {key} = c[key]
+@inline function _var_subcontext(c::ProcessContext, var::Var{M}) where {M<:AbstractMatcher}
     reg = getregistry(c)
     isnothing(reg) && error("Cannot look up a `Var`'s subcontext without a registry in this context.")
-    return getproperty(c, resolve_scref(reg, M, nothing, "Var subcontext"))
+    return getproperty(c, resolve_scref(reg, M, getfield(var, :matcher), "Var subcontext"))
 end
 
 """
     resolve_var_key(var, registry) -> the `Var` reading the same variable by its context key
 
 `var` with its matcher replaced by the key of the subcontext it reads (`KeyMatcher{key}`), found in `registry` (the
-plan's) while compiling (`resolve_scref`). Reading the result needs no registry: the loop's context has none
+plan's) by its matcher's value (`resolve_scref`). Reading the result needs no registry: the loop's context has none
 (`drop_registry`), so a lifetime's `Var`s get their keys before the stop check reads them (`resolve_var_keys`). A `Var`
 that already has a key, or anything else a lifetime reads, is returned as it is; so is any `Var` when there is no
 registry (`nothing`).
@@ -75,7 +76,7 @@ registry (`nothing`).
 @inline resolve_var_key(var::V, registry::R) where {V, R} = var
 @inline resolve_var_key(var::Var{KeyMatcher{key}}, registry::R) where {key, R<:NameSpaceRegistry} = var
 @inline resolve_var_key(var::Var{M}, registry::R) where {M<:AbstractMatcher, R<:NameSpaceRegistry} =
-    _var_with_key(var, Val(resolve_scref(registry, M, nothing, "Var subcontext")))
+    _var_with_key(var, Val(resolve_scref(registry, M, getfield(var, :matcher), "Var subcontext")))
 @inline _var_with_key(::Var{M, name, transform}, ::Val{key}) where {M, name, transform, key} =
     Var{KeyMatcher{key}, name, transform}(KeyMatcher{key}())
 
@@ -88,7 +89,7 @@ registry (`nothing`).
 
 @inline function Base.getindex(c::ProcessContext, var::Var{M, name}) where {M, name}
     # A field redirected by `Redirect` reads the value of the field it points to, not its `RedirectedVar` marker.
-    @inline _var_transform(var, (@inline _follow_reads(c, getproperty(_var_subcontext(c, M), name))))
+    @inline _var_transform(var, (@inline _follow_reads(c, getproperty(_var_subcontext(c, var), name))))
 end
 
 """What is literally stored in the state field `subcontext.field` of `c`, no hook asked (see `getproperty_raw`)."""

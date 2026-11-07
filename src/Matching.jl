@@ -57,9 +57,8 @@ Base.@nospecializeinfer dynamic_equals(@nospecialize(m1), @nospecialize(m2)) = m
 
 abstract type AbstractMatcher{A} end
 getmatchers(m::AbstractMatcher{A}) where {A} = A
-# A matcher, or a matcher type (the type-level id of a handle whose matcher carries data, `static_id`), matches as itself.
+# A matcher matches as itself. Matchers are compared as values (`matcher_equals`), never by their type.
 match_by(m::AbstractMatcher) = m
-match_by(T::Type{<:AbstractMatcher}) = T
 
 """
     static_id(matcher) -> value or type
@@ -112,11 +111,10 @@ end
 # Match with any isbits value/any type parameter, basically a Val type
 struct ValMatcher{V} <: AbstractMatcher{V} end
 ValMatcher(v) = ValMatcher{v}()
-# match_by(sm::Union{ValMatcher{V}, Type{ValMatcher{V}}}) where V = V
-function matcher_equals(sm::Union{ValMatcher{V}, Type{ValMatcher{V}}}, a) where V
+function matcher_equals(sm::ValMatcher{V}, a) where V
     return matcher_equals(V, a)
 end
-function matcher_equals(a, sm::Union{ValMatcher{V}, Type{ValMatcher{V}}}) where V
+function matcher_equals(a, sm::ValMatcher{V}) where V
     return matcher_equals(V, a)
 end
 function matcher_equals(sm1::ValMatcher{V1}, sm2::ValMatcher{V2}) where {V1,V2}
@@ -155,7 +153,6 @@ struct MatchAnyOf{T<:Tuple} <: AbstractMatcher{T}
     matchers::T
 end
 matcher_parts(m::MatchAnyOf) = getfield(m, :matchers)
-matcher_parts(::Type{MatchAnyOf{T}}) where {T} = Tuple(T.parameters)
 _any_matches(m, x) = any(p -> matcher_equals(p, x), matcher_parts(m))
 matcher_equals(m::MatchAnyOf, x) = _any_matches(m, x)
 matcher_equals(x, m::MatchAnyOf) = _any_matches(m, x)
@@ -164,19 +161,6 @@ matcher_equals(m::MatchAnyOf, n::MatchAnyOf) = any(p -> _any_matches(m, p), matc
 ################################################
 ##################   HOOKS   ###################
 ################################################
-
-"""
-    matches_type(value, M) -> Bool
-
-Whether the matcher value `value` (an algorithm's `match_by`) is matched by the matcher type `M` (a stored SCRef,
-`scref_match`). Default `value isa M`; a matcher type as the value (a handle type's id) by `<:`.
-Extended by: `ValMatcher`, `MatchAnyOf`, `MatchAny` (below), `UniquePlanId` (Identifiable/UniquePlanId/HookExtensions.jl).
-"""
-matches_type(value, M) = value isa M
-matches_type(value::Type, M) = value <: M
-matches_type(value, ::Type{<:ValMatcher{V}}) where {V} = matcher_equals(value, V) || value isa ValMatcher{V}
-# A merged state's matcher matches if any of its parts does.
-matches_type(value::Union{MatchAnyOf, Type{<:MatchAnyOf}}, M) = any(m -> matches_type(m, M), matcher_parts(value))
 
 """
     map_matchers_of_type(M, obj, f) -> obj
@@ -275,7 +259,6 @@ end
 function matcher_equals(a, m1::MatchAny)
     return any(x -> matcher_equals(x, a), getmatchers(m1))
 end
-matches_type(value::MatchAny, M) = any(m -> matches_type(m, M), getmatchers(value))
 
 struct MatchAll{A} <: AbstractMatcher{A} end
 MatchAll(matchers...) = MatchAll(tuple(matchers...))
